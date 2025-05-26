@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "PowerShell.MCP": {
+      "commandName": "Project"
+    },
+    "プロファイル 1": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+      "commandLineArgs": "-noexit -command \"[reflection.assembly]::loadFrom('PowerShell.MCP.dll') | import-module"
+    }
+  }
+}
