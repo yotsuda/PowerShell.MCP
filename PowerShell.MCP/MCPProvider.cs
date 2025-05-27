@@ -19,6 +19,7 @@ namespace PowerShell.MCP
 @"if (-not (Test-Path Variable:global:McpTimer)) {
     $global:McpTimer = New-Object System.Timers.Timer 500
     $global:McpTimer.AutoReset = $true
+
     Register-ObjectEvent `
         -InputObject    $global:McpTimer `
         -EventName      Elapsed `
@@ -31,32 +32,56 @@ namespace PowerShell.MCP
                 [Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()
                 [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
             }
-            
+
             $cmd = [PowerShell.MCP.MCPServerHost]::executeCommand
             if ($cmd) {
                 [PowerShell.MCP.MCPServerHost]::executeCommand = $null
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
-                
+
                 try {
-                    $cursorX = $Host.UI.RawUI.CursorPosition.X
-                    if ($cursorX -eq 0) {
-                        try {
-                            $promptText = & { prompt }
-                            $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
-                            [Console]::Write(""${cleanPrompt}> ${cmd}"")
-                        }
-                        catch {
-                            [Console]::Write(""PS $((Get-Location).Path)> ${cmd}"")
-                        }
-                        [Console]::WriteLine()
-                    } else {
-                        Write-Host $cmd
+                    [Console]::WriteLine()  # 確実に改行 + プロンプト
+                    try {
+                        $promptText = & { prompt }
+                        $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
+                        [Console]::Write(""${cleanPrompt}> "")
                     }
-                    
+                    catch {
+                        [Console]::Write(""PS $((Get-Location).Path)> "")
+                    }
+
+                    # 複数行コマンドの判定
+                    $isMultiLine = $cmd.Contains(""`n"") -or $cmd.Contains(""`r"")
+                    if ($isMultiLine) {
+                        # 複数行コマンド: 常に改行
+                        [Console]::WriteLine()  # 確実に改行
+                    }
+
+                    Write-Host $cmd
+
+                    # メインの実行処理
+                    $ErrorActionPreference = 'Continue'
+                    $WarningPreference = 'Continue'
+
                     $results = @()
-                    
-                    Invoke-Expression ""$cmd *>&1"" | Tee-Object -Variable results | Out-Default
-                    
+                    $mcpErrors = @()
+                    $mcpWarnings = @()
+                    $mcpInformation = @()
+
+                    # コマンド実行
+                    Invoke-Expression $cmd -ErrorVariable mcpErrors -WarningVariable mcpWarnings -InformationVariable mcpInformation -OutVariable results
+
+                    # コンソール出力
+                    $results | Out-Default
+                    if ($mcpErrors) { $mcpErrors | ForEach-Object { Write-Error $_ } }
+                    if ($mcpWarnings) { $mcpWarnings | ForEach-Object { Write-Warning $_ } }
+
+                    # 構造化出力の生成
+                    $allResults = @()
+                    $allResults += $results
+                    foreach($err in $mcpErrors) { $allResults += $err }
+                    foreach($warn in $mcpWarnings) { $allResults += $warn }
+                    foreach($info in $mcpInformation) { $allResults += $info }
+
                     $outputStreams = @{
                         Success = @()
                         Error = @()
@@ -65,8 +90,8 @@ namespace PowerShell.MCP
                         Debug = @()
                         Information = @()
                     }
-                    
-                    foreach ($item in $results) {
+
+                    foreach ($item in $allResults) {
                         switch ($item.GetType().Name) {
                             'ErrorRecord' {
                                 $outputStreams.Error += $item.Exception.Message
@@ -88,7 +113,7 @@ namespace PowerShell.MCP
                             }
                         }
                     }
-                    
+
                     $structuredOutput = @{
                         Success = ($outputStreams.Success | Out-String -Width 800).Trim()
                         Error = ($outputStreams.Error -join ""`n"").Trim()
@@ -97,52 +122,52 @@ namespace PowerShell.MCP
                         Debug = ($outputStreams.Debug -join ""`n"").Trim()
                         Information = ($outputStreams.Information -join ""`n"").Trim()
                     }
-                    
+
                     $cleanOutput = @{}
                     foreach ($key in $structuredOutput.Keys) {
                         if (-not [string]::IsNullOrEmpty($structuredOutput[$key])) {
                             $cleanOutput[$key] = $structuredOutput[$key]
                         }
                     }
-                    
+
                     if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success')) {
                         $formattedOutput = @()
-                        
+
                         if ($cleanOutput.Success) {
                             $formattedOutput += ""=== OUTPUT ===""
                             $formattedOutput += $cleanOutput.Success
                             $formattedOutput += """"
                         }
-                        
+
                         if ($cleanOutput.Error) {
                             $formattedOutput += ""=== ERRORS ===""
                             $formattedOutput += $cleanOutput.Error
                             $formattedOutput += """"
                         }
-                        
+
                         if ($cleanOutput.Warning) {
                             $formattedOutput += ""=== WARNINGS ===""
                             $formattedOutput += $cleanOutput.Warning
                             $formattedOutput += """"
                         }
-                        
+
                         if ($cleanOutput.Verbose) {
                             $formattedOutput += ""=== VERBOSE ===""
                             $formattedOutput += $cleanOutput.Verbose
                             $formattedOutput += """"
                         }
-                        
+
                         if ($cleanOutput.Debug) {
                             $formattedOutput += ""=== DEBUG ===""
                             $formattedOutput += $cleanOutput.Debug
                             $formattedOutput += """"
                         }
-                        
+
                         if ($cleanOutput.Information) {
                             $formattedOutput += ""=== INFO ===""
                             $formattedOutput += $cleanOutput.Information
                         }
-                        
+
                         $text = ($formattedOutput -join ""`n"").Trim()
                         if ($text.Length -gt 800) {
                             $text = $text.Substring(0, 800)
@@ -166,6 +191,7 @@ namespace PowerShell.MCP
     $global:McpTimer.Start()
 }
 ");
+
             Task.Run(() =>
             {
                 McpServerHost.StartServer(this, url, _tokenSource.Token);

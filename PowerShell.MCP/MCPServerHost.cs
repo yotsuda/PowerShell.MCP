@@ -158,7 +158,7 @@ public static class McpServerHost
         }
 
         // コマンド検証を実行
-        var validationError = ValidateCommand(command);
+        var validationError = ValidateCommand(command, executeImmediately);
         if (validationError != null)
         {
             // 検証エラーがある場合、即座にエラーレスポンスを返す
@@ -196,7 +196,7 @@ public static class McpServerHost
     }
 
     // 検証メソッドを追加
-    private static string? ValidateCommand(string command)
+    private static string? ValidateCommand(string command, bool executeImmediately)
     {
         // 1. null/空文字チェック
         if (string.IsNullOrWhiteSpace(command))
@@ -205,9 +205,9 @@ public static class McpServerHost
         }
 
         // 2. 改行文字チェック
-        if (command.Contains('\n') || command.Contains('\r'))
+        if (!executeImmediately && (command.Contains('\n') || command.Contains('\r')))
         {
-            return "ERROR: Multi-line commands are not supported. Please use single-line PowerShell commands only.";
+            return "ERROR: Multi-line commands are not supported when executeImmediately is false. Please use a single-line PowerShell command.";
         }
 
         // 3. 長すぎるコマンドのチェック（オプション）

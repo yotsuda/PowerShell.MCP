@@ -1,0 +1,27 @@
+﻿{
+  "jsonrpc": "2.0",
+  "id": {0},
+  "result":{
+    "tools": [
+      {
+        "name": "invokeExpression",
+        "description": "Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "pipeline": {
+              "type": "string",
+              "description": "The PowerShell command or pipeline to execute."
+            },
+            "executeImmediately": {
+              "type": "boolean",
+              "description": "If true, executes the command immediately and returns the result. If false, inserts the command into the console for manual execution.",
+              "default": true
+            }
+          },
+          "required": ["pipeline", "executeImmediately"]
+        }
+      }
+    ]
+  }
+}
