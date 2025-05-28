@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.0.2'
+ModuleVersion = '1.0.4'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -250,7 +250,7 @@ Developer Features:
 
 === Known Limitations ===
 - Fixed HTTP server port: 8086
-- Output truncation: MCP responses limited to 800 characters (for fast and stable LLM operation; full output viewable in console)
+- Output truncation: MCP responses limited to 8000 characters (for fast and stable LLM operation; full output viewable in console)
 - Security Note: Provides complete PowerShell access - use only in trusted environments
 
 === What Makes This Special? ===

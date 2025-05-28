@@ -1,4 +1,5 @@
-﻿using System.Management.Automation.Provider;
+﻿using System.Management.Automation;
+using System.Management.Automation.Provider;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -26,6 +27,45 @@ public static class McpServerHost
     private static HttpListener? _listener;
     private static Task? _serverTask;
 
+    public class Cleanup : IModuleAssemblyCleanup
+    {
+        public Cleanup() { }
+
+        public void OnRemove(PSModuleInfo psModuleInfo)
+        {
+            if (_listener != null)
+            {
+                try
+                {
+                    if (_listener.IsListening)
+                    {
+                        _listener.Stop();
+                    }
+                }
+                catch { /* 無視 */ }
+                finally
+                {
+                    _listener.Close();
+                    _listener = null;
+                }
+            }
+
+            try
+            {
+                // サーバータスクの完了を待機（短時間）
+                _serverTask?.Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception)
+            {
+                // Stop処理でのエラーは無視
+            }
+            finally
+            {
+                _serverTask = null;
+            }
+        }
+    }
+
     public static string? insertCommand = null;
     public static string? executeCommand = null;
     public static string? outputFromCommand = null;
@@ -34,6 +74,8 @@ public static class McpServerHost
     {
         try
         {
+            if (_listener != null) return;
+ 
             _listener = new HttpListener();
             _listener.Prefixes.Add(prefix);
             _listener.Start();
@@ -67,32 +109,11 @@ public static class McpServerHost
         catch (Exception ex)
         {
             // 初期化エラー時のクリーンアップ
-            _listener?.Stop();
-            _listener?.Close();
+            //_listener?.Stop(); // Dispose 済みなので呼び出せない
+            //_listener?.Close();
             _listener = null;
             host.WriteWarning($"[PowerShell.MCP] {ex.Message}");
             throw;
-        }
-    }
-
-    public static void StopServer()
-    {
-        try
-        {
-            if (_listener != null)
-            {
-                _listener.Stop();
-                _listener.Close();
-                _listener = null;
-            }
-
-            // サーバータスクの完了を待機（短時間）
-            _serverTask?.Wait(TimeSpan.FromSeconds(2));
-            _serverTask = null;
-        }
-        catch (Exception)
-        {
-            // Stop処理でのエラーは無視
         }
     }
 
@@ -211,9 +232,21 @@ public static class McpServerHost
         }
 
         // 3. 長すぎるコマンドのチェック（オプション）
-        if (command.Length > 2000) // 適切な制限値
+        if (command.Length > 5000)
         {
-            return "ERROR: Command too long. Please use shorter commands.";
+            var excess = command.Length - 5000;
+            var percentage = Math.Round((double)excess / 5000 * 100, 1);
+
+            return $"COMMAND_LENGTH_ERROR: Command too long for execution" +
+                   $"\n├─ Current length: {command.Length:N0} characters" +
+                   $"\n├─ Maximum allowed: 5,000 characters" +
+                   $"\n├─ Excess: {excess:N0} characters ({percentage}% over limit)" +
+                   $"\n├─ Command preview: {(command.Length > 100 ? command.Substring(0, 100) + "..." : command)}" +
+                   $"\n└─ Solutions:" +
+                   $"\n   • Split into multiple commands" +
+                   $"\n   • Use variables to store intermediate results" +
+                   $"\n   • Simplify complex pipelines" +
+                   $"\n   • Use Select-Object to limit output earlier in pipeline";
         }
 
         // 検証通過
@@ -299,9 +332,10 @@ public static class McpServerHost
         await WriteJson(resp, JsonSerializer.Deserialize<object>(content) ?? "");
     }
 
+    private static JsonSerializerOptions jsoWriteIndented = new() { WriteIndented = false };
     private static Task WriteJson(HttpListenerResponse resp, object obj)
     {
-        var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = false });
+        var json = JsonSerializer.Serialize(obj, jsoWriteIndented);
         var data = Encoding.UTF8.GetBytes(json);
         resp.ContentType = "application/json";
         resp.ContentLength64 = data.Length;

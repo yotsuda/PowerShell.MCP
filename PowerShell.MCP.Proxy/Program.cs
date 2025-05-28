@@ -1,5 +1,7 @@
 ﻿using System.Text.Json;
 using System.Text;
+using System.Reflection;
+using System.Diagnostics;
 
 namespace PowerShell.MCP.Proxy
 {
@@ -11,11 +13,26 @@ namespace PowerShell.MCP.Proxy
         // POSTメソッドを定数として定義
         private static readonly HashSet<string> PostMethods = new()
         {
-            "invoke", "initialize", "tools/list", "resources/list", "prompts/list", "tools/call"
+            "initialize", "tools/list", "resources/list", "prompts/list", "tools/call"
         };
+
+        private static string ReturnTemplate(string method, int id)
+        {
+            // 実行アセンブリのパスとテンプレートフォルダーへのパスを組み立て
+            var module_exe_path = Assembly.GetExecutingAssembly().Location;
+            var module_dir = Path.GetDirectoryName(module_exe_path)!;
+            var template_name = method.Replace('/', '_') + ".json";
+
+            var template_path = Path.GetFullPath(Path.Combine(module_dir, @"..\Templates", template_name));
+
+            // ファイル読み込み
+            var content = File.ReadAllText(template_path, Encoding.UTF8);
+            return content.Replace("{0}", id.ToString());
+        }
 
         static async Task Main(string[] args)
         {
+            //Debugger.Launch();
             using var reader = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false));
             using var writer = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
 
@@ -27,9 +44,19 @@ namespace PowerShell.MCP.Proxy
                     if (requestJson == null) continue;
 
                     var (method, id, isValid) = ParseJsonRpcRequest(requestJson);
-                    if (!isValid || ShouldSkipMethod(method, id)) continue;
+                    if (!isValid || ShouldSkipMethod(method)) continue;
 
-                    string responseJson = await ProcessRequestAsync(requestJson, method, id);
+                    string? responseJson = null;
+                    if (method != "tools/call")
+                    {
+                        responseJson = ReturnTemplate(method, id)
+                            .Replace("\n", "")
+                            .Replace("\r", "");
+                    }
+                    else
+                    {
+                        responseJson = await ProcessRequestAsync(requestJson, method, id);
+                    }
                     await writer.WriteLineAsync(responseJson);
                 }
                 catch (Exception)
@@ -53,19 +80,22 @@ namespace PowerShell.MCP.Proxy
             return string.IsNullOrEmpty(requestJson) ? null : requestJson;
         }
 
-        private static (string method, JsonElement id, bool isValid) ParseJsonRpcRequest(string requestJson)
+        private static (string method, int id, bool isValid) ParseJsonRpcRequest(string requestJson)
         {
             try
             {
-                using var rpcReq = JsonDocument.Parse(requestJson);
-                var root = rpcReq.RootElement;
+                using var doc = JsonDocument.Parse(requestJson);
+                var root = doc.RootElement;
 
-                string method = root.GetProperty("method").GetString() ?? "";
+                // method を取得
+                var method = root.GetProperty("method").GetString() ?? "";
 
-                if (!root.TryGetProperty("id", out var id))
-                {
+                // id がなければ or Number 以外なら isValid=false
+                if (!root.TryGetProperty("id", out var idElem) || idElem.ValueKind != JsonValueKind.Number)
                     return (method, default, false);
-                }
+
+                // 数値として取得
+                int id = idElem.GetInt32();
 
                 return (method, id, true);
             }
@@ -75,13 +105,13 @@ namespace PowerShell.MCP.Proxy
             }
         }
 
-        private static bool ShouldSkipMethod(string method, JsonElement id)
+        private static bool ShouldSkipMethod(string method)
         {
             // 通知メソッドはスキップ
             return method.StartsWith("notifications/");
         }
 
-        private static async Task<string> ProcessRequestAsync(string requestJson, string method, JsonElement id)
+        private static async Task<string> ProcessRequestAsync(string requestJson, string method, int id)
         {
             try
             {
@@ -90,7 +120,16 @@ namespace PowerShell.MCP.Proxy
             }
             catch (Exception ex)
             {
-                return CreateErrorResponse(id, ex.Message);
+                return CreateErrorResponse(
+                    id,
+                    $@"It looks like PowerShell isn't running. Please do the following:
+1. Press Win+R to open the Run dialog.
+2. Type `pwsh` and press Enter to launch PowerShell 7.
+3. In the PowerShell window, paste this command and press Enter:
+   Import-Module PowerShell.MCP, PSReadLine
+
+Once that's done, try again. (Error details: {ex.Message})"
+                );
             }
         }
 
@@ -124,7 +163,7 @@ namespace PowerShell.MCP.Proxy
             return new Uri(ProxyUri, method);
         }
 
-        private static string CreateErrorResponse(JsonElement id, string message)
+        private static string CreateErrorResponse(int id, string message)
         {
             return JsonSerializer.Serialize(new
             {

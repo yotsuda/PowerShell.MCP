@@ -115,7 +115,7 @@ namespace PowerShell.MCP
                     }
 
                     $structuredOutput = @{
-                        Success = ($outputStreams.Success | Out-String -Width 800).Trim()
+                        Success = ($outputStreams.Success | Out-String).Trim()
                         Error = ($outputStreams.Error -join ""`n"").Trim()
                         Warning = ($outputStreams.Warning -join ""`n"").Trim()
                         Verbose = ($outputStreams.Verbose -join ""`n"").Trim()
@@ -132,12 +132,6 @@ namespace PowerShell.MCP
 
                     if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success')) {
                         $formattedOutput = @()
-
-                        if ($cleanOutput.Success) {
-                            $formattedOutput += ""=== OUTPUT ===""
-                            $formattedOutput += $cleanOutput.Success
-                            $formattedOutput += """"
-                        }
 
                         if ($cleanOutput.Error) {
                             $formattedOutput += ""=== ERRORS ===""
@@ -168,15 +162,25 @@ namespace PowerShell.MCP
                             $formattedOutput += $cleanOutput.Information
                         }
 
+                        if ($cleanOutput.Success) {
+                            $formattedOutput += ""=== OUTPUT ===""
+                            $formattedOutput += $cleanOutput.Success
+                            $formattedOutput += """"
+                        }
+
                         $text = ($formattedOutput -join ""`n"").Trim()
-                        if ($text.Length -gt 800) {
-                            $text = $text.Substring(0, 800)
+                        $originalLength = $text.Length
+                        if ($originalLength -gt 8000) {
+                            $text = $text.Substring(0, 8000)
+                            $text += ""`n`n=== OUTPUT TRUNCATED ===`nOriginal: $originalLength characters | Showing: 8000 characters | Hidden: $($originalLength - 8000) characters""
                         }
                         [PowerShell.MCP.MCPServerHost]::outputFromCommand = $text
                     } else {
                         $text = if ($cleanOutput.Success) { $cleanOutput.Success } else { """" }
-                        if ($text.Length -gt 800) {
-                            $text = $text.Substring(0, 800)
+                        $originalLength = $text.Length
+                        if ($originalLength -gt 8000) {
+                            $text = $text.Substring(0, 8000)
+                            $text += ""`n`n=== OUTPUT TRUNCATED ===`nOriginal: $originalLength characters | Showing: 8000 characters | Hidden: $($originalLength - 8000) characters""
                         }
                         [PowerShell.MCP.MCPServerHost]::outputFromCommand = $text
                     }
@@ -208,8 +212,6 @@ namespace PowerShell.MCP
         {
             try
             {
-                McpServerHost.StopServer();
-
                 _tokenSource?.Cancel();
                 _tokenSource?.Dispose();
                 _tokenSource = null;
