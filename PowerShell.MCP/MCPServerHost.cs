@@ -1,10 +1,12 @@
-ï»¿using System.Management.Automation;
+using System.Management.Automation;
 using System.Management.Automation.Provider;
-using System.Net;
+using System.IO.Pipes;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Principal;
+using System.Security.AccessControl;
 
 namespace PowerShell.MCP;
 
@@ -24,8 +26,22 @@ public record JsonRpcResponse(
 
 public static class McpServerHost
 {
-    private static HttpListener? _listener;
+    private static NamedPipeServerStream? _pipeServer;
     private static Task? _serverTask;
+    private static CancellationTokenSource? _cancellationTokenSource;
+    private static readonly object _lockObject = new object();
+
+    // Named Pipeİ’è
+    private const string PIPE_NAME = "PowerShell.MCP.Communication";
+    private const int PIPE_BUFFER_SIZE = 8192;
+    private const int MAX_CLIENTS = 1;
+
+    // ƒZƒLƒ…ƒŠƒeƒBİ’è
+    private const int MAX_COMMAND_LENGTH = 5000;
+    private const int MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB§ŒÀ
+
+    // ƒo[ƒWƒ‡ƒ“ŠÇ—i‹N“®‚Éˆê“x‚¾‚¯æ“¾j
+    private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
 
     public class Cleanup : IModuleAssemblyCleanup
     {
@@ -33,35 +49,41 @@ public static class McpServerHost
 
         public void OnRemove(PSModuleInfo psModuleInfo)
         {
-            if (_listener != null)
-            {
-                try
-                {
-                    if (_listener.IsListening)
-                    {
-                        _listener.Stop();
-                    }
-                }
-                catch { /* ç„¡è¦– */ }
-                finally
-                {
-                    _listener.Close();
-                    _listener = null;
-                }
-            }
-
             try
             {
-                // ã‚µãƒ¼ãƒãƒ¼ã‚¿ã‚¹ã‚¯ã®å®Œäº†ã‚’å¾…æ©Ÿï¼ˆçŸ­æ™‚é–“ï¼‰
+                _cancellationTokenSource?.Cancel();
+
+                lock (_lockObject)
+                {
+                    if (_pipeServer != null)
+                    {
+                        try
+                        {
+                            if (_pipeServer.IsConnected)
+                            {
+                                _pipeServer.Disconnect();
+                            }
+                        }
+                        catch { /* –³‹ */ }
+                        finally
+                        {
+                            _pipeServer.Dispose();
+                            _pipeServer = null;
+                        }
+                    }
+                }
+
                 _serverTask?.Wait(TimeSpan.FromSeconds(5));
             }
             catch (Exception)
             {
-                // Stopå‡¦ç†ã§ã®ã‚¨ãƒ©ãƒ¼ã¯ç„¡è¦–
+                // Stopˆ—‚Å‚ÌƒGƒ‰[‚Í–³‹
             }
             finally
             {
                 _serverTask = null;
+                _cancellationTokenSource?.Dispose();
+                _cancellationTokenSource = null;
             }
         }
     }
@@ -70,102 +92,364 @@ public static class McpServerHost
     public static string? executeCommand = null;
     public static string? outputFromCommand = null;
 
-    public static void StartServer(CmdletProvider host, string prefix, CancellationToken token)
+    public static void StartServer(CmdletProvider host, CancellationToken token)
     {
         try
         {
-            if (_listener != null) return;
- 
-            _listener = new HttpListener();
-            _listener.Prefixes.Add(prefix);
-            _listener.Start();
+            lock (_lockObject)
+            {
+                if (_pipeServer != null)
+                {
+                    LogSecurityEvent("SERVER_ALREADY_RUNNING", "MCP server is already running", "");
+                    return;
+                }
+            }
+
+            _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
+
+            LogSecurityEvent("SERVER_START", $"MCP server starting with Named Pipes (Version: {_serverVersion})", "");
 
             _serverTask = Task.Run(async () =>
             {
-                while (!token.IsCancellationRequested)
+                while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
                     try
                     {
-                        var ctx = await _listener.GetContextAsync();
-                        _ = HandleContextAsync(ctx);
+                        await RunPipeServerAsync(_cancellationTokenSource.Token, host);
                     }
-                    catch (ObjectDisposedException)
+                    catch (OperationCanceledException)
                     {
-                        // ãƒªã‚¹ãƒŠãƒ¼ãŒç ´æ£„ã•ã‚ŒãŸå ´åˆã¯æ­£å¸¸çµ‚äº†
-                        break;
-                    }
-                    catch (HttpListenerException)
-                    {
-                        // ãƒªã‚¹ãƒŠãƒ¼ãŒåœæ­¢ã•ã‚ŒãŸå ´åˆã¯æ­£å¸¸çµ‚äº†
+                        LogSecurityEvent("SERVER_CANCELLED", "Server operation cancelled", "");
                         break;
                     }
                     catch (Exception ex)
                     {
-                        host.WriteWarning($"[PowerShell.MCP] Server error: {ex.Message}");
+                        LogSecurityEvent("SERVER_ERROR", $"Pipe server error: {ex.Message}", ex.StackTrace ?? "");
+                        host.WriteWarning($"[PowerShell.MCP] Pipe server error: {ex.Message}");
+
+                        // ƒGƒ‰[ŒãA’ZŠÔ‘Ò‹@‚µ‚Ä‚©‚çÄÀs
+                        try
+                        {
+                            await Task.Delay(2000, _cancellationTokenSource.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
                     }
                 }
-            }, token);
+            }, _cancellationTokenSource.Token);
+
+            LogSecurityEvent("SERVER_START", "MCP Named Pipe server started successfully", "");
         }
         catch (Exception ex)
         {
-            // åˆæœŸåŒ–ã‚¨ãƒ©ãƒ¼æ™‚ã®ã‚¯ãƒªãƒ¼ãƒ³ã‚¢ãƒƒãƒ—
-            //_listener?.Stop(); // Dispose æ¸ˆã¿ãªã®ã§å‘¼ã³å‡ºã›ãªã„
-            //_listener?.Close();
-            _listener = null;
+            LogSecurityEvent("SERVER_START_FAILED", $"Failed to start pipe server: {ex.Message}", ex.StackTrace ?? "");
             host.WriteWarning($"[PowerShell.MCP] {ex.Message}");
             throw;
         }
     }
 
-    private static async Task HandleContextAsync(HttpListenerContext ctx)
+    private static async Task RunPipeServerAsync(CancellationToken cancellationToken, CmdletProvider host)
     {
-        var req = ctx.Request;
-        var resp = ctx.Response;
-        try
+        while (!cancellationToken.IsCancellationRequested)
         {
-            if (req.HttpMethod == "POST")
+            NamedPipeServerStream? pipeServer = null;
+
+            try
             {
-                var path = req.Url?.AbsolutePath;
-                if (path == "/tools/call")
+                // ƒZƒLƒ…ƒA‚ÈNamed PipeƒT[ƒo[‚ğì¬
+                pipeServer = CreateSecurePipeServer();
+
+                lock (_lockObject)
                 {
-                    await ProcessRpcCall(req, resp);
-                    return;
+                    _pipeServer = pipeServer;
                 }
-                if (path is "/initialize" or "/tools/list" or "/resources/list" or "/prompts/list")
+
+                LogSecurityEvent("PIPE_WAITING", "Waiting for client connection", "");
+
+                // ƒNƒ‰ƒCƒAƒ“ƒg‚ÌÚ‘±‚ğ‘Ò‹@iƒ^ƒCƒ€ƒAƒEƒg•t‚«j
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(10)); // 10•ª‚Åƒ^ƒCƒ€ƒAƒEƒg
+
+                await pipeServer.WaitForConnectionAsync(timeoutCts.Token);
+
+                if (!pipeServer.IsConnected)
                 {
-                    var template = path[1..].Replace('/', '_') + ".json";
-                    await ReturnTemplate(req, resp, template);
-                    return;
+                    LogSecurityEvent("PIPE_CONNECTION_FAILED", "Failed to establish connection", "");
+                    continue; // Ÿ‚ÌÚ‘±‚ğ‘Ò‚Â
+                }
+
+                LogSecurityEvent("PIPE_CONNECTED", "Client connected to Named Pipe", "");
+
+                // Ú‘±’†‚ÌƒƒbƒZ[ƒWˆ—
+                while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await ProcessPipeMessageAsync(pipeServer, cancellationToken);
+                    }
+                    catch (IOException ex) when (ex.Message.Contains("pipe is broken") || ex.Message.Contains("pipe has been ended"))
+                    {
+                        LogSecurityEvent("PIPE_DISCONNECTED", "Client disconnected", ex.Message);
+                        break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogSecurityEvent("PIPE_MESSAGE_ERROR", $"Error processing message: {ex.Message}", ex.StackTrace ?? "");
+                        // ƒƒbƒZ[ƒWˆ—ƒGƒ‰[‚Ìê‡‚ÍÚ‘±‚ğˆÛ‚µ‚ÄƒŠƒgƒ‰ƒC
+                        await Task.Delay(100, cancellationToken);
+                    }
+                }
+
+                LogSecurityEvent("PIPE_CONNECTION_ENDED", "Connection ended, preparing for next client", "");
+            }
+            catch (OperationCanceledException)
+            {
+                LogSecurityEvent("PIPE_CANCELLED", "Pipe operation cancelled", "");
+                break;
+            }
+            catch (TimeoutException)
+            {
+                LogSecurityEvent("PIPE_TIMEOUT", "Pipe connection timeout", "");
+            }
+            catch (Exception ex)
+            {
+                LogSecurityEvent("PIPE_ERROR", $"Pipe communication error: {ex.Message}", ex.StackTrace ?? "");
+            }
+            finally
+            {
+                lock (_lockObject)
+                {
+                    try
+                    {
+                        if (pipeServer != null)
+                        {
+                            if (pipeServer.IsConnected)
+                            {
+                                pipeServer.Disconnect();
+                            }
+                            pipeServer.Dispose();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogSecurityEvent("PIPE_CLEANUP_ERROR", $"Error during pipe cleanup: {ex.Message}", "");
+                    }
+                    finally
+                    {
+                        _pipeServer = null;
+                    }
                 }
             }
 
-            resp.StatusCode = 404;
-        }
-        catch (JsonException jex)
-        {
-            await WriteJson(resp, new { error = "JSON parse error", detail = jex.Message });
-        }
-        catch (Exception ex)
-        {
-            await WriteJson(resp, new { error = "Internal Server Error", detail = ex.Message });
-        }
-        finally
-        {
-            resp.Close();
+            // ’ZŠÔ‘Ò‹@‚µ‚Ä‚©‚çŸ‚ÌÚ‘±ó•t‚ğŠJn
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(1000, cancellationToken);
+            }
         }
     }
 
-    private static async Task ProcessRpcCall(HttpListenerRequest req, HttpListenerResponse resp)
+    private static NamedPipeServerStream CreateSecurePipeServer()
     {
-        using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
-        var body = await reader.ReadToEndAsync();
-        var rpc = JsonSerializer.Deserialize<JsonRpcRequest>(body)
-                  ?? throw new JsonException("Invalid RPC payload");
+        try
+        {
+            // .NET 8‘Î‰: ƒZƒLƒ…ƒŠƒeƒBİ’è•t‚«‚ÌƒpƒCƒvƒT[ƒo[‚ğì¬
+            var pipeSecurity = new PipeSecurity();
+
+            // Œ»İ‚Ìƒ†[ƒU[‚Éƒtƒ‹ƒAƒNƒZƒXŒ ŒÀ‚ğ•t—^
+            var identity = WindowsIdentity.GetCurrent();
+            var userSid = identity.User;
+            if (userSid != null)
+            {
+                pipeSecurity.AddAccessRule(new PipeAccessRule(userSid, PipeAccessRights.FullControl, AccessControlType.Allow));
+            }
+
+            // ŠÇ—ÒƒOƒ‹[ƒv‚Éƒtƒ‹ƒAƒNƒZƒXŒ ŒÀ‚ğ•t—^
+            var adminSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(adminSid, PipeAccessRights.FullControl, AccessControlType.Allow));
+
+            return NamedPipeServerStreamAcl.Create(
+                PIPE_NAME,
+                PipeDirection.InOut,
+                MAX_CLIENTS,
+                PipeTransmissionMode.Message,
+                PipeOptions.Asynchronous | PipeOptions.WriteThrough,
+                PIPE_BUFFER_SIZE,
+                PIPE_BUFFER_SIZE,
+                pipeSecurity
+            );
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("PIPE_SECURITY_ERROR", $"Failed to create secure pipe, falling back to basic pipe: {ex.Message}", "");
+
+            // ƒtƒH[ƒ‹ƒoƒbƒN: ƒZƒLƒ…ƒŠƒeƒBİ’è‚È‚µ‚ÌŠî–{“I‚ÈƒpƒCƒv
+            return new NamedPipeServerStream(
+                PIPE_NAME,
+                PipeDirection.InOut,
+                MAX_CLIENTS,
+                PipeTransmissionMode.Message,
+                PipeOptions.Asynchronous | PipeOptions.WriteThrough,
+                PIPE_BUFFER_SIZE,
+                PIPE_BUFFER_SIZE
+            );
+        }
+    }
+
+    private static async Task ProcessPipeMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // ƒƒbƒZ[ƒW‚ğ“Ç‚İæ‚èiƒ^ƒCƒ€ƒAƒEƒg•t‚«j
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30•b‚Åƒ^ƒCƒ€ƒAƒEƒg
+
+            var message = await ReadPipeMessageAsync(pipeServer, timeoutCts.Token);
+            if (string.IsNullOrEmpty(message))
+            {
+                await Task.Delay(100, cancellationToken); // ’ZŠÔ‘Ò‹@
+                return;
+            }
+
+            LogSecurityEvent("MESSAGE_RECEIVED", $"Processing message: {message.Substring(0, Math.Min(100, message.Length))}...", "");
+
+            // JSON-RPC ƒŠƒNƒGƒXƒg‚ğ‰ğÍ
+            JsonRpcRequest? rpc;
+            try
+            {
+                rpc = JsonSerializer.Deserialize<JsonRpcRequest>(message);
+            }
+            catch (JsonException ex)
+            {
+                LogSecurityEvent("JSON_PARSE_ERROR", $"Invalid JSON: {ex.Message}", message);
+                await SendPipeErrorAsync(pipeServer, null, "Invalid JSON-RPC request", cancellationToken);
+                return;
+            }
+
+            if (rpc == null)
+            {
+                await SendPipeErrorAsync(pipeServer, null, "Invalid JSON-RPC request", cancellationToken);
+                return;
+            }
+
+            // ƒŠƒNƒGƒXƒg‚ğˆ—
+            var response = await ProcessRpcRequestAsync(rpc);
+
+            // ƒŒƒXƒ|ƒ“ƒX‚ğ‘—M
+            var responseJson = JsonSerializer.Serialize(response, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            await SendPipeMessageAsync(pipeServer, responseJson, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("MESSAGE_PROCESSING_ERROR", $"Error processing message: {ex.Message}", ex.StackTrace ?? "");
+            try
+            {
+                await SendPipeErrorAsync(pipeServer, null, $"Message processing error: {ex.Message}", cancellationToken);
+            }
+            catch
+            {
+                // ƒGƒ‰[‘—M‚É¸”s‚µ‚½ê‡‚Í–³‹
+            }
+        }
+    }
+
+    private static async Task<string> ReadPipeMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[PIPE_BUFFER_SIZE];
+        using var ms = new MemoryStream();
+
+        do
+        {
+            var bytesRead = await pipeServer.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            ms.Write(buffer, 0, bytesRead);
+
+            // ƒƒbƒZ[ƒWƒTƒCƒY§ŒÀƒ`ƒFƒbƒN
+            if (ms.Length > MAX_MESSAGE_SIZE)
+            {
+                throw new InvalidOperationException($"Message too large: {ms.Length} bytes");
+            }
+
+        } while (!pipeServer.IsMessageComplete);
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    private static async Task SendPipeMessageAsync(NamedPipeServerStream pipeServer, string message, CancellationToken cancellationToken)
+    {
+        var buffer = Encoding.UTF8.GetBytes(message);
+        await pipeServer.WriteAsync(buffer, 0, buffer.Length, cancellationToken);
+        await pipeServer.FlushAsync(cancellationToken);
+    }
+
+    private static async Task SendPipeErrorAsync(NamedPipeServerStream pipeServer, object? id, string errorMessage, CancellationToken cancellationToken)
+    {
+        var errorResponse = new JsonRpcResponse(
+            Id: id,
+            Error: new { code = -32000, message = errorMessage }
+        );
+
+        var errorJson = JsonSerializer.Serialize(errorResponse);
+        await SendPipeMessageAsync(pipeServer, errorJson, cancellationToken);
+    }
+
+    // ˆÈ‰ºAŠù‘¶‚Ìƒƒ\ƒbƒh‚Í‚»‚Ì‚Ü‚ÜˆÛiProcessRpcRequestAsyncˆÈ~j
+    private static async Task<JsonRpcResponse> ProcessRpcRequestAsync(JsonRpcRequest rpc)
+    {
+        try
+        {
+            var ps = rpc.Params;
+            var method = rpc.Method;
+
+            // ƒƒ\ƒbƒh•Êˆ—
+            if (method == "tools/call")
+            {
+                return await ProcessToolCallAsync(rpc);
+            }
+            else if (method is "initialize" or "tools/list" or "resources/list" or "prompts/list")
+            {
+                return ProcessTemplateRequest(rpc, method);
+            }
+            else
+            {
+                return new JsonRpcResponse(
+                    Id: rpc.Id,
+                    Error: new { code = -32601, message = "Method not found" }
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("RPC_PROCESSING_ERROR", $"RPC processing error: {ex.Message}", ex.StackTrace ?? "");
+            return new JsonRpcResponse(
+                Id: rpc.Id,
+                Error: new { code = -32603, message = "Internal error" }
+            );
+        }
+    }
+
+    private static async Task<JsonRpcResponse> ProcessToolCallAsync(JsonRpcRequest rpc)
+    {
         var ps = rpc.Params;
         var cmdName = ps.GetProperty("name").GetString()!;
         bool executeImmediately = rpc.Params.TryGetProperty("arguments", out var args) &&
                             args.TryGetProperty("executeImmediately", out var exeFlag) &&
                             exeFlag.GetBoolean();
+
         string command;
         switch (cmdName)
         {
@@ -178,27 +462,28 @@ public static class McpServerHost
                 break;
         }
 
-        // ã‚³ãƒãƒ³ãƒ‰æ¤œè¨¼ã‚’å®Ÿè¡Œ
+        // ƒRƒ}ƒ“ƒhŒŸØ
         var validationError = ValidateCommand(command, executeImmediately);
         if (validationError != null)
         {
-            // æ¤œè¨¼ã‚¨ãƒ©ãƒ¼ãŒã‚ã‚‹å ´åˆã€å³åº§ã«ã‚¨ãƒ©ãƒ¼ãƒ¬ã‚¹ãƒãƒ³ã‚¹ã‚’è¿”ã™
-            var errorResponse = new JsonRpcResponse(
+            LogSecurityEvent("COMMAND_VALIDATION_FAILED",
+                $"Command validation failed: {validationError}",
+                $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
+
+            return new JsonRpcResponse(
                 Jsonrpc: rpc.Jsonrpc,
                 Id: rpc.Id,
                 Result: CreateContentResponse(validationError)
             );
-            var errorJson = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
-            resp.ContentType = "application/json";
-            await resp.OutputStream.WriteAsync(Encoding.UTF8.GetBytes(errorJson));
-            return;
         }
 
-        JsonRpcResponse response;
         if (!executeImmediately)
         {
             insertCommand = command;
-            response = new JsonRpcResponse(
+            LogSecurityEvent("COMMAND_ENQUEUED", "Command enqueued for manual execution",
+                $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
+
+            return new JsonRpcResponse(
                 Jsonrpc: rpc.Jsonrpc,
                 Id: rpc.Id,
                 Result: CreateContentResponse("Command enqueued. Press Enter in console.")
@@ -208,140 +493,209 @@ public static class McpServerHost
         {
             outputFromCommand = null;
             executeCommand = command;
-            response = await CollectImmediateResponse(rpc);
-            Console.WriteLine();
+
+            LogSecurityEvent("COMMAND_EXECUTION", "Executing command immediately",
+                $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
+
+            var response = await CollectImmediateResponse(rpc);
+            return response;
         }
-        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
-        resp.ContentType = "application/json";
-        await resp.OutputStream.WriteAsync(Encoding.UTF8.GetBytes(json));
     }
 
-    // æ¤œè¨¼ãƒ¡ã‚½ãƒƒãƒ‰ã‚’è¿½åŠ 
+    // ˆÈ‰ºAŠù‘¶‚Ìƒƒ\ƒbƒh‚ğ‚»‚Ì‚Ü‚ÜˆÛ
+    private static JsonRpcResponse ProcessTemplateRequest(JsonRpcRequest rpc, string method)
+    {
+        try
+        {
+            var template = method.Replace('/', '_') + ".json";
+            var content = ReturnTemplate(template, rpc.Id?.ToString() ?? "0");
+
+            // JSON‚Æ‚µ‚Äƒp[ƒX‚µ‚Ä•Ô‚·
+            var jsonContent = JsonSerializer.Deserialize<JsonElement>(content);
+
+            return new JsonRpcResponse(
+                Jsonrpc: rpc.Jsonrpc,
+                Id: rpc.Id,
+                Result: jsonContent
+            );
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("TEMPLATE_ERROR", $"Template processing error: {ex.Message}", $"Method: {method}");
+            return new JsonRpcResponse(
+                Id: rpc.Id,
+                Error: new { code = -32603, message = "Template processing failed" }
+            );
+        }
+    }
+
+    private static string ReturnTemplate(string templateName, string id)
+    {
+        try
+        {
+            var assemblyLocation = Assembly.GetExecutingAssembly().Location;
+            var assemblyDir = Path.GetDirectoryName(assemblyLocation)!;
+            var templatePath = Path.Combine(assemblyDir, "..", "Templates", templateName);
+
+            if (File.Exists(templatePath))
+            {
+                var content = File.ReadAllText(templatePath);
+                return content.Replace("{0}", id);
+            }
+            else
+            {
+                throw new FileNotFoundException($"Template not found: {templateName}");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("TEMPLATE_READ_ERROR", $"Failed to read template: {ex.Message}", $"Template: {templateName}");
+            throw;
+        }
+    }
+
     private static string? ValidateCommand(string command, bool executeImmediately)
     {
-        // 1. null/ç©ºæ–‡å­—ãƒã‚§ãƒƒã‚¯
-        if (string.IsNullOrWhiteSpace(command))
-        {
-            return "ERROR: Empty command provided.";
-        }
+        if (string.IsNullOrEmpty(command))
+            return "Command cannot be empty";
 
-        // 2. æ”¹è¡Œæ–‡å­—ãƒã‚§ãƒƒã‚¯
-        if (!executeImmediately && (command.Contains('\n') || command.Contains('\r')))
-        {
-            return "ERROR: Multi-line commands are not supported when executeImmediately is false. Please use a single-line PowerShell command.";
-        }
+        if (command.Length > MAX_COMMAND_LENGTH)
+            return $"Command too long (max {MAX_COMMAND_LENGTH} characters)";
 
-        // 3. é•·ã™ãã‚‹ã‚³ãƒãƒ³ãƒ‰ã®ãƒã‚§ãƒƒã‚¯ï¼ˆã‚ªãƒ—ã‚·ãƒ§ãƒ³ï¼‰
-        if (command.Length > 5000)
-        {
-            var excess = command.Length - 5000;
-            var percentage = Math.Round((double)excess / 5000 * 100, 1);
+        //// ŠëŒ¯‚ÈƒRƒ}ƒ“ƒh‚Ìƒ`ƒFƒbƒN
+        //var dangerousPatterns = new[]
+        //{
+        //    "Remove-Item", "rm ", "del ", "format ", "shutdown", "restart", "reboot"
+        //};
 
-            return $"COMMAND_LENGTH_ERROR: Command too long for execution" +
-                   $"\nâ”œâ”€ Current length: {command.Length:N0} characters" +
-                   $"\nâ”œâ”€ Maximum allowed: 5,000 characters" +
-                   $"\nâ”œâ”€ Excess: {excess:N0} characters ({percentage}% over limit)" +
-                   $"\nâ”œâ”€ Command preview: {(command.Length > 100 ? command.Substring(0, 100) + "..." : command)}" +
-                   $"\nâ””â”€ Solutions:" +
-                   $"\n   â€¢ Split into multiple commands" +
-                   $"\n   â€¢ Use variables to store intermediate results" +
-                   $"\n   â€¢ Simplify complex pipelines" +
-                   $"\n   â€¢ Use Select-Object to limit output earlier in pipeline";
-        }
+        //var lowerCommand = command.ToLowerInvariant();
+        //foreach (var pattern in dangerousPatterns)
+        //{
+        //    if (lowerCommand.Contains(pattern.ToLowerInvariant()))
+        //    {
+        //        return $"Potentially dangerous command detected: {pattern}";
+        //    }
+        //}
 
-        // æ¤œè¨¼é€šé
         return null;
     }
 
-    private static string BuildCommand(string name, JsonElement args)
+    private static string BuildCommand(string cmdName, JsonElement args)
     {
-        var sb = new StringBuilder(name);
+        var sb = new StringBuilder(cmdName);
+
         foreach (var prop in args.EnumerateObject())
         {
-            if (prop.NameEquals("executeImmediately")) continue;
-            sb.Append(' ').Append(prop.Name);
-            if (prop.Value.ValueKind is JsonValueKind.False) continue;
-            sb.Append(' ');
-            sb.Append(prop.Value.ValueKind switch
+            if (prop.Name == "executeImmediately" || prop.Name == "timeoutSeconds")
+                continue;
+
+            var value = prop.Value;
+            sb.Append($" -{prop.Name}");
+
+            if (value.ValueKind == JsonValueKind.String)
             {
-                JsonValueKind.String => prop.Value.GetString(),
-                JsonValueKind.Number => prop.Value.GetRawText(),
-                _ => prop.Value.GetRawText()
-            });
+                var str = value.GetString()!;
+                sb.Append($" '{str.Replace("'", "''")}'");
+            }
+            else if (value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+            {
+                sb.Append($" {value.GetRawText()}");
+            }
+            else if (value.ValueKind == JsonValueKind.Array)
+            {
+                var items = value.EnumerateArray().Select(v =>
+                    v.ValueKind == JsonValueKind.String ? $"'{v.GetString()!.Replace("'", "''")}'" : v.GetRawText()
+                );
+                sb.Append($" @({string.Join(", ", items)})");
+            }
         }
+
         return sb.ToString();
     }
 
     private static async Task<JsonRpcResponse> CollectImmediateResponse(JsonRpcRequest rpc)
     {
-        // ã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆæ™‚åˆ»ã‚’è¨­å®š
-        var timeout = DateTime.UtcNow.AddSeconds(30);
+        const int maxTimeoutMs = 30 * 60 * 1000; // 30•ª
+        const int defaultTimeoutMs = 5 * 60 * 1000; // 5•ª
+        const int pollIntervalMs = 100;
 
-        // outputForCmdlet ãŒã‚»ãƒƒãƒˆã•ã‚Œã‚‹ã¾ã§ã€ã¾ãŸã¯ã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆã¾ã§å¾…æ©Ÿ
-        while (outputFromCommand == null && DateTime.UtcNow < timeout)
+        int timeoutMs = defaultTimeoutMs;
+        if (rpc.Params.TryGetProperty("arguments", out var args) &&
+            args.TryGetProperty("timeoutSeconds", out var timeoutParam) &&
+            timeoutParam.TryGetInt32(out var customTimeout))
         {
-            await Task.Delay(50);
+            timeoutMs = Math.Min(customTimeout * 1000, maxTimeoutMs);
         }
 
-        // æœ€çµ‚çš„ãªãƒ†ã‚­ã‚¹ãƒˆã‚’æ±ºå®š
-        var text = outputFromCommand ?? "Timeout. No response received";
+        var elapsed = 0;
 
-        // JSON-RPC ãƒ¬ã‚¹ãƒãƒ³ã‚¹ç”¨ã® content é…åˆ—
-        var content = new[]
+        while (elapsed < timeoutMs)
         {
-            new { type = "text", text }
-        };
-
-        // content é…åˆ—ã‚’çµ„ã¿ç«‹ã¦
-        var resultObj = new
-        {
-            content = new[]
+            if (outputFromCommand != null)
             {
-                new { type = "text", text }
+                var output = outputFromCommand;
+                outputFromCommand = null;
+                return new JsonRpcResponse(
+                    Jsonrpc: rpc.Jsonrpc,
+                    Id: rpc.Id,
+                    Result: CreateContentResponse(output)
+                );
             }
-        };
+
+            await Task.Delay(pollIntervalMs);
+            elapsed += pollIntervalMs;
+        }
+
+        var timeoutMinutes = timeoutMs / (60 * 1000);
+        LogSecurityEvent("COMMAND_TIMEOUT",
+            $"Command execution timed out after {timeoutMinutes} minutes",
+            $"RequestId: {rpc.Id}");
 
         return new JsonRpcResponse(
             Jsonrpc: rpc.Jsonrpc,
             Id: rpc.Id,
-            Result: resultObj
+            Result: CreateContentResponse($"Command execution timed out after {timeoutMinutes} minutes. " +
+                                       $"Consider using a shorter command or increasing the timeout with the timeoutSeconds parameter.")
         );
     }
 
-    private static async Task ReturnTemplate(HttpListenerRequest req, HttpListenerResponse resp, string templateFile)
+    private static object CreateContentResponse(string text)
     {
-        var module_dll_path = Assembly.GetExecutingAssembly().Location;
-        var module_dir = Path.GetDirectoryName(module_dll_path);
-
-        var path = System.IO.Path.GetFullPath(System.IO.Path.Combine(module_dir!, "Templates", templateFile));
-        if (!File.Exists(path))
+        return new
         {
-            resp.StatusCode = 500;
-            await WriteJson(resp, new { error = "Template not found.", path });
-            return;
-        }
-
-        var content = await File.ReadAllTextAsync(path, Encoding.UTF8);
-        if (templateFile.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-        {
-            var id = JsonDocument.Parse(await new StreamReader(req.InputStream).ReadToEndAsync())
-                         .RootElement.GetProperty("id").GetRawText();
-            content = content.Replace("{0}", id);
-        }
-
-        await WriteJson(resp, JsonSerializer.Deserialize<object>(content) ?? "");
+            content = new object[]
+            {
+                new { type = "text", text = text }
+            }
+        };
     }
 
-    private static JsonSerializerOptions jsoWriteIndented = new() { WriteIndented = false };
-    private static Task WriteJson(HttpListenerResponse resp, object obj)
+    /// <summary>
+    /// ƒZƒLƒ…ƒŠƒeƒBƒCƒxƒ“ƒg‚ÌƒƒO‹L˜^
+    /// </summary>
+    private static void LogSecurityEvent(string eventType, string message, string details)
     {
-        var json = JsonSerializer.Serialize(obj, jsoWriteIndented);
-        var data = Encoding.UTF8.GetBytes(json);
-        resp.ContentType = "application/json";
-        resp.ContentLength64 = data.Length;
-        return resp.OutputStream.WriteAsync(data, 0, data.Length);
-    }
+        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC");
+        var logMessage = $"[PowerShell.MCP] [{timestamp}] [PIPE-{eventType}] {message}";
 
-    private static object CreateContentResponse(string message)
-        => new { content = new[] { new { type = "text", text = message } } };
+        if (!string.IsNullOrEmpty(details))
+        {
+            logMessage += $" | Details: {details}";
+        }
+
+        // ƒRƒ“ƒ\[ƒ‹‚Éo—Í
+        //Console.WriteLine(logMessage);
+
+        // ƒfƒoƒbƒOo—Í
+        System.Diagnostics.Debug.WriteLine(logMessage);
+
+        // d—v‚ÈƒCƒxƒ“ƒg‚Ìê‡A’Ç‰Á‚ÌŒx
+        if (eventType.Contains("ERROR") || eventType.Contains("FAILED") ||
+            eventType.Contains("TIMEOUT") || eventType.Contains("VALIDATION"))
+        {
+            var alertMessage = $"[PowerShell.MCP] [PIPE-ALERT] {eventType} - check server status";
+            //Console.WriteLine(alertMessage);
+            System.Diagnostics.Debug.WriteLine(alertMessage);
+        }
+    }
 }

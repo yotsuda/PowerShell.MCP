@@ -6,7 +6,6 @@ namespace PowerShell.MCP
     [CmdletProvider("PowerShell.MCP", ProviderCapabilities.None)]
     public class MCPProvider : CmdletProvider
     {
-        public static readonly string url = "http://localhost:8086/";
         private CancellationTokenSource? _tokenSource;
 
         protected override ProviderInfo Start(ProviderInfo providerInfo)
@@ -25,17 +24,17 @@ namespace PowerShell.MCP
         -EventName      Elapsed `
         -SourceIdentifier MCP_Poll `
         -Action {
-            $cmd = [PowerShell.MCP.MCPServerHost]::insertCommand
+            $cmd = [PowerShell.MCP.McpServerHost]::insertCommand
             if ($cmd) {
-                [PowerShell.MCP.MCPServerHost]::insertCommand = $null
+                [PowerShell.MCP.McpServerHost]::insertCommand = $null
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
                 [Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()
                 [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
             }
 
-            $cmd = [PowerShell.MCP.MCPServerHost]::executeCommand
+            $cmd = [PowerShell.MCP.McpServerHost]::executeCommand
             if ($cmd) {
-                [PowerShell.MCP.MCPServerHost]::executeCommand = $null
+                [PowerShell.MCP.McpServerHost]::executeCommand = $null
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
 
                 try {
@@ -169,26 +168,16 @@ namespace PowerShell.MCP
                         }
 
                         $text = ($formattedOutput -join ""`n"").Trim()
-                        $originalLength = $text.Length
-                        if ($originalLength -gt 8000) {
-                            $text = $text.Substring(0, 8000)
-                            $text += ""`n`n=== OUTPUT TRUNCATED ===`nOriginal: $originalLength characters | Showing: 8000 characters | Hidden: $($originalLength - 8000) characters""
-                        }
-                        [PowerShell.MCP.MCPServerHost]::outputFromCommand = $text
+                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $text
                     } else {
                         $text = if ($cleanOutput.Success) { $cleanOutput.Success } else { """" }
-                        $originalLength = $text.Length
-                        if ($originalLength -gt 8000) {
-                            $text = $text.Substring(0, 8000)
-                            $text += ""`n`n=== OUTPUT TRUNCATED ===`nOriginal: $originalLength characters | Showing: 8000 characters | Hidden: $($originalLength - 8000) characters""
-                        }
-                        [PowerShell.MCP.MCPServerHost]::outputFromCommand = $text
+                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $text
                     }
                 }
                 catch {
                     $errorMessage = ""Command execution failed: $($_.Exception.Message)""
                     Write-Host $errorMessage -ForegroundColor Red
-                    [PowerShell.MCP.MCPServerHost]::outputFromCommand = $errorMessage
+                    [PowerShell.MCP.McpServerHost]::outputFromCommand = $errorMessage
                 }
             }
         } | Out-Null
@@ -198,11 +187,18 @@ namespace PowerShell.MCP
 
             Task.Run(() =>
             {
-                McpServerHost.StartServer(this, url, _tokenSource.Token);
+                try
+                {
+                    McpServerHost.StartServer(this, _tokenSource.Token);
+                }
+                catch (Exception ex)
+                {
+                    WriteWarning($"[PowerShell.MCP] Failed to start Named Pipe server: {ex.Message}");
+                }
             }, _tokenSource.Token);
 
             WriteInformation(
-                "[PowerShell.MCP] MCP server started at http://localhost:8086/",
+                "[PowerShell.MCP] MCP Named Pipe server started",
                 ["PowerShell.MCP", "ServerStart"]
             );
             return pi;

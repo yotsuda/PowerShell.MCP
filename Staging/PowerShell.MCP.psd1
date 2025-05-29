@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.0.4'
+ModuleVersion = '1.1.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -107,16 +107,14 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell MCP v1.0 Release Notes
+        ReleaseNotes = 'PowerShell MCP v1.1 Release Notes
 
 === Features ===
 Transform your AI assistant into a powerful PowerShell tool! This groundbreaking module turns your PowerShell console into an MCP server, providing MCP clients (such as Claude Desktop) with direct access to the entire PowerShell ecosystem.
 
-Note: Since most current MCP clients cannot directly connect to HTTP-based MCP servers, this module includes a stdio-based MCP proxy server.
-
 === Key Features ===
-- PowerShell 7 as MCP Server: Your PowerShell console becomes an HTTP-based MCP server
-- HTTP Server Functionality: Provides MCP protocol via http://localhost:8086/
+- PowerShell 7 as MCP Server: Your PowerShell console becomes an MCP server
+- Server Functionality: Provides MCP functionality via named pipe
 - Stdio Proxy Included: stdio-based proxy server for MCP client compatibility
 - Unlimited PowerShell Access: Execute any PowerShell cmdlet via MCP clients
 - Simple Setup: Plug-and-play integration with MCP clients via proxy server
@@ -130,15 +128,15 @@ Here''s the complete configuration guide with the corrected numbering:
    PS> Install-Module PowerShell.MCP
 
 2. Import Module
-   PS> Import-Module PSReadLine,PowerShell.MCP
-   (Upon import, PowerShell starts operating as an HTTP-based MCP server on port 8086)
+   PS> Import-Module PowerShell.MCP,PSReadLine
+   (Upon import, PowerShell starts operating as an MCP server)
 
 3. Verify PowerShell.MCP Installation Directory
    First, confirm the PowerShell.MCP module installation directory:
    PS> (Get-Module PowerShell.MCP).ModuleBase
 
    This command will display the PowerShell.MCP installation directory path.
-   Example: `C:\Users\[Username]\Documents\PowerShell\Modules\PowerShell.MCP\1.0.0`
+   Example: `C:\Users\[Username]\Documents\PowerShell\Modules\PowerShell.MCP\1.1.0`
 
 4. Claude Desktop Configuration Example
    For Claude Desktop, open your configuration file with Notepad.
@@ -165,12 +163,9 @@ Here''s the complete configuration guide with the corrected numbering:
 
 === Architecture Overview ===
 This module operates with the following architecture:
-1. PowerShell Module: Functions as HTTP-based MCP server (localhost:8086)
-2. Stdio Proxy Server: Bridges between MCP clients and HTTP MCP server
+1. PowerShell Module: Functions as named-pipe-based MCP server
+2. Stdio Proxy Server: Bridges between MCP clients and named pipe MCP server
 3. MCP Client: Connects to proxy server via stdio for operations
-
-Since most current MCP clients do not support direct connections to HTTP-based MCP servers,
-this architecture ensures compatibility with a wide range of MCP clients.
 
 === Prompt Examples ===
 
@@ -225,18 +220,20 @@ Creative Tasks:
 - "Display long-running processes with colorful progress bars"
 - "Visualize folder size analysis in TreeMap-style HTML"
 
+Developer Features:
+- "Run syntax checks on PowerShell scripts"
+- "Generate documentation from comment-based help"
+- "Analyze module dependencies"
+- "Calculate code metrics and evaluate quality"
+- "Please review the .cs files under c:\folder"
+
 PowerShell-Specific Advanced Features:
 - "Check the cmdlets included in imported modules"
 - "Check Get-Date cmdlet parameters with Get-Help cmdlet and try several examples with those parameters"
 - "Send several complex commands that you know to the PowerShell console with explanations. Do not execute them."
 - "Create processing examples combining multiple cmdlets using pipelines"
 - "Use PowerShell''s help system to display detailed information about specific commands"
-
-Developer Features:
-- "Run syntax checks on PowerShell scripts"
-- "Generate documentation from comment-based help"
-- "Analyze module dependencies"
-- "Calculate code metrics and evaluate quality"
+- "How do you find using PowerShell.MCP? Please share your thoughts and experiences"
 
 === Software Requirements ===
 - Windows 10 (version 1607 or higher) or Windows 11
@@ -245,12 +242,10 @@ Developer Features:
 - PSReadLine (version 2.3.4 or higher)
 
 === Package Contents ===
-- PowerShell.MCP Module: HTTP-based MCP server functionality
+- PowerShell.MCP Module: Named-pipe-based MCP server functionality
 - PowerShell.MCP.Proxy.exe: Stdio proxy server for MCP client compatibility
 
 === Known Limitations ===
-- Fixed HTTP server port: 8086
-- Output truncation: MCP responses limited to 8000 characters (for fast and stable LLM operation; full output viewable in console)
 - Security Note: Provides complete PowerShell access - use only in trusted environments
 
 === What Makes This Special? ===
@@ -281,4 +276,3 @@ Are you ready to revolutionize your AI assistant experience? Import the module a
 # DefaultCommandPrefix = ''
 
 }
-
