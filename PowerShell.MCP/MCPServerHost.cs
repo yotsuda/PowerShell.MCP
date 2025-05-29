@@ -36,10 +36,6 @@ public static class McpServerHost
     private const int PIPE_BUFFER_SIZE = 8192;
     private const int MAX_CLIENTS = 1;
 
-    // セキュリティ設定
-    private const int MAX_COMMAND_LENGTH = 5000;
-    private const int MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB制限
-
     // バージョン管理（起動時に一度だけ取得）
     private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
 
@@ -378,12 +374,6 @@ public static class McpServerHost
 
             ms.Write(buffer, 0, bytesRead);
 
-            // メッセージサイズ制限チェック
-            if (ms.Length > MAX_MESSAGE_SIZE)
-            {
-                throw new InvalidOperationException($"Message too large: {ms.Length} bytes");
-            }
-
         } while (!pipeServer.IsMessageComplete);
 
         return Encoding.UTF8.GetString(ms.ToArray());
@@ -558,9 +548,6 @@ public static class McpServerHost
     {
         if (string.IsNullOrEmpty(command))
             return "Command cannot be empty";
-
-        if (command.Length > MAX_COMMAND_LENGTH)
-            return $"Command too long (max {MAX_COMMAND_LENGTH} characters)";
 
         //// 危険なコマンドのチェック
         //var dangerousPatterns = new[]
