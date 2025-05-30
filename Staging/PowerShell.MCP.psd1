@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.1.1'
+ModuleVersion = '1.1.2'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -226,6 +226,7 @@ Developer Features:
 - "Analyze module dependencies"
 - "Calculate code metrics and evaluate quality"
 - "Please review the .cs files under c:\folder"
+- "Create patch files for code changes and apply with git apply"
 
 PowerShell-Specific Advanced Features:
 - "Check the cmdlets included in imported modules"

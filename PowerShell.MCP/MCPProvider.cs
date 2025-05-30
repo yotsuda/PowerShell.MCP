@@ -1,4 +1,4 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 using System.Management.Automation.Provider;
 
 namespace PowerShell.MCP
@@ -67,12 +67,14 @@ namespace PowerShell.MCP
                     $mcpInformation = @()
 
                     # コマンド実行
-                    Invoke-Expression $cmd -ErrorVariable mcpErrors -WarningVariable mcpWarnings -InformationVariable mcpInformation -OutVariable results
+                    Invoke-Expression $cmd `
+                        -ErrorVariable mcpErrors `
+                        -WarningVariable mcpWarnings `
+                        -InformationVariable mcpInformation `
+                        -OutVariable results
 
                     # コンソール出力
                     $results | Out-Default
-                    if ($mcpErrors) { $mcpErrors | ForEach-Object { Write-Error $_ } }
-                    if ($mcpWarnings) { $mcpWarnings | ForEach-Object { Write-Warning $_ } }
 
                     # 構造化出力の生成
                     $allResults = @()
@@ -85,8 +87,6 @@ namespace PowerShell.MCP
                         Success = @()
                         Error = @()
                         Warning = @()
-                        Verbose = @()
-                        Debug = @()
                         Information = @()
                     }
 
@@ -97,12 +97,6 @@ namespace PowerShell.MCP
                             }
                             'WarningRecord' {
                                 $outputStreams.Warning += $item.Message
-                            }
-                            'VerboseRecord' {
-                                $outputStreams.Verbose += $item.Message
-                            }
-                            'DebugRecord' {
-                                $outputStreams.Debug += $item.Message
                             }
                             'InformationRecord' {
                                 $outputStreams.Information += $item.MessageData
@@ -117,8 +111,6 @@ namespace PowerShell.MCP
                         Success = ($outputStreams.Success | Out-String).Trim()
                         Error = ($outputStreams.Error -join ""`n"").Trim()
                         Warning = ($outputStreams.Warning -join ""`n"").Trim()
-                        Verbose = ($outputStreams.Verbose -join ""`n"").Trim()
-                        Debug = ($outputStreams.Debug -join ""`n"").Trim()
                         Information = ($outputStreams.Information -join ""`n"").Trim()
                     }
 
@@ -141,18 +133,6 @@ namespace PowerShell.MCP
                         if ($cleanOutput.Warning) {
                             $formattedOutput += ""=== WARNINGS ===""
                             $formattedOutput += $cleanOutput.Warning
-                            $formattedOutput += """"
-                        }
-
-                        if ($cleanOutput.Verbose) {
-                            $formattedOutput += ""=== VERBOSE ===""
-                            $formattedOutput += $cleanOutput.Verbose
-                            $formattedOutput += """"
-                        }
-
-                        if ($cleanOutput.Debug) {
-                            $formattedOutput += ""=== DEBUG ===""
-                            $formattedOutput += $cleanOutput.Debug
                             $formattedOutput += """"
                         }
 
