@@ -38,7 +38,7 @@ namespace PowerShell.MCP
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
 
                 try {
-                    [Console]::WriteLine()  # 確実に改行 + プロンプト
+                    [Console]::WriteLine()
                     try {
                         $promptText = & { prompt }
                         $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
@@ -48,46 +48,65 @@ namespace PowerShell.MCP
                         [Console]::Write(""PS $((Get-Location).Path)> "")
                     }
 
-                    # 複数行コマンドの判定
                     $isMultiLine = $cmd.Contains(""`n"") -or $cmd.Contains(""`r"")
                     if ($isMultiLine) {
-                        # 複数行コマンド: 常に改行
-                        [Console]::WriteLine()  # 確実に改行
+                        [Console]::WriteLine()
                     }
 
                     Write-Host $cmd
-
-                    # メインの実行処理
-                    $ErrorActionPreference = 'Continue'
-                    $WarningPreference = 'Continue'
 
                     $results = @()
                     $mcpErrors = @()
                     $mcpWarnings = @()
                     $mcpInformation = @()
+                    $hostOutput = @()
 
-                    # コマンド実行
-                    Invoke-Expression $cmd `
-                        -ErrorVariable mcpErrors `
-                        -WarningVariable mcpWarnings `
-                        -InformationVariable mcpInformation `
-                        -OutVariable results
+                    $tempFile = [System.IO.Path]::GetTempFileName()
 
-                    # コンソール出力
+                    try {
+                        Start-Transcript -Path $tempFile -Append | Out-Null
+                        
+                        Invoke-Expression $cmd `
+                            -ErrorVariable mcpErrors `
+                            -WarningVariable mcpWarnings `
+                            -InformationVariable mcpInformation `
+                            -OutVariable results
+                        
+                        Stop-Transcript | Out-Null
+                        
+                        $transcriptContent = Get-Content $tempFile -ErrorAction SilentlyContinue
+                        $hostOutput = $transcriptContent | Where-Object { $_ -match '^(What if:|VERBOSE:|DEBUG:|WARNING:)' }
+                    }
+                    catch {
+                        Invoke-Expression $cmd `
+                            -ErrorVariable mcpErrors `
+                            -WarningVariable mcpWarnings `
+                            -InformationVariable mcpInformation `
+                            -OutVariable results
+                    }
+                    finally {
+                        if (Test-Path $tempFile) {
+                            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+
                     $results | Out-Default
 
-                    # 構造化出力の生成
                     $allResults = @()
                     $allResults += $results
                     foreach($err in $mcpErrors) { $allResults += $err }
                     foreach($warn in $mcpWarnings) { $allResults += $warn }
                     foreach($info in $mcpInformation) { $allResults += $info }
+                    foreach($host in $hostOutput) { $allResults += $host }
+
+                    $hasHostOutput = $hostOutput.Count -gt 0
 
                     $outputStreams = @{
                         Success = @()
                         Error = @()
                         Warning = @()
                         Information = @()
+                        Host = @()
                     }
 
                     foreach ($item in $allResults) {
@@ -101,6 +120,13 @@ namespace PowerShell.MCP
                             'InformationRecord' {
                                 $outputStreams.Information += $item.MessageData
                             }
+                            'String' {
+                                if ($item -in $hostOutput) {
+                                    $outputStreams.Host += $item
+                                } else {
+                                    $outputStreams.Success += $item
+                                }
+                            }
                             default {
                                 $outputStreams.Success += $item
                             }
@@ -112,6 +138,7 @@ namespace PowerShell.MCP
                         Error = ($outputStreams.Error -join ""`n"").Trim()
                         Warning = ($outputStreams.Warning -join ""`n"").Trim()
                         Information = ($outputStreams.Information -join ""`n"").Trim()
+                        Host = ($outputStreams.Host -join ""`n"").Trim()
                     }
 
                     $cleanOutput = @{}
@@ -139,6 +166,12 @@ namespace PowerShell.MCP
                         if ($cleanOutput.Information) {
                             $formattedOutput += ""=== INFO ===""
                             $formattedOutput += $cleanOutput.Information
+                        }
+
+                        if ($cleanOutput.Host) {
+                            $formattedOutput += ""=== HOST ===""
+                            $formattedOutput += $cleanOutput.Host
+                            $formattedOutput += """"
                         }
 
                         if ($cleanOutput.Success) {
