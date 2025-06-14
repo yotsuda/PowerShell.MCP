@@ -10,6 +10,61 @@ using System.Security.AccessControl;
 
 namespace PowerShell.MCP;
 
+#region Attributes and Infrastructure
+
+/// <summary>
+/// MCPメソッドハンドラーを示す属性
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public class McpMethodAttribute : Attribute
+{
+    public string MethodName { get; }
+    public bool RequiresAuth { get; set; } = false;
+    public int TimeoutSeconds { get; set; } = 300; // 5分デフォルト
+
+    public McpMethodAttribute(string methodName)
+    {
+        MethodName = methodName;
+    }
+}
+
+/// <summary>
+/// MCPメソッドハンドラーの実行コンテキスト
+/// </summary>
+public class McpMethodContext
+{
+    public JsonRpcRequest Request { get; }
+    public CmdletProvider Host { get; }
+    public CancellationToken CancellationToken { get; }
+
+    public McpMethodContext(JsonRpcRequest request, CmdletProvider host, CancellationToken cancellationToken)
+    {
+        Request = request;
+        Host = host;
+        CancellationToken = cancellationToken;
+    }
+}
+
+/// <summary>
+/// MCPメソッドハンドラーの結果
+/// </summary>
+public class McpMethodResult
+{
+    public bool IsSuccess { get; set; }
+    public object? Result { get; set; }
+    public object? ErrorInfo { get; set; }
+
+    public static McpMethodResult Success(object? result = null)
+        => new() { IsSuccess = true, Result = result };
+
+    public static McpMethodResult Failure(object error)
+        => new() { IsSuccess = false, ErrorInfo = error };
+}
+
+#endregion
+
+#region DTOs
+
 public record JsonRpcRequest(
     [property: JsonPropertyName("id")] object? Id,
     [property: JsonPropertyName("method")] string Method,
@@ -24,51 +79,63 @@ public record JsonRpcResponse(
     [property: JsonPropertyName("jsonrpc")] string Jsonrpc = "2.0"
 );
 
+#endregion
+
+#region Configuration
+
+public static class McpServerConfig
+{
+    public const string PIPE_NAME = "PowerShell.MCP.Communication";
+    public const int PIPE_BUFFER_SIZE = 8192;
+    public const int MAX_CLIENTS = 1;
+    public const int CONNECTION_TIMEOUT_MINUTES = 10;
+    public const int MESSAGE_TIMEOUT_SECONDS = 30;
+    public const int COMMAND_TIMEOUT_MINUTES = 30;
+    public const int POLL_INTERVAL_MS = 100;
+}
+
+#endregion
+
 public static class McpServerHost
 {
+    #region Private Fields
+
     private static NamedPipeServerStream? _pipeServer;
     private static Task? _serverTask;
     private static CancellationTokenSource? _cancellationTokenSource;
     private static readonly object _lockObject = new object();
-
-    // Named Pipe設定
-    private const string PIPE_NAME = "PowerShell.MCP.Communication";
-    private const int PIPE_BUFFER_SIZE = 8192;
-    private const int MAX_CLIENTS = 1;
-
-    // バージョン管理（起動時に一度だけ取得）
     private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
+    private static readonly Dictionary<string, MethodInfo> _methodHandlers = new();
+
+    #endregion
+
+    #region Public Properties (PowerShell Communication)
+
+    public static string? insertCommand = null;
+    public static string? executeCommand = null;
+    public static string? executeCommandSilent = null;
+    public static string? outputFromCommand = null;
+
+    #endregion
+
+    #region Lifecycle Management
+
+    static McpServerHost()
+    {
+        InitializeMethodHandlers();
+    }
 
     public class Cleanup : IModuleAssemblyCleanup
     {
-        public Cleanup() { }
-
         public void OnRemove(PSModuleInfo psModuleInfo)
         {
             try
             {
                 _cancellationTokenSource?.Cancel();
-
                 lock (_lockObject)
                 {
-                    if (_pipeServer != null)
-                    {
-                        try
-                        {
-                            if (_pipeServer.IsConnected)
-                            {
-                                _pipeServer.Disconnect();
-                            }
-                        }
-                        catch { /* 無視 */ }
-                        finally
-                        {
-                            _pipeServer.Dispose();
-                            _pipeServer = null;
-                        }
-                    }
+                    CleanupPipeServer();
                 }
-
                 _serverTask?.Wait(TimeSpan.FromSeconds(5));
             }
             catch (Exception)
@@ -84,11 +151,6 @@ public static class McpServerHost
         }
     }
 
-    public static string? insertCommand = null;
-    public static string? executeCommand = null;
-    public static string? executeCommandSilent = null;
-    public static string? outputFromCommand = null;
-
     public static void StartServer(CmdletProvider host, CancellationToken token)
     {
         try
@@ -103,7 +165,6 @@ public static class McpServerHost
             }
 
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
-
             LogSecurityEvent("SERVER_START", $"MCP server starting with Named Pipes (Version: {_serverVersion})", "");
 
             _serverTask = Task.Run(async () =>
@@ -124,7 +185,6 @@ public static class McpServerHost
                         LogSecurityEvent("SERVER_ERROR", $"Pipe server error: {ex.Message}", ex.StackTrace ?? "");
                         host.WriteWarning($"[PowerShell.MCP] Pipe server error: {ex.Message}");
 
-                        // エラー後、短時間待機してから再実行
                         try
                         {
                             await Task.Delay(2000, _cancellationTokenSource.Token);
@@ -147,6 +207,29 @@ public static class McpServerHost
         }
     }
 
+    #endregion
+
+    #region Method Handler Management
+
+    private static void InitializeMethodHandlers()
+    {
+        var methods = typeof(McpServerHost).GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
+            .Where(m => m.GetCustomAttribute<McpMethodAttribute>() != null);
+
+        foreach (var method in methods)
+        {
+            var attribute = method.GetCustomAttribute<McpMethodAttribute>()!;
+            _methodHandlers[attribute.MethodName] = method;
+        }
+
+        LogSecurityEvent("HANDLERS_INITIALIZED", $"Registered {_methodHandlers.Count} method handlers",
+            string.Join(", ", _methodHandlers.Keys));
+    }
+
+    #endregion
+
+    #region Core Server Logic
+
     private static async Task RunPipeServerAsync(CancellationToken cancellationToken, CmdletProvider host)
     {
         while (!cancellationToken.IsCancellationRequested)
@@ -155,9 +238,7 @@ public static class McpServerHost
 
             try
             {
-                // セキュアなNamed Pipeサーバーを作成
                 pipeServer = CreateSecurePipeServer();
-
                 lock (_lockObject)
                 {
                     _pipeServer = pipeServer;
@@ -165,26 +246,24 @@ public static class McpServerHost
 
                 LogSecurityEvent("PIPE_WAITING", "Waiting for client connection", "");
 
-                // クライアントの接続を待機（タイムアウト付き）
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromMinutes(10)); // 10分でタイムアウト
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(McpServerConfig.CONNECTION_TIMEOUT_MINUTES));
 
                 await pipeServer.WaitForConnectionAsync(timeoutCts.Token);
 
                 if (!pipeServer.IsConnected)
                 {
                     LogSecurityEvent("PIPE_CONNECTION_FAILED", "Failed to establish connection", "");
-                    continue; // 次の接続を待つ
+                    continue;
                 }
 
                 LogSecurityEvent("PIPE_CONNECTED", "Client connected to Named Pipe", "");
 
-                // 接続中のメッセージ処理
                 while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
-                        await ProcessPipeMessageAsync(pipeServer, cancellationToken);
+                        await ProcessPipeMessageAsync(pipeServer, host, cancellationToken);
                     }
                     catch (IOException ex) when (ex.Message.Contains("pipe is broken") || ex.Message.Contains("pipe has been ended"))
                     {
@@ -198,9 +277,7 @@ public static class McpServerHost
                     catch (Exception ex)
                     {
                         LogSecurityEvent("PIPE_MESSAGE_ERROR", $"Error processing message: {ex.Message}", ex.StackTrace ?? "");
-                        // メッセージ処理エラーの場合は接続を維持するが、リトライしない
-                        // クライアントからの次のメッセージを待つ
-                        break; // ループを抜けて接続をリセット
+                        break;
                     }
                 }
 
@@ -214,47 +291,20 @@ public static class McpServerHost
             catch (TimeoutException)
             {
                 LogSecurityEvent("PIPE_TIMEOUT", "Pipe connection timeout", "");
-                // タイムアウトの場合は再接続を試みる（自動リトライではない）
             }
             catch (Exception ex)
             {
                 LogSecurityEvent("PIPE_ERROR", $"Pipe communication error: {ex.Message}", ex.StackTrace ?? "");
-                // 重大なエラーの場合は、自動リトライを行わず、ログのみ記録
-                // 管理者による手動介入を促す
-                host.WriteError(new ErrorRecord(
-                    ex,
-                    "PipeCommunicationError",
-                    ErrorCategory.ConnectionError,
-                    pipeServer));
+                host.WriteError(new ErrorRecord(ex, "PipeCommunicationError", ErrorCategory.ConnectionError, pipeServer));
             }
             finally
             {
                 lock (_lockObject)
                 {
-                    try
-                    {
-                        if (pipeServer != null)
-                        {
-                            if (pipeServer.IsConnected)
-                            {
-                                pipeServer.Disconnect();
-                            }
-                            pipeServer.Dispose();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogSecurityEvent("PIPE_CLEANUP_ERROR", $"Error during pipe cleanup: {ex.Message}", "");
-                    }
-                    finally
-                    {
-                        _pipeServer = null;
-                    }
+                    CleanupPipeServer();
                 }
             }
 
-            // 短時間待機してから次の接続受付を開始
-            // ただし、重大なエラーの場合はより長い待機時間を設ける
             if (!cancellationToken.IsCancellationRequested)
             {
                 await Task.Delay(1000, cancellationToken);
@@ -262,71 +312,49 @@ public static class McpServerHost
         }
     }
 
-    private static NamedPipeServerStream CreateSecurePipeServer()
+    private static void CleanupPipeServer()
     {
         try
         {
-            // .NET 8対応: セキュリティ設定付きのパイプサーバーを作成
-            var pipeSecurity = new PipeSecurity();
-
-            // 現在のユーザーにフルアクセス権限を付与
-            var identity = WindowsIdentity.GetCurrent();
-            var userSid = identity.User;
-            if (userSid != null)
+            if (_pipeServer != null)
             {
-                pipeSecurity.AddAccessRule(new PipeAccessRule(userSid, PipeAccessRights.FullControl, AccessControlType.Allow));
+                if (_pipeServer.IsConnected)
+                {
+                    _pipeServer.Disconnect();
+                }
+                _pipeServer.Dispose();
             }
-
-            // 管理者グループにフルアクセス権限を付与
-            var adminSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-            pipeSecurity.AddAccessRule(new PipeAccessRule(adminSid, PipeAccessRights.FullControl, AccessControlType.Allow));
-
-            return NamedPipeServerStreamAcl.Create(
-                PIPE_NAME,
-                PipeDirection.InOut,
-                MAX_CLIENTS,
-                PipeTransmissionMode.Message,
-                PipeOptions.Asynchronous | PipeOptions.WriteThrough,
-                PIPE_BUFFER_SIZE,
-                PIPE_BUFFER_SIZE,
-                pipeSecurity
-            );
         }
         catch (Exception ex)
         {
-            LogSecurityEvent("PIPE_SECURITY_ERROR", $"Failed to create secure pipe, falling back to basic pipe: {ex.Message}", "");
-
-            // フォールバック: セキュリティ設定なしの基本的なパイプ
-            return new NamedPipeServerStream(
-                PIPE_NAME,
-                PipeDirection.InOut,
-                MAX_CLIENTS,
-                PipeTransmissionMode.Message,
-                PipeOptions.Asynchronous | PipeOptions.WriteThrough,
-                PIPE_BUFFER_SIZE,
-                PIPE_BUFFER_SIZE
-            );
+            LogSecurityEvent("PIPE_CLEANUP_ERROR", $"Error during pipe cleanup: {ex.Message}", "");
+        }
+        finally
+        {
+            _pipeServer = null;
         }
     }
 
-    private static async Task ProcessPipeMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    #endregion
+
+    #region Message Processing
+
+    private static async Task ProcessPipeMessageAsync(NamedPipeServerStream pipeServer, CmdletProvider host, CancellationToken cancellationToken)
     {
         try
         {
-            // メッセージを読み取り（タイムアウト付き）
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30秒でタイムアウト
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(McpServerConfig.MESSAGE_TIMEOUT_SECONDS));
 
             var message = await ReadPipeMessageAsync(pipeServer, timeoutCts.Token);
             if (string.IsNullOrEmpty(message))
             {
-                await Task.Delay(100, cancellationToken); // 短時間待機
+                await Task.Delay(100, cancellationToken);
                 return;
             }
 
             LogSecurityEvent("MESSAGE_RECEIVED", $"Processing message: {message.Substring(0, Math.Min(100, message.Length))}...", "");
 
-            // JSON-RPC リクエストを解析
             JsonRpcRequest? rpc;
             try
             {
@@ -345,31 +373,23 @@ public static class McpServerHost
                 return;
             }
 
-            // リクエストを処理
-            var response = await ProcessRpcRequestAsync(rpc);
-
-            // レスポンスを送信
+            var response = await ProcessRpcRequestAsync(rpc, host, cancellationToken);
             var responseJson = JsonSerializer.Serialize(response, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             await SendPipeMessageAsync(pipeServer, responseJson, cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            // キャンセルされた場合は再スローして呼び出し元に処理を委ねる
             throw;
         }
         catch (TimeoutException ex)
         {
             LogSecurityEvent("MESSAGE_TIMEOUT", $"Message processing timed out: {ex.Message}", "");
-            // タイムアウトの場合はエラーレスポンスを送信して終了
             try
             {
                 await SendPipeErrorAsync(pipeServer, null, "Message processing timed out", cancellationToken);
             }
-            catch
-            {
-                // エラー送信に失敗した場合は無視して例外を再スロー
-            }
-            throw; // 呼び出し元で接続をリセットするために例外を再スロー
+            catch { }
+            throw;
         }
         catch (Exception ex)
         {
@@ -378,19 +398,358 @@ public static class McpServerHost
             {
                 await SendPipeErrorAsync(pipeServer, null, $"Message processing error: {ex.Message}", cancellationToken);
             }
-            catch
+            catch { }
+            throw;
+        }
+    }
+
+    private static async Task<JsonRpcResponse> ProcessRpcRequestAsync(JsonRpcRequest rpc, CmdletProvider host, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (_methodHandlers.TryGetValue(rpc.Method, out var handler))
             {
-                // エラー送信に失敗した場合は無視
+                var context = new McpMethodContext(rpc, host, cancellationToken);
+                var result = await InvokeMethodHandler(handler, context);
+
+                return new JsonRpcResponse(
+                    Id: rpc.Id,
+                    Result: result.IsSuccess ? result.Result : null,
+                    Error: result.IsSuccess ? null : result.ErrorInfo
+                );
+            }
+            else
+            {
+                return new JsonRpcResponse(
+                    Id: rpc.Id,
+                    Error: new { code = -32601, message = "Method not found" }
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("RPC_PROCESSING_ERROR", $"RPC processing error: {ex.Message}", ex.StackTrace ?? "");
+            return new JsonRpcResponse(
+                Id: rpc.Id,
+                Error: new { code = -32603, message = "Internal error" }
+            );
+        }
+    }
+
+    private static async Task<McpMethodResult> InvokeMethodHandler(MethodInfo handler, McpMethodContext context)
+    {
+        try
+        {
+            var attribute = handler.GetCustomAttribute<McpMethodAttribute>()!;
+
+            // タイムアウト設定
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(attribute.TimeoutSeconds));
+
+            var contextWithTimeout = new McpMethodContext(context.Request, context.Host, timeoutCts.Token);
+
+            // メソッド呼び出し
+            var resultTask = handler.Invoke(null, new object[] { contextWithTimeout }) as Task<McpMethodResult>;
+            if (resultTask == null)
+            {
+                return McpMethodResult.Failure(new { code = -32603, message = "Handler returned invalid result" });
             }
 
-            // 重大なエラーの場合は例外を再スローして接続をリセット
-            throw;
+            return await resultTask;
+        }
+        catch (OperationCanceledException)
+        {
+            return McpMethodResult.Failure(new { code = -32002, message = "Request timed out" });
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("HANDLER_ERROR", $"Handler error: {ex.Message}", ex.StackTrace ?? "");
+            return McpMethodResult.Failure(new { code = -32603, message = "Handler execution failed" });
+        }
+    }
+
+    #endregion
+
+    #region MCP Method Handlers
+
+    [McpMethod("initialize")]
+    private static async Task<McpMethodResult> HandleInitialize(McpMethodContext context)
+    {
+        try
+        {
+            var template = ReturnTemplate("initialize.json", context.Request.Id?.ToString() ?? "0");
+            var jsonContent = JsonSerializer.Deserialize<JsonElement>(template);
+            return McpMethodResult.Success(jsonContent);
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("INITIALIZE_ERROR", $"Initialize error: {ex.Message}", "");
+            return McpMethodResult.Failure(new { code = -32603, message = "Initialize failed" });
+        }
+    }
+
+    [McpMethod("tools/list")]
+    private static async Task<McpMethodResult> HandleToolsList(McpMethodContext context)
+    {
+        try
+        {
+            var template = ReturnTemplate("tools_list.json", context.Request.Id?.ToString() ?? "0");
+            var jsonContent = JsonSerializer.Deserialize<JsonElement>(template);
+            return McpMethodResult.Success(jsonContent);
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("TOOLS_LIST_ERROR", $"Tools list error: {ex.Message}", "");
+            return McpMethodResult.Failure(new { code = -32603, message = "Tools list failed" });
+        }
+    }
+
+    [McpMethod("resources/list")]
+    private static async Task<McpMethodResult> HandleResourcesList(McpMethodContext context)
+    {
+        try
+        {
+            var template = ReturnTemplate("resources_list.json", context.Request.Id?.ToString() ?? "0");
+            var jsonContent = JsonSerializer.Deserialize<JsonElement>(template);
+            return McpMethodResult.Success(jsonContent);
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("RESOURCES_LIST_ERROR", $"Resources list error: {ex.Message}", "");
+            return McpMethodResult.Failure(new { code = -32603, message = "Resources list failed" });
+        }
+    }
+
+    [McpMethod("prompts/list")]
+    private static async Task<McpMethodResult> HandlePromptsList(McpMethodContext context)
+    {
+        try
+        {
+            var template = ReturnTemplate("prompts_list.json", context.Request.Id?.ToString() ?? "0");
+            var jsonContent = JsonSerializer.Deserialize<JsonElement>(template);
+            return McpMethodResult.Success(jsonContent);
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("PROMPTS_LIST_ERROR", $"Prompts list error: {ex.Message}", "");
+            return McpMethodResult.Failure(new { code = -32603, message = "Prompts list failed" });
+        }
+    }
+
+    [McpMethod("tools/call", TimeoutSeconds = 1800)] // 30分タイムアウト
+    private static async Task<McpMethodResult> HandleToolsCall(McpMethodContext context)
+    {
+        try
+        {
+            var ps = context.Request.Params;
+            var cmdName = ps.GetProperty("name").GetString()!;
+
+            // getCurrentLocationの特別処理
+            if (cmdName == "getCurrentLocation")
+            {
+                return await HandleGetCurrentLocation(context);
+            }
+
+            bool executeImmediately = context.Request.Params.TryGetProperty("arguments", out var args) &&
+                                args.TryGetProperty("executeImmediately", out var exeFlag) &&
+                                exeFlag.GetBoolean();
+
+            string command = cmdName == "invokeExpression"
+                ? args.GetProperty("pipeline").GetString()! ?? throw new JsonException("Missing 'pipeline'")
+                : BuildCommand(cmdName, args);
+
+            // コマンド検証
+            var validationError = ValidateCommand(command, executeImmediately);
+            if (validationError != null)
+            {
+                LogSecurityEvent("COMMAND_VALIDATION_FAILED", $"Command validation failed: {validationError}",
+                    $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
+                return McpMethodResult.Success(CreateContentResponse(validationError));
+            }
+
+            if (!executeImmediately)
+            {
+                insertCommand = command;
+                LogSecurityEvent("COMMAND_ENQUEUED", "Command enqueued for manual execution",
+                    $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
+                return McpMethodResult.Success(CreateContentResponse("Command enqueued. Press Enter in console."));
+            }
+            else
+            {
+                return await ExecuteCommandImmediate(command, context);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("TOOLS_CALL_ERROR", $"Tools call error: {ex.Message}", ex.StackTrace ?? "");
+            return McpMethodResult.Failure(new { code = -32603, message = "Tools call failed" });
+        }
+    }
+
+    #endregion
+
+    #region Command Execution
+
+    private static async Task<McpMethodResult> ExecuteCommandImmediate(string command, McpMethodContext context)
+    {
+        outputFromCommand = null;
+        executeCommand = command;
+
+        LogSecurityEvent("COMMAND_EXECUTION", "Executing command immediately",
+            $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
+
+        const int maxTimeoutMs = McpServerConfig.COMMAND_TIMEOUT_MINUTES * 60 * 1000;
+        const int defaultTimeoutMs = 5 * 60 * 1000; // 5分
+
+        int timeoutMs = defaultTimeoutMs;
+        if (context.Request.Params.TryGetProperty("arguments", out var args) &&
+            args.TryGetProperty("timeoutSeconds", out var timeoutParam) &&
+            timeoutParam.TryGetInt32(out var customTimeout))
+        {
+            timeoutMs = Math.Min(customTimeout * 1000, maxTimeoutMs);
+        }
+
+        var elapsed = 0;
+        while (elapsed < timeoutMs)
+        {
+            if (outputFromCommand != null)
+            {
+                var output = outputFromCommand;
+                outputFromCommand = null;
+                return McpMethodResult.Success(CreateContentResponse(output));
+            }
+
+            await Task.Delay(McpServerConfig.POLL_INTERVAL_MS, context.CancellationToken);
+            elapsed += McpServerConfig.POLL_INTERVAL_MS;
+        }
+
+        var timeoutMinutes = timeoutMs / (60 * 1000);
+        LogSecurityEvent("COMMAND_TIMEOUT", $"Command execution timed out after {timeoutMinutes} minutes", $"RequestId: {context.Request.Id}");
+
+        return McpMethodResult.Success(CreateContentResponse(
+            $"Command execution timed out after {timeoutMinutes} minutes. " +
+            $"Consider using a shorter command or increasing the timeout with the timeoutSeconds parameter."));
+    }
+
+    private static async Task<McpMethodResult> HandleGetCurrentLocation(McpMethodContext context)
+    {
+        try
+        {
+            string locationCommand = @"
+$current = Get-Location
+$allDrives = Get-PSDrive | ForEach-Object {
+    $driveName = [string]$_.Name + ':'
+    $providerName = [string]$_.Provider.Name
+    if ($_.CurrentLocation) {
+        $currentPath = [string]$_.CurrentLocation
+    } else {
+        $currentPath = [string]$_.Root
+    }
+    [PSCustomObject]@{
+        drive = $driveName
+        currentPath = $currentPath
+        provider = $providerName
+        isCurrent = ([string]$_.Name -eq [string]$current.Drive)
+    }
+}
+
+$currentDriveName = [string]$current.Drive + ':'
+$currentPath = [string]$current.Path
+$currentProvider = [string]$current.Provider.Name
+
+$otherDrives = $allDrives | Where-Object { -not $_.isCurrent }
+
+[PSCustomObject]@{
+    currentLocation = [PSCustomObject]@{
+        drive = $currentDriveName
+        currentPath = $currentPath
+        provider = $currentProvider
+    }
+    otherDriveLocations = @($otherDrives | Select-Object drive, currentPath, provider)
+} | ConvertTo-Json -Depth 3";
+
+            outputFromCommand = null;
+            executeCommandSilent = locationCommand;
+
+            LogSecurityEvent("CURRENT_LOCATION_COMMAND", "Executing PowerShell command to get current location and all drive locations", "Silent execution");
+
+            const int timeoutMs = 10000; // 10秒
+            var elapsed = 0;
+
+            while (elapsed < timeoutMs)
+            {
+                if (outputFromCommand != null)
+                {
+                    var output = outputFromCommand;
+                    outputFromCommand = null;
+                    LogSecurityEvent("CURRENT_LOCATION_SUCCESS", "Successfully retrieved current location and all drive locations",
+                        output.Substring(0, Math.Min(200, output.Length)));
+                    return McpMethodResult.Success(CreateContentResponse(output));
+                }
+
+                await Task.Delay(McpServerConfig.POLL_INTERVAL_MS, context.CancellationToken);
+                elapsed += McpServerConfig.POLL_INTERVAL_MS;
+            }
+
+            LogSecurityEvent("CURRENT_LOCATION_TIMEOUT", "Timeout while getting current location", "Command execution timed out");
+            return McpMethodResult.Failure(new { code = -32603, message = "Timeout while getting current location" });
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("CURRENT_LOCATION_ERROR", $"Error retrieving current location: {ex.Message}", ex.StackTrace ?? "");
+            return McpMethodResult.Failure(new { code = -32603, message = $"Internal error: {ex.Message}" });
+        }
+    }
+
+    #endregion
+
+    #region Utility Methods
+
+    private static NamedPipeServerStream CreateSecurePipeServer()
+    {
+        try
+        {
+            var pipeSecurity = new PipeSecurity();
+            var identity = WindowsIdentity.GetCurrent();
+            var userSid = identity.User;
+            if (userSid != null)
+            {
+                pipeSecurity.AddAccessRule(new PipeAccessRule(userSid, PipeAccessRights.FullControl, AccessControlType.Allow));
+            }
+
+            var adminSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(adminSid, PipeAccessRights.FullControl, AccessControlType.Allow));
+
+            return NamedPipeServerStreamAcl.Create(
+                McpServerConfig.PIPE_NAME,
+                PipeDirection.InOut,
+                McpServerConfig.MAX_CLIENTS,
+                PipeTransmissionMode.Message,
+                PipeOptions.Asynchronous | PipeOptions.WriteThrough,
+                McpServerConfig.PIPE_BUFFER_SIZE,
+                McpServerConfig.PIPE_BUFFER_SIZE,
+                pipeSecurity
+            );
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("PIPE_SECURITY_ERROR", $"Failed to create secure pipe, falling back to basic pipe: {ex.Message}", "");
+
+            return new NamedPipeServerStream(
+                McpServerConfig.PIPE_NAME,
+                PipeDirection.InOut,
+                McpServerConfig.MAX_CLIENTS,
+                PipeTransmissionMode.Message,
+                PipeOptions.Asynchronous | PipeOptions.WriteThrough,
+                McpServerConfig.PIPE_BUFFER_SIZE,
+                McpServerConfig.PIPE_BUFFER_SIZE
+            );
         }
     }
 
     private static async Task<string> ReadPipeMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        var buffer = new byte[PIPE_BUFFER_SIZE];
+        var buffer = new byte[McpServerConfig.PIPE_BUFFER_SIZE];
         using var ms = new MemoryStream();
 
         do
@@ -426,135 +785,6 @@ public static class McpServerHost
         await SendPipeMessageAsync(pipeServer, errorJson, cancellationToken);
     }
 
-    // 以下、既存のメソッドはそのまま維持（ProcessRpcRequestAsync以降）
-    private static async Task<JsonRpcResponse> ProcessRpcRequestAsync(JsonRpcRequest rpc)
-    {
-        try
-        {
-            var ps = rpc.Params;
-            var method = rpc.Method;
-
-            // メソッド別処理
-            if (method == "tools/call")
-            {
-                return await ProcessToolCallAsync(rpc);
-            }
-            else if (method is "initialize" or "tools/list" or "resources/list" or "prompts/list")
-            {
-                return ProcessTemplateRequest(rpc, method);
-            }
-            else
-            {
-                return new JsonRpcResponse(
-                    Id: rpc.Id,
-                    Error: new { code = -32601, message = "Method not found" }
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            LogSecurityEvent("RPC_PROCESSING_ERROR", $"RPC processing error: {ex.Message}", ex.StackTrace ?? "");
-            return new JsonRpcResponse(
-                Id: rpc.Id,
-                Error: new { code = -32603, message = "Internal error" }
-            );
-        }
-    }
-
-    private static async Task<JsonRpcResponse> ProcessToolCallAsync(JsonRpcRequest rpc)
-    {
-        var ps = rpc.Params;
-        var cmdName = ps.GetProperty("name").GetString()!;
-
-        // getCurrentLocationの特別処理
-        if (cmdName == "getCurrentLocation")
-        {
-            return await ProcessGetCurrentLocationAsync(rpc);
-        }
-
-        bool executeImmediately = rpc.Params.TryGetProperty("arguments", out var args) &&
-                            args.TryGetProperty("executeImmediately", out var exeFlag) &&
-                            exeFlag.GetBoolean();
-
-        string command;
-        switch (cmdName)
-        {
-            case "invokeExpression":
-                command = args.GetProperty("pipeline").GetString()!
-                          ?? throw new JsonException("Missing 'pipeline'");
-                break;
-            default:
-                command = BuildCommand(cmdName, args);
-                break;
-        }
-
-        // コマンド検証
-        var validationError = ValidateCommand(command, executeImmediately);
-        if (validationError != null)
-        {
-            LogSecurityEvent("COMMAND_VALIDATION_FAILED",
-                $"Command validation failed: {validationError}",
-                $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
-
-            return new JsonRpcResponse(
-                Jsonrpc: rpc.Jsonrpc,
-                Id: rpc.Id,
-                Result: CreateContentResponse(validationError)
-            );
-        }
-
-        if (!executeImmediately)
-        {
-            insertCommand = command;
-            LogSecurityEvent("COMMAND_ENQUEUED", "Command enqueued for manual execution",
-                $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
-
-            return new JsonRpcResponse(
-                Jsonrpc: rpc.Jsonrpc,
-                Id: rpc.Id,
-                Result: CreateContentResponse("Command enqueued. Press Enter in console.")
-            );
-        }
-        else
-        {
-            outputFromCommand = null;
-            executeCommand = command;
-
-            LogSecurityEvent("COMMAND_EXECUTION", "Executing command immediately",
-                $"Command: {command.Substring(0, Math.Min(100, command.Length))}...");
-
-            var response = await CollectImmediateResponse(rpc);
-            return response;
-        }
-    }
-
-    // 以下、既存のメソッドをそのまま維持
-    private static JsonRpcResponse ProcessTemplateRequest(JsonRpcRequest rpc, string method)
-    {
-        try
-        {
-            var template = method.Replace('/', '_') + ".json";
-            var content = ReturnTemplate(template, rpc.Id?.ToString() ?? "0");
-
-            // JSONとしてパースして返す
-            var jsonContent = JsonSerializer.Deserialize<JsonElement>(content);
-
-            return new JsonRpcResponse(
-                Jsonrpc: rpc.Jsonrpc,
-                Id: rpc.Id,
-                Result: jsonContent
-            );
-        }
-        catch (Exception ex)
-        {
-            LogSecurityEvent("TEMPLATE_ERROR", $"Template processing error: {ex.Message}", $"Method: {method}");
-            return new JsonRpcResponse(
-                Id: rpc.Id,
-                Error: new { code = -32603, message = "Template processing failed" }
-            );
-        }
-    }
-
     private static string ReturnTemplate(string templateName, string id)
     {
         try
@@ -585,20 +815,8 @@ public static class McpServerHost
         if (string.IsNullOrEmpty(command))
             return "Command cannot be empty";
 
-        //// 危険なコマンドのチェック
-        //var dangerousPatterns = new[]
-        //{
-        //    "Remove-Item", "rm ", "del ", "format ", "shutdown", "restart", "reboot"
-        //};
-
-        //var lowerCommand = command.ToLowerInvariant();
-        //foreach (var pattern in dangerousPatterns)
-        //{
-        //    if (lowerCommand.Contains(pattern.ToLowerInvariant()))
-        //    {
-        //        return $"Potentially dangerous command detected: {pattern}";
-        //    }
-        //}
+        // TODO: コマンド検証ロジックを実装
+        // 必要に応じて設定ファイルから危険なパターンを読み込む
 
         return null;
     }
@@ -636,52 +854,6 @@ public static class McpServerHost
         return sb.ToString();
     }
 
-    private static async Task<JsonRpcResponse> CollectImmediateResponse(JsonRpcRequest rpc)
-    {
-        const int maxTimeoutMs = 30 * 60 * 1000; // 30分
-        const int defaultTimeoutMs = 5 * 60 * 1000; // 5分
-        const int pollIntervalMs = 100;
-
-        int timeoutMs = defaultTimeoutMs;
-        if (rpc.Params.TryGetProperty("arguments", out var args) &&
-            args.TryGetProperty("timeoutSeconds", out var timeoutParam) &&
-            timeoutParam.TryGetInt32(out var customTimeout))
-        {
-            timeoutMs = Math.Min(customTimeout * 1000, maxTimeoutMs);
-        }
-
-        var elapsed = 0;
-
-        while (elapsed < timeoutMs)
-        {
-            if (outputFromCommand != null)
-            {
-                var output = outputFromCommand;
-                outputFromCommand = null;
-                return new JsonRpcResponse(
-                    Jsonrpc: rpc.Jsonrpc,
-                    Id: rpc.Id,
-                    Result: CreateContentResponse(output)
-                );
-            }
-
-            await Task.Delay(pollIntervalMs);
-            elapsed += pollIntervalMs;
-        }
-
-        var timeoutMinutes = timeoutMs / (60 * 1000);
-        LogSecurityEvent("COMMAND_TIMEOUT",
-            $"Command execution timed out after {timeoutMinutes} minutes",
-            $"RequestId: {rpc.Id}");
-
-        return new JsonRpcResponse(
-            Jsonrpc: rpc.Jsonrpc,
-            Id: rpc.Id,
-            Result: CreateContentResponse($"Command execution timed out after {timeoutMinutes} minutes. " +
-                                       $"Consider using a shorter command or increasing the timeout with the timeoutSeconds parameter.")
-        );
-    }
-
     private static object CreateContentResponse(string text)
     {
         return new
@@ -693,109 +865,7 @@ public static class McpServerHost
         };
     }
 
-    private static async Task<JsonRpcResponse> ProcessGetCurrentLocationAsync(JsonRpcRequest rpc)
-    {
-        try
-        {
-            // シンプルなPowerShellスクリプト - 現在のロケーションとすべてのドライブ情報
-            string locationCommand = @"
-$current = Get-Location
-$allDrives = Get-PSDrive | ForEach-Object {
-    $driveName = [string]$_.Name + ':'
-    $providerName = [string]$_.Provider.Name
-    if ($_.CurrentLocation) {
-        $currentPath = [string]$_.CurrentLocation
-    } else {
-        $currentPath = [string]$_.Root
-    }
-    [PSCustomObject]@{
-        drive = $driveName
-        currentPath = $currentPath
-        provider = $providerName
-        isCurrent = ([string]$_.Name -eq [string]$current.Drive)
-    }
-}
-
-$currentDriveName = [string]$current.Drive + ':'
-$currentPath = [string]$current.Path
-$currentProvider = [string]$current.Provider.Name
-
-$otherDrives = $allDrives | Where-Object { -not $_.isCurrent }
-
-[PSCustomObject]@{
-    currentLocation = [PSCustomObject]@{
-        drive = $currentDriveName
-        currentPath = $currentPath
-        provider = $currentProvider
-    }
-    otherDriveLocations = @($otherDrives | Select-Object drive, currentPath, provider)
-} | ConvertTo-Json -Depth 3
-";
-
-            // サイレント実行
-            outputFromCommand = null;
-            executeCommandSilent = locationCommand;
-
-            LogSecurityEvent("CURRENT_LOCATION_COMMAND",
-                "Executing PowerShell command to get current location and all drive locations",
-                "Silent execution");
-
-            // コマンドの実行結果を待つ
-            const int timeoutMs = 10000; // 10秒のタイムアウト
-            const int pollIntervalMs = 100;
-            var elapsed = 0;
-
-            while (elapsed < timeoutMs)
-            {
-                if (outputFromCommand != null)
-                {
-                    var output = outputFromCommand;
-                    outputFromCommand = null;
-
-                    LogSecurityEvent("CURRENT_LOCATION_SUCCESS",
-                        "Successfully retrieved current location and all drive locations",
-                        output.Substring(0, Math.Min(200, output.Length)));
-
-                    return new JsonRpcResponse(
-                        Jsonrpc: rpc.Jsonrpc,
-                        Id: rpc.Id,
-                        Result: CreateContentResponse(output)
-                    );
-                }
-
-                await Task.Delay(pollIntervalMs);
-                elapsed += pollIntervalMs;
-            }
-
-            // タイムアウトした場合
-            LogSecurityEvent("CURRENT_LOCATION_TIMEOUT",
-                "Timeout while getting current location",
-                "Command execution timed out");
-
-            return new JsonRpcResponse(
-                Jsonrpc: rpc.Jsonrpc,
-                Id: rpc.Id,
-                Error: new { code = -32603, message = "Timeout while getting current location" }
-            );
-        }
-        catch (Exception ex)
-        {
-            LogSecurityEvent("CURRENT_LOCATION_ERROR",
-                $"Error retrieving current location: {ex.Message}",
-                ex.StackTrace ?? "");
-
-            return new JsonRpcResponse(
-                Jsonrpc: rpc.Jsonrpc,
-                Id: rpc.Id,
-                Error: new { code = -32603, message = $"Internal error: {ex.Message}" }
-            );
-        }
-    }
-
-    /// <summary>
-    /// セキュリティイベントのログ記録
-    /// </summary>
-    private static void LogSecurityEvent(string eventType, string message, string details)
+    public static void LogSecurityEvent(string eventType, string message, string details)
     {
         var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC");
         var logMessage = $"[PowerShell.MCP] [{timestamp}] [PIPE-{eventType}] {message}";
@@ -805,9 +875,6 @@ $otherDrives = $allDrives | Where-Object { -not $_.isCurrent }
             logMessage += $" | Details: {details}";
         }
 
-        // コンソールに出力
-        //Console.WriteLine(logMessage);
-
         // デバッグ出力
         System.Diagnostics.Debug.WriteLine(logMessage);
 
@@ -816,8 +883,9 @@ $otherDrives = $allDrives | Where-Object { -not $_.isCurrent }
             eventType.Contains("TIMEOUT") || eventType.Contains("VALIDATION"))
         {
             var alertMessage = $"[PowerShell.MCP] [PIPE-ALERT] {eventType} - check server status";
-            //Console.WriteLine(alertMessage);
             System.Diagnostics.Debug.WriteLine(alertMessage);
         }
     }
+
+    #endregion
 }
