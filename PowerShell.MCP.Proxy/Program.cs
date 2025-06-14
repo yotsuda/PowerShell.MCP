@@ -163,11 +163,30 @@ namespace PowerShell.MCP.Proxy
         /// <summary>
         /// Named Pipe経由でリクエストを処理（修正版）
         /// </summary>
+        // Program.cs の修正 - tools/call メソッドの特別な処理
+
         private static async Task<string> ProcessRequestViaPipeAsync(string requestJson, int id)
         {
+            // tools/call かどうかを判定
+            bool isToolsCall = false;
+            try
+            {
+                using var doc = JsonDocument.Parse(requestJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("method", out var methodElem))
+                {
+                    isToolsCall = methodElem.GetString() == "tools/call";
+                }
+            }
+            catch { }
+
+            // tools/call の場合はリトライしない
+            int maxRetries = isToolsCall ? 1 : MAX_RETRIES;
+            int timeoutMs = isToolsCall ? 1800000 : PIPE_TIMEOUT_MS; // tools/callは30分タイムアウト
+
             Exception? lastException = null;
 
-            for (int attempt = 1; attempt <= MAX_RETRIES; attempt++)
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
                 NamedPipeClientStream? pipeClient = null;
 
@@ -175,11 +194,10 @@ namespace PowerShell.MCP.Proxy
                 {
                     pipeClient = CreatePipeClient();
 
-                    LogEvent("PIPE_CONNECTING", $"Attempting to connect to Named Pipe server (attempt {attempt}/{MAX_RETRIES})");
+                    LogEvent("PIPE_CONNECTING", $"Attempting to connect (attempt {attempt}/{maxRetries})");
 
-                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(PIPE_TIMEOUT_MS));
+                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
 
-                    // サーバーに接続
                     await pipeClient.ConnectAsync(timeoutCts.Token);
 
                     if (!pipeClient.IsConnected)
@@ -187,37 +205,37 @@ namespace PowerShell.MCP.Proxy
                         throw new InvalidOperationException("Failed to connect to Named Pipe server");
                     }
 
-                    // 重要: ReadModeをMessageに設定
                     pipeClient.ReadMode = PipeTransmissionMode.Message;
-
                     LogEvent("PIPE_CONNECTED", "Successfully connected to Named Pipe server");
 
-                    // リクエストを送信
                     await SendPipeMessageAsync(pipeClient, requestJson, timeoutCts.Token);
-
-                    // レスポンスを受信
                     var response = await ReceivePipeMessageAsync(pipeClient, timeoutCts.Token);
 
                     LogEvent("PIPE_SUCCESS", "Request processed successfully via Named Pipe");
-
                     return response;
                 }
-                catch (OperationCanceledException) when (attempt < MAX_RETRIES)
+                catch (OperationCanceledException) when (isToolsCall)
                 {
-                    lastException = new TimeoutException($"Pipe connection timeout (attempt {attempt}/{MAX_RETRIES})");
+                    // tools/call の場合はタイムアウトメッセージを返す（リトライしない）
+                    LogEvent("TOOLS_CALL_TIMEOUT", "Tools call operation timed out - this is expected for long-running commands");
+                    return CreateTimeoutResponse(id);
+                }
+                catch (OperationCanceledException) when (attempt < maxRetries)
+                {
+                    lastException = new TimeoutException($"Pipe connection timeout (attempt {attempt}/{maxRetries})");
                     LogEvent("PIPE_TIMEOUT", lastException.Message);
                 }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist") && attempt < MAX_RETRIES)
+                catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist") && attempt < maxRetries)
                 {
                     lastException = ex;
                     LogEvent("PIPE_NOT_FOUND", "Named Pipe server not found, retrying...");
                 }
-                catch (UnauthorizedAccessException ex) when (attempt < MAX_RETRIES)
+                catch (UnauthorizedAccessException ex) when (attempt < maxRetries)
                 {
                     lastException = ex;
                     LogEvent("PIPE_ACCESS_DENIED", "Access denied to Named Pipe, retrying...");
                 }
-                catch (IOException ex) when (attempt < MAX_RETRIES)
+                catch (IOException ex) when (attempt < maxRetries)
                 {
                     lastException = ex;
                     LogEvent("PIPE_IO_ERROR", $"IO error: {ex.Message}, retrying...");
@@ -234,16 +252,13 @@ namespace PowerShell.MCP.Proxy
                     {
                         pipeClient?.Dispose();
                     }
-                    catch
-                    {
-                        // Disposeエラーは無視
-                    }
+                    catch { }
                 }
 
-                // 最後の試行でない場合は待機
-                if (attempt < MAX_RETRIES)
+                // tools/call 以外の場合のみリトライ遅延
+                if (attempt < maxRetries && !isToolsCall)
                 {
-                    var delay = TimeSpan.FromMilliseconds(1000 * Math.Pow(2, attempt - 1)); // 指数バックオフ
+                    var delay = TimeSpan.FromMilliseconds(1000 * Math.Pow(2, attempt - 1));
                     LogEvent("PIPE_RETRY_DELAY", $"Waiting {delay.TotalSeconds} seconds before retry");
                     await Task.Delay(delay);
                 }
@@ -252,17 +267,37 @@ namespace PowerShell.MCP.Proxy
             // すべてのリトライが失敗した場合
             LogEvent("PIPE_ALL_RETRIES_FAILED", $"All connection attempts failed. Last error: {lastException?.Message}");
 
-            // サーバーが動作していない場合の判定を改善
             if (IsServerNotRunningError(lastException))
             {
-                // 期待する形式のレスポンスを返す
                 return CreatePowerShellNotRunningResponse(id);
             }
             else
             {
-                // その他のエラー（アクセス権限など）
                 return CreateSecurityErrorResponse(id, lastException?.Message ?? "Unknown error");
             }
+        }
+
+        /// <summary>
+        /// tools/call タイムアウト用のレスポンス
+        /// </summary>
+        private static string CreateTimeoutResponse(int id)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id,
+                result = new
+                {
+                    content = new object[]
+                    {
+                new
+                {
+                    type = "text",
+                    text = "Command is still executing in the background. Long-running commands may take several minutes to complete. Please check the PowerShell console for results."
+                }
+                    }
+                }
+            });
         }
 
         /// <summary>
