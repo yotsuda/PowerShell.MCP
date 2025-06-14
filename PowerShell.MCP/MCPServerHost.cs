@@ -31,12 +31,12 @@ public static class McpServerHost
     private static CancellationTokenSource? _cancellationTokenSource;
     private static readonly object _lockObject = new object();
 
-    // Named Pipeİ’è
+    // Named Pipeè¨­å®š
     private const string PIPE_NAME = "PowerShell.MCP.Communication";
     private const int PIPE_BUFFER_SIZE = 8192;
     private const int MAX_CLIENTS = 1;
 
-    // ƒo[ƒWƒ‡ƒ“ŠÇ—i‹N“®‚Éˆê“x‚¾‚¯æ“¾j
+    // ãƒãƒ¼ã‚¸ãƒ§ãƒ³ç®¡ç†ï¼ˆèµ·å‹•æ™‚ã«ä¸€åº¦ã ã‘å–å¾—ï¼‰
     private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
 
     public class Cleanup : IModuleAssemblyCleanup
@@ -60,7 +60,7 @@ public static class McpServerHost
                                 _pipeServer.Disconnect();
                             }
                         }
-                        catch { /* –³‹ */ }
+                        catch { /* ç„¡è¦– */ }
                         finally
                         {
                             _pipeServer.Dispose();
@@ -73,7 +73,7 @@ public static class McpServerHost
             }
             catch (Exception)
             {
-                // Stopˆ—‚Å‚ÌƒGƒ‰[‚Í–³‹
+                // Stopå‡¦ç†ã§ã®ã‚¨ãƒ©ãƒ¼ã¯ç„¡è¦–
             }
             finally
             {
@@ -86,6 +86,7 @@ public static class McpServerHost
 
     public static string? insertCommand = null;
     public static string? executeCommand = null;
+    public static string? executeCommandSilent = null;
     public static string? outputFromCommand = null;
 
     public static void StartServer(CmdletProvider host, CancellationToken token)
@@ -123,7 +124,7 @@ public static class McpServerHost
                         LogSecurityEvent("SERVER_ERROR", $"Pipe server error: {ex.Message}", ex.StackTrace ?? "");
                         host.WriteWarning($"[PowerShell.MCP] Pipe server error: {ex.Message}");
 
-                        // ƒGƒ‰[ŒãA’ZŠÔ‘Ò‹@‚µ‚Ä‚©‚çÄÀs
+                        // ã‚¨ãƒ©ãƒ¼å¾Œã€çŸ­æ™‚é–“å¾…æ©Ÿã—ã¦ã‹ã‚‰å†å®Ÿè¡Œ
                         try
                         {
                             await Task.Delay(2000, _cancellationTokenSource.Token);
@@ -154,7 +155,7 @@ public static class McpServerHost
 
             try
             {
-                // ƒZƒLƒ…ƒA‚ÈNamed PipeƒT[ƒo[‚ğì¬
+                // ã‚»ã‚­ãƒ¥ã‚¢ãªNamed Pipeã‚µãƒ¼ãƒãƒ¼ã‚’ä½œæˆ
                 pipeServer = CreateSecurePipeServer();
 
                 lock (_lockObject)
@@ -164,21 +165,21 @@ public static class McpServerHost
 
                 LogSecurityEvent("PIPE_WAITING", "Waiting for client connection", "");
 
-                // ƒNƒ‰ƒCƒAƒ“ƒg‚ÌÚ‘±‚ğ‘Ò‹@iƒ^ƒCƒ€ƒAƒEƒg•t‚«j
+                // ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®æ¥ç¶šã‚’å¾…æ©Ÿï¼ˆã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆä»˜ãï¼‰
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromMinutes(10)); // 10•ª‚Åƒ^ƒCƒ€ƒAƒEƒg
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(10)); // 10åˆ†ã§ã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆ
 
                 await pipeServer.WaitForConnectionAsync(timeoutCts.Token);
 
                 if (!pipeServer.IsConnected)
                 {
                     LogSecurityEvent("PIPE_CONNECTION_FAILED", "Failed to establish connection", "");
-                    continue; // Ÿ‚ÌÚ‘±‚ğ‘Ò‚Â
+                    continue; // æ¬¡ã®æ¥ç¶šã‚’å¾…ã¤
                 }
 
                 LogSecurityEvent("PIPE_CONNECTED", "Client connected to Named Pipe", "");
 
-                // Ú‘±’†‚ÌƒƒbƒZ[ƒWˆ—
+                // æ¥ç¶šä¸­ã®ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸å‡¦ç†
                 while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
                 {
                     try
@@ -197,7 +198,7 @@ public static class McpServerHost
                     catch (Exception ex)
                     {
                         LogSecurityEvent("PIPE_MESSAGE_ERROR", $"Error processing message: {ex.Message}", ex.StackTrace ?? "");
-                        // ƒƒbƒZ[ƒWˆ—ƒGƒ‰[‚Ìê‡‚ÍÚ‘±‚ğˆÛ‚µ‚ÄƒŠƒgƒ‰ƒC
+                        // ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸å‡¦ç†ã‚¨ãƒ©ãƒ¼ã®å ´åˆã¯æ¥ç¶šã‚’ç¶­æŒã—ã¦ãƒªãƒˆãƒ©ã‚¤
                         await Task.Delay(100, cancellationToken);
                     }
                 }
@@ -243,7 +244,7 @@ public static class McpServerHost
                 }
             }
 
-            // ’ZŠÔ‘Ò‹@‚µ‚Ä‚©‚çŸ‚ÌÚ‘±ó•t‚ğŠJn
+            // çŸ­æ™‚é–“å¾…æ©Ÿã—ã¦ã‹ã‚‰æ¬¡ã®æ¥ç¶šå—ä»˜ã‚’é–‹å§‹
             if (!cancellationToken.IsCancellationRequested)
             {
                 await Task.Delay(1000, cancellationToken);
@@ -255,10 +256,10 @@ public static class McpServerHost
     {
         try
         {
-            // .NET 8‘Î‰: ƒZƒLƒ…ƒŠƒeƒBİ’è•t‚«‚ÌƒpƒCƒvƒT[ƒo[‚ğì¬
+            // .NET 8å¯¾å¿œ: ã‚»ã‚­ãƒ¥ãƒªãƒ†ã‚£è¨­å®šä»˜ãã®ãƒ‘ã‚¤ãƒ—ã‚µãƒ¼ãƒãƒ¼ã‚’ä½œæˆ
             var pipeSecurity = new PipeSecurity();
 
-            // Œ»İ‚Ìƒ†[ƒU[‚Éƒtƒ‹ƒAƒNƒZƒXŒ ŒÀ‚ğ•t—^
+            // ç¾åœ¨ã®ãƒ¦ãƒ¼ã‚¶ãƒ¼ã«ãƒ•ãƒ«ã‚¢ã‚¯ã‚»ã‚¹æ¨©é™ã‚’ä»˜ä¸
             var identity = WindowsIdentity.GetCurrent();
             var userSid = identity.User;
             if (userSid != null)
@@ -266,7 +267,7 @@ public static class McpServerHost
                 pipeSecurity.AddAccessRule(new PipeAccessRule(userSid, PipeAccessRights.FullControl, AccessControlType.Allow));
             }
 
-            // ŠÇ—ÒƒOƒ‹[ƒv‚Éƒtƒ‹ƒAƒNƒZƒXŒ ŒÀ‚ğ•t—^
+            // ç®¡ç†è€…ã‚°ãƒ«ãƒ¼ãƒ—ã«ãƒ•ãƒ«ã‚¢ã‚¯ã‚»ã‚¹æ¨©é™ã‚’ä»˜ä¸
             var adminSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
             pipeSecurity.AddAccessRule(new PipeAccessRule(adminSid, PipeAccessRights.FullControl, AccessControlType.Allow));
 
@@ -285,7 +286,7 @@ public static class McpServerHost
         {
             LogSecurityEvent("PIPE_SECURITY_ERROR", $"Failed to create secure pipe, falling back to basic pipe: {ex.Message}", "");
 
-            // ƒtƒH[ƒ‹ƒoƒbƒN: ƒZƒLƒ…ƒŠƒeƒBİ’è‚È‚µ‚ÌŠî–{“I‚ÈƒpƒCƒv
+            // ãƒ•ã‚©ãƒ¼ãƒ«ãƒãƒƒã‚¯: ã‚»ã‚­ãƒ¥ãƒªãƒ†ã‚£è¨­å®šãªã—ã®åŸºæœ¬çš„ãªãƒ‘ã‚¤ãƒ—
             return new NamedPipeServerStream(
                 PIPE_NAME,
                 PipeDirection.InOut,
@@ -302,20 +303,20 @@ public static class McpServerHost
     {
         try
         {
-            // ƒƒbƒZ[ƒW‚ğ“Ç‚İæ‚èiƒ^ƒCƒ€ƒAƒEƒg•t‚«j
+            // ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’èª­ã¿å–ã‚Šï¼ˆã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆä»˜ãï¼‰
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30•b‚Åƒ^ƒCƒ€ƒAƒEƒg
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30ç§’ã§ã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆ
 
             var message = await ReadPipeMessageAsync(pipeServer, timeoutCts.Token);
             if (string.IsNullOrEmpty(message))
             {
-                await Task.Delay(100, cancellationToken); // ’ZŠÔ‘Ò‹@
+                await Task.Delay(100, cancellationToken); // çŸ­æ™‚é–“å¾…æ©Ÿ
                 return;
             }
 
             LogSecurityEvent("MESSAGE_RECEIVED", $"Processing message: {message.Substring(0, Math.Min(100, message.Length))}...", "");
 
-            // JSON-RPC ƒŠƒNƒGƒXƒg‚ğ‰ğÍ
+            // JSON-RPC ãƒªã‚¯ã‚¨ã‚¹ãƒˆã‚’è§£æ
             JsonRpcRequest? rpc;
             try
             {
@@ -334,10 +335,10 @@ public static class McpServerHost
                 return;
             }
 
-            // ƒŠƒNƒGƒXƒg‚ğˆ—
+            // ãƒªã‚¯ã‚¨ã‚¹ãƒˆã‚’å‡¦ç†
             var response = await ProcessRpcRequestAsync(rpc);
 
-            // ƒŒƒXƒ|ƒ“ƒX‚ğ‘—M
+            // ãƒ¬ã‚¹ãƒãƒ³ã‚¹ã‚’é€ä¿¡
             var responseJson = JsonSerializer.Serialize(response, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             await SendPipeMessageAsync(pipeServer, responseJson, cancellationToken);
         }
@@ -354,7 +355,7 @@ public static class McpServerHost
             }
             catch
             {
-                // ƒGƒ‰[‘—M‚É¸”s‚µ‚½ê‡‚Í–³‹
+                // ã‚¨ãƒ©ãƒ¼é€ä¿¡ã«å¤±æ•—ã—ãŸå ´åˆã¯ç„¡è¦–
             }
         }
     }
@@ -397,7 +398,7 @@ public static class McpServerHost
         await SendPipeMessageAsync(pipeServer, errorJson, cancellationToken);
     }
 
-    // ˆÈ‰ºAŠù‘¶‚Ìƒƒ\ƒbƒh‚Í‚»‚Ì‚Ü‚ÜˆÛiProcessRpcRequestAsyncˆÈ~j
+    // ä»¥ä¸‹ã€æ—¢å­˜ã®ãƒ¡ã‚½ãƒƒãƒ‰ã¯ãã®ã¾ã¾ç¶­æŒï¼ˆProcessRpcRequestAsyncä»¥é™ï¼‰
     private static async Task<JsonRpcResponse> ProcessRpcRequestAsync(JsonRpcRequest rpc)
     {
         try
@@ -405,7 +406,7 @@ public static class McpServerHost
             var ps = rpc.Params;
             var method = rpc.Method;
 
-            // ƒƒ\ƒbƒh•Êˆ—
+            // ãƒ¡ã‚½ãƒƒãƒ‰åˆ¥å‡¦ç†
             if (method == "tools/call")
             {
                 return await ProcessToolCallAsync(rpc);
@@ -436,6 +437,13 @@ public static class McpServerHost
     {
         var ps = rpc.Params;
         var cmdName = ps.GetProperty("name").GetString()!;
+
+        // getCurrentLocationã®ç‰¹åˆ¥å‡¦ç†
+        if (cmdName == "getCurrentLocation")
+        {
+            return await ProcessGetCurrentLocationAsync(rpc);
+        }
+
         bool executeImmediately = rpc.Params.TryGetProperty("arguments", out var args) &&
                             args.TryGetProperty("executeImmediately", out var exeFlag) &&
                             exeFlag.GetBoolean();
@@ -452,7 +460,7 @@ public static class McpServerHost
                 break;
         }
 
-        // ƒRƒ}ƒ“ƒhŒŸØ
+        // ã‚³ãƒãƒ³ãƒ‰æ¤œè¨¼
         var validationError = ValidateCommand(command, executeImmediately);
         if (validationError != null)
         {
@@ -492,7 +500,7 @@ public static class McpServerHost
         }
     }
 
-    // ˆÈ‰ºAŠù‘¶‚Ìƒƒ\ƒbƒh‚ğ‚»‚Ì‚Ü‚ÜˆÛ
+    // ä»¥ä¸‹ã€æ—¢å­˜ã®ãƒ¡ã‚½ãƒƒãƒ‰ã‚’ãã®ã¾ã¾ç¶­æŒ
     private static JsonRpcResponse ProcessTemplateRequest(JsonRpcRequest rpc, string method)
     {
         try
@@ -500,7 +508,7 @@ public static class McpServerHost
             var template = method.Replace('/', '_') + ".json";
             var content = ReturnTemplate(template, rpc.Id?.ToString() ?? "0");
 
-            // JSON‚Æ‚µ‚Äƒp[ƒX‚µ‚Ä•Ô‚·
+            // JSONã¨ã—ã¦ãƒ‘ãƒ¼ã‚¹ã—ã¦è¿”ã™
             var jsonContent = JsonSerializer.Deserialize<JsonElement>(content);
 
             return new JsonRpcResponse(
@@ -549,7 +557,7 @@ public static class McpServerHost
         if (string.IsNullOrEmpty(command))
             return "Command cannot be empty";
 
-        //// ŠëŒ¯‚ÈƒRƒ}ƒ“ƒh‚Ìƒ`ƒFƒbƒN
+        //// å±é™ºãªã‚³ãƒãƒ³ãƒ‰ã®ãƒã‚§ãƒƒã‚¯
         //var dangerousPatterns = new[]
         //{
         //    "Remove-Item", "rm ", "del ", "format ", "shutdown", "restart", "reboot"
@@ -602,8 +610,8 @@ public static class McpServerHost
 
     private static async Task<JsonRpcResponse> CollectImmediateResponse(JsonRpcRequest rpc)
     {
-        const int maxTimeoutMs = 30 * 60 * 1000; // 30•ª
-        const int defaultTimeoutMs = 5 * 60 * 1000; // 5•ª
+        const int maxTimeoutMs = 30 * 60 * 1000; // 30åˆ†
+        const int defaultTimeoutMs = 5 * 60 * 1000; // 5åˆ†
         const int pollIntervalMs = 100;
 
         int timeoutMs = defaultTimeoutMs;
@@ -657,8 +665,107 @@ public static class McpServerHost
         };
     }
 
+    private static async Task<JsonRpcResponse> ProcessGetCurrentLocationAsync(JsonRpcRequest rpc)
+    {
+        try
+        {
+            // ã‚·ãƒ³ãƒ—ãƒ«ãªPowerShellã‚¹ã‚¯ãƒªãƒ—ãƒˆ - ç¾åœ¨ã®ãƒ­ã‚±ãƒ¼ã‚·ãƒ§ãƒ³ã¨ã™ã¹ã¦ã®ãƒ‰ãƒ©ã‚¤ãƒ–æƒ…å ±
+            string locationCommand = @"
+$current = Get-Location
+$allDrives = Get-PSDrive | ForEach-Object {
+    $driveName = [string]$_.Name + ':'
+    $providerName = [string]$_.Provider.Name
+    if ($_.CurrentLocation) {
+        $currentPath = [string]$_.CurrentLocation
+    } else {
+        $currentPath = [string]$_.Root
+    }
+    [PSCustomObject]@{
+        drive = $driveName
+        currentPath = $currentPath
+        provider = $providerName
+        isCurrent = ([string]$_.Name -eq [string]$current.Drive)
+    }
+}
+
+$currentDriveName = [string]$current.Drive + ':'
+$currentPath = [string]$current.Path
+$currentProvider = [string]$current.Provider.Name
+
+$otherDrives = $allDrives | Where-Object { -not $_.isCurrent }
+
+[PSCustomObject]@{
+    currentLocation = [PSCustomObject]@{
+        drive = $currentDriveName
+        currentPath = $currentPath
+        provider = $currentProvider
+    }
+    otherDriveLocations = @($otherDrives | Select-Object drive, currentPath, provider)
+} | ConvertTo-Json -Depth 3
+";
+
+            // ã‚µã‚¤ãƒ¬ãƒ³ãƒˆå®Ÿè¡Œ
+            outputFromCommand = null;
+            executeCommandSilent = locationCommand;
+
+            LogSecurityEvent("CURRENT_LOCATION_COMMAND",
+                "Executing PowerShell command to get current location and all drive locations",
+                "Silent execution");
+
+            // ã‚³ãƒãƒ³ãƒ‰ã®å®Ÿè¡Œçµæœã‚’å¾…ã¤
+            const int timeoutMs = 10000; // 10ç§’ã®ã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆ
+            const int pollIntervalMs = 100;
+            var elapsed = 0;
+
+            while (elapsed < timeoutMs)
+            {
+                if (outputFromCommand != null)
+                {
+                    var output = outputFromCommand;
+                    outputFromCommand = null;
+
+                    LogSecurityEvent("CURRENT_LOCATION_SUCCESS",
+                        "Successfully retrieved current location and all drive locations",
+                        output.Substring(0, Math.Min(200, output.Length)));
+
+                    return new JsonRpcResponse(
+                        Jsonrpc: rpc.Jsonrpc,
+                        Id: rpc.Id,
+                        Result: CreateContentResponse(output)
+                    );
+                }
+
+                await Task.Delay(pollIntervalMs);
+                elapsed += pollIntervalMs;
+            }
+
+            // ã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆã—ãŸå ´åˆ
+            LogSecurityEvent("CURRENT_LOCATION_TIMEOUT",
+                "Timeout while getting current location",
+                "Command execution timed out");
+
+            return new JsonRpcResponse(
+                Jsonrpc: rpc.Jsonrpc,
+                Id: rpc.Id,
+                Error: new { code = -32603, message = "Timeout while getting current location" }
+            );
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("CURRENT_LOCATION_ERROR",
+                $"Error retrieving current location: {ex.Message}",
+                ex.StackTrace ?? "");
+
+            return new JsonRpcResponse(
+                Jsonrpc: rpc.Jsonrpc,
+                Id: rpc.Id,
+                Error: new { code = -32603, message = $"Internal error: {ex.Message}" }
+            );
+        }
+    }
+
     /// <summary>
-    /// ƒZƒLƒ…ƒŠƒeƒBƒCƒxƒ“ƒg‚ÌƒƒO‹L˜^
+    /// ã‚»ã‚­ãƒ¥ãƒªãƒ†ã‚£ã‚¤ãƒ™ãƒ³ãƒˆã®ãƒ­ã‚°è¨˜éŒ²
     /// </summary>
     private static void LogSecurityEvent(string eventType, string message, string details)
     {
@@ -670,13 +777,13 @@ public static class McpServerHost
             logMessage += $" | Details: {details}";
         }
 
-        // ƒRƒ“ƒ\[ƒ‹‚Éo—Í
+        // ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã«å‡ºåŠ›
         //Console.WriteLine(logMessage);
 
-        // ƒfƒoƒbƒOo—Í
+        // ãƒ‡ãƒãƒƒã‚°å‡ºåŠ›
         System.Diagnostics.Debug.WriteLine(logMessage);
 
-        // d—v‚ÈƒCƒxƒ“ƒg‚Ìê‡A’Ç‰Á‚ÌŒx
+        // é‡è¦ãªã‚¤ãƒ™ãƒ³ãƒˆã®å ´åˆã€è¿½åŠ ã®è­¦å‘Š
         if (eventType.Contains("ERROR") || eventType.Contains("FAILED") ||
             eventType.Contains("TIMEOUT") || eventType.Contains("VALIDATION"))
         {

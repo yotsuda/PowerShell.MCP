@@ -193,6 +193,24 @@ namespace PowerShell.MCP
                     [PowerShell.MCP.McpServerHost]::outputFromCommand = $errorMessage
                 }
             }
+
+            $silentCmd = [PowerShell.MCP.McpServerHost]::executeCommandSilent
+            if ($silentCmd) {
+                [PowerShell.MCP.McpServerHost]::executeCommandSilent = $null
+                
+                try {
+                    $results = Invoke-Expression $silentCmd
+                    if ($results -ne $null) {
+                        $output = $results | Out-String
+                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $output.Trim()
+                    } else {
+                        [PowerShell.MCP.McpServerHost]::outputFromCommand = """"
+                    }
+                }
+                catch {
+                    [PowerShell.MCP.McpServerHost]::outputFromCommand = ""Error: $($_.Exception.Message)""
+                }
+            }
         } | Out-Null
     $global:McpTimer.Start()
 }

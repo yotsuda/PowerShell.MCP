@@ -1,8 +1,17 @@
-﻿{
+{
   "jsonrpc": "2.0",
   "id": {0},
   "result":{
     "tools": [
+      {
+        "name": "getCurrentLocation",
+        "description": "Retrieves the current location and all available drives (providers) from the PowerShell session. Returns currentLocation and otherDriveLocations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invokeExpression commands in succession, calling once at the beginning is sufficient.",
+       "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      },
       {
         "name": "invokeExpression",
         "description": "Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.",

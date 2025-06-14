@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.1.2'
+ModuleVersion = '1.1.4'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -247,6 +247,7 @@ PowerShell-Specific Advanced Features:
 - PowerShell.MCP.Proxy.exe: Stdio proxy server for MCP client compatibility
 
 === Known Limitations ===
+- Commands executed via MCP cannot be canceled with Ctrl+C.
 - Security Note: Provides complete PowerShell access - use only in trusted environments
 
 === What Makes This Special? ===
