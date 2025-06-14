@@ -198,8 +198,9 @@ public static class McpServerHost
                     catch (Exception ex)
                     {
                         LogSecurityEvent("PIPE_MESSAGE_ERROR", $"Error processing message: {ex.Message}", ex.StackTrace ?? "");
-                        // メッセージ処理エラーの場合は接続を維持してリトライ
-                        await Task.Delay(100, cancellationToken);
+                        // メッセージ処理エラーの場合は接続を維持するが、リトライしない
+                        // クライアントからの次のメッセージを待つ
+                        break; // ループを抜けて接続をリセット
                     }
                 }
 
@@ -213,10 +214,18 @@ public static class McpServerHost
             catch (TimeoutException)
             {
                 LogSecurityEvent("PIPE_TIMEOUT", "Pipe connection timeout", "");
+                // タイムアウトの場合は再接続を試みる（自動リトライではない）
             }
             catch (Exception ex)
             {
                 LogSecurityEvent("PIPE_ERROR", $"Pipe communication error: {ex.Message}", ex.StackTrace ?? "");
+                // 重大なエラーの場合は、自動リトライを行わず、ログのみ記録
+                // 管理者による手動介入を促す
+                host.WriteError(new ErrorRecord(
+                    ex,
+                    "PipeCommunicationError",
+                    ErrorCategory.ConnectionError,
+                    pipeServer));
             }
             finally
             {
@@ -245,6 +254,7 @@ public static class McpServerHost
             }
 
             // 短時間待機してから次の接続受付を開始
+            // ただし、重大なエラーの場合はより長い待機時間を設ける
             if (!cancellationToken.IsCancellationRequested)
             {
                 await Task.Delay(1000, cancellationToken);
@@ -344,7 +354,22 @@ public static class McpServerHost
         }
         catch (OperationCanceledException)
         {
+            // キャンセルされた場合は再スローして呼び出し元に処理を委ねる
             throw;
+        }
+        catch (TimeoutException ex)
+        {
+            LogSecurityEvent("MESSAGE_TIMEOUT", $"Message processing timed out: {ex.Message}", "");
+            // タイムアウトの場合はエラーレスポンスを送信して終了
+            try
+            {
+                await SendPipeErrorAsync(pipeServer, null, "Message processing timed out", cancellationToken);
+            }
+            catch
+            {
+                // エラー送信に失敗した場合は無視して例外を再スロー
+            }
+            throw; // 呼び出し元で接続をリセットするために例外を再スロー
         }
         catch (Exception ex)
         {
@@ -357,6 +382,9 @@ public static class McpServerHost
             {
                 // エラー送信に失敗した場合は無視
             }
+
+            // 重大なエラーの場合は例外を再スローして接続をリセット
+            throw;
         }
     }
 
