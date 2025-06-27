@@ -1,8 +1,62 @@
 using System.Management.Automation;
 using System.Management.Automation.Provider;
+using System.IO;
+using System.Reflection;
 
 namespace PowerShell.MCP
 {
+    /// <summary>
+    /// Resources/ フォルダの埋め込みリソースを読み込むヘルパークラス
+    /// </summary>
+    public static class EmbeddedResourceLoader
+    {
+        /// <summary>
+        /// Resources/ フォルダからPowerShellスクリプトを読み込む
+        /// </summary>
+        /// <param name="scriptFileName">スクリプトファイル名（例: "MCPPollingEngine.ps1"）</param>
+        /// <returns>スクリプト内容</returns>
+        public static string LoadScript(string scriptFileName)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = $"PowerShell.MCP.Resources.{scriptFileName}";
+            
+            using (var stream = assembly.GetManifestResourceStream(resourceName))
+            {
+                if (stream == null)
+                {
+                    throw new FileNotFoundException($"Embedded resource '{resourceName}' not found.");
+                }
+                
+                using (var reader = new StreamReader(stream))
+                {
+                    return reader.ReadToEnd();
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 利用可能な埋め込みリソースの一覧を取得（デバッグ用）
+        /// </summary>
+        /// <returns>リソース名の配列</returns>
+        public static string[] GetAvailableResources()
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceNames = assembly.GetManifestResourceNames();
+            var resources = new List<string>();
+            
+            foreach (var resourceName in resourceNames)
+            {
+                if (resourceName.StartsWith("PowerShell.MCP.Resources."))
+                {
+                    var shortName = resourceName.Replace("PowerShell.MCP.Resources.", "");
+                    resources.Add(shortName);
+                }
+            }
+            
+            return resources.ToArray();
+        }
+    }
+
     [CmdletProvider("PowerShell.MCP", ProviderCapabilities.None)]
     public class MCPProvider : CmdletProvider
     {
@@ -14,207 +68,37 @@ namespace PowerShell.MCP
 
             _tokenSource = new CancellationTokenSource();
 
-            this.InvokeCommand.InvokeScript(
-@"if (-not (Test-Path Variable:global:McpTimer)) {
-    $global:McpTimer = New-Object System.Timers.Timer 500
-    $global:McpTimer.AutoReset = $true
+            try
+            {
+                // MCPポーリングエンジンスクリプトの読み込みと実行
+                var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
+                this.InvokeCommand.InvokeScript(pollingScript);
 
-    Register-ObjectEvent `
-        -InputObject    $global:McpTimer `
-        -EventName      Elapsed `
-        -SourceIdentifier MCP_Poll `
-        -Action {
-            $cmd = [PowerShell.MCP.McpServerHost]::insertCommand
-            if ($cmd) {
-                [PowerShell.MCP.McpServerHost]::insertCommand = $null
-                [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
-                [Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()
-                [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
+                #if DEBUG
+                // デバッグ時のリソース確認
+                WriteVerbose($"[PowerShell.MCP] Available resources: {string.Join(", ", EmbeddedResourceLoader.GetAvailableResources())}");
+                #endif
             }
-
-            $cmd = [PowerShell.MCP.McpServerHost]::executeCommand
-            if ($cmd) {
-                [PowerShell.MCP.McpServerHost]::executeCommand = $null
-                [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
-
-                try {
-                    [Console]::WriteLine()
-                    try {
-                        $promptText = & { prompt }
-                        $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
-                        [Console]::Write(""${cleanPrompt}> "")
-                    }
-                    catch {
-                        [Console]::Write(""PS $((Get-Location).Path)> "")
-                    }
-
-                    $isMultiLine = $cmd.Contains(""`n"") -or $cmd.Contains(""`r"")
-                    if ($isMultiLine) {
-                        [Console]::WriteLine()
-                    }
-
-                    Write-Host $cmd
-
-                    $results = @()
-                    $mcpErrors = @()
-                    $mcpWarnings = @()
-                    $mcpInformation = @()
-                    $hostOutput = @()
-
-                    $tempFile = [System.IO.Path]::GetTempFileName()
-
-                    try {
-                        Start-Transcript -Path $tempFile -Append | Out-Null
-                        
-                        Invoke-Expression $cmd `
-                            -ErrorVariable mcpErrors `
-                            -WarningVariable mcpWarnings `
-                            -InformationVariable mcpInformation `
-                            -OutVariable results
-                        
-                        Stop-Transcript | Out-Null
-                        
-                        $transcriptContent = Get-Content $tempFile -ErrorAction SilentlyContinue
-                        $hostOutput = $transcriptContent | Where-Object { $_ -match '^(What if:|VERBOSE:|DEBUG:|WARNING:)' }
-                    }
-                    catch {
-                        Invoke-Expression $cmd `
-                            -ErrorVariable mcpErrors `
-                            -WarningVariable mcpWarnings `
-                            -InformationVariable mcpInformation `
-                            -OutVariable results
-                    }
-                    finally {
-                        if (Test-Path $tempFile) {
-                            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-                        }
-                    }
-
-                    $results | Out-Default
-
-                    $allResults = @()
-                    $allResults += $results
-                    foreach($err in $mcpErrors) { $allResults += $err }
-                    foreach($warn in $mcpWarnings) { $allResults += $warn }
-                    foreach($info in $mcpInformation) { $allResults += $info }
-                    foreach($host in $hostOutput) { $allResults += $host }
-
-                    $hasHostOutput = $hostOutput.Count -gt 0
-
-                    $outputStreams = @{
-                        Success = @()
-                        Error = @()
-                        Warning = @()
-                        Information = @()
-                        Host = @()
-                    }
-
-                    foreach ($item in $allResults) {
-                        switch ($item.GetType().Name) {
-                            'ErrorRecord' {
-                                $outputStreams.Error += $item.Exception.Message
-                            }
-                            'WarningRecord' {
-                                $outputStreams.Warning += $item.Message
-                            }
-                            'InformationRecord' {
-                                $outputStreams.Information += $item.MessageData
-                            }
-                            'String' {
-                                if ($item -in $hostOutput) {
-                                    $outputStreams.Host += $item
-                                } else {
-                                    $outputStreams.Success += $item
-                                }
-                            }
-                            default {
-                                $outputStreams.Success += $item
-                            }
-                        }
-                    }
-
-                    $structuredOutput = @{
-                        Success = ($outputStreams.Success | Out-String).Trim()
-                        Error = ($outputStreams.Error -join ""`n"").Trim()
-                        Warning = ($outputStreams.Warning -join ""`n"").Trim()
-                        Information = ($outputStreams.Information -join ""`n"").Trim()
-                        Host = ($outputStreams.Host -join ""`n"").Trim()
-                    }
-
-                    $cleanOutput = @{}
-                    foreach ($key in $structuredOutput.Keys) {
-                        if (-not [string]::IsNullOrEmpty($structuredOutput[$key])) {
-                            $cleanOutput[$key] = $structuredOutput[$key]
-                        }
-                    }
-
-                    if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success')) {
-                        $formattedOutput = @()
-
-                        if ($cleanOutput.Error) {
-                            $formattedOutput += ""=== ERRORS ===""
-                            $formattedOutput += $cleanOutput.Error
-                            $formattedOutput += """"
-                        }
-
-                        if ($cleanOutput.Warning) {
-                            $formattedOutput += ""=== WARNINGS ===""
-                            $formattedOutput += $cleanOutput.Warning
-                            $formattedOutput += """"
-                        }
-
-                        if ($cleanOutput.Information) {
-                            $formattedOutput += ""=== INFO ===""
-                            $formattedOutput += $cleanOutput.Information
-                        }
-
-                        if ($cleanOutput.Host) {
-                            $formattedOutput += ""=== HOST ===""
-                            $formattedOutput += $cleanOutput.Host
-                            $formattedOutput += """"
-                        }
-
-                        if ($cleanOutput.Success) {
-                            $formattedOutput += ""=== OUTPUT ===""
-                            $formattedOutput += $cleanOutput.Success
-                            $formattedOutput += """"
-                        }
-
-                        $text = ($formattedOutput -join ""`n"").Trim()
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $text
-                    } else {
-                        $text = if ($cleanOutput.Success) { $cleanOutput.Success } else { """" }
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $text
-                    }
-                }
-                catch {
-                    $errorMessage = ""Command execution failed: $($_.Exception.Message)""
-                    Write-Host $errorMessage -ForegroundColor Red
-                    [PowerShell.MCP.McpServerHost]::outputFromCommand = $errorMessage
-                }
-            }
-
-            $silentCmd = [PowerShell.MCP.McpServerHost]::executeCommandSilent
-            if ($silentCmd) {
-                [PowerShell.MCP.McpServerHost]::executeCommandSilent = $null
+            catch (FileNotFoundException ex)
+            {
+                WriteError(new ErrorRecord(
+                    ex,
+                    "EmbeddedScriptNotFound",
+                    ErrorCategory.ResourceUnavailable,
+                    null));
                 
-                try {
-                    $results = Invoke-Expression $silentCmd
-                    if ($results -ne $null) {
-                        $output = $results | Out-String
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $output.Trim()
-                    } else {
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = """"
-                    }
-                }
-                catch {
-                    [PowerShell.MCP.McpServerHost]::outputFromCommand = ""Error: $($_.Exception.Message)""
-                }
+                WriteWarning("[PowerShell.MCP] MCPPollingEngine.ps1 not found. Please check embedded resources.");
             }
-        } | Out-Null
-    $global:McpTimer.Start()
-}
-");
+            catch (Exception ex)
+            {
+                WriteError(new ErrorRecord(
+                    ex,
+                    "ScriptExecutionError",
+                    ErrorCategory.InvalidOperation,
+                    null));
+                
+                WriteWarning($"[PowerShell.MCP] Script execution error: {ex.Message}");
+            }
 
             Task.Run(() =>
             {

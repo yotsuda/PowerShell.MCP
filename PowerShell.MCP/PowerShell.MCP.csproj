@@ -8,6 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Resources\MCPLocationProvider.ps1" />
+    <None Remove="Resources\MCPPollingEngine.ps1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\MCPLocationProvider.ps1" />
+    <EmbeddedResource Include="Resources\MCPPollingEngine.ps1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.Management.Automation" Version="7.2.15" />
   </ItemGroup>
 
