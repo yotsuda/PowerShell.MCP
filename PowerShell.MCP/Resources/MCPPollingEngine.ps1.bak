@@ -75,17 +75,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     $results | Out-Default
 
-                    # Add current location info at the beginning of results
-                    $currentLocation = @{
-                        drive = (Get-Location).Drive.Name + ":"
-                        currentPath = (Get-Location).Path
-                        provider = (Get-Location).Provider.Name
-                    }
-                    
-                    $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
-
                     $allResults = @()
-                    $allResults += $locationInfo  # Add location info first
                     $allResults += $results
                     foreach($err in $mcpErrors) { $allResults += $err }
                     foreach($warn in $mcpWarnings) { $allResults += $warn }
@@ -193,34 +183,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 
                 try {
                     $results = Invoke-Expression $silentCmd
-                    
-                    # Add current location info for silent commands too
-                    $currentLocation = @{
-                        drive = (Get-Location).Drive.Name + ":"
-                        currentPath = (Get-Location).Path
-                        provider = (Get-Location).Provider.Name
-                    }
-                    
-                    $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
-                    
                     if ($results -ne $null) {
                         $output = $results | Out-String
-                        $combinedOutput = $locationInfo + "`n" + $output.Trim()
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $combinedOutput
+                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $output.Trim()
                     } else {
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $locationInfo
+                        [PowerShell.MCP.McpServerHost]::outputFromCommand = ""
                     }
                 }
                 catch {
-                    $currentLocation = @{
-                        drive = (Get-Location).Drive.Name + ":"
-                        currentPath = (Get-Location).Path
-                        provider = (Get-Location).Provider.Name
-                    }
-                    
-                    $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
-                    $errorMessage = "Error: $($_.Exception.Message)"
-                    [PowerShell.MCP.McpServerHost]::outputFromCommand = $locationInfo + "`n" + $errorMessage
+                    [PowerShell.MCP.McpServerHost]::outputFromCommand = "Error: $($_.Exception.Message)"
                 }
             }
         } | Out-Null
