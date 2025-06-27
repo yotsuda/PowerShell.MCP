@@ -19,30 +19,20 @@ namespace PowerShell.MCP;
 public class McpMethodAttribute : Attribute
 {
     public string MethodName { get; }
-    public bool RequiresAuth { get; set; } = false;
+    //public bool RequiresAuth { get; set; } = false;
     public int TimeoutSeconds { get; set; } = 300; // 5分デフォルト
 
-    public McpMethodAttribute(string methodName)
-    {
-        MethodName = methodName;
-    }
+    public McpMethodAttribute(string methodName) => MethodName = methodName;
 }
 
 /// <summary>
 /// MCPメソッドハンドラーの実行コンテキスト
 /// </summary>
-public class McpMethodContext
+public class McpMethodContext(JsonRpcRequest request, CmdletProvider host, CancellationToken cancellationToken)
 {
-    public JsonRpcRequest Request { get; }
-    public CmdletProvider Host { get; }
-    public CancellationToken CancellationToken { get; }
-
-    public McpMethodContext(JsonRpcRequest request, CmdletProvider host, CancellationToken cancellationToken)
-    {
-        Request = request;
-        Host = host;
-        CancellationToken = cancellationToken;
-    }
+    public JsonRpcRequest Request { get; } = request;
+    public CmdletProvider Host { get; } = host;
+    public CancellationToken CancellationToken { get; } = cancellationToken;
 }
 
 /// <summary>
@@ -473,7 +463,7 @@ public static class McpServerHost
     #region MCP Method Handlers
 
     [McpMethod("initialize")]
-    private static async Task<McpMethodResult> HandleInitialize(McpMethodContext context)
+    private static McpMethodResult HandleInitialize(McpMethodContext context)
     {
         try
         {
@@ -489,7 +479,7 @@ public static class McpServerHost
     }
 
     [McpMethod("tools/list")]
-    private static async Task<McpMethodResult> HandleToolsList(McpMethodContext context)
+    private static McpMethodResult HandleToolsList(McpMethodContext context)
     {
         try
         {
@@ -505,7 +495,7 @@ public static class McpServerHost
     }
 
     [McpMethod("resources/list")]
-    private static async Task<McpMethodResult> HandleResourcesList(McpMethodContext context)
+    private static McpMethodResult HandleResourcesList(McpMethodContext context)
     {
         try
         {
@@ -521,7 +511,7 @@ public static class McpServerHost
     }
 
     [McpMethod("prompts/list")]
-    private static async Task<McpMethodResult> HandlePromptsList(McpMethodContext context)
+    private static McpMethodResult HandlePromptsList(McpMethodContext context)
     {
         try
         {
