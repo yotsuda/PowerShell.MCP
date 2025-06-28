@@ -92,7 +92,6 @@ public static class McpServerHost
 
     private static NamedPipeServerStream? _pipeServer;
     private static Task? _serverTask;
-    private static CancellationTokenSource? _cancellationTokenSource;
     private static readonly object _lockObject = new object();
     private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
     private static readonly Dictionary<string, MethodInfo> _methodHandlers = new();
@@ -121,7 +120,6 @@ public static class McpServerHost
         {
             try
             {
-                _cancellationTokenSource?.Cancel();
                 lock (_lockObject)
                 {
                     CleanupPipeServer();
@@ -135,8 +133,6 @@ public static class McpServerHost
             finally
             {
                 _serverTask = null;
-                _cancellationTokenSource?.Dispose();
-                _cancellationTokenSource = null;
             }
         }
     }
@@ -154,38 +150,35 @@ public static class McpServerHost
                 }
             }
 
-            _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
             LogSecurityEvent("SERVER_START", $"MCP server starting with Named Pipes (Version: {_serverVersion})", "");
+
 
             _serverTask = Task.Run(async () =>
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
+                while (true)
                 {
                     try
                     {
-                        await RunPipeServerAsync(_cancellationTokenSource.Token, host);
+                        await RunPipeServerAsync(CancellationToken.None, host);
                     }
                     catch (OperationCanceledException)
                     {
-                        LogSecurityEvent("SERVER_CANCELLED", "Server operation cancelled", "");
-                        break;
+                        // この例外は発生しないはずだが、念のため
+                        LogSecurityEvent("SERVER_CANCELLED_UNEXPECTED", "Unexpected cancellation occurred - continuing", "");
+                        host.WriteWarning("[PowerShell.MCP] Unexpected cancellation - server will continue running");
+                        await Task.Delay(1000);
+                        continue;
                     }
                     catch (Exception ex)
                     {
                         LogSecurityEvent("SERVER_ERROR", $"Pipe server error: {ex.Message}", ex.StackTrace ?? "");
                         host.WriteWarning($"[PowerShell.MCP] Pipe server error: {ex.Message}");
 
-                        try
-                        {
-                            await Task.Delay(2000, _cancellationTokenSource.Token);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            break;
-                        }
+                        // エラー後の遅延処理（キャンセル不可）
+                        await Task.Delay(2000);
                     }
                 }
-            }, _cancellationTokenSource.Token);
+            });
 
             LogSecurityEvent("SERVER_START", "MCP Named Pipe server started successfully", "");
         }
