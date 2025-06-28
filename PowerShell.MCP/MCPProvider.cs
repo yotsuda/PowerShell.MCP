@@ -6,7 +6,7 @@ using System.Reflection;
 namespace PowerShell.MCP
 {
     /// <summary>
-    /// Resources/ フォルダの埋め込みリソースを読み込むヘルパークラス
+    /// Resources/ フォルダの埋め込みリソースを読み込むヘルパークラス（改善版）
     /// </summary>
     public static class EmbeddedResourceLoader
     {
@@ -18,42 +18,17 @@ namespace PowerShell.MCP
         public static string LoadScript(string scriptFileName)
         {
             var assembly = Assembly.GetExecutingAssembly();
-            var resourceName = $"PowerShell.MCP.Resources.{scriptFileName}";
+            var assemblyName = assembly.GetName().Name;
+            var resourceName = $"{assemblyName}.Resources.{scriptFileName}";
             
-            using (var stream = assembly.GetManifestResourceStream(resourceName))
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null)
             {
-                if (stream == null)
-                {
-                    throw new FileNotFoundException($"Embedded resource '{resourceName}' not found.");
-                }
-                
-                using (var reader = new StreamReader(stream))
-                {
-                    return reader.ReadToEnd();
-                }
-            }
-        }
-        
-        /// <summary>
-        /// 利用可能な埋め込みリソースの一覧を取得（デバッグ用）
-        /// </summary>
-        /// <returns>リソース名の配列</returns>
-        public static string[] GetAvailableResources()
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            var resourceNames = assembly.GetManifestResourceNames();
-            var resources = new List<string>();
-            
-            foreach (var resourceName in resourceNames)
-            {
-                if (resourceName.StartsWith("PowerShell.MCP.Resources."))
-                {
-                    var shortName = resourceName.Replace("PowerShell.MCP.Resources.", "");
-                    resources.Add(shortName);
-                }
+                throw new FileNotFoundException($"Embedded resource '{resourceName}' not found.");
             }
             
-            return resources.ToArray();
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
         }
     }
 
@@ -61,61 +36,37 @@ namespace PowerShell.MCP
     public class MCPProvider : CmdletProvider
     {
         private CancellationTokenSource? _tokenSource;
+        private McpConfiguration? _configuration;
 
         protected override ProviderInfo Start(ProviderInfo providerInfo)
         {
             var pi = base.Start(providerInfo);
 
-            _tokenSource = new CancellationTokenSource();
-
             try
             {
+                // 基本設定の初期化
+                _configuration = new McpConfiguration();
+                _tokenSource = new CancellationTokenSource();
+
                 // MCPポーリングエンジンスクリプトの読み込みと実行
                 var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
                 this.InvokeCommand.InvokeScript(pollingScript);
 
-                #if DEBUG
-                // デバッグ時のリソース確認
-                WriteVerbose($"[PowerShell.MCP] Available resources: {string.Join(", ", EmbeddedResourceLoader.GetAvailableResources())}");
-                #endif
-            }
-            catch (FileNotFoundException ex)
-            {
-                WriteError(new ErrorRecord(
-                    ex,
-                    "EmbeddedScriptNotFound",
-                    ErrorCategory.ResourceUnavailable,
-                    null));
-                
-                WriteWarning("[PowerShell.MCP] MCPPollingEngine.ps1 not found. Please check embedded resources.");
+                // MCPサーバーの堅牢な起動（例外で終了しない）
+                Task.Run(async () =>
+                {
+                    McpServerHost.StartServer(this, _tokenSource.Token);
+                    // サーバーが正常に動作している間は無限ループ
+                    await Task.Delay(Timeout.Infinite, _tokenSource.Token);
+                }, _tokenSource.Token);
+
+                WriteInformation("[PowerShell.MCP] MCP server started", ["PowerShell.MCP", "ServerStart"]);
             }
             catch (Exception ex)
             {
-                WriteError(new ErrorRecord(
-                    ex,
-                    "ScriptExecutionError",
-                    ErrorCategory.InvalidOperation,
-                    null));
-                
-                WriteWarning($"[PowerShell.MCP] Script execution error: {ex.Message}");
+                WriteWarning($"[PowerShell.MCP] Failed to start: {ex.Message}");
             }
 
-            Task.Run(() =>
-            {
-                try
-                {
-                    McpServerHost.StartServer(this, _tokenSource.Token);
-                }
-                catch (Exception ex)
-                {
-                    WriteWarning($"[PowerShell.MCP] Failed to start Named Pipe server: {ex.Message}");
-                }
-            }, _tokenSource.Token);
-
-            WriteInformation(
-                "[PowerShell.MCP] MCP Named Pipe server started",
-                ["PowerShell.MCP", "ServerStart"]
-            );
             return pi;
         }
 
