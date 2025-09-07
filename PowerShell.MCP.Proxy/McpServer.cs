@@ -160,29 +160,27 @@ public class McpServer
             throw new ArgumentException("Tool name is required");
         }
 
-        // PowerShellプロセスが存在するかチェック
-        if (!PowerShellProcessManager.IsPowerShellProcessRunning())
-        {
-            await Console.Error.WriteLineAsync("PowerShell process not found. Starting new PowerShell process...");
-            var startupSuccess = await PowerShellProcessManager.StartPowerShellWithModuleAsync(_pipeClient);
-            if (!startupSuccess)
-            {
-                return new
-                {
-                    content = new[]
-                    {
-                        new
-                        {
-                            type = "text",
-                            text = "Failed to start PowerShell process with PowerShell.MCP module. Please ensure PowerShell 7 is installed and the PowerShell.MCP module is available."
-                        }
-                    }
-                };
-            }
-            
-            // プロセス起動後、少し待機
-            // await Task.Delay(2000); // 固定の2秒待機を削除！named pipeの応答確認で代替済み
-        }
+        // PowerShellプロセスが存在しなければ、自動で起動する
+        // なんだかうまく動かない。。起動済みなのに別の pwsh を起動してしまう。一旦コメントアウトしておく
+        //if (!PowerShellProcessManager.IsPowerShellProcessRunning())
+        //{
+        //    await Console.Error.WriteLineAsync("PowerShell process not found. Starting new PowerShell process...");
+        //    var startupSuccess = await PowerShellProcessManager.StartPowerShellWithModuleAsync(_pipeClient);
+        //    if (!startupSuccess)
+        //    {
+        //        return new
+        //        {
+        //            content = new[]
+        //            {
+        //                new
+        //                {
+        //                    type = "text",
+        //                    text = "Failed to start PowerShell process with PowerShell.MCP module. Please ensure PowerShell 7 is installed and the PowerShell.MCP module is available."
+        //                }
+        //            }
+        //        };
+        //    }
+        //}
 
         try
         {
