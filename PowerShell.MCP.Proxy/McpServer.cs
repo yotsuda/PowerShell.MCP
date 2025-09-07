@@ -7,14 +7,14 @@ namespace PowerShell.MCP.Proxy;
 public class McpServer
 {
     private readonly Dictionary<string, Func<JsonElement, double, Task<object>>> _mcpMethods;
-    private readonly PowerShellProcessManager _processManager;
+//    private readonly PowerShellProcessManager _processManager;
     private readonly NamedPipeClient _pipeClient;
 
     private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
 
     public McpServer()
     {
-        _processManager = new PowerShellProcessManager();
+ //       _processManager = new PowerShellProcessManager();
         _pipeClient = new NamedPipeClient();
         
         // MCP標準メソッドを初期化（IDパラメータ追加）
@@ -161,10 +161,11 @@ public class McpServer
         }
 
         // PowerShellプロセスが存在するかチェック
-        if (!_processManager.IsPowerShellProcessRunning())
+        if (!PowerShellProcessManager.IsPowerShellProcessRunning())
         {
             await Console.Error.WriteLineAsync("PowerShell process not found. Starting new PowerShell process...");
-            if (!_processManager.StartPowerShellWithModule())
+            var startupSuccess = await PowerShellProcessManager.StartPowerShellWithModuleAsync(_pipeClient);
+            if (!startupSuccess)
             {
                 return new
                 {
@@ -173,14 +174,14 @@ public class McpServer
                         new
                         {
                             type = "text",
-                            text = "Failed to start PowerShell process. Please ensure PowerShell 7 is installed and accessible."
+                            text = "Failed to start PowerShell process with PowerShell.MCP module. Please ensure PowerShell 7 is installed and the PowerShell.MCP module is available."
                         }
                     }
                 };
             }
             
             // プロセス起動後、少し待機
-            await Task.Delay(2000);
+            // await Task.Delay(2000); // 固定の2秒待機を削除！named pipeの応答確認で代替済み
         }
 
         try
@@ -263,3 +264,5 @@ public class McpServer
         await writer.WriteLineAsync(json);
     }
 }
+
+
