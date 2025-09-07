@@ -11,7 +11,7 @@ public class NamedPipeServer : IDisposable
 {
     private const string PipeName = "PowerShell.MCP.Communication";
     //private const string PipeName = "PowerShell.MCP.Communication-debug";
-    private const int MaxConcurrentConnections = 4;
+    private const int MaxConcurrentConnections = 1;
     private readonly MCPProvider _provider;
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
@@ -106,7 +106,7 @@ public class NamedPipeServer : IDisposable
     /// <summary>
     /// クライアントとの通信を処理します
     /// </summary>
-    private async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    private static async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
         try
         {
@@ -125,7 +125,7 @@ public class NamedPipeServer : IDisposable
             }
             var parameters = requestRoot.TryGetProperty("parameters", out var paramsElement) ? paramsElement : new JsonElement();
 
-            // ツールを実行（同期実行に変更）
+            // ツールを実行
             var result = await Task.Run(() => ExecuteTool(method!, parameters));
             
             // レスポンスを構築
@@ -176,29 +176,29 @@ public class NamedPipeServer : IDisposable
     }
 
     /// <summary>
-    /// ツールを実行します（同期版）
+    /// ツールを実行します
     /// </summary>
-    private string ExecuteTool(string method, JsonElement parameters)
+    private static string ExecuteTool(string method, JsonElement parameters)
     {
         return method switch
         {
-            "getCurrentLocation" => _provider.GetCurrentLocation(),
+            "getCurrentLocation" => MCPProvider.GetCurrentLocation(),
             "invokeExpression" => ExecuteInvokeExpression(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
     }
 
     /// <summary>
-    /// invokeExpressionツールを実行します（同期版）
+    /// invokeExpressionツールを実行します
     /// </summary>
-    private string ExecuteInvokeExpression(JsonElement parameters)
+    private static string ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
         var executeImmediately = parameters.TryGetProperty("executeImmediately", out var execElement) 
             ? execElement.GetBoolean() 
             : true;
 
-        return _provider.ExecuteCommand(pipeline, executeImmediately);
+        return MCPProvider.ExecuteCommand(pipeline, executeImmediately);
     }
 
     /// <summary>

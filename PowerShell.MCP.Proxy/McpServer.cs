@@ -185,7 +185,7 @@ public class McpServer
         try
         {
             // Named Pipe経由でPowerShellモジュールにリクエスト送信
-            var response = await _pipeClient.SendRequestAsync(toolName, arguments, id);
+            var response = await NamedPipeClient.SendRequestAsync(toolName, arguments, id);
             
             return new
             {

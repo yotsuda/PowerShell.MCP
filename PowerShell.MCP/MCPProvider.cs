@@ -83,9 +83,9 @@ namespace PowerShell.MCP
         }
 
         /// <summary>
-        /// PowerShellコマンドを実行します（元のシンプルな方式）
+        /// PowerShellコマンドを実行します
         /// </summary>
-        public string ExecuteCommand(string command, bool executeImmediately)
+        public static string ExecuteCommand(string command, bool executeImmediately)
         {
             try
             {
@@ -116,7 +116,7 @@ namespace PowerShell.MCP
         /// 現在の場所とドライブ情報を取得します
         /// 元の MCPServerHost.HandleGetCurrentLocation() と同じ実装パターン
         /// </summary>
-        public string GetCurrentLocation()
+        public static string GetCurrentLocation()
         {
             try
             {

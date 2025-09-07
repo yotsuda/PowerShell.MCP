@@ -9,7 +9,6 @@ public class NamedPipeClient
     private const string PipeName = "PowerShell.MCP.Communication";
     //private const string PipeName = "PowerShell.MCP.Communication-debug";
     private const int TimeoutMs = 5000; // 接続タイムアウト（5秒）
-    private const int ResponseTimeoutMs = 300000; // レスポンスタイムアウト（5分）
 
     /// <summary>
     /// Named Pipe経由でPowerShellモジュールにリクエストを送信します
@@ -18,7 +17,7 @@ public class NamedPipeClient
     /// <param name="arguments">ツールの引数</param>
     /// <param name="originalId">元のMCPクライアントからのID</param>
     /// <returns>PowerShellモジュールからのレスポンス</returns>
-    public async Task<string> SendRequestAsync(string toolName, JsonElement arguments, object originalId)
+    public static async Task<string> SendRequestAsync(string toolName, JsonElement arguments, object originalId)
     {
         using var pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
 
