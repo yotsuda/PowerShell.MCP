@@ -66,11 +66,25 @@ namespace PowerShell.MCP
         {
             try
             {
+                WriteInformation("[PowerShell.MCP] Requesting polling engine cleanup...", ["PowerShell.MCP", "Cleanup"]);
+                
+                // 埋め込みリソースからクリーンアップスクリプトを読み込み
+                var cleanupCommand = EmbeddedResourceLoader.LoadScript("MCPCleanup.ps1");
+                
+                // メインスレッドでクリーンアップコマンドを実行
+                McpServerHost.outputFromCommand = null;
+                McpServerHost.executeCommandSilent = cleanupCommand;
+                
+                // 少し待機してクリーンアップの完了を待つ
+                Thread.Sleep(1000);
+                
                 _tokenSource?.Cancel();
                 _namedPipeServer?.Dispose();
                 _tokenSource?.Dispose();
                 _tokenSource = null;
                 _namedPipeServer = null;
+                
+                WriteInformation("[PowerShell.MCP] MCP server stopped", ["PowerShell.MCP", "ServerStop"]);
             }
             catch (Exception ex)
             {

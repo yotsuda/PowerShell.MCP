@@ -46,14 +46,6 @@ public static class PowerShellCommunication
         
         return "Command execution timed out";
     }
-    
-    /// <summary>
-    /// 非同期版（Task.Runでラップ）
-    /// </summary>
-    //public static async Task<string> WaitForResultAsync(TimeSpan timeout)
-    //{
-    //    return await Task.Run(() => WaitForResult(timeout));
-    //}
 }
 
 /// <summary>
