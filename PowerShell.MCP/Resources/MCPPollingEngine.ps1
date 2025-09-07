@@ -7,17 +7,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
         -EventName      Elapsed `
         -SourceIdentifier MCP_Poll `
         -Action {
-            $cmd = [PowerShell.MCP.McpServerHost]::insertCommand
+            $cmd = [PowerShell.MCP.Services.McpServerHost]::insertCommand
             if ($cmd) {
-                [PowerShell.MCP.McpServerHost]::insertCommand = $null
+                [PowerShell.MCP.Services.McpServerHost]::insertCommand = $null
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
                 [Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()
                 [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
             }
 
-            $cmd = [PowerShell.MCP.McpServerHost]::executeCommand
+            $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
             if ($cmd) {
-                [PowerShell.MCP.McpServerHost]::executeCommand = $null
+                [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
 
                 try {
@@ -174,22 +174,22 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         }
 
                         $text = ($formattedOutput -join "`n").Trim()
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $text
+                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $text
                     } else {
                         $text = if ($cleanOutput.Success) { $cleanOutput.Success } else { "" }
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $text
+                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $text
                     }
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
                     Write-Host $errorMessage -ForegroundColor Red
-                    [PowerShell.MCP.McpServerHost]::outputFromCommand = $errorMessage
+                    [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $errorMessage
                 }
             }
 
-            $silentCmd = [PowerShell.MCP.McpServerHost]::executeCommandSilent
+            $silentCmd = [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent
             if ($silentCmd) {
-                [PowerShell.MCP.McpServerHost]::executeCommandSilent = $null
+                [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent = $null
                 
                 try {
                     $results = Invoke-Expression $silentCmd
@@ -206,9 +206,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     if ($results -ne $null) {
                         $output = $results | Out-String
                         $combinedOutput = $locationInfo + "`n" + $output.Trim()
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $combinedOutput
+                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $combinedOutput
                     } else {
-                        [PowerShell.MCP.McpServerHost]::outputFromCommand = $locationInfo
+                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $locationInfo
                     }
                 }
                 catch {
@@ -220,7 +220,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     
                     $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
                     $errorMessage = "Error: $($_.Exception.Message)"
-                    [PowerShell.MCP.McpServerHost]::outputFromCommand = $locationInfo + "`n" + $errorMessage
+                    [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $locationInfo + "`n" + $errorMessage
                 }
             }
         } | Out-Null
