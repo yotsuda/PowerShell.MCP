@@ -125,8 +125,8 @@ public class NamedPipeServer : IDisposable
             }
             var parameters = requestRoot.TryGetProperty("parameters", out var paramsElement) ? paramsElement : new JsonElement();
 
-            // ツールを実行
-            var result = await ExecuteToolAsync(method!, parameters);
+            // ツールを実行（同期実行に変更）
+            var result = await Task.Run(() => ExecuteTool(method!, parameters));
             
             // レスポンスを構築
             var response = new
@@ -176,29 +176,29 @@ public class NamedPipeServer : IDisposable
     }
 
     /// <summary>
-    /// ツールを実行します
+    /// ツールを実行します（同期版）
     /// </summary>
-    private async Task<string> ExecuteToolAsync(string method, JsonElement parameters)
+    private string ExecuteTool(string method, JsonElement parameters)
     {
         return method switch
         {
             "getCurrentLocation" => _provider.GetCurrentLocation(),
-            "invokeExpression" => await ExecuteInvokeExpressionAsync(parameters),
+            "invokeExpression" => ExecuteInvokeExpression(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
     }
 
     /// <summary>
-    /// invokeExpressionツールを実行します
+    /// invokeExpressionツールを実行します（同期版）
     /// </summary>
-    private async Task<string> ExecuteInvokeExpressionAsync(JsonElement parameters)
+    private string ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
         var executeImmediately = parameters.TryGetProperty("executeImmediately", out var execElement) 
             ? execElement.GetBoolean() 
             : true;
 
-        return await Task.Run(() => _provider.ExecuteCommand(pipeline, executeImmediately));
+        return _provider.ExecuteCommand(pipeline, executeImmediately);
     }
 
     /// <summary>
