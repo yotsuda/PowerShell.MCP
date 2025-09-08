@@ -9,6 +9,7 @@ public class McpServer
     private readonly Dictionary<string, Func<JsonElement, double, Task<object>>> _mcpMethods;
 //    private readonly PowerShellProcessManager _processManager;
     private readonly NamedPipeClient _pipeClient;
+//    private NotificationPipeServer? _notificationServer;
 
     private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
 
@@ -29,6 +30,10 @@ public class McpServer
 
     public async Task RunAsync()
     {
+        // 通知受信サーバーを開始
+  //      _notificationServer = new NotificationPipeServer();
+  //      await _notificationServer.StartAsync();
+
         var stdin = Console.OpenStandardInput();
         var stdout = Console.OpenStandardOutput();
 
@@ -262,5 +267,3 @@ public class McpServer
         await writer.WriteLineAsync(json);
     }
 }
-
-

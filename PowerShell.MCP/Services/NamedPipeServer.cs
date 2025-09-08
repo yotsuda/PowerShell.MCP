@@ -9,8 +9,8 @@ namespace PowerShell.MCP.Services;
 /// </summary>
 public class NamedPipeServer : IDisposable
 {
-    private const string PipeName = "PowerShell.MCP.Communication";
-    //private const string PipeName = "PowerShell.MCP.Communication-debug";
+    public const string PipeName = "PowerShell.MCP.Communication";
+    //public const string PipeName = "PowerShell.MCP.Communication-debug";
     private const int MaxConcurrentConnections = 1;
     private readonly MCPProvider _provider;
     private readonly CancellationTokenSource _internalCancellation = new();
@@ -226,7 +226,7 @@ public class NamedPipeServer : IDisposable
     /// <summary>
     /// Named Pipeにメッセージを送信します
     /// </summary>
-    private static async Task SendMessageAsync(NamedPipeServerStream pipeServer, string message, CancellationToken cancellationToken)
+    public static async Task SendMessageAsync(NamedPipeServerStream pipeServer, string message, CancellationToken cancellationToken)
     {
         var messageBytes = Encoding.UTF8.GetBytes(message);
         var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
@@ -265,4 +265,35 @@ public class NamedPipeServer : IDisposable
             _disposed = true;
         }
     }
+
+    /// <summary>
+    /// 通知専用 pipe で EXE 側に通知を送信
+    // 今のところ、MCP notification をサポートしている MCP client はほとんどないようだ。
+    // いったんコメントアウトしておく。
+    /// </summary>
+    public static void SendNotificationToPipe(object notificationData)
+    {
+        //try
+        //{
+        //    const string NotificationPipeName = "PowerShell.MCP.Notifications";
+            
+        //    using var pipeClient = new NamedPipeClientStream(".", NotificationPipeName, PipeDirection.Out);
+        //    pipeClient.Connect(1000); // 1秒でタイムアウト
+            
+        //    var notificationJson = JsonSerializer.Serialize(notificationData);
+            
+        //    // 簡潔な形式: JSONを直接送信
+        //    using var writer = new StreamWriter(pipeClient);
+        //    writer.Write(notificationJson);
+        //    writer.Flush();
+        //}
+        //catch
+        //{
+        //    // 通知エラーは無視（EXE側が起動していない場合など）
+        //}
+    }
 }
+
+
+
+

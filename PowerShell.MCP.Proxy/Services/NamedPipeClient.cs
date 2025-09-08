@@ -4,11 +4,124 @@ using System.Text.Json;
 
 namespace PowerShell.MCP.Proxy.Services;
 
+/// <summary>
+/// 通知受信用のNamedPipeServer
+/// </summary>
+public class NotificationPipeServer //: IDisposable
+{
+    private const string NotificationPipeName = "PowerShell.MCP.Notifications";
+    private readonly CancellationTokenSource _cancellationSource = new();
+    //private Task? _serverTask;
+    //private static string? _lastKnownLocation;
+
+    // 今のところ、MCP notification をサポートしている MCP client はほとんどないようだ。
+    // いったんコメントアウトしておく。
+    //public async Task StartAsync()
+    //{
+    //    _serverTask = Task.Run(async () => await RunNotificationServerAsync(_cancellationSource.Token));
+    //    await Task.Delay(100); // 起動待機
+    //}
+
+    //private async Task RunNotificationServerAsync(CancellationToken cancellationToken)
+    //{
+    //    while (!cancellationToken.IsCancellationRequested)
+    //    {
+    //        try
+    //        {
+    //            using var pipeServer = new NamedPipeServerStream(
+    //                NotificationPipeName,
+    //                PipeDirection.In,
+    //                1,
+    //                PipeTransmissionMode.Byte,
+    //                PipeOptions.Asynchronous);
+
+    //            await pipeServer.WaitForConnectionAsync(cancellationToken);
+    //            await HandleNotificationAsync(pipeServer, cancellationToken);
+    //        }
+    //        catch (OperationCanceledException)
+    //        {
+    //            break;
+    //        }
+    //        catch (Exception ex)
+    //        {
+    //            Console.Error.WriteLine($"Notification pipe error: {ex.Message}");
+    //            await Task.Delay(1000, cancellationToken);
+    //        }
+    //    }
+    //}
+
+    //private async Task HandleNotificationAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    //{
+    //    try
+    //    {
+    //        var notificationJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
+    //        var notification = JsonSerializer.Deserialize<JsonElement>(notificationJson);
+            
+    //        if (notification.TryGetProperty("type", out var typeElement))
+    //        {
+    //            var notificationType = typeElement.GetString();
+                
+    //            if (notificationType == "location_changed" && 
+    //                notification.TryGetProperty("new_location", out var locationElement))
+    //            {
+    //                var newLocation = locationElement.GetString();
+    //                if (_lastKnownLocation != newLocation)
+    //                {
+    //                    _lastKnownLocation = newLocation;
+    //                    SendMcpNotification(notification);
+    //                }
+    //            }
+    //            else
+    //            {
+    //                // その他の通知（コマンド実行など）は常に送信
+    //                SendMcpNotification(notification);
+    //            }
+    //        }
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        Console.Error.WriteLine($"Notification handling error: {ex.Message}");
+    //    }
+    //}
+
+    //private void SendMcpNotification(JsonElement notificationData)
+    //{
+    //    var mcpNotification = new
+    //    {
+    //        jsonrpc = "2.0",
+    //        method = "notifications/message",
+    //        @params = new
+    //        {
+    //            level = "info",
+    //            logger = "PowerShell.MCP",
+    //            data = notificationData
+    //        }
+    //    };
+        
+    //    var mcpJson = JsonSerializer.Serialize(mcpNotification);
+    //    Console.WriteLine(mcpJson); // MCPクライアントへpush送信
+    //}
+
+    //private async Task<string> ReceiveMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    //{
+    //    // 簡潔な形式: 長さプレフィックスなしでJSONを直接受信
+    //    using var reader = new StreamReader(pipeServer);
+    //    return await reader.ReadToEndAsync();
+    //}
+
+    //public void Dispose()
+    //{
+    //    _cancellationSource.Cancel();
+    //    _serverTask?.Wait(1000);
+    //    _cancellationSource.Dispose();
+    //}
+}
+
 public class NamedPipeClient
 {
     private const string PipeName = "PowerShell.MCP.Communication";
     //private const string PipeName = "PowerShell.MCP.Communication-debug";
-    private const int TimeoutMs = 5000; // 接続タイムアウト（5秒）
+    private const int TimeoutMs = 1000 * 60 * 60; // 接続タイムアウト（1000ミリ秒 * 60秒 * 60分 = 1時間）
 
     /// <summary>
     /// Named Pipe経由でPowerShellモジュールにリクエストを送信します

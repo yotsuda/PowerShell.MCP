@@ -224,6 +224,88 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $locationInfo + "`n" + $errorMessage
                 }
             }
+
+            # === コマンド実行通知システム ===
+            try {
+                # 前回チェックした履歴の位置を追跡
+                if (-not $global:MCP_LastHistoryId) {
+                    $global:MCP_LastHistoryId = 0
+                }
+
+                # 対話的コマンド履歴をチェック
+                $history = Get-History -ErrorAction SilentlyContinue
+                if ($history -and $history.Count -gt $global:MCP_LastHistoryId) {
+                    $newCommands = $history | Where-Object { $_.Id -gt $global:MCP_LastHistoryId }
+                    
+                    foreach ($historyItem in $newCommands) {
+                        $command = $historyItem.CommandLine
+                        $duration = if ($historyItem.EndExecutionTime -and $historyItem.StartExecutionTime) {
+                            ($historyItem.EndExecutionTime - $historyItem.StartExecutionTime).TotalMilliseconds
+                        } else { 0 }
+                        
+                        # 基本的なフィルタリング（調整済み）
+                        $excludePatterns = @('cls', 'clear', 'exit', 'pwd')
+                        $shouldExclude = $excludePatterns | Where-Object { $command -match "^$_\s*$" }
+                        
+                        if (-not $shouldExclude) {
+                            # === MCP通知: 対話的コマンド実行 ===
+                            try {
+                                [PowerShell.MCP.Services.McpServerHost]::SendCommandExecuted(
+                                    $command,
+                                    $PWD.Path,
+                                    $LASTEXITCODE,
+                                    [long]$duration
+                                )
+                                
+                                $icon = if ($duration -gt 3000) { "⏳" } else { "⚡" }
+                                $durationText = if ($duration -gt 0) { " ($([math]::Round($duration))ms)" } else { "" }
+#                                Write-Host "$icon Interactive command: $command$durationText" -ForegroundColor Green
+                            }
+                            catch {
+                                # 通知エラーは無視（従来のログも残す）
+#                                Add-Content -Path "$env:TEMP\mcp-notifications.log" -Value "$(Get-Date): Interactive command: $command" -ErrorAction SilentlyContinue
+                            }
+                        }
+                    }
+                    
+                    $global:MCP_LastHistoryId = $history[-1].Id
+                }
+            }
+            catch {
+                # コマンド通知エラーは無視
+                Add-Content -Path "$env:TEMP\mcp-errors.log" -Value "$(Get-Date): Command notification error: $_" -ErrorAction SilentlyContinue
+            }
+
+            # === 位置変更通知 ===
+            try {
+                # 初期化（意図的にコメントアウトして初回通知を有効化）
+                #if (-not $global:MCP_LastLocation) {
+                #    $global:MCP_LastLocation = $PWD.Path
+                #}
+
+                # 位置変更チェック
+                $currentLocation = $PWD.Path
+                if ($global:MCP_LastLocation -ne $currentLocation) {
+                    $oldLocation = if ($global:MCP_LastLocation) { $global:MCP_LastLocation } else { "(initial)" }
+                    
+                    # === MCP通知: 位置変更 ===
+                    try {
+                        [PowerShell.MCP.Services.McpServerHost]::SendLocationChanged($oldLocation, $currentLocation)
+#                        Write-Host "📍 Location changed: $oldLocation → $currentLocation" -ForegroundColor Cyan
+                    }
+                    catch {
+                        # 通知エラーは無視（従来のログも残す）
+#                        Add-Content -Path "$env:TEMP\mcp-notifications.log" -Value "$(Get-Date): Location changed: $oldLocation → $currentLocation" -ErrorAction SilentlyContinue
+                    }
+                    
+                    $global:MCP_LastLocation = $currentLocation
+                }
+            }
+            catch {
+                # 位置変更通知エラーは無視
+                Add-Content -Path "$env:TEMP\mcp-errors.log" -Value "$(Get-Date): Location notification error: $_" -ErrorAction SilentlyContinue
+            }
+
         } | Out-Null
     $global:McpTimer.Start()
 }

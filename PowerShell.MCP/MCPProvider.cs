@@ -1,6 +1,7 @@
 using System.Management.Automation;
 using System.Management.Automation.Provider;
 using System.Reflection;
+using System.Text.Json;
 using PowerShell.MCP.Services;
 
 namespace PowerShell.MCP
@@ -15,13 +16,13 @@ namespace PowerShell.MCP
             var assembly = Assembly.GetExecutingAssembly();
             var assemblyName = assembly.GetName().Name;
             var resourceName = $"{assemblyName}.Resources.{scriptFileName}";
-            
+
             using var stream = assembly.GetManifestResourceStream(resourceName);
             if (stream == null)
             {
                 throw new FileNotFoundException($"Embedded resource '{resourceName}' not found.");
             }
-            
+
             using var reader = new StreamReader(stream);
             return reader.ReadToEnd();
         }
@@ -41,7 +42,7 @@ namespace PowerShell.MCP
             {
                 _tokenSource = new CancellationTokenSource();
                 _namedPipeServer = new NamedPipeServer(this);
-                
+
                 // MCPポーリングエンジンスクリプトの読み込みと実行
                 var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
                 this.InvokeCommand.InvokeScript(pollingScript);
@@ -67,23 +68,23 @@ namespace PowerShell.MCP
             try
             {
                 WriteInformation("[PowerShell.MCP] Requesting polling engine cleanup...", ["PowerShell.MCP", "Cleanup"]);
-                
+
                 // 埋め込みリソースからクリーンアップスクリプトを読み込み
                 var cleanupCommand = EmbeddedResourceLoader.LoadScript("MCPCleanup.ps1");
-                
+
                 // メインスレッドでクリーンアップコマンドを実行
                 McpServerHost.outputFromCommand = null;
                 McpServerHost.executeCommandSilent = cleanupCommand;
-                
+
                 // 少し待機してクリーンアップの完了を待つ
                 Thread.Sleep(1000);
-                
+
                 _tokenSource?.Cancel();
                 _namedPipeServer?.Dispose();
                 _tokenSource?.Dispose();
                 _tokenSource = null;
                 _namedPipeServer = null;
-                
+
                 WriteInformation("[PowerShell.MCP] MCP server stopped", ["PowerShell.MCP", "ServerStop"]);
             }
             catch (Exception ex)
@@ -105,7 +106,7 @@ namespace PowerShell.MCP
             {
                 // 結果をクリア
                 McpServerHost.outputFromCommand = null;
-                
+
                 if (executeImmediately)
                 {
                     // 元のMCPPollingEngineの仕組みを直接使用
@@ -128,7 +129,6 @@ namespace PowerShell.MCP
 
         /// <summary>
         /// 現在の場所とドライブ情報を取得します
-        /// 元の MCPServerHost.HandleGetCurrentLocation() と同じ実装パターン
         /// </summary>
         public static string GetCurrentLocation()
         {
@@ -165,6 +165,14 @@ namespace PowerShell.MCP
             {
                 return $"Error getting current location: {ex.Message}";
             }
+        }
+
+        /// <summary>
+        /// 通知を専用pipeでEXE側に送信
+        /// </summary>
+        public static void SendNotification(object notificationData)
+        {
+            Services.NamedPipeServer.SendNotificationToPipe(notificationData);
         }
     }
 }
