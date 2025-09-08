@@ -118,7 +118,7 @@ public class McpServer
             {
                 new
                 {
-                    name = "getCurrentLocation",
+                    name = "get_current_location",
                     description = "Retrieves the current location and all available drives (providers) from the PowerShell session. Returns currentLocation and otherDriveLocations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invokeExpression commands in succession, calling once at the beginning is sufficient.",
                     inputSchema = new
                     {
@@ -129,7 +129,7 @@ public class McpServer
                 },
                 new
                 {
-                    name = "invokeExpression",
+                    name = "invoke_expression",
                     description = "Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.",
                     inputSchema = new
                     {
@@ -141,14 +141,14 @@ public class McpServer
                                 type = "string",
                                 description = "The PowerShell command or pipeline to execute. When executeImmediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When executeImmediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line."
                             },
-                            executeImmediately = new
+                            execute_immediately = new
                             {
                                 type = "boolean",
                                 description = "If true, executes the command immediately and returns the result. If false, inserts the command into the console for manual execution.",
                                 @default = true
                             }
                         },
-                        required = new[] { "pipeline", "executeImmediately" }
+                        required = new[] { "pipeline", "execute_immediately" }
                     }
                 }
             }

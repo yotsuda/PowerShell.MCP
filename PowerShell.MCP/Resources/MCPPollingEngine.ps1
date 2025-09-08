@@ -225,6 +225,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
 
+            # Claude Desktop ほか多くの MCP client は、今のところ MCP protocol notification をサポートしていない
+            # そのため、以下の通知処理はスキップする
+            return
+
             # === コマンド実行通知システム ===
             try {
                 # 前回チェックした履歴の位置を追跡

@@ -182,8 +182,8 @@ public class NamedPipeServer : IDisposable
     {
         return method switch
         {
-            "getCurrentLocation" => MCPProvider.GetCurrentLocation(),
-            "invokeExpression" => ExecuteInvokeExpression(parameters),
+            "get_current_location" => MCPProvider.GetCurrentLocation(),
+            "invoke_expression" => ExecuteInvokeExpression(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
     }
@@ -194,7 +194,7 @@ public class NamedPipeServer : IDisposable
     private static string ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
-        var executeImmediately = parameters.TryGetProperty("executeImmediately", out var execElement) 
+        var executeImmediately = parameters.TryGetProperty("execute_immediately", out var execElement) 
             ? execElement.GetBoolean() 
             : true;
 
