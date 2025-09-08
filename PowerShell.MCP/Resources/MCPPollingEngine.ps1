@@ -13,6 +13,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
                 [Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()
                 [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
+                [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = "Your pipeline has been inserted into the PS console."
             }
 
             $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
@@ -190,7 +191,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             $silentCmd = [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent
             if ($silentCmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent = $null
-                
+
                 try {
                     $results = Invoke-Expression $silentCmd
                     
@@ -200,9 +201,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         currentPath = (Get-Location).Path
                         provider = (Get-Location).Provider.Name
                     }
-                    
+
                     $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
-                    
+
                     if ($results -ne $null) {
                         $output = $results | Out-String
                         $combinedOutput = $locationInfo + "`n" + $output.Trim()
@@ -217,7 +218,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         currentPath = (Get-Location).Path
                         provider = (Get-Location).Provider.Name
                     }
-                    
+
                     $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
                     $errorMessage = "Error: $($_.Exception.Message)"
                     [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $locationInfo + "`n" + $errorMessage

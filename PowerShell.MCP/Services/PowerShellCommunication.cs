@@ -29,7 +29,7 @@ public static class PowerShellCommunication
         while (DateTime.UtcNow < endTime)
         {
             var currentResult = McpServerHost.outputFromCommand;
-            if (!string.IsNullOrEmpty(currentResult))
+            if (currentResult is not null)
             {
                 return currentResult;
             }
