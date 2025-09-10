@@ -8,9 +8,9 @@ public static class PowerShellCommunication
     /// <summary>
     /// 結果を待機します（適応的ポーリング方式）
     /// </summary>
-    public static string WaitForResult(TimeSpan timeout)
+    public static string WaitForResult()
     {
-        var endTime = DateTime.UtcNow.Add(timeout);
+        var endTime = DateTime.UtcNow.AddSeconds(4 * 60 + 50);
         
         // 結果をクリアしてから待機
         McpServerHost.outputFromCommand = null;
@@ -39,7 +39,7 @@ public static class PowerShellCommunication
             Thread.Sleep(currentInterval);
         }
         
-        return "Command execution timed out";
+        return "Command execution timed out (4 minutes 50 seconds). Your command is still running. Consider restarting the PowerShell console.";
     }
 }
 

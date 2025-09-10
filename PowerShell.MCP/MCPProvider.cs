@@ -118,8 +118,8 @@ namespace PowerShell.MCP
                     McpServerHost.insertCommand = command;
                 }
 
-                // 結果を待機（最大30秒）
-                return PowerShellCommunication.WaitForResult(TimeSpan.FromSeconds(30));
+                // 結果を待機
+                return PowerShellCommunication.WaitForResult();
             }
             catch (Exception ex)
             {

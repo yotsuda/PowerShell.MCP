@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace PowerShell.MCP.Proxy
+﻿namespace PowerShell.MCP.Proxy
 {
     internal class McpException : Exception
     {
