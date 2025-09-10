@@ -1,9 +1,12 @@
+using System.Diagnostics;
+
 namespace PowerShell.MCP.Proxy;
 
 internal class Program
 {
     static async Task Main(string[] args)
     {
+        //Debugger.Launch();
         try
         {
             var server = new McpServer();

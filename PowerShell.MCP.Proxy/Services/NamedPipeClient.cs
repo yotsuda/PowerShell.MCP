@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
@@ -121,7 +122,7 @@ public class NamedPipeClient
 {
     private const string PipeName = "PowerShell.MCP.Communication";
     //private const string PipeName = "PowerShell.MCP.Communication-debug";
-    private const int TimeoutMs = 1000 * 60 * 60; // 接続タイムアウト（1000ミリ秒 * 60秒 * 60分 = 1時間）
+    private const int TimeoutMs = 1000 * 3; // 接続タイムアウト（3秒）
 
     /// <summary>
     /// Named Pipe経由でPowerShellモジュールにリクエストを送信します
@@ -132,13 +133,25 @@ public class NamedPipeClient
     /// <returns>PowerShellモジュールからのレスポンス</returns>
     public static async Task<string> SendRequestAsync(string toolName, JsonElement arguments, object originalId)
     {
+        if (!PowerShellProcessManager.IsPowerShellProcessRunning())
+        {
+            throw new McpException($"The PowerShell 7 console is not running. Please guide the user to start it and import the PowerShell.MCP module.");
+        }
+
         using var pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+
+        // Named Pipeに接続
+        try
+        {
+            await pipeClient.ConnectAsync(TimeoutMs);
+        }
+        catch (TimeoutException e)
+        {
+            throw new McpException($"The PowerShell 7 console is running, but the PowerShell.MCP module does not appear to be imported. Please guide the user to import it.", e);
+        }
 
         try
         {
-            // Named Pipeに接続
-            await pipeClient.ConnectAsync(TimeoutMs);
-            
             // JSON-RPCリクエストを構築（元のIDを保持）
             var request = new
             {
@@ -227,7 +240,7 @@ public class NamedPipeClient
         
         if (messageLength <= 0 || messageLength > 10 * 1024 * 1024) // 10MB上限
         {
-            throw new InvalidOperationException($"Invalid message length: {messageLength}");
+            throw new InvalidOperationException($"Invalid message length (over 10MB): {messageLength}");
         }
 
         // メッセージ本体を受信
@@ -247,21 +260,38 @@ public class NamedPipeClient
         return Encoding.UTF8.GetString(messageBytes);
     }
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool WaitNamedPipe(string name, uint timeout);
+
     /// <summary>
-    /// Named Pipeの接続テストを行います
+    /// サーバ側で Named Pipe が作成されることを待機します
     /// </summary>
-    /// <returns>接続可能な場合はtrue</returns>
-    public async Task<bool> TestConnectionAsync()
+    /// <returns>接続可能な場合は true</returns>
+    public static async Task<bool> WaitForPipeReadyAsync()
     {
-        try
+        for (int i = 0; i < 30; i++)
         {
-            using var pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
-            await pipeClient.ConnectAsync(1000); // 1秒でテスト
-            return pipeClient.IsConnected;
+            try
+            {
+                // パイプの存在確認
+                if (WaitNamedPipe($@"\\.\pipe\{PipeName}", 100))
+                {
+                    // 実際に通信テストを実行
+                    using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+                    await client.ConnectAsync(1000);
+
+                    // 簡単なテストコマンド（例：$true）を送信して応答を確認
+                    // 実際の通信が可能かテスト
+
+                    return true;
+                }
+            }
+            catch
+            {
+                // 通信失敗、再試行
+            }
+            await Task.Delay(1000);
         }
-        catch
-        {
-            return false;
-        }
+        return false;
     }
 }

@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace PowerShell.MCP.Proxy.Services;
 
@@ -33,97 +35,14 @@ public class PowerShellProcessManager
     }
 
     /// <summary>
-    /// PowerShell.MCPモジュールをインポートした状態で PowerShell プロセスを起動します（非同期版）
+    /// PowerShell.MCPモジュールをインポートした状態で PowerShell プロセスを起動します
     /// </summary>
     /// <param name="pipeClient">Named pipe 通信用のクライアント（ヘルスチェックに使用）</param>
     /// <returns>起動に成功した場合は true</returns>
-    public static async Task<bool> StartPowerShellWithModuleAsync(NamedPipeClient? pipeClient = null)
+    public static async Task<bool> StartPowerShellWithModuleAsync(bool elevated)
     {
-        try
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "pwsh.exe",
-                Arguments = "-NoExit -Command \"Import-Module PowerShell.MCP\"",
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Normal,
-                WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            };
-
-            using var process = Process.Start(startInfo);
-            
-            if (process == null)
-            {
-                Console.Error.WriteLine("Failed to start PowerShell process");
-                return false;
-            }
-
-            Console.Error.WriteLine($"PowerShell process started (PID: {process.Id})");
-            
-            // Named pipeでの接続確認が最も確実な方法
-            if (pipeClient != null)
-            {
-                // モジュールが完全に読み込まれてNamed Pipeがリスンするまで待機
-                return await WaitForModuleReadyAsync(pipeClient);
-            }
-            
-            // pipeClientがない場合は基本的な待機のみ
-            await Task.Delay(3000);
-            return !process.HasExited;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error starting PowerShell process: {ex.Message}");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// 既存の同期版メソッド（後方互換性のため残す）
-    /// </summary>
-    /// <returns>起動に成功した場合はtrue</returns>
-    //public bool StartPowerShellWithModule()
-    //{
-    //    return StartPowerShellWithModuleAsync().GetAwaiter().GetResult();
-    //}
-
-    /// <summary>
-    /// PowerShell.MCPモジュールがnamed pipeでリッスンするまで待機します
-    /// </summary>
-    /// <param name="pipeClient">Named pipe通信用のクライアント</param>
-    /// <param name="timeoutMs">タイムアウト時間（ミリ秒）</param>
-    /// <returns>モジュールが準備完了した場合はtrue</returns>
-    private static async Task<bool> WaitForModuleReadyAsync(NamedPipeClient pipeClient, int timeoutMs = 15000)
-    {
-        const int checkIntervalMs = 500;
-        var startTime = DateTime.UtcNow;
-        var timeout = TimeSpan.FromMilliseconds(timeoutMs);
-        
-        Console.Error.WriteLine("Waiting for PowerShell.MCP module to be ready...");
-        
-        while (DateTime.UtcNow - startTime < timeout)
-        {
-            try
-            {
-                var isReady = await pipeClient.TestConnectionAsync();
-                if (isReady)
-                {
-                    var elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
-                    Console.Error.WriteLine($"PowerShell.MCP module is ready (took {elapsedMs:F0}ms)");
-                    return true;
-                }
-            }
-            catch (Exception ex)
-            {
-                // ログに記録するが、再試行を続ける
-                Console.Error.WriteLine($"Module health check failed (retrying): {ex.Message}");
-            }
-            
-            await Task.Delay(checkIntervalMs);
-        }
-        
-        Console.Error.WriteLine($"Timeout waiting for PowerShell.MCP module (timeout: {timeoutMs}ms)");
-        return false;
+        PwshNative.LaunchPwshStrict();
+        return await NamedPipeClient.WaitForPipeReadyAsync();
     }
 }
 
@@ -136,4 +55,100 @@ public class ProcessInfo
     public string ProcessName { get; set; } = string.Empty;
     public DateTime StartTime { get; set; }
     public bool HasExited { get; set; }
+}
+
+public static class PwshNative
+{
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+    [DllImport("userenv.dll", SetLastError = true)]
+    static extern bool CreateEnvironmentBlock(out IntPtr lpEnvironment, IntPtr hToken, bool bInherit);
+
+    [DllImport("userenv.dll", SetLastError = true)]
+    static extern bool DestroyEnvironmentBlock(IntPtr lpEnvironment);
+
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool CreateProcessW(
+        string? lpApplicationName,
+        string lpCommandLine,
+        IntPtr lpProcessAttributes,
+        IntPtr lpThreadAttributes,
+        bool bInheritHandles,
+        uint dwCreationFlags,
+        IntPtr lpEnvironment,
+        string? lpCurrentDirectory,
+        ref STARTUPINFOW lpStartupInfo,
+        out PROCESS_INFORMATION lpProcessInformation);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFOW
+    {
+        public uint cb;
+        public string? lpReserved;
+        public string? lpDesktop;   // 既定のままでOK: "winsta0\\default" が使われます
+        public string? lpTitle;
+        public uint dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public ushort wShowWindow;
+        public ushort cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput, hStdOutput, hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION
+    {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public uint dwProcessId;
+        public uint dwThreadId;
+    }
+
+    const uint TOKEN_QUERY = 0x0008;
+    const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    const uint CREATE_NEW_CONSOLE = 0x00000010;
+
+    public static void LaunchPwshStrict()
+    {
+        // 1) 現在ユーザーのトークンを取得
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, out var hToken))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+
+        // 2) そのユーザーの“既定”環境ブロックを生成（Explorer 同等）
+        if (!CreateEnvironmentBlock(out var env, hToken, false))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+
+        try
+        {
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            // 3) 新しいコンソールで pwsh.exe を起動
+            var si = new STARTUPINFOW { cb = (uint)Marshal.SizeOf<STARTUPINFOW>() };
+            var pi = new PROCESS_INFORMATION();
+
+            string commandLine = "pwsh.exe -NoExit -Command \"Import-Module PowerShell.MCP\"";
+
+            bool ok = CreateProcessW(
+                null,
+                commandLine,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                false,
+                CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE,
+                env,                       // ← Explorer 相当の環境をそのまま渡す
+                userProfile,               // 作業ディレクトリ
+                ref si,
+                out pi);
+
+            if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
+            // ハンドルは必要なら CloseHandle で明示的に閉じてください
+        }
+        finally
+        {
+            DestroyEnvironmentBlock(env);
+        }
+    }
 }

@@ -119,7 +119,7 @@ public class McpServer
                 new
                 {
                     name = "get_current_location",
-                    description = "Retrieves the current location and all available drives (providers) from the PowerShell session. Returns currentLocation and otherDriveLocations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invokeExpression commands in succession, calling once at the beginning is sufficient.",
+                    description = "Retrieves the current location and all available drives (providers) from the PowerShell session. Returns currentLocation and otherDriveLocations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.",
                     inputSchema = new
                     {
                         type = "object",
@@ -150,9 +150,58 @@ public class McpServer
                         },
                         required = new[] { "pipeline", "execute_immediately" }
                     }
+                },
+                new
+                {
+                    name = "start_powershell_console",
+                    description = "Launch a new PowerShell console window with PowerShell.MCP module imported. Can start with elevated privileges.",
+                    inputSchema = new
+                    {
+                        type = "object",
+                        properties = new
+                        {
+                            elevated = new
+                            {
+                                type = "boolean",
+                                description = "Run as administrator (will show UAC prompt).",
+                                @default = false
+                            }
+                        },
+                        required = Array.Empty<string>()
+                    }
                 }
             }
         });
+    }
+
+    private static object CreateResponse(string text)
+    {
+        return new
+        {
+            content = new[]
+            {
+                new
+                {
+                    type = "text",
+                    text = text
+                }
+            }
+        };
+    }
+
+    // TODO: PowerShellProcessManager() を直接呼び出してもらった方が良いだろう
+    private static async Task<object> StartPowershellConsole(JsonElement parameters)
+    {
+        bool elevated = parameters.TryGetProperty("elevated", out var args) && bool.Parse(args.ToString());
+        var processStarted = await PowerShellProcessManager.StartPowerShellWithModuleAsync(elevated);
+        if (processStarted)
+        {
+            return CreateResponse("PowerShell 7 console has been started with PowerShell.MCP module imported.");
+        }
+        else
+        {
+            throw new Exception("Failed to start PowerShell process with PowerShell.MCP module. Please ensure PowerShell 7 is installed and the PowerShell.MCP module is available.");
+        }
     }
 
     private async Task<object> ToolsCallAsync(JsonElement parameters, double id)
@@ -165,60 +214,24 @@ public class McpServer
             throw new ArgumentException("Tool name is required");
         }
 
-        // PowerShellプロセスが存在しなければ、自動で起動する
-        // なんだかうまく動かない。。起動済みなのに別の pwsh を起動してしまう。一旦コメントアウトしておく
-        //if (!PowerShellProcessManager.IsPowerShellProcessRunning())
-        //{
-        //    await Console.Error.WriteLineAsync("PowerShell process not found. Starting new PowerShell process...");
-        //    var startupSuccess = await PowerShellProcessManager.StartPowerShellWithModuleAsync(_pipeClient);
-        //    if (!startupSuccess)
-        //    {
-        //        return new
-        //        {
-        //            content = new[]
-        //            {
-        //                new
-        //                {
-        //                    type = "text",
-        //                    text = "Failed to start PowerShell process with PowerShell.MCP module. Please ensure PowerShell 7 is installed and the PowerShell.MCP module is available."
-        //                }
-        //            }
-        //        };
-        //    }
-        //}
+        switch (toolName)
+        {
+            case "start_powershell_console":
+                return await StartPowershellConsole(parameters);
+            default: // 上記以外のツールは、Named Pipe 経由で PowerShell モジュールに処理を委譲
+                break;
+        }
 
+        // Named Pipe 経由で PowerShell モジュールにリクエスト送信
         try
         {
-            // Named Pipe経由でPowerShellモジュールにリクエスト送信
             var response = await NamedPipeClient.SendRequestAsync(toolName, arguments, id);
-            
-            return new
-            {
-                content = new[]
-                {
-                    new
-                    {
-                        type = "text",
-                        text = response
-                    }
-                }
-            };
+            return CreateResponse(response);
         }
         catch (Exception ex)
         {
             await Console.Error.WriteLineAsync($"Named pipe communication failed: {ex.Message}");
-            
-            return new
-            {
-                content = new[]
-                {
-                    new
-                    {
-                        type = "text",
-                        text = $"PowerShell communication error: {ex.Message}\n\nPlease ensure that:\n1. PowerShell process is running\n2. PowerShell.MCP module is imported with: Import-Module PowerShell.MCP\n\nIf the issue persists, restart PowerShell and try again."
-                    }
-                }
-            };
+            return CreateResponse($"PowerShell communication error: {ex.Message}\n\nPlease ensure that:\n1. PowerShell process is running\n2. PowerShell.MCP module is imported with: Import-Module PowerShell.MCP\n\nIf the issue persists, restart PowerShell and try again.");
         }
     }
 
