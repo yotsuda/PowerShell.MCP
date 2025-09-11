@@ -83,7 +83,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         provider = (Get-Location).Provider.Name
                     }
                     
-                    $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Your pipeline executed in: $($currentLocation.currentPath) [$($currentLocation.provider)]"
 
                     $allResults = @()
                     $allResults += $locationInfo  # Add location info first
