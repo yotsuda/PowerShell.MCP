@@ -39,7 +39,7 @@ public class PowerShellProcessManager
     /// </summary>
     /// <param name="pipeClient">Named pipe 通信用のクライアント（ヘルスチェックに使用）</param>
     /// <returns>起動に成功した場合は true</returns>
-    public static async Task<bool> StartPowerShellWithModuleAsync(bool elevated)
+    public static async Task<bool> StartPowerShellWithModuleAsync()
     {
         PwshNative.LaunchPwshStrict();
         return await NamedPipeClient.WaitForPipeReadyAsync();

@@ -154,19 +154,10 @@ public class McpServer
                 new
                 {
                     name = "start_powershell_console",
-                    description = "Launch a new PowerShell console window with PowerShell.MCP module imported. Can start with elevated privileges.",
+                    description = "Launch a new PowerShell console window with PowerShell.MCP module imported.",
                     inputSchema = new
                     {
                         type = "object",
-                        properties = new
-                        {
-                            elevated = new
-                            {
-                                type = "boolean",
-                                description = "Run as administrator (will show UAC prompt).",
-                                @default = false
-                            }
-                        },
                         required = Array.Empty<string>()
                     }
                 }
@@ -192,8 +183,7 @@ public class McpServer
     // TODO: PowerShellProcessManager() を直接呼び出してもらった方が良いだろう
     private static async Task<object> StartPowershellConsole(JsonElement parameters)
     {
-        bool elevated = parameters.TryGetProperty("elevated", out var args) && bool.Parse(args.ToString());
-        var processStarted = await PowerShellProcessManager.StartPowerShellWithModuleAsync(elevated);
+        var processStarted = await PowerShellProcessManager.StartPowerShellWithModuleAsync();
         if (processStarted)
         {
             return CreateResponse("PowerShell 7 console has been started with PowerShell.MCP module imported.");
