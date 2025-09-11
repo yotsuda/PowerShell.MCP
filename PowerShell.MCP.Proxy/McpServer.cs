@@ -154,7 +154,7 @@ public class McpServer
                 new
                 {
                     name = "start_powershell_console",
-                    description = "Launch a new PowerShell console window with PowerShell.MCP module imported.",
+                    description = "Launch a new PowerShell console window with PowerShell.MCP module imported. This tool should only be executed when explicitly requested by the user or when other tool executions fail.",
                     inputSchema = new
                     {
                         type = "object",
@@ -181,14 +181,10 @@ public class McpServer
     }
 
     // TODO: PowerShellProcessManager() を直接呼び出してもらった方が良いだろう
-    private static async Task<object> StartPowershellConsole(JsonElement parameters)
+    private static async void StartPowershellConsole(JsonElement parameters)
     {
         var processStarted = await PowerShellProcessManager.StartPowerShellWithModuleAsync();
-        if (processStarted)
-        {
-            return CreateResponse("PowerShell 7 console has been started with PowerShell.MCP module imported.");
-        }
-        else
+        if (!processStarted)
         {
             throw new Exception("Failed to start PowerShell process with PowerShell.MCP module. Please ensure PowerShell 7 is installed and the PowerShell.MCP module is available.");
         }
@@ -207,7 +203,14 @@ public class McpServer
         switch (toolName)
         {
             case "start_powershell_console":
-                return await StartPowershellConsole(parameters);
+                StartPowershellConsole(parameters);
+
+                // PowerShellプロセス起動のために少し待機
+                // パイプで疎通確認しているのだけど、直後のパイプ通信が失敗することがあった。。
+                //Thread.Sleep(100);
+
+                toolName = "get_current_location";
+                break;
             default: // 上記以外のツールは、Named Pipe 経由で PowerShell モジュールに処理を委譲
                 break;
         }

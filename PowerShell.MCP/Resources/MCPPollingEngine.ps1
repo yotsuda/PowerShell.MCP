@@ -76,7 +76,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     $results | Out-Default
 
-                    # Add current location info at the beginning of results
+                    # Add current location info at the beginning
                     $currentLocation = @{
                         drive = (Get-Location).Drive.Name + ":"
                         currentPath = (Get-Location).Path
@@ -84,16 +84,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                     
                     $locationInfo = "Your pipeline executed in: $($currentLocation.currentPath) [$($currentLocation.provider)]"
-
-                    $allResults = @()
-                    $allResults += $locationInfo  # Add location info first
-                    $allResults += $results
-                    foreach($err in $mcpErrors) { $allResults += $err }
-                    foreach($warn in $mcpWarnings) { $allResults += $warn }
-                    foreach($info in $mcpInformation) { $allResults += $info }
-                    foreach($host in $hostOutput) { $allResults += $host }
-
-                    $hasHostOutput = $hostOutput.Count -gt 0
 
                     $outputStreams = @{
                         Success = @()
@@ -103,28 +93,29 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         Host = @()
                     }
 
-                    foreach ($item in $allResults) {
-                        switch ($item.GetType().Name) {
-                            'ErrorRecord' {
-                                $outputStreams.Error += $item.Exception.Message
-                            }
-                            'WarningRecord' {
-                                $outputStreams.Warning += $item.Message
-                            }
-                            'InformationRecord' {
-                                $outputStreams.Information += $item.MessageData
-                            }
-                            'String' {
-                                if ($item -in $hostOutput) {
-                                    $outputStreams.Host += $item
-                                } else {
-                                    $outputStreams.Success += $item
-                                }
-                            }
-                            default {
-                                $outputStreams.Success += $item
-                            }
-                        }
+                    # Process errors
+                    foreach($err in $mcpErrors) { 
+                        $outputStreams.Error += $err.Exception.Message 
+                    }
+                    
+                    # Process warnings
+                    foreach($warn in $mcpWarnings) { 
+                        $outputStreams.Warning += $warn.Message 
+                    }
+                    
+                    # Process information
+                    foreach($info in $mcpInformation) { 
+                        $outputStreams.Information += $info.MessageData 
+                    }
+                    
+                    # Process host output
+                    foreach($host in $hostOutput) { 
+                        $outputStreams.Host += $host 
+                    }
+
+                    # Process results (standard output)
+                    foreach ($item in $results) {
+                        $outputStreams.Success += $item
                     }
 
                     $structuredOutput = @{
@@ -142,8 +133,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         }
                     }
 
-                    if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success')) {
+                    if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success') -or ($cleanOutput.Error -or $cleanOutput.Warning -or $cleanOutput.Information -or $cleanOutput.Host)) {
                         $formattedOutput = @()
+                        
+                        # Always start with location info
+                        $formattedOutput += $locationInfo
 
                         if ($cleanOutput.Error) {
                             $formattedOutput += "=== ERRORS ==="
@@ -160,6 +154,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         if ($cleanOutput.Information) {
                             $formattedOutput += "=== INFO ==="
                             $formattedOutput += $cleanOutput.Information
+                            $formattedOutput += ""
                         }
 
                         if ($cleanOutput.Host) {
@@ -168,16 +163,20 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             $formattedOutput += ""
                         }
 
+                        $formattedOutput += "=== OUTPUT ==="
                         if ($cleanOutput.Success) {
-                            $formattedOutput += "=== OUTPUT ==="
                             $formattedOutput += $cleanOutput.Success
-                            $formattedOutput += ""
                         }
 
                         $text = ($formattedOutput -join "`n").Trim()
                         [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $text
                     } else {
-                        $text = if ($cleanOutput.Success) { $cleanOutput.Success } else { "" }
+                        # Simple output: just location + results
+                        if ($cleanOutput.Success) {
+                            $text = $locationInfo + "`n" + $cleanOutput.Success
+                        } else {
+                            $text = $locationInfo
+                        }
                         [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $text
                     }
                 }
