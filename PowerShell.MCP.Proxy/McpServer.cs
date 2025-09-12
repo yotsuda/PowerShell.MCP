@@ -7,17 +7,15 @@ namespace PowerShell.MCP.Proxy;
 public class McpServer
 {
     private readonly Dictionary<string, Func<JsonElement, double, Task<object>>> _mcpMethods;
-//    private readonly PowerShellProcessManager _processManager;
     private readonly NamedPipeClient _pipeClient;
-//    private NotificationPipeServer? _notificationServer;
+    //    private NotificationPipeServer? _notificationServer;
 
     private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
 
     public McpServer()
     {
- //       _processManager = new PowerShellProcessManager();
         _pipeClient = new NamedPipeClient();
-        
+
         // MCP標準メソッドを初期化（IDパラメータ追加）
         _mcpMethods = new Dictionary<string, Func<JsonElement, double, Task<object>>>
         {
@@ -31,8 +29,8 @@ public class McpServer
     public async Task RunAsync()
     {
         // 通知受信サーバーを開始
-  //      _notificationServer = new NotificationPipeServer();
-  //      await _notificationServer.StartAsync();
+        //      _notificationServer = new NotificationPipeServer();
+        //      await _notificationServer.StartAsync();
 
         var stdin = Console.OpenStandardInput();
         var stdout = Console.OpenStandardOutput();
@@ -43,9 +41,12 @@ public class McpServer
         string? line;
         while ((line = await reader.ReadLineAsync()) != null)
         {
-            await ProcessRequestAsync(line, writer);
+            // 各リクエストを別のタスクで並行処理
+            _ = Task.Run(async () => await ProcessRequestAsync(line, writer));
         }
     }
+
+    private readonly object _writerLock = new(); // 出力の排他制御用
 
     private async Task ProcessRequestAsync(string requestLine, StreamWriter writer)
     {
@@ -58,23 +59,37 @@ public class McpServer
             if (method != null && _mcpMethods.TryGetValue(method, out var handler))
             {
                 var paramsElement = jsonRequest.RootElement.TryGetProperty("params", out var p) ? p : new JsonElement();
-                var result = await handler(paramsElement, id); // IDを渡す
-                await WriteJsonResponse(writer, id, result);
+                var result = await handler(paramsElement, id);
+
+                // 出力を同期化（複数スレッドからの同時書き込みを防ぐ）
+                lock (_writerLock)
+                {
+                    WriteJsonResponse(writer, id, result).Wait();
+                }
             }
             else
             {
-                await WriteJsonError(writer, id, -32601, "Method not found", method);
+                lock (_writerLock)
+                {
+                    WriteJsonError(writer, id, -32601, "Method not found", method).Wait();
+                }
             }
         }
         catch (JsonException ex)
         {
             await Console.Error.WriteLineAsync($"JSON parsing error: {ex.Message}");
-            await WriteJsonError(writer, 0, -32700, "Parse error", ex.Message);
+            lock (_writerLock)
+            {
+                WriteJsonError(writer, 0, -32700, "Parse error", ex.Message).Wait();
+            }
         }
         catch (Exception ex)
         {
             await Console.Error.WriteLineAsync($"Request processing error: {ex.Message}");
-            await WriteJsonError(writer, 0, -32603, "Internal error", ex.Message);
+            lock (_writerLock)
+            {
+                WriteJsonError(writer, 0, -32603, "Internal error", ex.Message).Wait();
+            }
         }
     }
 
@@ -139,7 +154,7 @@ public class McpServer
                             pipeline = new
                             {
                                 type = "string",
-                                description = "The PowerShell command or pipeline to execute. When executeImmediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When executeImmediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line."
+                                description = "The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line."
                             },
                             execute_immediately = new
                             {
