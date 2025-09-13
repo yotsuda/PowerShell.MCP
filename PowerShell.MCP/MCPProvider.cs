@@ -17,12 +17,7 @@ namespace PowerShell.MCP
             var assemblyName = assembly.GetName().Name;
             var resourceName = $"{assemblyName}.Resources.{scriptFileName}";
 
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream == null)
-            {
-                throw new FileNotFoundException($"Embedded resource '{resourceName}' not found.");
-            }
-
+            using var stream = assembly.GetManifestResourceStream(resourceName) ?? throw new FileNotFoundException($"Embedded resource '{resourceName}' not found.");
             using var reader = new StreamReader(stream);
             return reader.ReadToEnd();
         }
@@ -36,6 +31,9 @@ namespace PowerShell.MCP
 
         protected override ProviderInfo Start(ProviderInfo providerInfo)
         {
+            // TODO: named pipe が既に存在する場合は、このプロバイダのインポートに失敗させる
+            // 例外をスローする？ nullを返す？
+
             var pi = base.Start(providerInfo);
 
             try
@@ -79,6 +77,9 @@ namespace PowerShell.MCP
                 // 少し待機してクリーンアップの完了を待つ
                 Thread.Sleep(1000);
 
+                // 状態管理の終了処理
+                ExecutionState.SetIdle();
+
                 _tokenSource?.Cancel();
                 _namedPipeServer?.Dispose();
                 _tokenSource?.Dispose();
@@ -98,36 +99,6 @@ namespace PowerShell.MCP
         }
 
         /// <summary>
-        /// PowerShellコマンドを実行します
-        /// </summary>
-        public static string ExecuteCommand(string command, bool executeImmediately)
-        {
-            try
-            {
-                // 結果をクリア
-                McpServerHost.outputFromCommand = null;
-
-                if (executeImmediately)
-                {
-                    // 元のMCPPollingEngineの仕組みを直接使用
-                    McpServerHost.executeCommand = command;
-                }
-                else
-                {
-                    // コマンドをコンソールに挿入
-                    McpServerHost.insertCommand = command;
-                }
-
-                // 結果を待機
-                return PowerShellCommunication.WaitForResult();
-            }
-            catch (Exception ex)
-            {
-                return $"Error executing command: {ex.Message}";
-            }
-        }
-
-        /// <summary>
         /// 現在の場所とドライブ情報を取得します
         /// </summary>
         public static string GetCurrentLocation()
@@ -137,29 +108,8 @@ namespace PowerShell.MCP
                 // 既存のMCPLocationProvider.ps1スクリプトを使用
                 var locationCommand = EmbeddedResourceLoader.LoadScript("MCPLocationProvider.ps1");
 
-                // 結果をクリアしてからコマンドを設定（元の実装と同じパターン）
-                McpServerHost.outputFromCommand = null;
-                McpServerHost.executeCommandSilent = locationCommand;
-
-                // 結果を待機（最大10秒 - 元の実装と同じタイムアウト）
-                const int timeoutMs = 10000;
-                var elapsed = 0;
-                const int pollIntervalMs = 100; // ポーリング間隔
-
-                while (elapsed < timeoutMs)
-                {
-                    if (McpServerHost.outputFromCommand != null)
-                    {
-                        var output = McpServerHost.outputFromCommand;
-                        McpServerHost.outputFromCommand = null; // 使用後はクリア
-                        return output;
-                    }
-
-                    Thread.Sleep(pollIntervalMs);
-                    elapsed += pollIntervalMs;
-                }
-
-                return "Timeout while getting current location";
+                // 状態管理付きでサイレント実行
+                return McpServerHost.ExecuteSilentCommand(locationCommand);
             }
             catch (Exception ex)
             {
@@ -168,11 +118,11 @@ namespace PowerShell.MCP
         }
 
         /// <summary>
-        /// 通知を専用pipeでEXE側に送信
+        /// 通知を専用 pipe でEXE側に送信
         /// </summary>
-        public static void SendNotification(object notificationData)
-        {
-            Services.NamedPipeServer.SendNotificationToPipe(notificationData);
-        }
+        //public static void SendNotification(object notificationData)
+        //{
+        //    Services.NamedPipeServer.SendNotificationToPipe(notificationData);
+        //}
     }
 }

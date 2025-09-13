@@ -5,13 +5,26 @@ using System.Text.Json;
 namespace PowerShell.MCP.Services;
 
 /// <summary>
+/// 実行状態を管理する静的クラス
+/// </summary>
+public static class ExecutionState
+{
+    private static volatile string _status = "idle";
+    
+    public static string Status => _status;
+    public static void SetBusy() => _status = "busy";
+    public static void SetIdle() => _status = "idle";
+}
+
+/// <summary>
 /// Named Pipe サーバー - PowerShell.MCP.Proxy.exe との通信を担当
+/// コマンド実行中は"busy"レスポンスを返す
 /// </summary>
 public class NamedPipeServer : IDisposable
 {
     public const string PipeName = "PowerShell.MCP.Communication";
     //public const string PipeName = "PowerShell.MCP.Communication-debug";
-    private const int MaxConcurrentConnections = 1;
+    private const int MaxConcurrentConnections = 2; // 2つのパイプインスタンス
     private readonly MCPProvider _provider;
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
@@ -32,7 +45,7 @@ public class NamedPipeServer : IDisposable
 
         try
         {
-            // 複数の同時接続を許可するため、複数のサーバーインスタンスを起動
+            // 複数のサーバーインスタンスを起動
             for (int i = 0; i < MaxConcurrentConnections; i++)
             {
                 var task = RunServerInstanceAsync(combinedCts.Token);
@@ -53,7 +66,7 @@ public class NamedPipeServer : IDisposable
     }
 
     /// <summary>
-    /// 単一のサーバーインスタンスを実行します
+    /// サーバーインスタンスを実行します
     /// </summary>
     private async Task RunServerInstanceAsync(CancellationToken cancellationToken)
     {
@@ -124,6 +137,30 @@ public class NamedPipeServer : IDisposable
                 id = idElement.GetDouble();
             }
             var parameters = requestRoot.TryGetProperty("parameters", out var paramsElement) ? paramsElement : new JsonElement();
+
+            // 実行状態をチェック
+            if (ExecutionState.Status == "busy" && method == "invoke_expression")
+            {
+                // busyレスポンスを返す
+                var busyResponse = new
+                {
+                    jsonrpc = "2.0",
+                    id = id,
+                    result = @"Cannot execute new pipeline while previous pipeline is running (cannot be cancelled with Ctrl+C). Options:
+1. Wait for completion
+2. Force terminate console and restart (auto-executed by LLM if selected)
+
+LLM should prompt user to choose."
+                };
+
+                var busyJson = JsonSerializer.Serialize(busyResponse, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                await SendMessageAsync(pipeServer, busyJson, cancellationToken);
+                return;
+            }
 
             // ツールを実行
             var result = await Task.Run(() => ExecuteTool(method!, parameters));
@@ -198,7 +235,7 @@ public class NamedPipeServer : IDisposable
             ? execElement.GetBoolean() 
             : true;
 
-        return MCPProvider.ExecuteCommand(pipeline, executeImmediately);
+        return McpServerHost.ExecuteCommand(pipeline, executeImmediately);
     }
 
     /// <summary>
@@ -276,12 +313,12 @@ public class NamedPipeServer : IDisposable
         //try
         //{
         //    const string NotificationPipeName = "PowerShell.MCP.Notifications";
-            
+
         //    using var pipeClient = new NamedPipeClientStream(".", NotificationPipeName, PipeDirection.Out);
         //    pipeClient.Connect(1000); // 1秒でタイムアウト
-            
+
         //    var notificationJson = JsonSerializer.Serialize(notificationData);
-            
+
         //    // 簡潔な形式: JSONを直接送信
         //    using var writer = new StreamWriter(pipeClient);
         //    writer.Write(notificationJson);
@@ -293,7 +330,3 @@ public class NamedPipeServer : IDisposable
         //}
     }
 }
-
-
-
-
