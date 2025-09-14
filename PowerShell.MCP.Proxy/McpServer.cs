@@ -6,7 +6,6 @@ namespace PowerShell.MCP.Proxy;
 
 public class McpServer
 {
-    private readonly Dictionary<string, Func<JsonElement, double, Task<object>>> _mcpMethods;
     private readonly NamedPipeClient _pipeClient;
     //    private NotificationPipeServer? _notificationServer;
 
@@ -15,15 +14,6 @@ public class McpServer
     public McpServer()
     {
         _pipeClient = new NamedPipeClient();
-
-        // MCP標準メソッドを初期化（IDパラメータ追加）
-        _mcpMethods = new Dictionary<string, Func<JsonElement, double, Task<object>>>
-        {
-            ["initialize"] = InitializeAsync,
-            ["tools/list"] = ToolsListAsync,
-            ["tools/call"] = ToolsCallAsync,
-            ["ping"] = PingAsync
-        };
     }
 
     public async Task RunAsync()
@@ -58,24 +48,30 @@ public class McpServer
             using var jsonRequest = JsonDocument.Parse(requestLine);
             var method = jsonRequest.RootElement.GetProperty("method").GetString();
             var id = GetJsonRpcId(jsonRequest);
+            var paramsElement = jsonRequest.RootElement.TryGetProperty("params", out var p) ? p : new JsonElement();
 
-            if (method != null && _mcpMethods.TryGetValue(method, out var handler))
+            var result = method switch
             {
-                var paramsElement = jsonRequest.RootElement.TryGetProperty("params", out var p) ? p : new JsonElement();
-                var result = await handler(paramsElement, id);
+                "initialize" => await InitializeAsync(paramsElement, id),
+                "tools/list" => await ToolsListAsync(paramsElement, id),
+                "tools/call" => await ToolsCallAsync(paramsElement, id),
+                "ping" => await PingAsync(paramsElement, id),
+                _ => throw new InvalidOperationException($"Method not found: {method}")
+            };
 
-                // 出力を同期化（複数スレッドからの同時書き込みを防ぐ）
-                lock (_writerLock)
-                {
-                    WriteJsonResponse(writer, id, result).Wait();
-                }
+            // 出力を同期化（複数スレッドからの同時書き込みを防ぐ）
+            lock (_writerLock)
+            {
+                WriteJsonResponse(writer, id, result).Wait();
             }
-            else
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("Method not found"))
+        {
+            var id = GetJsonRpcId(JsonDocument.Parse(requestLine));
+            var method = JsonDocument.Parse(requestLine).RootElement.GetProperty("method").GetString();
+            lock (_writerLock)
             {
-                lock (_writerLock)
-                {
-                    WriteJsonError(writer, id, -32601, "Method not found", method).Wait();
-                }
+                WriteJsonError(writer, id, -32601, "Method not found", method).Wait();
             }
         }
         catch (JsonException ex)
