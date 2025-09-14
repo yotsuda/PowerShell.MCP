@@ -28,6 +28,7 @@ namespace PowerShell.MCP
     {
         private CancellationTokenSource? _tokenSource;
         private NamedPipeServer? _namedPipeServer;
+        public static readonly string ServerVersion = Assembly.GetExecutingAssembly().GetName().Version!.ToString();
 
         protected override ProviderInfo Start(ProviderInfo providerInfo)
         {

@@ -35,6 +35,20 @@ public class NamedPipeServer : IDisposable
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
     }
 
+    private static object CreateErrorResponse(double id, int code, string message)
+    {
+        return new
+        {
+            jsonrpc = "2.0",
+            id,
+            error = new
+            {
+                code,
+                message
+            }
+        };
+    }
+
     /// <summary>
     /// Named Pipe サーバーを開始します
     /// </summary>
@@ -137,6 +151,40 @@ public class NamedPipeServer : IDisposable
                 id = idElement.GetDouble();
             }
             var parameters = requestRoot.TryGetProperty("parameters", out var paramsElement) ? paramsElement : new JsonElement();
+
+            string? proxyVersion = requestRoot.TryGetProperty("proxyVersion", out JsonElement proxyVersionElement)
+                ? proxyVersionElement.GetString() : "Not detected";
+            if (proxyVersion != MCPProvider.ServerVersion)
+            {
+                string? mcpClient = requestRoot.TryGetProperty("mcpClient", out JsonElement mcpClientElement)
+                    ? mcpClientElement.GetString() : "Not detected";
+
+                string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\")");
+                //string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\") -replace '\\\\', '\\\\'");
+                string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
+
+                // このメッセージを修正したら、McpServer.cs の ToolsCallAsync() "version is outdated" も直す必要がある。
+                var versionErrorResponse = CreateErrorResponse(id, -32001,
+$@"PowerShell MCP Configuration Error
+
+ISSUE: PowerShell.MCP.Proxy.exe version is outdated.
+- PowerShell.MCP module version: {MCPProvider.ServerVersion}
+- Proxy executable version: {proxyVersion}
+
+ACTION REQUIRED: Update your MCP client configuration
+- Executable path: {proxyExePath}
+- JSON config example: ""PowerShell"": {{ ""command"": ""{proxyExePath.Replace("\\", "\\\\")}"" }}
+
+Please provide how to update the MCP client ({mcpClient}) configuration to the user.");
+
+                var versionErrorJson = JsonSerializer.Serialize(versionErrorResponse, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                await SendMessageAsync(pipeServer, versionErrorJson, cancellationToken);
+                return;
+            }
 
             // 実行状態をチェック
             if (ExecutionState.Status == "busy" && method == "invoke_expression")

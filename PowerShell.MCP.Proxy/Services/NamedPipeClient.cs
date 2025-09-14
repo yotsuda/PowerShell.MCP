@@ -122,7 +122,7 @@ public class NamedPipeClient
 {
     private const string PipeName = "PowerShell.MCP.Communication";
     //private const string PipeName = "PowerShell.MCP.Communication-debug";
-    private const int TimeoutMs = 1000 * 10; // 接続タイムアウト
+    private const int TimeoutMs = 1000 * 10; // 接続タイムアウト(10秒)
 
     /// <summary>
     /// Named Pipe経由でPowerShellモジュールにリクエストを送信します
@@ -157,6 +157,8 @@ public class NamedPipeClient
             {
                 jsonrpc = "2.0",
                 id = originalId, // オリジナルIDを使用
+                mcpClient = McpServer.ClientName,
+                proxyVersion = McpServer.ProxyVersion, // これは MCP protocol に含まれないことに注意
                 method = toolName,
                 parameters = arguments
             };

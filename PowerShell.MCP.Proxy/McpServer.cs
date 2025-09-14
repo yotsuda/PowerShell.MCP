@@ -10,7 +10,7 @@ public class McpServer
     private readonly NamedPipeClient _pipeClient;
     //    private NotificationPipeServer? _notificationServer;
 
-    private static readonly Version _serverVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
+    public static readonly string ProxyVersion = Assembly.GetExecutingAssembly().GetName().Version!.ToString();
 
     public McpServer()
     {
@@ -47,6 +47,9 @@ public class McpServer
     }
 
     private readonly object _writerLock = new(); // 出力の排他制御用
+
+    public static string ClientName { get; private set; } = "unknown";
+    public static string ClientVersion { get; private set; } = "unknown";
 
     private async Task ProcessRequestAsync(string requestLine, StreamWriter writer)
     {
@@ -110,6 +113,21 @@ public class McpServer
 
     private Task<object> InitializeAsync(JsonElement parameters, double id)
     {
+        // clientInfo から name と version を抽出
+
+        if (parameters.TryGetProperty("clientInfo", out var clientInfo))
+        {
+            if (clientInfo.TryGetProperty("name", out var nameProperty))
+            {
+                ClientName = nameProperty.GetString() ?? "unknown";
+            }
+
+            if (clientInfo.TryGetProperty("version", out var versionProperty))
+            {
+                ClientVersion = versionProperty.GetString() ?? "unknown";
+            }
+        }
+
         return Task.FromResult<object>(new
         {
             protocolVersion = "2024-11-05",
@@ -120,7 +138,7 @@ public class McpServer
             serverInfo = new
             {
                 name = "PowerShell.MCP",
-                version = _serverVersion
+                version = ProxyVersion
             }
         });
     }
@@ -239,7 +257,15 @@ public class McpServer
         catch (Exception ex)
         {
             await Console.Error.WriteLineAsync($"Named pipe communication failed: {ex.Message}");
-            return CreateResponse($"PowerShell communication error: {ex.Message}\n\nPlease ensure that:\n1. PowerShell process is running\n2. PowerShell.MCP module is imported with: Import-Module PowerShell.MCP\n\nIf the issue persists, restart PowerShell and try again.");
+            if (ex.Message.Contains("version is outdated"))
+            {
+                return CreateResponse(ex.Message);
+            }
+            else
+            {
+                return CreateResponse($"PowerShell communication error: {ex.Message}\n\nPlease ensure that:\n1. PowerShell process is running\n2. PowerShell.MCP module is imported with: Import-Module PowerShell.MCP\n\nIf the issue persists, restart PowerShell and try again.");
+
+            }
         }
     }
 
