@@ -18,7 +18,7 @@ public class McpServer
 
     public async Task RunAsync()
     {
-        // 通知受信サーバーを開始
+        // Start notification server
         //      _notificationServer = new NotificationPipeServer();
         //      await _notificationServer.StartAsync();
 
@@ -31,23 +31,27 @@ public class McpServer
         string? line;
         while ((line = await reader.ReadLineAsync()) != null)
         {
-            // 各リクエストを別のタスクで並行処理
-            _ = Task.Run(async () => await ProcessRequestAsync(line, writer));
+            // Process each request directly without Task.Run
+            // This avoids ThreadPool issues while maintaining async processing
+            _ = ProcessRequestAsync(line, writer);
         }
     }
 
-    private readonly object _writerLock = new(); // 出力の排他制御用
+    private readonly object _writerLock = new(); // Writer synchronization lock
 
     public static string ClientName { get; private set; } = "unknown";
     public static string ClientVersion { get; private set; } = "unknown";
 
     private async Task ProcessRequestAsync(string requestLine, StreamWriter writer)
     {
+        double id = 0;
+        string? method = null;
+        
         try
         {
             using var jsonRequest = JsonDocument.Parse(requestLine);
-            var method = jsonRequest.RootElement.GetProperty("method").GetString();
-            var id = GetJsonRpcId(jsonRequest);
+            method = jsonRequest.RootElement.GetProperty("method").GetString();
+            id = GetJsonRpcId(jsonRequest);
             var paramsElement = jsonRequest.RootElement.TryGetProperty("params", out var p) ? p : new JsonElement();
 
             var result = method switch
@@ -55,23 +59,25 @@ public class McpServer
                 "initialize" => await InitializeAsync(paramsElement, id),
                 "tools/list" => await ToolsListAsync(paramsElement, id),
                 "tools/call" => await ToolsCallAsync(paramsElement, id),
+                "prompts/list" => await PromptsListAsync(paramsElement, id),
+                "prompts/get" => await PromptsGetAsync(paramsElement, id),
                 "ping" => await PingAsync(paramsElement, id),
                 _ => throw new InvalidOperationException($"Method not found: {method}")
             };
 
-            // 出力を同期化（複数スレッドからの同時書き込みを防ぐ）
+            // Synchronize output (prevent concurrent writes from multiple threads)
             lock (_writerLock)
             {
-                WriteJsonResponse(writer, id, result).Wait();
+                WriteJsonResponse(writer, id, result).ConfigureAwait(false).GetAwaiter().GetResult();
             }
         }
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("Method not found"))
         {
-            var id = GetJsonRpcId(JsonDocument.Parse(requestLine));
-            var method = JsonDocument.Parse(requestLine).RootElement.GetProperty("method").GetString();
+            var id2 = GetJsonRpcId(JsonDocument.Parse(requestLine));
+            var method2 = JsonDocument.Parse(requestLine).RootElement.GetProperty("method").GetString();
             lock (_writerLock)
             {
-                WriteJsonError(writer, id, -32601, "Method not found", method).Wait();
+                WriteJsonError(writer, id2, -32601, "Method not found", method2).ConfigureAwait(false).GetAwaiter().GetResult();
             }
         }
         catch (JsonException ex)
@@ -79,7 +85,7 @@ public class McpServer
             await Console.Error.WriteLineAsync($"JSON parsing error: {ex.Message}");
             lock (_writerLock)
             {
-                WriteJsonError(writer, 0, -32700, "Parse error", ex.Message).Wait();
+                WriteJsonError(writer, 0, -32700, "Parse error", ex.Message).ConfigureAwait(false).GetAwaiter().GetResult();
             }
         }
         catch (Exception ex)
@@ -87,7 +93,7 @@ public class McpServer
             await Console.Error.WriteLineAsync($"Request processing error: {ex.Message}");
             lock (_writerLock)
             {
-                WriteJsonError(writer, 0, -32603, "Internal error", ex.Message).Wait();
+                WriteJsonError(writer, 0, -32603, "Internal error", ex.Message).ConfigureAwait(false).GetAwaiter().GetResult();
             }
         }
     }
@@ -107,9 +113,9 @@ public class McpServer
         };
     }
 
-    private Task<object> InitializeAsync(JsonElement parameters, double id)
+    private static Task<object> InitializeAsync(JsonElement parameters, double id)
     {
-        // clientInfo から name と version を抽出
+        // Extract name and version from clientInfo
 
         if (parameters.TryGetProperty("clientInfo", out var clientInfo))
         {
@@ -129,7 +135,8 @@ public class McpServer
             protocolVersion = "2024-11-05",
             capabilities = new
             {
-                tools = new { }
+                tools = new { },
+                prompts = new { }
             },
             serverInfo = new
             {
@@ -137,6 +144,137 @@ public class McpServer
                 version = ProxyVersion
             }
         });
+    }
+
+    private static Task<object> PromptsListAsync(JsonElement parameters, double id)
+    {
+        Console.Error.WriteLine($"[DEBUG] PromptsListAsync called with ID: {id}");
+        
+        var result = new
+        {
+            prompts = new object[]
+            {
+                new
+                {
+                    name = "try-powershell",
+                    description = "Try PowerShell",
+                    arguments = new object[]
+                    {
+                        new
+                        {
+                            name = "topic",
+                            description = "Topic of PowerShell features or commands to try (e.g., file operations, process management, text processing)",
+                            required = false
+                        }
+                    }
+                },
+                new
+                {
+                    name = "explore-folder",
+                    description = "Explore folder contents and suggest next actions",
+                    arguments = new object[]
+                    {
+                        new
+                        {
+                            name = "path",
+                            description = "Path of the folder to explore",
+                            required = true
+                        }
+                    }
+                },
+                new
+                {
+                    name = "import-module",
+                    description = "Import PowerShell module and explore usage",
+                    arguments = new object[]
+                    {
+                        new
+                        {
+                            name = "module_name",
+                            description = "Name of the PowerShell module to import",
+                            required = true
+                        }
+                    }
+                }
+            }
+        };
+        
+        Console.Error.WriteLine($"[DEBUG] PromptsListAsync returning result for ID: {id}");
+        return Task.FromResult<object>(result);
+    }
+    private static Task<object> PromptsGetAsync(JsonElement parameters, double id)
+    {
+        var promptName = parameters.GetProperty("name").GetString();
+        var arguments = parameters.TryGetProperty("arguments", out var args) ? args : new JsonElement();
+
+        var promptText = promptName switch
+        {
+            "try-powershell" => GenerateTryPowerShellPrompt(arguments),
+            "explore-folder" => GenerateExploreFolderPrompt(arguments),
+            "import-module" => GenerateImportModulePrompt(arguments),
+            _ => throw new ArgumentException($"Unknown prompt: {promptName}")
+        };
+
+        return Task.FromResult<object>(new
+        {
+            messages = new object[]
+            {
+                new
+                {
+                    role = "user",
+                    content = new
+                    {
+                        type = "text",
+                        text = promptText
+                    }
+                }
+            }
+        });
+    }
+
+    private static string GenerateTryPowerShellPrompt(JsonElement arguments)
+    {
+        var topic = "";
+        if (arguments.TryGetProperty("topic", out var topicProp))
+        {
+            topic = topicProp.GetString() ?? "";
+        }
+
+        if (string.IsNullOrEmpty(topic))
+        {
+            return "Let's try PowerShell's basic features. Please demonstrate practical commands for file operations, process management, text processing, and other useful functionality. Include explanations and execution examples for each command to provide a hands-on experience with PowerShell's powerful capabilities.";
+        }
+        else
+        {
+            return $"Let's explore PowerShell features related to '{topic}'. Please show practical commands and usage examples for this topic. Include explanations of each command and interpretation of execution results to enable learning through actual practice.";
+        }
+    }
+
+    private static string GenerateExploreFolderPrompt(JsonElement arguments)
+    {
+        var path = arguments.GetProperty("path").GetString() ?? ".";
+        
+        return $"Please thoroughly examine the contents of folder '{path}' and suggest next actions. Follow these steps:\n\n" +
+               "1. Check basic folder information (location, size, permissions, etc.)\n" +
+               "2. Display list of files and subfolders\n" +
+               "3. Analyze by file types (extensions, sizes, modification dates, etc.)\n" +
+               "4. Investigate details of noteworthy files or structures\n" +
+               "5. Suggest useful operations or maintenance tasks for this folder\n\n" +
+               "Use PowerShell's rich cmdlets to perform comprehensive analysis.";
+    }
+
+    private static string GenerateImportModulePrompt(JsonElement arguments)
+    {
+        var moduleName = arguments.GetProperty("module_name").GetString() ?? "";
+        
+        return $"Please import PowerShell module '{moduleName}' and explore its usage:\n\n" +
+               "1. Check basic module information (version, description, author, etc.)\n" +
+               "2. Import the module\n" +
+               "3. Display list of available cmdlets\n" +
+               "4. Check help for main cmdlets\n" +
+               "5. Execute several practical usage examples\n" +
+               "6. Introduce commonly used features and best practices\n\n" +
+               "Proceed with explanations at each step to make it beginner-friendly. Include troubleshooting for potential errors.";
     }
 
     private Task<object> ToolsListAsync(JsonElement parameters, double id)
@@ -209,7 +347,7 @@ public class McpServer
         };
     }
 
-    // TODO: PowerShellProcessManager() を直接呼び出してもらった方が良いだろう
+    // TODO: Call PowerShellProcessManager() directly would be better
     private static async void StartPowershellConsole(JsonElement parameters)
     {
         var processStarted = await PowerShellProcessManager.StartPowerShellWithModuleAsync();
@@ -234,17 +372,17 @@ public class McpServer
             case "start_powershell_console":
                 StartPowershellConsole(parameters);
 
-                // PowerShellプロセス起動のために少し待機
-                // パイプで疎通確認しているのだけど、直後のパイプ通信が失敗することがあった。。
+                // Wait briefly for PowerShell process startup
+                // Pipe communication was confirmed, but immediate pipe communication sometimes failed
                 //Thread.Sleep(100);
 
                 toolName = "get_current_location";
                 break;
-            default: // 上記以外のツールは、Named Pipe 経由で PowerShell モジュールに処理を委譲
+            default: // Other tools are delegated to PowerShell module via Named Pipe
                 break;
         }
 
-        // Named Pipe 経由で PowerShell モジュールにリクエスト送信
+        // Send request to PowerShell module via Named Pipe
         try
         {
             var response = await NamedPipeClient.SendRequestAsync(toolName, arguments, id);
