@@ -73,11 +73,10 @@ public class McpServer
         }
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("Method not found"))
         {
-            var id2 = GetJsonRpcId(JsonDocument.Parse(requestLine));
-            var method2 = JsonDocument.Parse(requestLine).RootElement.GetProperty("method").GetString();
+            await Console.Error.WriteLineAsync($"[DEBUG] Method not found error: {method}, ID: {id}");
             lock (_writerLock)
             {
-                WriteJsonError(writer, id2, -32601, "Method not found", method2).ConfigureAwait(false).GetAwaiter().GetResult();
+                WriteJsonError(writer, id, -32601, "Method not found", method).ConfigureAwait(false).GetAwaiter().GetResult();
             }
         }
         catch (JsonException ex)
@@ -156,7 +155,7 @@ public class McpServer
             {
                 new
                 {
-                    name = "try-powershell",
+                    name = "try_PowerShell",
                     description = "Try PowerShell",
                     arguments = new object[]
                     {
@@ -170,7 +169,7 @@ public class McpServer
                 },
                 new
                 {
-                    name = "explore-folder",
+                    name = "explore_folder",
                     description = "Explore folder contents and suggest next actions",
                     arguments = new object[]
                     {
@@ -184,7 +183,7 @@ public class McpServer
                 },
                 new
                 {
-                    name = "import-module",
+                    name = "import_module",
                     description = "Import PowerShell module and explore usage",
                     arguments = new object[]
                     {
@@ -209,9 +208,9 @@ public class McpServer
 
         var promptText = promptName switch
         {
-            "try-powershell" => GenerateTryPowerShellPrompt(arguments),
-            "explore-folder" => GenerateExploreFolderPrompt(arguments),
-            "import-module" => GenerateImportModulePrompt(arguments),
+            "try_PowerShell" => GenerateTryPowerShellPrompt(arguments),
+            "explore_folder" => GenerateExploreFolderPrompt(arguments),
+            "import_module" => GenerateImportModulePrompt(arguments),
             _ => throw new ArgumentException($"Unknown prompt: {promptName}")
         };
 
@@ -397,7 +396,7 @@ public class McpServer
             }
             else
             {
-                return CreateResponse($"PowerShell communication error: {ex.Message}\n\nPlease ensure that:\n1. PowerShell process is running\n2. PowerShell.MCP module is imported with: Import-Module PowerShell.MCP\n\nIf the issue persists, restart PowerShell and try again.");
+                return CreateResponse($"PowerShell communication error: {ex.Message}\n\nPlease ensure that:\n1. PowerShell process is running\n2. PowerShell.MCP module is imported with: import_module PowerShell.MCP\n\nIf the issue persists, restart PowerShell and try again.");
 
             }
         }
