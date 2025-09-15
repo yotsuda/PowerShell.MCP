@@ -1,299 +1,134 @@
 using System.IO.Pipes;
-using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.Json;
 
 namespace PowerShell.MCP.Proxy.Services;
-
-/// <summary>
-/// 通知受信用のNamedPipeServer
-/// </summary>
-public class NotificationPipeServer //: IDisposable
-{
-    private const string NotificationPipeName = "PowerShell.MCP.Notifications";
-    private readonly CancellationTokenSource _cancellationSource = new();
-    //private Task? _serverTask;
-    //private static string? _lastKnownLocation;
-
-    // 今のところ、MCP notification をサポートしている MCP client はほとんどないようだ。
-    // いったんコメントアウトしておく。
-    //public async Task StartAsync()
-    //{
-    //    _serverTask = Task.Run(async () => await RunNotificationServerAsync(_cancellationSource.Token));
-    //    await Task.Delay(100); // 起動待機
-    //}
-
-    //private async Task RunNotificationServerAsync(CancellationToken cancellationToken)
-    //{
-    //    while (!cancellationToken.IsCancellationRequested)
-    //    {
-    //        try
-    //        {
-    //            using var pipeServer = new NamedPipeServerStream(
-    //                NotificationPipeName,
-    //                PipeDirection.In,
-    //                1,
-    //                PipeTransmissionMode.Byte,
-    //                PipeOptions.Asynchronous);
-
-    //            await pipeServer.WaitForConnectionAsync(cancellationToken);
-    //            await HandleNotificationAsync(pipeServer, cancellationToken);
-    //        }
-    //        catch (OperationCanceledException)
-    //        {
-    //            break;
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            Console.Error.WriteLine($"Notification pipe error: {ex.Message}");
-    //            await Task.Delay(1000, cancellationToken);
-    //        }
-    //    }
-    //}
-
-    //private async Task HandleNotificationAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
-    //{
-    //    try
-    //    {
-    //        var notificationJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
-    //        var notification = JsonSerializer.Deserialize<JsonElement>(notificationJson);
-            
-    //        if (notification.TryGetProperty("type", out var typeElement))
-    //        {
-    //            var notificationType = typeElement.GetString();
-                
-    //            if (notificationType == "location_changed" && 
-    //                notification.TryGetProperty("new_location", out var locationElement))
-    //            {
-    //                var newLocation = locationElement.GetString();
-    //                if (_lastKnownLocation != newLocation)
-    //                {
-    //                    _lastKnownLocation = newLocation;
-    //                    SendMcpNotification(notification);
-    //                }
-    //            }
-    //            else
-    //            {
-    //                // その他の通知（コマンド実行など）は常に送信
-    //                SendMcpNotification(notification);
-    //            }
-    //        }
-    //    }
-    //    catch (Exception ex)
-    //    {
-    //        Console.Error.WriteLine($"Notification handling error: {ex.Message}");
-    //    }
-    //}
-
-    //private void SendMcpNotification(JsonElement notificationData)
-    //{
-    //    var mcpNotification = new
-    //    {
-    //        jsonrpc = "2.0",
-    //        method = "notifications/message",
-    //        @params = new
-    //        {
-    //            level = "info",
-    //            logger = "PowerShell.MCP",
-    //            data = notificationData
-    //        }
-    //    };
-        
-    //    var mcpJson = JsonSerializer.Serialize(mcpNotification);
-    //    Console.WriteLine(mcpJson); // MCPクライアントへpush送信
-    //}
-
-    //private async Task<string> ReceiveMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
-    //{
-    //    // 簡潔な形式: 長さプレフィックスなしでJSONを直接受信
-    //    using var reader = new StreamReader(pipeServer);
-    //    return await reader.ReadToEndAsync();
-    //}
-
-    //public void Dispose()
-    //{
-    //    _cancellationSource.Cancel();
-    //    _serverTask?.Wait(1000);
-    //    _cancellationSource.Dispose();
-    //}
-}
 
 public class NamedPipeClient
 {
     private const string PipeName = "PowerShell.MCP.Communication";
-    //private const string PipeName = "PowerShell.MCP.Communication-debug";
-    private const int TimeoutMs = 1000 * 10; // 接続タイムアウト(10秒)
 
-    /// <summary>
-    /// Named Pipe経由でPowerShellモジュールにリクエストを送信します
-    /// </summary>
-    /// <param name="toolName">実行するツール名</param>
-    /// <param name="arguments">ツールの引数</param>
-    /// <param name="originalId">元のMCPクライアントからのID</param>
-    /// <returns>PowerShellモジュールからのレスポンス</returns>
-    public static async Task<string> SendRequestAsync(string toolName, JsonElement arguments, object originalId)
+    public async Task<string> SendRequestAsync(string arguments)
     {
-        if (!PowerShellProcessManager.IsPowerShellProcessRunning())
-        {
-            throw new McpException($"The PowerShell 7 console is not running. Please guide the user to start it and import the PowerShell.MCP module.");
-        }
-
-        using var pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
-
-        // Named Pipeに接続
         try
         {
-            await pipeClient.ConnectAsync(TimeoutMs);
-        }
-        catch (TimeoutException e)
-        {
-            throw new McpException($"PowerShell 7 (pwsh.exe) is running but PowerShell.MCP module is not imported.\r\n\r\nMANDATORY STEPS - DO NOT SKIP ANY:\r\n1. Explain the situation to the user\r\n2. Present exactly these two options:\r\n   - Option 1: User imports PowerShell.MCP module manually in current console\r\n   - Option 2: I will automatically start fresh console with PowerShell.MCP imported\r\n3. STOP and wait for explicit user response - DO NOT make any choice for the user\r\n4. ONLY if user explicitly chooses option 2, execute start_powershell_console\r\n5. If user chooses option 1, provide the command: Import-Module PowerShell.MCP\r\n6. DO NOT execute any PowerShell commands until user makes their choice\r\n\r\nCRITICAL: Never assume user preference or execute start_powershell_console without explicit user consent.", e);
-        }
-
-        try
-        {
-            // JSON-RPCリクエストを構築（元のIDを保持）
-            var request = new
+            if (!PowerShellProcessManager.IsPowerShellProcessRunning())
             {
-                jsonrpc = "2.0",
-                id = originalId, // オリジナルIDを使用
-                mcpClient = McpServer.ClientName,
-                proxyVersion = McpServer.ProxyVersion, // これは MCP protocol に含まれないことに注意
-                method = toolName,
-                parameters = arguments
-            };
-
-            var requestJson = JsonSerializer.Serialize(request, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-
-            // リクエストを送信
-            await SendMessageAsync(pipeClient, requestJson);
-            
-            // レスポンスを受信
-            var responseJson = await ReceiveMessageAsync(pipeClient);
-            
-            // JSON-RPCレスポンスを解析
-            using var responseDoc = JsonDocument.Parse(responseJson);
-            var responseRoot = responseDoc.RootElement;
-
-            if (responseRoot.TryGetProperty("error", out var errorElement))
-            {
-                var errorMessage = errorElement.TryGetProperty("message", out var msgElement) 
-                    ? msgElement.GetString() 
-                    : "Unknown error";
-                throw new InvalidOperationException($"PowerShell module error: {errorMessage}");
+                return $"The PowerShell 7 console is not running. Please guide the user to start it and import the PowerShell.MCP module.";
             }
+            
+            using var pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
 
-            if (responseRoot.TryGetProperty("result", out var resultElement))
+            // Named Pipe への接続を試行
+            try
             {
-                return resultElement.GetString() ?? string.Empty;
+                await pipeClient.ConnectAsync(1000 * 10); // 10秒でタイムアウト
             }
+            catch (TimeoutException)
+            {
+                return $"PowerShell 7 (pwsh.exe) is running but PowerShell.MCP module is not imported.\r\n\r\nMANDATORY STEPS - DO NOT SKIP ANY:\r\n1. Explain the situation to the user\r\n2. Present exactly these two options:\r\n   - Option 1: User imports PowerShell.MCP module manually in current console\r\n   - Option 2: I will automatically start fresh console with PowerShell.MCP imported\r\n3. STOP and wait for explicit user response - DO NOT make any choice for the user\r\n4. ONLY if user explicitly chooses option 2, execute start_powershell_console\r\n5. If user chooses option 1, provide the command: Import-Module PowerShell.MCP\r\n6. DO NOT execute any PowerShell commands until user makes their choice\r\n\r\nCRITICAL: Never assume user preference or execute start_powershell_console without explicit user consent.";
+            }
+ 
+            // JSONメッセージをUTF-8バイトに変換
+            var messageBytes = Encoding.UTF8.GetBytes(arguments);
+            
+            // メッセージ長をLittle Endianで4バイト作成
+            var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
+            
+            // メッセージ長プレフィックス + JSONメッセージ本体を送信
+            await pipeClient.WriteAsync(lengthBytes, 0, lengthBytes.Length);
+            await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length);
 
-            throw new InvalidOperationException("Invalid response format from PowerShell module");
+            // レスポンス受信: 正しい長さプレフィックス処理
+            var response = await ReceiveMessageAsync(pipeClient);
+            return response;
         }
         catch (TimeoutException)
         {
-            throw new TimeoutException($"Failed to connect to PowerShell module via Named Pipe '{PipeName}' within {TimeoutMs}ms. Please ensure PowerShell.MCP module is imported.");
+            Console.Error.WriteLine("[WARNING] PowerShell.MCP module connection timeout - module may not be running");
+            return string.Empty;
         }
-        catch (IOException ex)
+        catch (Exception ex)
         {
-            throw new IOException($"Named Pipe communication error: {ex.Message}. Please verify PowerShell.MCP module is running.", ex);
+            Console.Error.WriteLine($"[ERROR] Named Pipe communication failed: {ex.Message}");
+            return string.Empty;
         }
     }
 
-    /// <summary>
-    /// Named Pipeにメッセージを送信します
-    /// </summary>
-    private static async Task SendMessageAsync(NamedPipeClientStream pipeClient, string message)
+    private async Task<string> ReceiveMessageAsync(NamedPipeClientStream pipeClient)
     {
-        var messageBytes = Encoding.UTF8.GetBytes(message);
-        var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
-
-        // メッセージの長さを先に送信（4バイト）
-        await pipeClient.WriteAsync(lengthBytes, 0, 4);
+        // 1. メッセージ長（4バイト）を確実に読み取り
+        var lengthBuffer = new byte[4];
+        await ReadExactAsync(pipeClient, lengthBuffer, 4);
         
-        // メッセージ本体を送信
-        await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length);
-        await pipeClient.FlushAsync();
+        var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
+        
+        // 2. メッセージ長の妥当性チェック
+        if (messageLength < 0 || messageLength > 10 * 1024 * 1024) // 10MB制限
+        {
+            throw new InvalidOperationException($"Invalid message length received: {messageLength}");
+        }
+        
+        // 3. メッセージ本体を確実に読み取り
+        var messageBuffer = new byte[messageLength];
+        await ReadExactAsync(pipeClient, messageBuffer, messageLength);
+        
+        // 4. UTF-8デコード
+        return Encoding.UTF8.GetString(messageBuffer);
     }
 
-    /// <summary>
-    /// Named Pipeからメッセージを受信します
-    /// </summary>
-    private static async Task<string> ReceiveMessageAsync(NamedPipeClientStream pipeClient)
+    private async Task ReadExactAsync(NamedPipeClientStream pipeClient, byte[] buffer, int count)
     {
-        // メッセージの長さを受信（4バイト）
-        var lengthBytes = new byte[4];
-        var totalBytesRead = 0;
+        int totalBytesRead = 0;
         
-        while (totalBytesRead < 4)
+        while (totalBytesRead < count)
         {
-            var bytesRead = await pipeClient.ReadAsync(lengthBytes, totalBytesRead, 4 - totalBytesRead);
+            var bytesRead = await pipeClient.ReadAsync(buffer, totalBytesRead, count - totalBytesRead);
+            
             if (bytesRead == 0)
             {
-                throw new IOException("Connection closed while reading message length");
+                throw new InvalidOperationException($"Connection closed unexpectedly. Expected {count} bytes, got {totalBytesRead}");
             }
+            
             totalBytesRead += bytesRead;
         }
-
-        var messageLength = BitConverter.ToInt32(lengthBytes, 0);
-        
-        if (messageLength <= 0 || messageLength > 10 * 1024 * 1024) // 10MB上限
-        {
-            throw new InvalidOperationException($"Invalid message length (over 10MB): {messageLength}");
-        }
-
-        // メッセージ本体を受信
-        var messageBytes = new byte[messageLength];
-        totalBytesRead = 0;
-        
-        while (totalBytesRead < messageLength)
-        {
-            var bytesRead = await pipeClient.ReadAsync(messageBytes, totalBytesRead, messageLength - totalBytesRead);
-            if (bytesRead == 0)
-            {
-                throw new IOException("Connection closed while reading message body");
-            }
-            totalBytesRead += bytesRead;
-        }
-
-        return Encoding.UTF8.GetString(messageBytes);
     }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool WaitNamedPipe(string name, uint timeout);
-
     /// <summary>
-    /// サーバ側で Named Pipe が作成されることを待機します
+    /// Named Pipe が準備完了になるまで待機します
     /// </summary>
-    /// <returns>接続可能な場合は true</returns>
+    /// <returns>パイプが準備できた場合は true</returns>
     public static async Task<bool> WaitForPipeReadyAsync()
     {
-        for (int i = 0; i < 30; i++)
+        const int maxAttempts = 10;
+        const int delayMs = 1000;
+        
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
-                // パイプの存在確認
-                if (WaitNamedPipe($@"\\.\pipe\{PipeName}", 100))
+                using var testClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+                await testClient.ConnectAsync(500); // 500ms timeout
+                Console.Error.WriteLine($"[INFO] Named Pipe ready after {attempt} attempts");
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                Console.Error.WriteLine($"[DEBUG] Waiting for Named Pipe... attempt {attempt}/{maxAttempts}");
+                if (attempt < maxAttempts)
                 {
-                    // 実際に通信テストを実行
-                    using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
-                    await client.ConnectAsync(1000);
-
-                    // 簡単なテストコマンド（例：$true）を送信して応答を確認
-                    // 実際の通信が可能かテスト
-
-                    return true;
+                    await Task.Delay(delayMs);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 通信失敗、再試行
+                Console.Error.WriteLine($"[DEBUG] Named Pipe test failed (attempt {attempt}): {ex.Message}");
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(delayMs);
+                }
             }
-            await Task.Delay(1000);
         }
+        
+        Console.Error.WriteLine("[WARNING] Named Pipe not ready after maximum attempts");
         return false;
     }
 }

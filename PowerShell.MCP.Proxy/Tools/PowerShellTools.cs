@@ -1,0 +1,76 @@
+using ModelContextProtocol.Server;
+using System.ComponentModel;
+using PowerShell.MCP.Proxy.Services;
+using PowerShell.MCP.Proxy.Models;
+using System.Text.Json;
+
+namespace PowerShell.MCP.Proxy.Tools;
+
+[McpServerToolType]
+public static class PowerShellTools
+{
+    [McpServerTool]
+    [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
+    public static async Task<string> GetCurrentLocation(
+        IPowerShellService powerShellService,
+        CancellationToken cancellationToken = default)
+    {
+        Console.Error.WriteLine("[DEBUG] GetCurrentLocation static method called!");
+        
+        // PowerShellService からの例外はそのまま通す（フォールバック判定削除）
+        return await powerShellService.GetCurrentLocationAsync(cancellationToken);
+    }
+
+    [McpServerTool]
+    [Description("Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.")]
+    public static async Task<string> InvokeExpression(
+        IPowerShellService powerShellService,
+        [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]
+        string pipeline,
+        [Description("If true, executes the command immediately and returns the result. If false, inserts the command into the console for manual execution.")]
+        bool execute_immediately = true,
+        CancellationToken cancellationToken = default)
+    {
+        Console.Error.WriteLine($"[DEBUG] InvokeExpression static method called! Pipeline: {pipeline}, ExecuteImmediately: {execute_immediately}");
+        
+        // PowerShellService からの例外はそのまま通す
+        return await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
+    }
+
+    [McpServerTool]
+    [Description("Launch a new PowerShell console window with PowerShell.MCP module imported. This tool should only be executed when explicitly requested by the user or when other tool executions fail.")]
+    public static async Task<string> StartPowershellConsole(
+        IPowerShellService powerShellService,
+        CancellationToken cancellationToken = default)
+    {
+        Console.Error.WriteLine("[DEBUG] StartPowershellConsole static method called!");
+        
+        try
+        {
+            Console.Error.WriteLine("[INFO] Starting new PowerShell console with PowerShell.MCP module...");
+            
+            // 1. プロキシ側で直接 pwsh.exe を起動（Named Pipe 経由ではない）
+            bool success = await PowerShellProcessManager.StartPowerShellWithModuleAsync();
+            
+            if (!success)
+            {
+                throw new InvalidOperationException("Failed to start PowerShell console or establish Named Pipe connection");
+            }
+            
+            Console.Error.WriteLine("[INFO] PowerShell console started successfully, getting current location...");
+            
+            // 2. 自動で get_current_location を実行
+            var locationResult = await powerShellService.GetCurrentLocationAsync(cancellationToken);
+            
+            Console.Error.WriteLine("[INFO] PowerShell console startup completed");
+            
+            // 3. 結果を MCP クライアントに返す
+            return $"PowerShell console started successfully with PowerShell.MCP module imported.\n\n{locationResult}";
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[ERROR] StartPowershellConsole failed: {ex.Message}");
+            throw new InvalidOperationException($"Failed to start PowerShell console: {ex.Message}");
+        }
+    }
+}

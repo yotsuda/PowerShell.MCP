@@ -1,11 +1,45 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.1.6.0</Version>
+    <Version>1.2.0.0</Version>
+    
+    <!-- Single File デプロイ設定 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    
+    <!-- ファイルサイズ最適化設定 -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    
+    <!-- パフォーマンス最適化 -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+    
+    <!-- 警告の抑制（トリミング関連） -->
+    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MCP SDK -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
+    <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.4" />
+    <!-- 依存性注入の最小セット -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
+    <!-- ログ記録（必要最小限） -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
+  </ItemGroup>
+
+  <!-- トリミング設定: 必要なアセンブリを保護 -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="PowerShell.MCP.Proxy" />
+    <TrimmerRootAssembly Include="ModelContextProtocol" />
+    <TrimmerRootAssembly Include="ModelContextProtocol.Core" />
+  </ItemGroup>
 
 </Project>

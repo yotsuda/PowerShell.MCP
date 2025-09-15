@@ -35,20 +35,6 @@ public class NamedPipeServer : IDisposable
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
     }
 
-    private static object CreateErrorResponse(double id, int code, string message)
-    {
-        return new
-        {
-            jsonrpc = "2.0",
-            id,
-            error = new
-            {
-                code,
-                message
-            }
-        };
-    }
-
     /// <summary>
     /// Named Pipe サーバーを開始します
     /// </summary>
@@ -144,16 +130,12 @@ public class NamedPipeServer : IDisposable
             using var requestDoc = JsonDocument.Parse(requestJson);
             var requestRoot = requestDoc.RootElement;
             
-            var method = requestRoot.GetProperty("method").GetString();
-            double id = 0;
-            if (requestRoot.TryGetProperty("id", out var idElement))
-            {
-                id = idElement.GetDouble();
-            }
-            var parameters = requestRoot.TryGetProperty("parameters", out var paramsElement) ? paramsElement : new JsonElement();
+            var name = requestRoot.GetProperty("name").GetString();
+            //var parameters = requestRoot.TryGetProperty("parameters", out var paramsElement) ? paramsElement : new JsonElement();
 
-            string? proxyVersion = requestRoot.TryGetProperty("proxyVersion", out JsonElement proxyVersionElement)
+            string? proxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement proxyVersionElement)
                 ? proxyVersionElement.GetString() : "Not detected";
+
             if (proxyVersion != MCPProvider.ServerVersion)
             {
                 string? mcpClient = requestRoot.TryGetProperty("mcpClient", out JsonElement mcpClientElement)
@@ -163,8 +145,7 @@ public class NamedPipeServer : IDisposable
                 //string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\") -replace '\\\\', '\\\\'");
                 string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
 
-                // このメッセージを修正したら、McpServer.cs の ToolsCallAsync() "version is outdated" も直す必要がある。
-                var versionErrorResponse = CreateErrorResponse(id, -32001,
+                var versionErrorResponse =
 $@"PowerShell MCP Configuration Error
 
 ISSUE: PowerShell.MCP.Proxy.exe version is outdated.
@@ -175,59 +156,31 @@ ACTION REQUIRED: Update your MCP client configuration
 - Executable path: {proxyExePath}
 - JSON config example: ""PowerShell"": {{ ""command"": ""{proxyExePath.Replace("\\", "\\\\")}"" }}
 
-Please provide how to update the MCP client ({mcpClient}) configuration to the user.");
+Please provide how to update the MCP client ({mcpClient}) configuration to the user.";
 
-                var versionErrorJson = JsonSerializer.Serialize(versionErrorResponse, new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
-
-                await SendMessageAsync(pipeServer, versionErrorJson, cancellationToken);
+                await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken);
                 return;
             }
 
             // 実行状態をチェック
-            if (ExecutionState.Status == "busy" && method == "invoke_expression")
+            if (ExecutionState.Status == "busy" && name == "invoke_expression")
             {
                 // busyレスポンスを返す
-                var busyResponse = new
-                {
-                    jsonrpc = "2.0",
-                    id = id,
-                    result = @"Cannot execute new pipeline while previous pipeline is running (cannot be cancelled with Ctrl+C). Options:
+                var busyResponse = @"Cannot execute new pipeline while previous pipeline is running (cannot be cancelled with Ctrl+C). Options:
 1. Wait for completion
 2. Force terminate console and restart (auto-executed by LLM if selected)
 
-LLM should prompt user to choose."
-                };
+LLM should prompt user to choose.";
 
-                var busyJson = JsonSerializer.Serialize(busyResponse, new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
-
-                await SendMessageAsync(pipeServer, busyJson, cancellationToken);
+                await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
                 return;
             }
 
             // ツールを実行
-            var result = await Task.Run(() => ExecuteTool(method!, parameters));
+            var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
             
-            // レスポンスを構築
-            var response = new
-            {
-                jsonrpc = "2.0",
-                id = id,
-                result = result
-            };
-
-            var responseJson = JsonSerializer.Serialize(response, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-
             // レスポンスを送信
-            await SendMessageAsync(pipeServer, responseJson, cancellationToken);
+            await SendMessageAsync(pipeServer, result, cancellationToken);
         }
         catch (Exception ex)
         {
