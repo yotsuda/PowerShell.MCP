@@ -21,7 +21,7 @@ public class NamedPipeClient
             // Named Pipe への接続を試行
             try
             {
-                await pipeClient.ConnectAsync(1000 * 10); // 10秒でタイムアウト
+                await pipeClient.ConnectAsync(1000 * 3); // 3秒でタイムアウト
             }
             catch (TimeoutException)
             {
