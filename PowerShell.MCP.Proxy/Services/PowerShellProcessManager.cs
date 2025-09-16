@@ -129,7 +129,7 @@ public static class PwshNative
             var si = new STARTUPINFOW { cb = (uint)Marshal.SizeOf<STARTUPINFOW>() };
             var pi = new PROCESS_INFORMATION();
 
-            string commandLine = "pwsh.exe -NoExit -Command \"Import-Module PowerShell.MCP\"";
+            string commandLine = "pwsh.exe -NoExit -Command \"Import-Module PSReadLine,PowerShell.MCP\"";
 
             bool ok = CreateProcessW(
                 null,

@@ -60,7 +60,8 @@ public static class PowerShellTools
                     // The existing pwsh.exe is available but PowerShell.MCP module is not imported
                     return @"A pwsh.exe instance is already running and the existing session will continue to be used. 
 However, the PowerShell.MCP module may not be imported in the existing session. 
-Please guide the user to run 'Import-Module PowerShell.MCP' to import the module.";
+Please guide the user to run 'Import-Module PowerShell.MCP' to import the module.
+Note LLM cannot import the module automatically.";
                 }
                 else if (loc.Contains("previous pipeline is running"))
                 {
