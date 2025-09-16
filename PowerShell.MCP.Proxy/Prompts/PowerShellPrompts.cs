@@ -9,7 +9,7 @@ public static class PowerShellPrompts
 {
     [McpServerPrompt]
     [Description("Comprehensive software development support with coding, testing, and deployment assistance")]
-    public static ChatMessage DevelopSoftware(
+    public static ChatMessage SoftwareDevelopment(
         [Description("Programming language or technology")]
         string? technology = null,
         [Description("Development task type")]
@@ -46,7 +46,8 @@ Use PowerShell.MCP for project operations:
 - Build automation and testing execution
 - Version control and deployment tasks
 
-Execute safely with proper version control and follow existing project conventions when applicable.";
+Execute safely with proper version control and follow existing project conventions when applicable.
+For new projects, create appropriate directory structure and initialize version control.";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
@@ -55,9 +56,9 @@ Execute safely with proper version control and follow existing project conventio
     [Description("Analyze content and provide insights with actionable recommendations")]
     public static ChatMessage AnalyzeContent(
         [Description("Path to content for analysis")]
-    string path)
+        string content_path)
     {
-        var prompt = $@"Analyze the content at '{path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
+        var prompt = $@"Analyze the content at '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
 
 First, confirm the analysis scope with the user before starting.
 
@@ -69,6 +70,7 @@ Perform analysis including:
 - Performance optimization suggestions
 
 Use -WhatIf for safety and confirm with user before making changes. For sensitive operations, provide commands for manual execution.
+If the specified path is not found, confirm the correct path with user.
 
 Create a detailed report file with prioritized action items and present in user's preferred format (.html or .md).";
         return new ChatMessage(ChatRole.User, prompt);
@@ -76,7 +78,7 @@ Create a detailed report file with prioritized action items and present in user'
 
     [McpServerPrompt]
     [Description("Execute and automate system administration tasks with PowerShell")]
-    public static ChatMessage AdministerSystem(
+    public static ChatMessage SystemAdministration(
         [Description("System administration task type")]
         string task_type,
         [Description("PowerShell module for task execution (optional)")]
@@ -99,6 +101,7 @@ Execute operations according to the following requirements:
 - Automatic troubleshooting when problems occur
 
 When executing cmdlets, use -WhatIf and proceed with user confirmation. For critical operations, only send commands to the console and have the user execute them manually.
+If module installation fails, provide manual installation instructions to the user.
 
 After completing the work, create a work report and show it to the user. Confirm the work report format with the user. Generally, HTML or Markdown format should be preferred.";
 
@@ -107,11 +110,11 @@ After completing the work, create a work report and show it to the user. Confirm
 
     [McpServerPrompt]
     [Description("Create learning environment and guide step-by-step programming language learning with hands-on practice")]
-    public static ChatMessage LearnProgramming(
+    public static ChatMessage LearnProgrammingLanguage(
         [Description("Python, C#, JavaScript, Java, Go, Rust, etc.")]
-        string language)
+        string programming_language)
     {
-        var prompt = $@"Create a complete learning environment for {language} programming and guide step-by-step learning with emphasis on hands-on practice.
+        var prompt = $@"Create a complete learning environment for {programming_language} programming and guide step-by-step learning with emphasis on hands-on practice.
 
 First, confirm the user's experience level and learning goals before starting.
 
@@ -141,6 +144,7 @@ Learning methodology:
 - Use the native language if user preference is indicated
 
 Use PowerShell.MCP to execute all setup commands and file operations.
+If development tools are not installed, guide the user through installation process.
 Maintain a learning progress report artifact tracking completed topics and next steps.
 
 Remember: The goal is hands-on learning, not just demonstration. Each step should involve user interaction and practice.";
@@ -184,6 +188,7 @@ DOCUMENT MANAGEMENT:
 - Use PowerShell.MCP for structured document creation and maintenance
 - Update progress table frequently as work advances
 - Ensure documents remain organized and accessible
+- Create parent directories for specified .md files if they do not exist
 
 DELIVERABLES:
 1. Work procedure document ({work_procedure_path ?? "work_procedure.md"})
@@ -196,8 +201,8 @@ Present both documents to the user and confirm the regular update schedule.";
     }
 
     [McpServerPrompt]
-    [Description("Resume work by analyzing procedure and progress documentation to identify and execute remaining tasks")]
-    public static ChatMessage ResumeWorkFromWorkProcedure(
+    [Description("Execute/Resume work procedure and track progress by analyzing documentation")]
+    public static ChatMessage ExecuteWorkProcedure(
         [Description("Path to the procedure file (.md recommended)")]
         string? work_procedure_path = null,
         [Description("Path to the progress file (.md recommended)")]
@@ -232,18 +237,19 @@ OUTPUT ACTIONS:
 3. Report what was accomplished and next steps
 4. Highlight any blockers or issues encountered
 
+If documents are not found, offer to create basic procedure templates at specified locations.
 Begin by reading the documents, then immediately start executing the next available work items.";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
 
     [McpServerPrompt]
-    [Description("Update and organize work procedure documents based on new learnings")]
-    public static ChatMessage UpdateWorkProcedure(
+    [Description("Refine work procedure with new learnings and improvements")]
+    public static ChatMessage RefineWorkProcedure(
         [Description("Path to the existing work procedure document")]
         string? work_procedure_path = null,
         [Description("Description of new learnings or changes to incorporate")]
-        string? learnings = null)
+        string? new_learnings = null)
     {
         var prompt = $@"Update and reorganize the work procedure document at '{work_procedure_path}' with new learnings and improvements.
 
@@ -256,7 +262,7 @@ Update process:
 - Eliminate duplications and contradictions
 - Ensure important information remains prominent and accessible
 
-For new learnings provided: {(string.IsNullOrEmpty(learnings) ? "Identify learnings through user consultation" : learnings)}
+For new learnings provided: {(string.IsNullOrEmpty(new_learnings) ? "Identify learnings through user consultation" : new_learnings)}
 
 Maintain document quality:
 - Keep structure logical and well-organized
@@ -264,23 +270,25 @@ Maintain document quality:
 - Integrate new information seamlessly
 - Update related sections consistently
 
-Use PowerShell.MCP to safely update the document with backup creation. Present the updated document to the user for review and approval.";
+Use PowerShell.MCP to safely update the document with backup creation.
+If the document path is not found, confirm the correct location with user.
+Present the updated document to the user for review and approval.";
         return new ChatMessage(ChatRole.User, prompt);
     }
 
     [McpServerPrompt]
     [Description("Create hands-on learning environment for development tools")]
-    public static ChatMessage LearnTool(
+    public static ChatMessage LearnCliTools(
         [Description("Git, Docker, PowerShell, kubectl, etc.")]
-    string tool,
+        string cli_tool,
         [Description("Beginner, Intermediate, Advanced")]
-    string level = "Beginner")
+        string experience_level = "Beginner")
     {
-        var prompt = $@"Create hands-on {tool} learning environment for {level} level.
+        var prompt = $@"Create hands-on {cli_tool} learning environment for {experience_level} level.
 
 Steps:
 1. Confirm user experience level and goals
-2. Verify {tool} installation and setup practice folder
+2. Verify {cli_tool} installation and setup practice folder
 3. Follow: Explain → Demonstrate → User Practice → Verify → Next
 
 Key principles:
@@ -291,7 +299,70 @@ Key principles:
 - Create progress tracking artifact
 - Focus on real-world workflows, not just commands
 
+If {cli_tool} is not installed, guide the user through installation process.
 Make the user actively practice each step.";
+
+        return new ChatMessage(ChatRole.User, prompt);
+    }
+
+    [McpServerPrompt]
+    [Description("Start fast-paced foreign language dictation training with PowerShell audio and AI evaluation")]
+    public static ChatMessage ForeignLanguageDictationTraining(
+        [Description("Target language: English, French, German, Spanish, Italian, Chinese, Korean, Japanese")]
+        string target_language,
+        [Description("Short (3-5 words), Medium (6-8 words), Long (9-12 words), VeryLong (13-15 words)")]
+        string sentence_length = "Short",
+        [Description("Slow (rate -2), Normal (rate 0), Fast (rate +2), VeryFast (rate +4)")]
+        string speech_speed = "Normal",
+        [Description("General, Grammar, Vocabulary, Pronunciation, Business, Conversation")]
+        string learning_focus = "General",
+        [Description("Audio repetitions: 1, 2, 3, or 4 times")]
+        string repeat_count = "2")
+    {
+        var prompt = $@"Start RAPID {target_language} dictation training using PowerShell.MCP:
+
+Settings: {target_language} | {sentence_length} | {speech_speed} | {learning_focus} | {repeat_count}x
+
+WORKFLOW:
+1. Start PowerShell → Minimize: Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{{ [DllImport(""user32.dll"")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(""kernel32.dll"")]public static extern IntPtr GetConsoleWindow();}}'; [Win32]::ShowWindow([Win32]::GetConsoleWindow(),2)
+
+2. Show guidance in user's native language
+3. Generate {sentence_length} {target_language} sentence → Play {repeat_count}x at {speech_speed} (rate: Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
+4. User responds in THIS CHAT (not PowerShell console)
+5. Show minimal feedback with tip → Immediately continue
+6. Repeat until 'stop'
+
+SENTENCE LENGTHS: Short=3-5, Medium=6-8, Long=9-12, VeryLong=13-15 words
+
+GUIDANCE TEMPLATE (user's native language):
+🎯 DICTATION TRAINING - {sentence_length} sentences at {speech_speed} speed
+- Audio from minimized PowerShell
+- Answer in THIS CHAT
+- Say 'stop' to end
+
+QUESTION FORMAT:
+**Question [X]** ([correct]/[total] correct)
+[Audio plays from PowerShell]
+
+FEEDBACK FORMAT (with tip):
+✅/❌ ([correct]/[total]) | Answer: [correct] XX% | Tip: [brief learning tip]
+
+Examples:
+**Question 1** (0/1 correct)
+✅ (1/1) | Answer: I like cats 100% | Tip: Perfect listening!
+
+**Question 2** (1/2 correct)  
+❌ (1/2) | Answer: She is happy 67% | Tip: Focus on 'love' vs 'like'
+
+RULES:
+- Native language for guidance/feedback, target language for dictation only
+- Never show answer before user response
+- Match exact word count for {sentence_length}
+- Calculate word-level accuracy: (correct/total)×100%
+- Track question number and cumulative correct/total count
+- ONE brief tip per feedback
+- FAST pace, minimal delays
+- Restore on stop: [Win32]::ShowWindow([Win32]::GetConsoleWindow(),9)";
 
         return new ChatMessage(ChatRole.User, prompt);
     }

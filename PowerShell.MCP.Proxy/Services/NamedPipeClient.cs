@@ -98,7 +98,7 @@ public class NamedPipeClient
     /// <returns>パイプが準備できた場合は true</returns>
     public static async Task<bool> WaitForPipeReadyAsync()
     {
-        const int maxAttempts = 10;
+        const int maxAttempts = 80; // 最大で40秒間待機する
         const int delayMs = 1000;
         
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
