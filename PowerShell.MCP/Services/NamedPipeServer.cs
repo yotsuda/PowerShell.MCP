@@ -163,7 +163,7 @@ Please provide how to update the MCP client ({mcpClient}) configuration to the u
             }
 
             // 実行状態をチェック
-            if (ExecutionState.Status == "busy" && name == "invoke_expression")
+            if (ExecutionState.Status == "busy")
             {
                 // busyレスポンスを返す
                 var busyResponse = @"Cannot execute new pipeline while previous pipeline is running (cannot be cancelled with Ctrl+C). Options:
