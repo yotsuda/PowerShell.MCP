@@ -249,7 +249,7 @@ LLM should prompt user to choose.";
         await ReadExactAsync(pipeServer, lengthBytes, cancellationToken);
         var messageLength = BitConverter.ToInt32(lengthBytes, 0);
 
-        if (messageLength <= 0 || messageLength > 10 * 1024 * 1024) // 10MB上限
+        if (messageLength <= 0)
         {
             throw new InvalidOperationException($"Invalid message length: {messageLength}");
         }

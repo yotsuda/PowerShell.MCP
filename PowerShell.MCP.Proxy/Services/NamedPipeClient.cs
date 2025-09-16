@@ -63,7 +63,7 @@ public class NamedPipeClient
         var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
         
         // 2. メッセージ長の妥当性チェック
-        if (messageLength < 0 || messageLength > 10 * 1024 * 1024) // 10MB制限
+        if (messageLength < 0)
         {
             throw new InvalidOperationException($"Invalid message length received: {messageLength}");
         }
