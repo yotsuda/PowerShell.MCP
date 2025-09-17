@@ -120,11 +120,11 @@ PowerShell.MCP provides 50+ ready-to-use prompt examples that demonstrate the fu
 - "Query DNS records and display results"
 
 ### 🚀 Advanced Integration and Report Generation
-- **"Generate system information as an HTML report and open it in browser"**
-- **"Create an HTML report of system errors from the last 3 days and open it in browser"**
-- **"Visualize process usage as an HTML dashboard and display in browser"**
-- **"Create a colorful HTML chart of disk usage analysis and display automatically"**
-- **"Visualize network connection history as HTML timeline"**
+- "Generate system information as an HTML report and open it in browser"
+- "Create an HTML report of system errors from the last 3 days and open it in browser"
+- "Visualize process usage as an HTML dashboard and display in browser"
+- "Create a colorful HTML chart of disk usage analysis and display automatically"
+- "Visualize network connection history as HTML timeline"
 
 ### 🏢 System Administration Tasks
 - "Export a list of installed programs to CSV and open in Excel"
@@ -140,18 +140,18 @@ PowerShell.MCP provides 50+ ready-to-use prompt examples that demonstrate the fu
 - "Auto-generate reports in specified formats"
 
 ### 🎨 Creative Tasks
-- **"Visualize error trends in log files with graphs in HTML"**
-- **"Generate QR codes (encode strings)"**
-- **"Display long-running processes with colorful progress bars"**
-- **"Visualize folder size analysis in TreeMap-style HTML"**
+- "Visualize error trends in log files with graphs in HTML"
+- "Generate QR codes (encode strings)"
+- "Display long-running processes with colorful progress bars"
+- "Visualize folder size analysis in TreeMap-style HTML"
 
 ### 👨‍💻Developer Features
-- **"Run syntax checks on PowerShell scripts"**
-- **"Generate documentation from comment-based help"**
-- **"Analyze module dependencies"**
-- **"Calculate code metrics and evaluate quality"**
-- **"Please review the .cs files under c:\folder"**
-- **"Create patch files for code changes and apply with git apply"**
+- "Run syntax checks on PowerShell scripts"
+- "Generate documentation from comment-based help"
+- "Analyze module dependencies"
+- "Calculate code metrics and evaluate quality"
+- "Please review the .cs files under c:\folder"
+- "Create patch files for code changes and apply with git apply"
 
 ### ⚡ PowerShell-Specific Advanced Features
 - "Check the cmdlets included in imported modules"
