@@ -315,19 +315,17 @@ Make the user actively practice each step.";
         [Description("Slow (rate -2), Normal (rate 0), Fast (rate +2), VeryFast (rate +4)")]
         string speech_speed = "Normal",
         [Description("General, Grammar, Vocabulary, Pronunciation, Business, Conversation")]
-        string learning_focus = "General",
-        [Description("Audio repetitions: 1, 2, 3, or 4 times")]
-        string repeat_count = "2")
+        string learning_focus = "General")
     {
         var prompt = $@"Start RAPID {target_language} dictation training using PowerShell.MCP:
 
-Settings: {target_language} | {sentence_length} | {speech_speed} | {learning_focus} | {repeat_count}x
+Settings: {target_language} | {sentence_length} | {speech_speed} | {learning_focus} |
 
 WORKFLOW:
 1. Start PowerShell → Minimize: Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{{ [DllImport(""user32.dll"")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(""kernel32.dll"")]public static extern IntPtr GetConsoleWindow();}}'; [Win32]::ShowWindow([Win32]::GetConsoleWindow(),2)
 
 2. Show guidance in user's native language
-3. Generate {sentence_length} {target_language} sentence → Play {repeat_count}x at {speech_speed} (rate: Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
+3. Generate {sentence_length} {target_language} sentence → Play 2x at {speech_speed} (rate: Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
 4. User responds in THIS CHAT (not PowerShell console)
 5. Show minimal feedback with tip → Immediately continue
 6. Repeat until 'stop'
@@ -339,6 +337,7 @@ GUIDANCE TEMPLATE (user's native language):
 - Audio from minimized PowerShell
 - Answer in THIS CHAT
 - Say 'stop' to end
+- Say 'repeat' to hear again
 
 QUESTION FORMAT:
 **Question [X]** ([correct]/[total] correct)
