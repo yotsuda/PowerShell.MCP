@@ -322,7 +322,8 @@ Make the user actively practice each step.";
 Settings: {target_language} | {sentence_length} | {speech_speed} | {learning_focus} |
 
 WORKFLOW:
-1. Start PowerShell → Minimize: Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{{ [DllImport(""user32.dll"")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(""kernel32.dll"")]public static extern IntPtr GetConsoleWindow();}}'; [Win32]::ShowWindow([Win32]::GetConsoleWindow(),2)
+1. Start PowerShell → Minimize + Initialize Speech:
+Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{{ [DllImport(""user32.dll"")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(""kernel32.dll"")]public static extern IntPtr GetConsoleWindow();}}'; [Win32]::ShowWindow([Win32]::GetConsoleWindow(),2); Add-Type -AssemblyName System.Speech; $global:speech = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speech.Rate = 0
 
 2. Show guidance in user's native language
 3. Generate {sentence_length} {target_language} sentence → Play 2x at {speech_speed} (rate: Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
@@ -338,6 +339,11 @@ GUIDANCE TEMPLATE (user's native language):
 - Answer in THIS CHAT
 - Say 'stop' to end
 - Say 'repeat' to hear again
+- Say 'faster' or 'slower' to adjust speech speed
+- Say 'longer' or 'shorter' to change sentence length
+- Say 'info' to show current settings
+- Say 'skip' to move to next question
+- Say 'back' to replay previous question
 
 QUESTION FORMAT:
 **Question [X]** ([correct]/[total] correct)
@@ -359,7 +365,7 @@ RULES:
 - Match exact word count for {sentence_length}
 - Calculate word-level accuracy: (correct/total)×100%
 - Track question number and cumulative correct/total count
-- ONE brief tip per feedback
+- ONE brief tip per feedback in user's native language
 - FAST pace, minimal delays
 - Restore on stop: [Win32]::ShowWindow([Win32]::GetConsoleWindow(),9)";
 
