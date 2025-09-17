@@ -12,7 +12,7 @@ PowerShell.MCP enables PowerShell 7 to function as an MCP server, allowing MCP c
 
 ## Key Features
 - **🤖 Direct AI Command Execution** - Enable AI assistants to run any PowerShell cmdlet or CLI tool directly
-- **👥 Shared Console Experience** - AI and user share the same PowerShell session with complete transparency
+- **👥 Shared Console Experience** - AI and user share the same PowerShell console with complete transparency
 - **⚡ Real-time Command Execution** - Comprehensive output capture with immediate results
 - **📚 Rich Prompt Examples** - Ready-to-use practical scenarios for common tasks
 - **🔒 Secure Local Communication** - Local-only access, no remote connections
