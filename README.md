@@ -94,7 +94,9 @@ C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 
 ## Examples
 
-PowerShell.MCP provides 50+ ready-to-use prompt examples that demonstrate the full power of integrating AI assistants with PowerShell automation.
+PowerShell.MCP provides **8 carefully curated built-in prompts** accessible directly from MCP clients through the prompts list feature. Try them out!
+
+Here are additional useful prompt examples you can try:
 
 ### 🔧 Basic System Information
 - "Tell me the current date and time"
