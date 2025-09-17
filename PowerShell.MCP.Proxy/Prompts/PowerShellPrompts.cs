@@ -325,11 +325,14 @@ WORKFLOW:
 1. Start PowerShell → Minimize + Initialize Speech:
 Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{{ [DllImport(""user32.dll"")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(""kernel32.dll"")]public static extern IntPtr GetConsoleWindow();}}'; [Win32]::ShowWindow([Win32]::GetConsoleWindow(),2); Add-Type -AssemblyName System.Speech; $global:speech = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speech.Rate = 0
 
-2. Show guidance in user's native language
-3. Generate {sentence_length} {target_language} sentence → Play 2x at {speech_speed} (rate: Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
-4. User responds in THIS CHAT (not PowerShell console)
-5. Show minimal feedback with tip → Immediately continue
-6. Repeat until 'stop'
+2. Check available voices and configure for {target_language}:
+$speech.GetInstalledVoices() | ForEach-Object {{ Write-Host ""Voice: $($_.VoiceInfo.Name) - Language: $($_.VoiceInfo.Culture)"" }}
+
+3. Show guidance in user's native language
+4. Generate {sentence_length} {target_language} sentence → Play 2x at {speech_speed} (rate: Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
+5. User responds in THIS CHAT (not PowerShell console)
+6. Show minimal feedback with tip → Immediately continue
+7. Repeat until 'stop'
 
 SENTENCE LENGTHS: Short=3-5, Medium=6-8, Long=9-12, VeryLong=13-15 words
 
@@ -362,6 +365,7 @@ Examples:
 RULES:
 - Native language for guidance/feedback, target language for dictation only
 - Never show answer before user response
+- Accept phonetically equivalent answers and common spelling variations as correct
 - Match exact word count for {sentence_length}
 - Calculate word-level accuracy: (correct/total)×100%
 - Track question number and cumulative correct/total count
