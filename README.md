@@ -11,9 +11,11 @@ Malicious use could result in severe damage. Use responsibly and only in trusted
 PowerShell.MCP enables PowerShell 7 to function as an MCP server, allowing MCP clients like Claude Desktop to access the entire PowerShell ecosystem through secure named pipe communication.
 
 ## Key Features
-- **🔒 Secure Named Pipe Communication** - Local-only access, no remote connections
-- **⚡ Real-time Command Execution** - Comprehensive output capture
-- **📚 Rich Prompt Examples** - Ready-to-use practical scenarios
+- **🤖 Direct AI Command Execution** - Enable AI assistants to run any PowerShell cmdlet or CLI tool directly
+- **👥 Shared Console Experience** - AI and user share the same PowerShell session with complete transparency
+- **⚡ Real-time Command Execution** - Comprehensive output capture with immediate results
+- **📚 Rich Prompt Examples** - Ready-to-use practical scenarios for common tasks
+- **🔒 Secure Local Communication** - Local-only access, no remote connections
 - **🏢 Enterprise-Ready** - Designed for safe corporate environments
 
 ## System Requirements
