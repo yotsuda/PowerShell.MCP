@@ -51,7 +51,7 @@ PowerShellVersion = '7.2.15'
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-# RequiredModules = @()
+RequiredModules = @(@{ModuleName='PSReadLine'; ModuleVersion='2.3.4'})
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
@@ -107,22 +107,31 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell MCP v1.1 Release Notes
-
-=== Features ===
-Transform your AI assistant into a powerful PowerShell tool! This groundbreaking module turns your PowerShell console into an MCP server, providing MCP clients (such as Claude Desktop) with direct access to the entire PowerShell ecosystem.
+        ReleaseNotes = 'PowerShell.MCP Release Notes
 
 === Key Features ===
-- PowerShell 7 as MCP Server: Your PowerShell console becomes an MCP server
-- Server Functionality: Provides MCP functionality via named pipe
-- Stdio Proxy Included: stdio-based proxy server for MCP client compatibility
-- Unlimited PowerShell Access: Execute any PowerShell cmdlet via MCP clients
-- Simple Setup: Plug-and-play integration with MCP clients via proxy server
-- Instant Deployment: Import the module and start using immediately!
+- PowerShell 7 as MCP Server via secure named pipe communication
+- Complete PowerShell ecosystem access through MCP protocol
+- Real-time command execution with comprehensive output capture
+- Built-in prompts/list endpoint with curated PowerShell examples and use cases
+- Enhanced safety with location context and execution awareness
+
+=== Quick Setup ===
+1. Install-Module PowerShell.MCP
+2. Import-Module PowerShell.MCP,PSReadLine
+3. Configure MCP client: [ModuleBase]\bin\PowerShell.MCP.Proxy.exe
+4. Restart MCP client to activate integration
+
+=== System Requirements ===
+- Windows 10/11 or Windows Server 2016+
+- PowerShell 7.2.15 or higher
+- PSReadLine 2.3.4 or higher
+
+=== Security & Architecture ===
+Named pipe communication ensures only local machine proxy connections.
+No remote access capability for enhanced security in enterprise environments.
 
 === Setup Instructions ===
-
-Here''s the complete configuration guide with the corrected numbering:
 
 1. Install Module (first time only)
    PS> Install-Module PowerShell.MCP
@@ -136,7 +145,7 @@ Here''s the complete configuration guide with the corrected numbering:
    PS> (Get-Module PowerShell.MCP).ModuleBase
 
    This command will display the PowerShell.MCP installation directory path.
-   Example: `C:\Users\[Username]\Documents\PowerShell\Modules\PowerShell.MCP\1.1.0`
+   Example: `C:\Users\[Username]\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0`
 
 4. Claude Desktop Configuration Example
    For Claude Desktop, open your configuration file with Notepad.
@@ -147,8 +156,7 @@ Here''s the complete configuration guide with the corrected numbering:
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "[PowerShell.MCP Installation Directory]\\bin\\PowerShell.MCP.Proxy.exe",
-      "args": []
+      "command": "[PowerShell.MCP Installation Directory]\\bin\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
@@ -256,6 +264,53 @@ This isn''t just another tool - it''s a game changer! By connecting MCP clients 
 Note: This module has been tested and verified with Claude Desktop. It should work with other MCP clients as well, but this is untested.
 
 Are you ready to revolutionize your AI assistant experience? Import the module and start commanding your system like never before!
+
+=== PowerShell.MCP Release History ===
+
+=== Version 1.2.0 ===
+Rewritten with MS C# MCP SDK entirely. Added comprehensive prompts list.
+Added start_powershell_console tool to enhance user experience.
+
+=== Version 1.1.7 ===
+Added current location context to command output for better execution awareness.
+
+=== Version 1.1.6 ===
+Fixed timeout-related duplicate execution issues with extended timeout handling.
+
+=== Version 1.1.5 ===
+Removed automatic retry mechanism preventing duplicate execution of long-running commands.
+
+=== Version 1.1.4 ===
+Added getCurrentLocation tool for improved PowerShell console operation safety and efficiency.
+
+=== Version 1.1.3 ===
+Enhanced output capture for What if:, VERBOSE:, DEBUG:, and WARNING: host streams.
+
+=== Version 1.1.2 ===
+Code cleanup and removal of obsolete components for better maintainability.
+
+=== Version 1.1.1 ===
+Removed 5,000-character input limit for unlimited command length support.
+
+=== Version 1.1.0 ===
+Major security enhancement: Switched from HTTP to named pipes, preventing remote access.
+Removed output character limits for unlimited response handling.
+
+=== Version 1.0.4 ===
+Expanded limits: Input to 5,000 chars, output to 8,000 chars, removed line limits.
+Improved error handling and stream ordering (Error �� Warning �� Standard).
+
+=== Version 1.0.3 ===
+Minor bug fixes and stability improvements.
+
+=== Version 1.0.2 ===
+Separated output streams: Standard, Error, and Warning now captured individually.
+
+=== Version 1.0.1 ===
+Added command prompt display before execution for better user awareness.
+
+=== Version 1.0.0 ===
+Initial release with basic MCP server functionality.
 '
 
         # Prerelease string of this module
@@ -278,6 +333,4 @@ Are you ready to revolutionize your AI assistant experience? Import the module a
 # DefaultCommandPrefix = ''
 
 }
-
-
 
