@@ -1,5 +1,5 @@
-using ModelContextProtocol.Server;
 using Microsoft.Extensions.AI;
+using ModelContextProtocol.Server;
 using System.ComponentModel;
 
 namespace PowerShell.MCP.Proxy.Prompts;
@@ -29,7 +29,10 @@ public static class PowerShellPrompts
             ? $"\nProject location: {project_path}"
             : "";
 
-        var prompt = $@"{technologyFocus} with comprehensive development lifecycle support.{taskFocus}{projectSection}
+        var prompt = $@"LANGUAGE:
+Communicate with users in the user's native language
+
+{technologyFocus} with comprehensive development lifecycle support.{taskFocus}{projectSection}
 
 First, analyze project context (existing structure for established projects, requirements for new projects).
 
@@ -58,7 +61,10 @@ For new projects, create appropriate directory structure and initialize version 
         [Description("Path to content for analysis")]
         string content_path)
     {
-        var prompt = $@"Analyze the content at '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
+        var prompt = $@"LANGUAGE:
+Communicate with users in the user's native language
+
+Analyze the content at '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
 
 First, confirm the analysis scope with the user before starting.
 
@@ -88,7 +94,10 @@ Create a detailed report file with prioritized action items and present in user'
             ? $"\nRequired PowerShell module: {required_module} - will be installed and imported if needed."
             : "";
 
-        var prompt = $@"Execute and automate {task_type} tasks using PowerShell.MCP.{moduleSection}
+        var prompt = $@"LANGUAGE:
+Communicate with users in the user's native language
+
+Execute and automate {task_type} tasks using PowerShell.MCP.{moduleSection}
 
 First, confirm specific requirements with the user and create a work procedure document before starting.
 
@@ -114,7 +123,10 @@ After completing the work, create a work report and show it to the user. Confirm
         [Description("Python, C#, JavaScript, Java, Go, Rust, etc.")]
         string programming_language)
     {
-        var prompt = $@"Create a complete learning environment for {programming_language} programming and guide step-by-step learning with emphasis on hands-on practice.
+        var prompt = $@"LANGUAGE:
+Communicate with users in the user's native language
+
+Create a complete learning environment for {programming_language} programming and guide step-by-step learning with emphasis on hands-on practice.
 
 First, confirm the user's experience level and learning goals before starting.
 
@@ -153,126 +165,97 @@ Remember: The goal is hands-on learning, not just demonstration. Each step shoul
     }
 
     [McpServerPrompt]
-    [Description("Create comprehensive work procedure documentation and progress tracking system")]
+    [Description("Create work procedure and progress tracking files.")]
     public static ChatMessage CreateWorkProcedure(
         [Description("Description of the work or project")]
         string work_description,
-        [Description("Path for procedure file (.md recommended)")]
-        string? work_procedure_path = null,
-        [Description("Path for progress file (.md recommended)")]
-        string? work_progress_path = null)
+        [Description("Working directory to analyze")]
+        string working_directory,
+        [Description("specific focus area")]
+        string? focus_area = "all")
     {
-        var prompt = $@"Create comprehensive work procedure documentation and progress tracking for: {work_description}
+        var prompt = $@"LANGUAGE:
+Communicate with users and write files in the user's native language
 
-STEP 1: REQUIREMENT CONFIRMATION
-First, confirm detailed requirements and scope with the user before starting creation.
+Create work procedure for: {work_description}
+Directory: {working_directory} | Focus: {focus_area ?? "all"}
 
-STEP 2: WORK PROCEDURE DOCUMENT (.md)
-Create a detailed work procedure document including:
-- Step-by-step instructions with clear, actionable tasks
-- Prerequisites and required resources
-- Success criteria for each step
-- Risk mitigation strategies
-- Quality checkpoints
+FORMATS:
+- File: filename | status | priority | effort_remaining | notes
+- Task: task_name | status | dependencies | effort_est | effort_actual | notes  
+- Milestone: milestone_name | status | target_date | actual_date | success_criteria | notes
+- STATUS: ✅🟡⏳❌🔄🚀
 
-STEP 3: WORK PROGRESS DOCUMENT (.md)
-Create a progress tracking document with the following requirements:
-- **Single-row-per-task format**: Each task occupies one row that gets updated (not appended)
-- **Current status focus**: Show current progress and next actions, not historical records
-- **Self-resumable format**: Enable you to resume work by reading this document alone
-- **Required columns**: Task, Status, Due Date, Notes
-- **Status indicators**: Use clear visual indicators (✅ Complete, 🟡 In Progress, ⏳ Pending, ❌ Blocked)
-- **At-a-glance overview**: Provide immediate understanding of overall project health
+EXECUTE:
+1. ASK USER: purpose・scope・deadline・quality criteria
+2. Git check → init if needed → ASK Y/N initial commit
+3. ANALYZE working directory + auto-detect format type if needed
+4. ASK USER: format type + scope
+5. CREATE work_procedure.md:
+   - LLM reference document for consistent workflow execution
+   - overview
+   - Git Y/N policy
+   - refine this file when learning
+   - update work_progress.txt immediately when progress occurs
+   - procedures
+   - quality
+   - risks
+6. CREATE work_progress.txt: exact format + COMPLETE coverage
+   - List EVERY work item identified (files/tasks/milestones)
+   - Zero omissions - if N items exist, list N items
+   - NO history section
+7. ASK Y/N final commit
 
-DOCUMENT MANAGEMENT:
-- Use PowerShell.MCP for structured document creation and maintenance
-- Update progress table frequently as work advances
-- Ensure documents remain organized and accessible
-- Create parent directories for specified .md files if they do not exist
-
-DELIVERABLES:
-1. Work procedure document ({work_procedure_path ?? "work_procedure.md"})
-2. Progress tracking document ({work_progress_path ?? "work_progress.md"})
-3. Established update schedule and maintenance plan
-
-Present both documents to the user and confirm the regular update schedule.";
+CRITICAL: Create real files on disk + user approval for commits + exact formats";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
 
     [McpServerPrompt]
-    [Description("Execute/Resume work procedure and track progress by analyzing documentation")]
+    [Description("Execute work procedure and track progress with continuous improvement.")]
     public static ChatMessage ExecuteWorkProcedure(
-        [Description("Path to the procedure file (.md recommended)")]
-        string? work_procedure_path = null,
-        [Description("Path to the progress file (.md recommended)")]
-        string? work_progress_path = null,
-        [Description("Context or focus area for work")]
-        string? work_context = null)
+        [Description("Working directory where work will be performed")]
+    string working_directory)
     {
-        var contextSection = !string.IsNullOrEmpty(work_context)
-            ? $"\nWORK CONTEXT: {work_context}"
-            : "";
+        var prompt = $@"LANGUAGE:
+Communicate with users in the user's native language
 
-        var prompt = $@"Resume and execute remaining work by analyzing documentation, performing tasks, and updating progress.{contextSection}
+Execute work in '{working_directory}' with mandatory continuous procedure refinement.
 
-EXECUTE WORK FLOW:
-1. Read procedure document ({work_procedure_path ?? "work_procedure.md"}) and progress tracking ({work_progress_path ?? "work_progress.md"})
-2. Identify next actionable tasks (⏳ Pending, 🟡 In Progress, or ready to start)
-3. Execute the identified tasks following the established procedure
-4. Update progress tracking document in real-time as tasks are completed
-5. Mark completed tasks with ✅ status and add completion notes
+EXECUTE:
+1. Navigate to: {working_directory}
+2. READ work_procedure.md + work_progress.txt
+3. IDENTIFY next priority tasks from documents
+4. PERFORM actual work following documented procedures
+5. UPDATE work_progress.txt immediately with ✅ status + completion notes
+6. MANDATORY: UPDATE work_procedure.md with new learnings/improvements
+7. ASK Y/N commit approval
 
-EXECUTION REQUIREMENTS:
-- Actually perform the work, don't just plan it
-- Follow the step-by-step procedure documented
-- Update task statuses immediately upon completion
-- Add detailed notes about work performed and any discoveries
-- If blocked, mark as ❌ and document the blocker reason
-- Maintain the single-row-per-task format in progress tracking
+WORK STANDARDS:
+- Actually perform tasks, don't just plan
+- Generate real outputs + validate quality
+- Document what you actually did
+- Create backups before significant changes
 
-OUTPUT ACTIONS:
-1. Execute the next available tasks from the procedure
-2. Update {work_progress_path ?? "work_progress.md"} with current status
-3. Report what was accomplished and next steps
-4. Highlight any blockers or issues encountered
+PROGRESS TRACKING:
+- Update status immediately upon completion
+- Add specific notes about work performed + results
+- Mark blocked tasks as ❌ with clear blocker descriptions
 
-If documents are not found, offer to create basic procedure templates at specified locations.
-Begin by reading the documents, then immediately start executing the next available work items.";
+PROCEDURE REFINEMENT (CRITICAL):
+Update procedure document with:
+- New insights or better approaches discovered
+- Clarifications for unclear steps
+- Additional details for future sessions
+- Remove outdated/incorrect information
 
-        return new ChatMessage(ChatRole.User, prompt);
-    }
+DOCUMENT HANDLING:
+- Standard filenames: work_procedure.md, work_progress.txt
+- If missing: Create basic templates + begin execution
+- User approval required for all commits
 
-    [McpServerPrompt]
-    [Description("Refine work procedure with new learnings and improvements")]
-    public static ChatMessage RefineWorkProcedure(
-        [Description("Path to the existing work procedure document")]
-        string? work_procedure_path = null,
-        [Description("Description of new learnings or changes to incorporate")]
-        string? new_learnings = null)
-    {
-        var prompt = $@"Update and reorganize the work procedure document at '{work_procedure_path}' with new learnings and improvements.
+Start by reading documents, then execute next priority tasks while improving procedures.";
 
-First, analyze the existing document structure and confirm update requirements with the user.
-
-Update process:
-- Review current document content and structure
-- Incorporate new learnings logically without creating redundancy
-- Reorganize content to maintain clarity and flow
-- Eliminate duplications and contradictions
-- Ensure important information remains prominent and accessible
-
-For new learnings provided: {(string.IsNullOrEmpty(new_learnings) ? "Identify learnings through user consultation" : new_learnings)}
-
-Maintain document quality:
-- Keep structure logical and well-organized
-- Preserve important existing content
-- Integrate new information seamlessly
-- Update related sections consistently
-
-Use PowerShell.MCP to safely update the document with backup creation.
-If the document path is not found, confirm the correct location with user.
-Present the updated document to the user for review and approval.";
         return new ChatMessage(ChatRole.User, prompt);
     }
 
@@ -284,7 +267,10 @@ Present the updated document to the user for review and approval.";
         [Description("Beginner, Intermediate, Advanced")]
         string experience_level = "Beginner")
     {
-        var prompt = $@"Create hands-on {cli_tool} learning environment for {experience_level} level.
+        var prompt = $@"LANGUAGE:
+Communicate with users in the user's native language
+
+Create hands-on {cli_tool} learning environment for {experience_level} level.
 
 Steps:
 1. Confirm user experience level and goals

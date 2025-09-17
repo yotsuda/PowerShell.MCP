@@ -13,7 +13,7 @@ public class NamedPipeClient
         {
             if (!PowerShellProcessManager.IsPowerShellProcessRunning())
             {
-                return $"The PowerShell 7 console is not running. Please guide the user to start it and import the PowerShell.MCP module.";
+                return $"The PowerShell 7 console is not running. Use start_powershell_console tool to start it first.";
             }
             
             using var pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
