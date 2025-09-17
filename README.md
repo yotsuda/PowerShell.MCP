@@ -22,10 +22,24 @@ PowerShell.MCP enables PowerShell 7 to function as an MCP server, allowing MCP c
 - PSReadLine 2.3.4 or higher
 
 ## Installation
-`powershell
+
+**From PowerShell Gallery:**
+```powershell
 Install-Module PowerShell.MCP
-Import-Module PowerShell.MCP,PSReadLine
-`
+```
+
+**Import the module:**
+```powershell
+Import-Module PowerShell.MCP
+```
+
+> **📝 Note**: PSReadLine is automatically loaded as a required dependency - no manual import needed.
+
+**Verify installation:**
+```powershell
+Get-Module PowerShell.MCP
+```
+
 
 ## Claude Desktop Configuration
 
@@ -181,5 +195,6 @@ Yoshifumi Tsuda
 
 ---
 **For enterprise use, ensure compliance with your organization's security policies.**
+
 
 
