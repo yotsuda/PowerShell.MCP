@@ -47,7 +47,6 @@ Import-Module PowerShell.MCP
 Get-Module PowerShell.MCP
 ```
 
-
 ## Claude Desktop Configuration
 
 Add PowerShell.MCP to your Claude Desktop configuration:
@@ -85,7 +84,6 @@ C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 
 **💡 Tip**: After updating the configuration, restart Claude Desktop to activate the PowerShell.MCP integration.
 
-
 ## Architecture
 1. **PowerShell Module** - Named pipe-based MCP server functionality
 2. **Stdio Proxy Server** - Bridge between MCP clients and named pipe MCP server
@@ -96,6 +94,9 @@ C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 - **Enterprise-Grade** - Works with appropriate security policies
 - **Full Transparency** - Open source for complete auditability
 
+## Limitations
+- **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C
+- **User Command Privacy**: Commands executed by users are not visible to AI assistants
 
 ## Examples
 
