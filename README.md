@@ -155,12 +155,10 @@ Here are additional useful prompt examples you can try:
 - "Visualize folder size analysis in TreeMap-style HTML"
 
 ### 👨‍💻Developer Features
-- "Run syntax checks on PowerShell scripts"
-- "Generate documentation from comment-based help"
+- "Review the git diff in the current folder and suggest a commit comment"
 - "Analyze module dependencies"
 - "Calculate code metrics and evaluate quality"
 - "Please review the .cs files under c:\folder"
-- "Create patch files for code changes and apply with git apply"
 
 ### ⚡ PowerShell-Specific Advanced Features
 - "Check the cmdlets included in imported modules"
