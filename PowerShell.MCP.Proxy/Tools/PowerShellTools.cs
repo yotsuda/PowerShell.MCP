@@ -44,7 +44,7 @@ public static class PowerShellTools
         CancellationToken cancellationToken = default)
     {
         Console.Error.WriteLine("[DEBUG] StartPowershellConsole static method called!");
-        
+
         try
         {
             Console.Error.WriteLine("[INFO] Starting new PowerShell console with PowerShell.MCP module...");
@@ -58,25 +58,25 @@ public static class PowerShellTools
                 if (loc.Contains("PowerShell.MCP module is not imported"))
                 {
                     // The existing pwsh.exe is available but PowerShell.MCP module is not imported
-                    return @"A pwsh.exe instance is already running and the existing session will continue to be used. 
-However, the PowerShell.MCP module may not be imported in the existing session. 
+                    return @"A pwsh.exe instance is already running and the existing session will continue to be used. However, the PowerShell.MCP module may not be imported in the existing session.
 Please guide the user to run 'Import-Module PowerShell.MCP' to import the module.
 Note LLM cannot import the module automatically.";
                 }
                 else if (loc.Contains("previous pipeline is running"))
                 {
                     // The existing pwsh.exe is still executing the previous command
-                    return @"Since pwsh.exe with the PowerShell.MCP module imported is already running, 
-the existing session will continue to be used.
-However, the existing pwsh.exe is currently executing a pipeline from the previous invoke_expression call, so it cannot accept a new command. 
-Please guide the user to either wait for the command to complete or close the existing PowerShell console. 
+                    return @"Since pwsh.exe with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
+However, the existing pwsh.exe is currently executing a pipeline from the previous invoke_expression call, so it cannot accept a new command.
+Please guide the user to either wait for the command to complete or close the existing PowerShell console.
 Note that commands executed via invoke_expression cannot be cancelled with Ctrl+C and must complete naturally.";
                 }
                 else
                 {
                     // The existing pwsh.exe is available with PowerShell.MCP module imported
-                    return @"Since pwsh.exe with the PowerShell.MCP module imported is already running, 
-the existing session will continue to be used.";
+                    var msg = @"Since pwsh.exe with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
+
+";
+                    return msg + await powerShellService.GetCurrentLocationAsync(cancellationToken);
                 }
             }
 

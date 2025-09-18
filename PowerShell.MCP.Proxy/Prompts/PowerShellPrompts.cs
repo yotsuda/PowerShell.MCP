@@ -262,7 +262,7 @@ Start by reading documents, then execute next priority tasks while improving pro
     [McpServerPrompt]
     [Description("Create hands-on learning environment for development tools")]
     public static ChatMessage LearnCliTools(
-        [Description("Git, Docker, PowerShell, kubectl, etc.")]
+        [Description("PowerShell, Git, Docker, kubectl, etc.")]
         string cli_tool,
         [Description("Beginner, Intermediate, Advanced")]
         string experience_level = "Beginner")
@@ -300,7 +300,7 @@ Make the user actively practice each step.";
         string sentence_length = "Short",
         [Description("Slow (rate -2), Normal (rate 0), Fast (rate +2), VeryFast (rate +4)")]
         string speech_speed = "Normal",
-        [Description("General, Grammar, Vocabulary, Pronunciation, Business, Conversation")]
+        [Description("Zoo, Grammar, Vocabulary, Pronunciation, Business, Conversation")]
         string learning_focus = "General")
     {
         var prompt = $@"Start RAPID {target_language} dictation training using PowerShell.MCP:
