@@ -25,6 +25,11 @@ PowerShell.MCP enables PowerShell 7 to function as an MCP server, allowing MCP c
 
 ## Installation
 
+### Prerequisites
+PowerShell.MCP requires PowerShell 7 or later on Windows. See the [official installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5) for installation instructions.
+
+### Module Installation
+
 **From PowerShell Gallery:**
 ```powershell
 Install-Module PowerShell.MCP
@@ -35,7 +40,7 @@ Install-Module PowerShell.MCP
 Import-Module PowerShell.MCP
 ```
 
-> **📝 Note**: PSReadLine is automatically loaded as a required dependency - no manual import needed.
+**📝 Note**: PSReadLine is automatically loaded as a required dependency - no manual import needed.
 
 **Verify installation:**
 ```powershell
