@@ -83,7 +83,7 @@ C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 }
 ```
 
-> **💡 Tip**: After updating the configuration, restart Claude Desktop to activate the PowerShell.MCP integration.
+**💡 Tip**: After updating the configuration, restart Claude Desktop to activate the PowerShell.MCP integration.
 
 
 ## Architecture
