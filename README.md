@@ -95,7 +95,7 @@ C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 - **Full Transparency** - Open source for complete auditability
 
 ## Limitations
-- **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C
+- **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C. To cancel AI-executed commands, close the PowerShell console
 - **User Command Privacy**: Commands executed by users are not visible to AI assistants
 
 ## Examples
