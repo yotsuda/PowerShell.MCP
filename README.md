@@ -60,19 +60,23 @@ Transform natural language requests into PowerShell automation - from simple fil
 - PowerShell 7.2.15 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5))
 - PSReadLine 2.3.4 or higher (auto-installed)
 
-### 1. Install PowerShell.MCP
+### 1. Open PowerShell 7
+- Press `Win + R`, type `pwsh`, press `Enter`
+- Verify PowerShell 7.x is running (not Windows PowerShell 5.x)
+
+### 2. Install PowerShell.MCP
 ```powershell
 Install-Module PowerShell.MCP
 Import-Module PowerShell.MCP
 ```
 
-### 2. Get your module path
+### 3. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
 # Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 ```
 
-### 3. Configure Claude Desktop
+### 4. Configure Claude Desktop
 Add to your Claude Desktop configuration:
 ```json
 {
@@ -84,7 +88,7 @@ Add to your Claude Desktop configuration:
 }
 ```
 
-### 4. Restart Claude Desktop and test
+### 5. Restart Claude Desktop and test
 - Restart Claude Desktop to activate the integration
 - Try: "Show me the PowerShell version"
 
