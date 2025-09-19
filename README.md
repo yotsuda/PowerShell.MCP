@@ -8,100 +8,72 @@
 Malicious use could result in severe damage. Use responsibly and only in trusted environments.
 
 ## Overview
+
 PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to execute any cmdlets/CLI tools within a PowerShell console. Users can also execute cmdlets/CLI tools in the same console, allowing AI and users to work collaboratively. It operates at high speed without needing to launch a new console each time, while preserving the state of imported modules, functions and variables.
 
-## Key Features
-- **🤖 Direct AI Command Execution** - Enable AI assistants to run any cmdlets or CLI tools directly in PowerShell console
-- **👥 Shared Console Experience** - AI and user share the same PowerShell console with complete transparency
-- **⚙ Real-time Command Execution** - Comprehensive output capture with immediate results
-- **📚 Rich Prompts List** - Ready-to-use practical scenarios for common tasks
-- **🔒 Secure Local Communication** - Local-only access, no remote connections
-- **🏢 Enterprise-Ready** - Designed for safe corporate environments
+### What Makes It Powerful
 
-## Why PowerShell.MCP is Fast
+**🤝 Shared Console Experience**
+- You and AI work together in the same PowerShell session
+- Every command the AI executes appears in your console in real-time
+- Run your own commands between AI operations
+- Complete transparency - see exactly what's happening
 
-PowerShell.MCP delivers exceptional performance through three key optimizations:
+**🔄 Living Workspace That Remembers Everything**
+- Current directory persists across all commands and interactions
+- Imported modules and authenticated sessions (Azure, AWS, Exchange) remain active
+- Variables, functions, and mounted drives stay available throughout the session
+- No need to re-initialize or re-authenticate between commands
+- True model context protocol implementation preserves your entire working state
 
-### ⚡ Immediate User Feedback
-- **Instant Response**: Users receive immediate feedback as soon as AI assistants begin executing commands
-- **Real-time Output**: Command results stream back in real-time, eliminating wait times
+**⚡ Instant Response, Zero Overhead**
+- Commands execute immediately without launching new PowerShell processes
+- Eliminates the typical 1-5 second startup delay per command
+- Real-time streaming of output as commands run
+- Complex multi-step operations flow naturally
 
-### 🚀 Persistent Session Architecture  
-- **No Process Startup**: Commands execute without launching pwsh.exe each time, eliminating 1-10 second startup delays
-- **Always Ready**: PowerShell modules remain imported, cmdlet-specific auth tokens (AWS, Azure, etc.) stay valid, PSDrive mounts persist, and connections are maintained
+**🔐 Enterprise-Ready Security**
+- Local-only communication through named pipes
+- No network exposure or remote connections
+- Every executed command is visible and auditable
+- Compatible with strict corporate security policies
 
-### 🎯 True Model Context Protocol Implementation
-
-PowerShell.MCP represents a genuine implementation of Model Context Protocol principles. Traditional command execution loses context between operations, but PowerShell.MCP preserves complete working context:
-
-**Context Continuity Example:**
+### See It In Action
 ```text
 # AI navigates to your project
-PS C:\> Set-Location "C:\MyProject\WebApp"
+PS C:\> cd "C:\MyProject\WebApp"
 
-# Subsequent commands automatically work in the same context
-PS C:\MyProject\WebApp> Get-ChildItem *.js         # Lists JavaScript files in current project
-PS C:\MyProject\WebApp> git status                 # Shows git status for current project  
-PS C:\MyProject\WebApp> dotnet build               # Builds current project
-PS C:\MyProject\WebApp> ./scripts/deploy.ps1       # Runs project-specific script
+# All subsequent commands inherit this context automatically
+PS C:\MyProject\WebApp> dir *.js               # Lists JS files
+PS C:\MyProject\WebApp> git status             # Shows git status  
+PS C:\MyProject\WebApp> dotnet build           # Builds the project
+PS C:\MyProject\WebApp> $env:NODE_ENV = "dev"  # Sets variable
+PS C:\MyProject\WebApp> ./scripts/deploy.ps1   # Runs scripts with env vars intact
 ```
 
-This architecture enables PowerShell.MCP to execute complex command sequences at near-native speed while maintaining full session context.
+Transform natural language requests into PowerShell automation - from simple file operations to complex system administration tasks, all while maintaining complete visibility and control.
 
-## System Requirements
-- Windows 10/11 or Windows Server 2016+
-- PowerShell 7.2.15 or higher
-- PSReadLine 2.3.4 or higher
-
-## Installation
+## Quick Start
 
 ### Prerequisites
-PowerShell.MCP requires PowerShell 7 or later on Windows. See the [official installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5) for installation instructions.
+- Windows 10/11 or Windows Server 2016+
+- PowerShell 7.2.15 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5))
+- PSReadLine 2.3.4 or higher (auto-installed)
 
-### Module Installation
-
-**From PowerShell Gallery:**
+### 1. Install PowerShell.MCP
 ```powershell
 Install-Module PowerShell.MCP
-```
-
-**Import the module:**
-```powershell
 Import-Module PowerShell.MCP
 ```
 
-**📝 Note**: PSReadLine is automatically loaded as a required dependency - no manual import needed.
-
-**Verify installation:**
-```powershell
-Get-Module PowerShell.MCP
-```
-
-## Claude Desktop Configuration
-
-Add PowerShell.MCP to your Claude Desktop configuration:
-
-```json
-{
-  "mcpServers": {
-    "PowerShell": {
-      "command": "[ModuleBase]\\bin\\PowerShell.MCP.Proxy.exe"
-    }
-  }
-}
-```
-
-**Find your module base path:**
+### 2. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
+# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 ```
 
-**Example result:**
-```
-C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
-```
-
-**Complete configuration example:**
+### 3. Configure Claude Desktop
+Add to your Claude Desktop configuration:
 ```json
 {
   "mcpServers": {
@@ -112,17 +84,11 @@ C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.0
 }
 ```
 
-**💡 Tip**: After updating the configuration, restart Claude Desktop to activate the PowerShell.MCP integration.
+### 4. Restart Claude Desktop and test
+- Restart Claude Desktop to activate the integration
+- Try: "Show me the PowerShell version"
 
-## Architecture
-1. **PowerShell Module** - Named pipe-based MCP server functionality
-2. **Stdio Proxy Server** - Bridge between MCP clients and named pipe MCP server
-3. **MCP Client** - Connects to proxy server via stdio for operations
-
-## Security
-- **Local Communication Only** - Named pipe prevents remote access
-- **Enterprise-Grade** - Works with appropriate security policies
-- **Full Transparency** - Open source for complete auditability
+**💡 First-time tip**: Start with simple commands to familiarize yourself with the shared console experience.
 
 ## Limitations
 - **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C. To cancel AI-executed commands, close the PowerShell console
@@ -141,85 +107,61 @@ Here are additional useful prompt examples you can try:
 - "Show me disk usage"
 
 ### 📊 System Monitoring and Analysis
-- "Show me all processes consuming more than 100MB of memory, sorted by CPU usage"
-- "Display 5 running Windows services"
-- "Show me the list of directories in the current folder"
-- "Display top 5 processes by memory usage"
+- "Show me all processes consuming more than 100MB of memory"
+- "Display top 5 processes by CPU usage"
+- "Show me running Windows services"
+- "List recently modified files in current directory"
 
 ### 🧮 Practical Calculations and Data Processing
 - "Calculate the date 30 days from today"
 - "Generate a 12-character random password"
-- "Calculate the total file size for a specific extension"
+- "Calculate total size of all PDF files"
 
 ### 📁 File and Folder Operations
-- "Compare the contents of two folders and show the differences"
-- "Display the top 10 recently updated files"
+- "Compare two folders and show differences"
+- "Find duplicate files in a directory"
+- "Create a backup of configuration files"
 
 ### 🌐 Network and Connectivity
-- "Check if a specific port is open"
-- "Query DNS records and display results"
+- "Check if port 443 is open on a server"
+- "Display network adapter information"
+- "Test connectivity to multiple servers"
 
-### 🚀 Advanced Integration and Report Generation
-- "Generate system information as an HTML report and open it in browser"
-- "Create an HTML report of system errors from the last 3 days and open it in browser"
-- "Visualize process usage as an HTML dashboard and display in browser"
-- "Create a colorful HTML chart of disk usage analysis and display automatically"
-- "Visualize network connection history as HTML timeline"
+### 🚀 Advanced Integration and Reporting
+- "Generate an HTML system report and open in browser"
+- "Create a dashboard of system performance metrics"
+- "Export event log errors to CSV"
+- "Visualize disk usage as an interactive chart"
 
-### 🏢 System Administration Tasks
-- "Export a list of installed programs to CSV and open in Excel"
-- "Search for specific application settings in the registry"
+### 👨‍💻 Developer Features
+- "Review git changes and suggest a commit message"
+- "Analyze code metrics in the current project"
+- "Find TODO comments in source files"
+- "Check for outdated npm packages"
 
-### 📈 Data Analysis and Reporting
-- "Extract warnings and errors from Windows event logs"
-- "Create a system performance overview report"
-- "Explain the steps for creating the current report"
-- "Display folder structure hierarchically"
-
-### 🤖 Automation and Efficiency
-- "Auto-generate reports in specified formats"
-
-### 🎨 Creative Tasks
-- "Visualize error trends in log files with graphs in HTML"
-- "Generate QR codes (encode strings)"
-- "Display long-running processes with colorful progress bars"
-- "Visualize folder size analysis in TreeMap-style HTML"
-
-### 👨‍💻Developer Features
-- "Review the git diff in the current folder and suggest a commit comment"
-- "Analyze module dependencies"
-- "Calculate code metrics and evaluate quality"
-- "Please review the .cs files under c:\folder"
-
-### ⚡ PowerShell-Specific Advanced Features
-- "Check the cmdlets included in imported modules"
-- "Check Get-Date cmdlet parameters with Get-Help cmdlet and try several examples with those parameters"
-- "Send several complex commands that you know to the PowerShell console with explanations. Do not execute them."
-- "Create processing examples combining multiple cmdlets using pipelines"
-- "Use PowerShell's help system to display detailed information about specific commands"
-- "How do you find using PowerShell.MCP? Please share your thoughts and experiences"
+### ⚡ PowerShell Learning
+- "Explain Get-Process cmdlet with examples"
+- "Show me how to use the pipeline effectively"
+- "Demonstrate advanced filtering with Where-Object"
+- "Create a custom PowerShell function"
 
 ### 💡 Getting Started Tips
 1. **Start Simple**: Try basic system information commands first
-2. **Explore Categories**: Each category demonstrates different PowerShell capabilities
-3. **Combine Commands**: Chain multiple operations for complex automation
-4. **Safety First**: Test commands in non-production environments
-5. **Learn PowerShell**: Use built-in help system with `Get-Help`
+2. **Explore Built-in Prompts**: Use the 8 curated prompts in your MCP client
+3. **Build Complexity**: Progress from single commands to pipelines
+4. **Learn by Doing**: Ask AI to explain what each command does
+5. **Stay Safe**: Test in non-production environments first
 
 ### 🎭 Interactive Experience
-PowerShell.MCP transforms your AI assistant into a powerful system administrator. Simply describe what you want to accomplish, and watch as PowerShell commands are executed with detailed explanations.
+PowerShell.MCP transforms your AI assistant into a powerful system administrator. Simply describe what you want to accomplish in natural language:
 
 **Example Conversation:**
 ```
 You: "I need to see which processes are using the most memory"
 Assistant: I'll show you the top memory-consuming processes...
 [Executes: Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 10]
+[Results appear in real-time with explanation]
 ```
-
----
-
-**⚠ Security Reminder**: These examples demonstrate powerful system access capabilities. Always ensure you're working in appropriate environments and understand the commands being executed.
-
 
 ## Disclaimer
 This software is provided "AS IS" without warranty of any kind, either expressed or implied.  
@@ -233,6 +175,3 @@ Yoshifumi Tsuda
 
 ---
 **For enterprise use, ensure compliance with your organization's security policies.**
-
-
-
