@@ -27,8 +27,8 @@ PowerShell.MCP delivers exceptional performance through three key optimizations:
 - **Real-time Output**: Command results stream back in real-time, eliminating wait times
 
 ### 🚀 Persistent Session Architecture  
-- **Persistent Session**: Single PowerShell session eliminates 1-3 second startup delays
-- **Complete Context Preservation**: All session state persists as model context - imported modules, variables, functions, current directory, PSDrive mounts, and execution environment remain intact across AI interactions
+- **No Process Startup**: Commands execute without launching pwsh.exe each time, eliminating 1-3 second startup delays
+- **Always Ready**: PowerShell modules remain imported, cmdlet-specific auth tokens (AWS, Azure, etc.) stay valid, PSDrive mounts persist, and connections are maintained
 
 ### 🎯 True Model Context Protocol Implementation
 
