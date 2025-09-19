@@ -13,10 +13,40 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 ## Key Features
 - **🤖 Direct AI Command Execution** - Enable AI assistants to run any cmdlets or CLI tools directly in PowerShell console
 - **👥 Shared Console Experience** - AI and user share the same PowerShell console with complete transparency
-- **⚡ Real-time Command Execution** - Comprehensive output capture with immediate results
+- **⚙ Real-time Command Execution** - Comprehensive output capture with immediate results
 - **📚 Rich Prompts List** - Ready-to-use practical scenarios for common tasks
 - **🔒 Secure Local Communication** - Local-only access, no remote connections
 - **🏢 Enterprise-Ready** - Designed for safe corporate environments
+
+## Why PowerShell.MCP is Fast
+
+PowerShell.MCP delivers exceptional performance through three key optimizations:
+
+### ⚡ Immediate User Feedback
+- **Instant Response**: Users receive immediate feedback as soon as AI assistants begin executing commands
+- **Real-time Output**: Command results stream back in real-time, eliminating wait times
+
+### 🚀 Persistent Session Architecture  
+- **Persistent Session**: Single PowerShell session eliminates 1-3 second startup delays
+- **Complete Context Preservation**: All session state persists as model context - imported modules, variables, functions, current directory, PSDrive mounts, and execution environment remain intact across AI interactions
+
+### 🎯 True Model Context Protocol Implementation
+
+PowerShell.MCP represents a genuine implementation of Model Context Protocol principles. Traditional command execution loses context between operations, but PowerShell.MCP preserves complete working context:
+
+**Context Continuity Example:**
+```text
+# AI navigates to your project
+PS C:\> Set-Location "C:\MyProject\WebApp"
+
+# Subsequent commands automatically work in the same context
+PS C:\MyProject\WebApp> Get-ChildItem *.js         # Lists JavaScript files in current project
+PS C:\MyProject\WebApp> git status                 # Shows git status for current project  
+PS C:\MyProject\WebApp> dotnet build               # Builds current project
+PS C:\MyProject\WebApp> ./scripts/deploy.ps1       # Runs project-specific script
+```
+
+This architecture enables PowerShell.MCP to execute complex command sequences at near-native speed while maintaining full session context.
 
 ## System Requirements
 - Windows 10/11 or Windows Server 2016+
