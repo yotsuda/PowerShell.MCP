@@ -42,7 +42,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 ### See It In Action
 ```text
 # AI navigates to your project
-PS C:\> cd "C:\MyProject\WebApp"
+PS C:\> cd C:\MyProject\WebApp
 
 # All subsequent commands inherit this context automatically
 PS C:\MyProject\WebApp> dir *.js               # Lists JS files
