@@ -21,7 +21,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 
 **🔄 Living Workspace That Remembers Everything**
 - Current directory persists across all commands and interactions
-- Imported modules and authenticated sessions (Azure, AWS, Exchange) remain active
+- Imported modules and authenticated sessions remain active throughout the entire session
 - Variables, functions, and mounted drives stay available throughout the session
 - No need to re-initialize or re-authenticate between commands
 - True model context protocol implementation preserves your entire working state
