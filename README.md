@@ -21,7 +21,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 
 **🔄 Living Workspace That Remembers Everything**
 - Current directory persists across all commands and interactions
-- Imported modules and authenticated sessions (Azure, AWS, Exchange) remain active
+- Imported modules and authenticated sessions remain active throughout the entire session
 - Variables, functions, and mounted drives stay available throughout the session
 - No need to re-initialize or re-authenticate between commands
 - True model context protocol implementation preserves your entire working state
@@ -42,7 +42,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 ### See It In Action
 ```text
 # AI navigates to your project
-PS C:\> cd "C:\MyProject\WebApp"
+PS C:\> cd C:\MyProject\WebApp
 
 # All subsequent commands inherit this context automatically
 PS C:\MyProject\WebApp> dir *.js               # Lists JS files
@@ -60,7 +60,7 @@ Transform natural language requests into PowerShell automation - from simple fil
 - Windows 10/11 or Windows Server 2016+
 - Claude Desktop ([download](https://claude.ai/download)) or any MCP clients
 - PowerShell 7.2.15 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5))
-- PSReadLine 2.3.4 or higher (auto-installed)
+- PSReadLine 2.3.4 or higher ([auto-installed](https://www.powershellgallery.com/packages/PSReadLine))
 
 ### 1. Open PowerShell 7
 - Press `Win + R`, type `pwsh`, press `Enter`
