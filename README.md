@@ -38,6 +38,12 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - AI receives even the verbose and debug streams that are normally not displayed in the console, enabling comprehensive debugging and troubleshooting
 - No information loss - every piece of output data is preserved and accessible for precise analysis
 
+**🎯 Ready-to-Use Built-in Prompts**
+- 8 specialized prompts for development, analysis, administration, and learning scenarios
+- Intelligent automation with native language support and interactive guidance
+- Built-in safety measures, progress tracking, and hands-on learning environments
+- Accessible directly through MCP client prompts list - no command writing required
+
 **🔐 Enterprise-Ready Security**
 - Local-only communication through named pipes
 - No network exposure or remote connections
