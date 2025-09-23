@@ -1,3 +1,7 @@
+# MCPPollingEngine.ps1
+
+# ===== Main Timer Setup =====
+
 if (-not (Test-Path Variable:global:McpTimer)) {
     $global:McpTimer = New-Object System.Timers.Timer 500
     $global:McpTimer.AutoReset = $true
@@ -7,6 +11,200 @@ if (-not (Test-Path Variable:global:McpTimer)) {
         -EventName      Elapsed `
         -SourceIdentifier MCP_Poll `
         -Action {
+            
+            # ===== Helper Functions (Defined within Action Block) =====
+            
+            function Invoke-CommandWithAllStreams {
+                param([string]$Command)
+                
+                # Initialize output variables
+                $outVar = @()
+                $errorVar = @()
+                $warningVar = @()
+                $informationVar = @()
+                $verboseVar = @()
+                $debugVar = @()
+                
+                # Save current preference settings
+                $originalVerbose = $VerbosePreference
+                $originalDebug = $DebugPreference
+                $originalInformation = $InformationPreference
+                
+                try {
+                    # Enable all streams
+                    $VerbosePreference = 'Continue'
+                    $DebugPreference = 'Continue' 
+                    $InformationPreference = 'Continue'
+                    
+                    # Use PowerShell native stream variables with redirection
+                    $redirectedOutput = Invoke-Expression $Command `
+                        -OutVariable outVar `
+                        -ErrorVariable errorVar `
+                        -WarningVariable warningVar `
+                        -InformationVariable informationVar `
+                        4>&1 5>&1  # Redirect Verbose(4) and Debug(5) to Success stream
+                    
+                    # Separate Verbose/Debug records from redirected output
+                    if ($redirectedOutput) {
+                        $redirectedOutput | ForEach-Object {
+                            if ($_ -is [System.Management.Automation.VerboseRecord]) {
+                                $verboseVar += $_
+                            }
+                            elseif ($_ -is [System.Management.Automation.DebugRecord]) {
+                                $debugVar += $_
+                            }
+                        }
+                    }
+                    
+                    return @{
+                        Success = $outVar
+                        Error = $errorVar
+                        Warning = $warningVar
+                        Information = $informationVar
+                        Verbose = $verboseVar
+                        Debug = $debugVar
+                    }
+                }
+                finally {
+                    # Restore preference settings
+                    $VerbosePreference = $originalVerbose
+                    $DebugPreference = $originalDebug
+                    $InformationPreference = $originalInformation
+                }
+            }
+
+            function Format-McpOutput {
+                param(
+                    [hashtable]$StreamResults,
+                    [string]$LocationInfo
+                )
+                
+                # Process each stream type
+                $outputStreams = @{
+                    Success = @()
+                    Error = @()
+                    Warning = @()
+                    Information = @()
+                    Host = @()
+                }
+
+                # Process errors
+                foreach($err in $StreamResults.Error) { 
+                    if ($err -is [System.Management.Automation.ErrorRecord]) {
+                        $outputStreams.Error += $err.Exception.Message
+                    } else {
+                        $outputStreams.Error += $err.ToString()
+                    }
+                }
+                
+                # Process warnings
+                foreach($warn in $StreamResults.Warning) { 
+                    if ($warn -is [System.Management.Automation.WarningRecord]) {
+                        $outputStreams.Warning += $warn.Message
+                    } else {
+                        $outputStreams.Warning += $warn.ToString()
+                    }
+                }
+                
+                # Process information
+                foreach($info in $StreamResults.Information) { 
+                    if ($info -is [System.Management.Automation.InformationRecord]) {
+                        $outputStreams.Information += $info.MessageData
+                    } else {
+                        $outputStreams.Information += $info.ToString()
+                    }
+                }
+                
+                # Process verbose
+                foreach($verbose in $StreamResults.Verbose) { 
+                    if ($verbose -is [System.Management.Automation.VerboseRecord]) {
+                        $outputStreams.Host += "VERBOSE: $($verbose.Message)"
+                    } else {
+                        $outputStreams.Host += "VERBOSE: $verbose"
+                    }
+                }
+                
+                # Process debug
+                foreach($debug in $StreamResults.Debug) { 
+                    if ($debug -is [System.Management.Automation.DebugRecord]) {
+                        $outputStreams.Host += "DEBUG: $($debug.Message)"
+                    } else {
+                        $outputStreams.Host += "DEBUG: $debug"
+                    }
+                }
+
+                # Process success
+                foreach ($item in $StreamResults.Success) {
+                    $outputStreams.Success += $item
+                }
+
+                # Generate structured output strings
+                $structuredOutput = @{
+                    Success = ($outputStreams.Success | Out-String).Trim()
+                    Error = ($outputStreams.Error -join "`n").Trim()
+                    Warning = ($outputStreams.Warning -join "`n").Trim()
+                    Information = ($outputStreams.Information -join "`n").Trim()
+                    Host = ($outputStreams.Host -join "`n").Trim()
+                }
+
+                # Remove empty outputs
+                $cleanOutput = @{}
+                foreach ($key in $structuredOutput.Keys) {
+                    if (-not [string]::IsNullOrEmpty($structuredOutput[$key])) {
+                        $cleanOutput[$key] = $structuredOutput[$key]
+                    }
+                }
+
+                # Generate formatted output
+                if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success') -or ($cleanOutput.Error -or $cleanOutput.Warning -or $cleanOutput.Information -or $cleanOutput.Host)) {
+                    $formattedOutput = @()
+                    
+                    # Always start with location info
+                    $formattedOutput += $LocationInfo
+
+                    if ($cleanOutput.Error) {
+                        $formattedOutput += "=== ERRORS ==="
+                        $formattedOutput += $cleanOutput.Error
+                        $formattedOutput += ""
+                    }
+
+                    if ($cleanOutput.Warning) {
+                        $formattedOutput += "=== WARNINGS ==="
+                        $formattedOutput += $cleanOutput.Warning
+                        $formattedOutput += ""
+                    }
+
+                    if ($cleanOutput.Information) {
+                        $formattedOutput += "=== INFO ==="
+                        $formattedOutput += $cleanOutput.Information
+                        $formattedOutput += ""
+                    }
+
+                    if ($cleanOutput.Host) {
+                        $formattedOutput += "=== HOST ==="
+                        $formattedOutput += $cleanOutput.Host
+                        $formattedOutput += ""
+                    }
+
+                    $formattedOutput += "=== OUTPUT ==="
+                    if ($cleanOutput.Success) {
+                        $formattedOutput += $cleanOutput.Success
+                    }
+
+                    return ($formattedOutput -join "`n").Trim()
+                } else {
+                    # Simple output: location info + results only
+                    if ($cleanOutput.Success) {
+                        return $LocationInfo + "`n" + $cleanOutput.Success
+                    } else {
+                        return $LocationInfo
+                    }
+                }
+            }
+            
+            # ===== Main Event Processing =====
+            
+            # Handle insert command
             $cmd = [PowerShell.MCP.Services.McpServerHost]::insertCommand
             if ($cmd) {
                 [PowerShell.MCP.Services.McpServerHost]::insertCommand = $null
@@ -16,12 +214,14 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = "Your pipeline has been inserted into the PS console."
             }
 
+            # Handle execute command
             $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
             if ($cmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
 
                 try {
+                    # Display command in console
                     [Console]::WriteLine()
                     try {
                         $promptText = & { prompt }
@@ -39,44 +239,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     Write-Host $cmd
 
-                    $results = @()
-                    $mcpErrors = @()
-                    $mcpWarnings = @()
-                    $mcpInformation = @()
-                    $hostOutput = @()
+                    # Execute command with stream capture
+                    $streamResults = Invoke-CommandWithAllStreams -Command $cmd
+                    
+                    # Display results in console
+                    $streamResults.Success | Out-Default
 
-                    $tempFile = [System.IO.Path]::GetTempFileName()
-
-                    try {
-                        Start-Transcript -Path $tempFile -Append | Out-Null
-                        
-                        Invoke-Expression $cmd `
-                            -ErrorVariable mcpErrors `
-                            -WarningVariable mcpWarnings `
-                            -InformationVariable mcpInformation `
-                            -OutVariable results
-                        
-                        Stop-Transcript | Out-Null
-                        
-                        $transcriptContent = Get-Content $tempFile -ErrorAction SilentlyContinue
-                        $hostOutput = $transcriptContent | Where-Object { $_ -match '^(What if:|VERBOSE:|DEBUG:|WARNING:)' }
-                    }
-                    catch {
-                        Invoke-Expression $cmd `
-                            -ErrorVariable mcpErrors `
-                            -WarningVariable mcpWarnings `
-                            -InformationVariable mcpInformation `
-                            -OutVariable results
-                    }
-                    finally {
-                        if (Test-Path $tempFile) {
-                            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-                        }
-                    }
-
-                    $results | Out-Default
-
-                    # Add current location info at the beginning
+                    # Get current location info
                     $currentLocation = @{
                         drive = (Get-Location).Drive.Name + ":"
                         currentPath = (Get-Location).Path
@@ -85,100 +254,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     
                     $locationInfo = "Your pipeline executed in: $($currentLocation.currentPath) [$($currentLocation.provider)]"
 
-                    $outputStreams = @{
-                        Success = @()
-                        Error = @()
-                        Warning = @()
-                        Information = @()
-                        Host = @()
-                    }
-
-                    # Process errors
-                    foreach($err in $mcpErrors) { 
-                        $outputStreams.Error += $err.Exception.Message 
-                    }
-                    
-                    # Process warnings
-                    foreach($warn in $mcpWarnings) { 
-                        $outputStreams.Warning += $warn.Message 
-                    }
-                    
-                    # Process information
-                    foreach($info in $mcpInformation) { 
-                        $outputStreams.Information += $info.MessageData 
-                    }
-                    
-                    # Process host output
-                    foreach($host in $hostOutput) { 
-                        $outputStreams.Host += $host 
-                    }
-
-                    # Process results (standard output)
-                    foreach ($item in $results) {
-                        $outputStreams.Success += $item
-                    }
-
-                    $structuredOutput = @{
-                        Success = ($outputStreams.Success | Out-String).Trim()
-                        Error = ($outputStreams.Error -join "`n").Trim()
-                        Warning = ($outputStreams.Warning -join "`n").Trim()
-                        Information = ($outputStreams.Information -join "`n").Trim()
-                        Host = ($outputStreams.Host -join "`n").Trim()
-                    }
-
-                    $cleanOutput = @{}
-                    foreach ($key in $structuredOutput.Keys) {
-                        if (-not [string]::IsNullOrEmpty($structuredOutput[$key])) {
-                            $cleanOutput[$key] = $structuredOutput[$key]
-                        }
-                    }
-
-                    if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success') -or ($cleanOutput.Error -or $cleanOutput.Warning -or $cleanOutput.Information -or $cleanOutput.Host)) {
-                        $formattedOutput = @()
-                        
-                        # Always start with location info
-                        $formattedOutput += $locationInfo
-
-                        if ($cleanOutput.Error) {
-                            $formattedOutput += "=== ERRORS ==="
-                            $formattedOutput += $cleanOutput.Error
-                            $formattedOutput += ""
-                        }
-
-                        if ($cleanOutput.Warning) {
-                            $formattedOutput += "=== WARNINGS ==="
-                            $formattedOutput += $cleanOutput.Warning
-                            $formattedOutput += ""
-                        }
-
-                        if ($cleanOutput.Information) {
-                            $formattedOutput += "=== INFO ==="
-                            $formattedOutput += $cleanOutput.Information
-                            $formattedOutput += ""
-                        }
-
-                        if ($cleanOutput.Host) {
-                            $formattedOutput += "=== HOST ==="
-                            $formattedOutput += $cleanOutput.Host
-                            $formattedOutput += ""
-                        }
-
-                        $formattedOutput += "=== OUTPUT ==="
-                        if ($cleanOutput.Success) {
-                            $formattedOutput += $cleanOutput.Success
-                        }
-
-                        $text = ($formattedOutput -join "`n").Trim()
-                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $text
-                    } else {
-                        # Simple output: just location + results
-                        if ($cleanOutput.Success) {
-                            $text = $locationInfo + "`n" + $cleanOutput.Success
-                        } else {
-                            $text = $locationInfo
-                        }
-                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $text
-                    }
+                    # Generate MCP formatted output
+                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo
+                    [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $mcpOutput
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
@@ -187,6 +265,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
 
+            # Handle silent execute command
             $silentCmd = [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent
             if ($silentCmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent = $null
@@ -194,7 +273,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 try {
                     $results = Invoke-Expression $silentCmd
                     
-                    # Add current location info for silent commands too
+                    # Get current location info
                     $currentLocation = @{
                         drive = (Get-Location).Drive.Name + ":"
                         currentPath = (Get-Location).Path
@@ -224,18 +303,19 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
 
-            # Claude Desktop ほか多くの MCP client は、今のところ MCP protocol notification をサポートしていない
-            # そのため、以下の通知処理はスキップする
+            # Notification system (future support)
+            # Most MCP clients do not currently support MCP protocol notifications
+            # Skip the following notification processing
             return
 
-            # === コマンド実行通知システム ===
+            # Command execution notification system
             try {
-                # 前回チェックした履歴の位置を追跡
+                # Track last checked history position
                 if (-not $global:MCP_LastHistoryId) {
                     $global:MCP_LastHistoryId = 0
                 }
 
-                # 対話的コマンド履歴をチェック
+                # Check interactive command history
                 $history = Get-History -ErrorAction SilentlyContinue
                 if ($history -and $history.Count -gt $global:MCP_LastHistoryId) {
                     $newCommands = $history | Where-Object { $_.Id -gt $global:MCP_LastHistoryId }
@@ -246,12 +326,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             ($historyItem.EndExecutionTime - $historyItem.StartExecutionTime).TotalMilliseconds
                         } else { 0 }
                         
-                        # 基本的なフィルタリング（調整済み）
+                        # Basic filtering
                         $excludePatterns = @('cls', 'clear', 'exit', 'pwd')
                         $shouldExclude = $excludePatterns | Where-Object { $command -match "^$_\s*$" }
                         
                         if (-not $shouldExclude) {
-                            # === MCP通知: 対話的コマンド実行 ===
+                            # MCP notification: Interactive command executed
                             try {
                                 [PowerShell.MCP.Services.McpServerHost]::SendCommandExecuted(
                                     $command,
@@ -259,14 +339,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                                     $LASTEXITCODE,
                                     [long]$duration
                                 )
-                                
-                                $icon = if ($duration -gt 3000) { "⏳" } else { "⚡" }
-                                $durationText = if ($duration -gt 0) { " ($([math]::Round($duration))ms)" } else { "" }
-#                                Write-Host "$icon Interactive command: $command$durationText" -ForegroundColor Green
                             }
                             catch {
-                                # 通知エラーは無視（従来のログも残す）
-#                                Add-Content -Path "$env:TEMP\mcp-notifications.log" -Value "$(Get-Date): Interactive command: $command" -ErrorAction SilentlyContinue
+                                # Ignore notification errors
                             }
                         }
                     }
@@ -275,37 +350,30 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
             catch {
-                # コマンド通知エラーは無視
+                # Ignore command notification errors
                 Add-Content -Path "$env:TEMP\mcp-errors.log" -Value "$(Get-Date): Command notification error: $_" -ErrorAction SilentlyContinue
             }
 
-            # === 位置変更通知 ===
+            # Location change notification
             try {
-                # 初期化（意図的にコメントアウトして初回通知を有効化）
-                #if (-not $global:MCP_LastLocation) {
-                #    $global:MCP_LastLocation = $PWD.Path
-                #}
-
-                # 位置変更チェック
+                # Check for location changes
                 $currentLocation = $PWD.Path
                 if ($global:MCP_LastLocation -ne $currentLocation) {
                     $oldLocation = if ($global:MCP_LastLocation) { $global:MCP_LastLocation } else { "(initial)" }
                     
-                    # === MCP通知: 位置変更 ===
+                    # MCP notification: Location changed
                     try {
                         [PowerShell.MCP.Services.McpServerHost]::SendLocationChanged($oldLocation, $currentLocation)
-#                        Write-Host "📍 Location changed: $oldLocation → $currentLocation" -ForegroundColor Cyan
                     }
                     catch {
-                        # 通知エラーは無視（従来のログも残す）
-#                        Add-Content -Path "$env:TEMP\mcp-notifications.log" -Value "$(Get-Date): Location changed: $oldLocation → $currentLocation" -ErrorAction SilentlyContinue
+                        # Ignore notification errors
                     }
                     
                     $global:MCP_LastLocation = $currentLocation
                 }
             }
             catch {
-                # 位置変更通知エラーは無視
+                # Ignore location change notification errors
                 Add-Content -Path "$env:TEMP\mcp-errors.log" -Value "$(Get-Date): Location notification error: $_" -ErrorAction SilentlyContinue
             }
 
