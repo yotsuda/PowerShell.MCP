@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.2.0'
+ModuleVersion = '1.2.1'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -106,14 +106,19 @@ PrivateData = @{
         # A URL to an icon representing this module.
         # IconUri = ''
 
+        Platforms = @('Windows')
+
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.2.0 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.2.1 - Enterprise-Ready MCP Server
 
 === Key Features ===
-• PowerShell 7 as MCP Server with secure named pipe communication
-• Complete PowerShell ecosystem access for Claude Desktop and MCP clients
-• 50+ ready-to-use prompt examples for immediate productivity
-• Enterprise-grade security - local access only, no remote connections
+• 🤝 Shared Console Experience - AI and users collaborate in the same PowerShell session
+• 🔄 Persistent State Management - Variables, modules, and authentication preserved across commands
+• ⚡ Zero-Overhead Execution - Instant command response without process startup delays
+• 🔍 Complete Stream Separation - All 6 PowerShell output streams captured and analyzed
+• 📋 Ready-to-Use Prompt Library - 8 specialized prompts for development, administration, and learning
+• 🔐 Enterprise Security - Local-only named pipe communication, no network exposure
+• 💻 Universal Compatibility - Works with Claude Desktop and any MCP-compatible client
 
 === Popular Examples ===
 • "Generate system performance HTML report and open in browser"
@@ -136,7 +141,7 @@ Windows 10/11, PowerShell 7.2.15+, PSReadLine 2.3.4+ (auto-loaded)
 Full examples & setup guide: https://github.com/yotsuda/PowerShell.MCP#examples
 Security policy: https://github.com/yotsuda/PowerShell.MCP/blob/main/SECURITY.md
 
-⚠️ Provides complete PowerShell access. Use in trusted environments only.
+⚠  Provides complete PowerShell access. Use in trusted environments only.
 '
 
         # Prerelease string of this module
@@ -153,7 +158,7 @@ Security policy: https://github.com/yotsuda/PowerShell.MCP/blob/main/SECURITY.md
  } # End of PrivateData hashtable
 
 # HelpInfo URI of this module
-HelpInfoURI = 'https://github.com/yotsuda/PowerShell.MCP/wiki'
+HelpInfoURI = 'https://github.com/yotsuda/PowerShell.MCP#readme'
 
 # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
 # DefaultCommandPrefix = ''
