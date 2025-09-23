@@ -33,6 +33,11 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - Real-time streaming of output as commands run
 - Complex multi-step operations flow naturally
 
+**🔍 Complete Output Stream Visibility**
+- All command output is captured and returned to the AI assistant, with PowerShell's 6 output streams (success, error, warning, verbose, debug, information) completely separated
+- AI receives even the verbose and debug streams that are normally not displayed in the console, enabling comprehensive debugging and troubleshooting
+- No information loss - every piece of output data is preserved and accessible for precise analysis
+
 **🔐 Enterprise-Ready Security**
 - Local-only communication through named pipes
 - No network exposure or remote connections
