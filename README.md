@@ -19,6 +19,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - PowerShell cmdlets display colorful output
 - You can respond to input requests from AI-executed commands directly in the console
 - You can run your own commands between AI operations
+- AI-executed commands are saved to history, allowing you to recall and modify parameters for re-execution
 - Complete transparency - see exactly what's happening
 
 **🔄 Living Workspace That Remembers Everything**
