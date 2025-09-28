@@ -41,7 +41,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - AI receives even the verbose and debug streams that are normally not displayed in the console, enabling comprehensive debugging and troubleshooting
 - No information loss - every piece of output data is preserved and accessible for precise analysis
 
-**🌐 Universal Module & CLI Tool Integration**
+**🌐 Universal Modules & CLI Tools Integration**
 - PowerShell.MCP acts as a universal bridge, instantly making any PowerShell modules or CLI tools available as fully functional MCP servers
 - Access the vast ecosystem of PowerShell Gallery with over 120,000 pre-built modules, instantly integrating with everything from cloud services like Azure, AWS, and Google Cloud to enterprise tools like Active Directory, Exchange, SQL Server, and Kubernetes
 - Uses `Get-Help` to automatically learn each cmdlet's syntax, parameters, and usage patterns for immediate productive use
