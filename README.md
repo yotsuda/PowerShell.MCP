@@ -31,7 +31,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 
 **⚡ Instant Response, Zero Overhead**
 - Commands execute immediately without launching new PowerShell processes
-- Eliminates the typical 1-5 second startup delay per command
+- Eliminates the typical 1-5 second startup delay per cmdlet
 - Fast initial feedback to users with instant acknowledgment before full results
 - Real-time streaming of output as commands run
 - Complex multi-step operations flow naturally
@@ -43,7 +43,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 
 **🌐 Universal Modules & CLI Tools Integration**
 - PowerShell.MCP acts as a universal bridge, instantly making any PowerShell modules or CLI tools available as fully functional MCP servers
-- Access the vast ecosystem of PowerShell Gallery with over 120,000 pre-built modules, instantly integrating with everything from cloud services like Azure, AWS, and Google Cloud to enterprise tools like Active Directory, Exchange, SQL Server, and Kubernetes
+- Access the vast ecosystem of PowerShell Gallery with over 3,000 pre-built modules, instantly integrating with everything from cloud services like Azure, AWS, and Google Cloud to enterprise tools like Active Directory, Exchange, SQL Server, and Kubernetes
 - Uses `Get-Help` to automatically learn each cmdlet's syntax, parameters, and usage patterns for immediate productive use
 - AI effectively leverages well-known command-line tools like Git or Docker
 - PowerShell.MCP fundamentally transforms the MCP ecosystem by making virtually any command-line tool AI-accessible without custom development
