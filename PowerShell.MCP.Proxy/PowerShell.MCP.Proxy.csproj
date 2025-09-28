@@ -5,7 +5,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.2.1.0</Version>
+    <Version>1.2.2.0</Version>
     
     <!-- Single File デプロイ設定 -->
     <PublishSingleFile>true</PublishSingleFile>
@@ -31,8 +31,6 @@
     <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.4" />
     <!-- 依存性注入の最小セット -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
-    <!-- ログ記録（必要最小限） -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
   </ItemGroup>
 
   <!-- トリミング設定: 必要なアセンブリを保護 -->

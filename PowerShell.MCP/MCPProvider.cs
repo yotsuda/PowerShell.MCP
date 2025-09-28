@@ -72,7 +72,6 @@ namespace PowerShell.MCP
                 var cleanupCommand = EmbeddedResourceLoader.LoadScript("MCPCleanup.ps1");
 
                 // メインスレッドでクリーンアップコマンドを実行
-                McpServerHost.outputFromCommand = null;
                 McpServerHost.executeCommandSilent = cleanupCommand;
 
                 // 少し待機してクリーンアップの完了を待つ

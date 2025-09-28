@@ -5,46 +5,49 @@ namespace PowerShell.MCP.Services;
 /// </summary>
 public static class PowerShellCommunication
 {
+    private static readonly ManualResetEvent _resultReadyEvent = new(false);
+    private static string? _currentResult = null;
+
     /// <summary>
-    /// 結果を待機します
+    /// 結果が準備完了したことを通知するメソッド
+    /// PowerShellスクリプトから明示的に呼び出される
+    /// </summary>
+    public static void NotifyResultReady(string result)
+    {
+        _currentResult = result;
+        _resultReadyEvent.Set();
+    }
+
+    /// <summary>
+    /// 結果を待機します（ブロッキング方式）
     /// </summary>
     public static string WaitForResult()
     {
         var endTime = DateTime.UtcNow.AddSeconds(4 * 60 + 50);
         
-        // 結果をクリアしてから待機
-        McpServerHost.outputFromCommand = null;
+        // 前回の結果をクリア
+        _currentResult = null;
+        _resultReadyEvent.Reset();
         
         // 実行状態をBusyに設定
         ExecutionState.SetBusy();
         
         try
         {
-            const int initialIntervalMs = 10;
-            const int maxIntervalMs = 100;
-            const int escalationTimeMs = 1000;
+            var remainingTime = endTime - DateTime.UtcNow;
+            var timeoutMs = (int)Math.Max(0, remainingTime.TotalMilliseconds);
             
-            var currentInterval = initialIntervalMs;
-            var startTime = DateTime.UtcNow;
+            // ManualResetEventでブロッキング待機
+            bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
             
-            while (DateTime.UtcNow < endTime)
+            if (signaled)
             {
-                var currentResult = McpServerHost.outputFromCommand;
-                if (currentResult is not null)
-                {
-                    return currentResult;
-                }
-                
-                var elapsed = DateTime.UtcNow - startTime;
-                if (elapsed.TotalMilliseconds > escalationTimeMs && currentInterval < maxIntervalMs)
-                {
-                    currentInterval = Math.Min(currentInterval * 2, maxIntervalMs);
-                }
-                
-                Thread.Sleep(currentInterval);
+                return _currentResult ?? "No result available";
             }
-            
-            return "Command execution timed out (4 minutes 50 seconds). Your command is still running. Consider restarting the PowerShell console.";
+            else
+            {
+                return "Command execution timed out (4 minutes 50 seconds). Your command is still running. Consider restarting the PowerShell console.";
+            }
         }
         finally
         {
@@ -63,9 +66,7 @@ public static class McpServerHost
     public static volatile string? executeCommand;
     public static volatile string? insertCommand;
     public static volatile string? executeCommandSilent;
-    public static volatile string? outputFromCommand;
     //public static volatile string? pendingNotification;
-
     /// <summary>
     /// 位置変更通知を送信
     /// </summary>
@@ -90,9 +91,6 @@ public static class McpServerHost
     {
         try
         {
-            // 結果をクリア
-            outputFromCommand = null;
-
             if (executeImmediately)
             {
                 executeCommand = command;
@@ -118,8 +116,6 @@ public static class McpServerHost
     {
         try
         {
-            // 結果をクリア
-            outputFromCommand = null;
             executeCommandSilent = command;
 
             // WaitForResult()を使用して状態管理も含めて処理

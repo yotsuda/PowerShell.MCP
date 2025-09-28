@@ -3,7 +3,7 @@
 # ===== Main Timer Setup =====
 
 if (-not (Test-Path Variable:global:McpTimer)) {
-    $global:McpTimer = New-Object System.Timers.Timer 500
+    $global:McpTimer = New-Object System.Timers.Timer 100
     $global:McpTimer.AutoReset = $true
 
     Register-ObjectEvent `
@@ -201,7 +201,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                 }
             }
-            
+
             # ===== Main Event Processing =====
             
             # Handle insert command
@@ -211,7 +211,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
                 [Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()
                 [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
-                [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = "Your pipeline has been inserted into the PS console."
+                
+                [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady("Your pipeline has been inserted into the PS console.")
+
             }
 
             # Handle execute command
@@ -256,12 +258,14 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Generate MCP formatted output
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo
-                    [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $mcpOutput
+                    
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
                     Write-Host $errorMessage -ForegroundColor Red
-                    [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $errorMessage
+                    
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($errorMessage)
                 }
             }
 
@@ -285,9 +289,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     if ($results -ne $null) {
                         $output = $results | Out-String
                         $combinedOutput = $locationInfo + "`n" + $output.Trim()
-                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $combinedOutput
+                        [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($combinedOutput)
                     } else {
-                        [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $locationInfo
+                        [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($locationInfo)
                     }
                 }
                 catch {
@@ -299,7 +303,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
                     $errorMessage = "Error: $($_.Exception.Message)"
-                    [PowerShell.MCP.Services.McpServerHost]::outputFromCommand = $locationInfo + "`n" + $errorMessage
+                    
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($locationInfo + "`n" + $errorMessage)
                 }
             }
 

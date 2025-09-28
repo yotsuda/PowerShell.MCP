@@ -99,7 +99,7 @@ public class NamedPipeClient
     public static async Task<bool> WaitForPipeReadyAsync()
     {
         const int maxAttempts = 80; // 最大で40秒間待機する
-        const int delayMs = 1000;
+        //const int delayMs = 1000;
         
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
@@ -113,18 +113,10 @@ public class NamedPipeClient
             catch (TimeoutException)
             {
                 Console.Error.WriteLine($"[DEBUG] Waiting for Named Pipe... attempt {attempt}/{maxAttempts}");
-                if (attempt < maxAttempts)
-                {
-                    await Task.Delay(delayMs);
-                }
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[DEBUG] Named Pipe test failed (attempt {attempt}): {ex.Message}");
-                if (attempt < maxAttempts)
-                {
-                    await Task.Delay(delayMs);
-                }
             }
         }
         

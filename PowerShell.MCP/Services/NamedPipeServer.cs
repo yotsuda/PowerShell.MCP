@@ -138,9 +138,6 @@ public class NamedPipeServer : IDisposable
 
             if (proxyVersion != MCPProvider.ServerVersion)
             {
-                string? mcpClient = requestRoot.TryGetProperty("mcpClient", out JsonElement mcpClientElement)
-                    ? mcpClientElement.GetString() : "Not detected";
-
                 string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\")");
                 //string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\") -replace '\\\\', '\\\\'");
                 string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
@@ -156,7 +153,7 @@ ACTION REQUIRED: Update your MCP client configuration
 - Executable path: {proxyExePath}
 - JSON config example: ""PowerShell"": {{ ""command"": ""{proxyExePath.Replace("\\", "\\\\")}"" }}
 
-Please provide how to update the MCP client ({mcpClient}) configuration to the user.";
+Please provide how to update the MCP client configuration to the user.";
 
                 await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken);
                 return;

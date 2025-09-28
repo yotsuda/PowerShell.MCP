@@ -12,10 +12,10 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.2.1'
+ModuleVersion = '1.2.2'
 
 # Supported PSEditions
-# CompatiblePSEditions = @()
+CompatiblePSEditions = @('Core')
 
 # ID used to uniquely identify this module
 GUID = '313962fa-c90b-424a-9c8a-d4a05f4a1481'
@@ -109,7 +109,7 @@ PrivateData = @{
         Platforms = @('Windows')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.2.1 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.2.2 - Enterprise-Ready MCP Server
 
 === Key Features ===
 • 🤝 Shared Console Experience - AI and users collaborate in the same PowerShell session
@@ -121,6 +121,7 @@ PrivateData = @{
 • 💻 Universal Compatibility - Works with Claude Desktop and any MCP-compatible client
 
 === Popular Examples ===
+• "Review git changes and suggest a commit message"
 • "Generate system performance HTML report and open in browser"
 • "Show processes consuming more than 100MB memory, sorted by CPU usage"
 • "Create colorful disk usage analysis charts and visualizations"
