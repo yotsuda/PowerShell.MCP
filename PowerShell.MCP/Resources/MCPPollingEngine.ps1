@@ -17,7 +17,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             function Invoke-CommandWithAllStreams {
                 param([string]$Command)
 
-                # Initialize output variables (Verbose/Debug除去)
+                # Initialize output variables
                 $outVar = @()
                 $errorVar = @()
                 $warningVar = @()
@@ -54,7 +54,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             function Format-McpOutput {
                 param(
                     [hashtable]$StreamResults,
-                    [string]$LocationInfo
+                    [string]$LocationInfo,
+                    [double]$Duration
                 )
 
                 # Process each stream type
@@ -75,7 +76,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                 }
 
-
                 # Process exceptions
                 foreach($ex in $StreamResults.Exception) { 
                     if ($ex -is [System.Management.Automation.ErrorRecord]) {
@@ -84,6 +84,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         $outputStreams.Exception += $ex.ToString()
                     }
                 }
+
                 # Process warnings
                 foreach($warn in $StreamResults.Warning) { 
                     if ($warn -is [System.Management.Automation.WarningRecord]) {
@@ -112,6 +113,19 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $outputStreams.Success += $item
                 }
 
+                # Calculate statistics
+                $errorCount = $outputStreams.Error.Count + $outputStreams.Exception.Count
+                $warningCount = $outputStreams.Warning.Count
+                $infoCount = $outputStreams.Information.Count
+                $hasErrors = $errorCount -gt 0
+                
+                # Generate status line
+                $statusIcon = if ($hasErrors) { "✗" } else { "✓" }
+                $statusText = if ($hasErrors) { "executed with errors" } else { "executed successfully" }
+                $durationText = "{0:F2}s" -f $Duration
+                
+                $statusLine = "$statusIcon Pipeline $statusText | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
+
                 # Generate structured output strings
                 $structuredOutput = @{
                     Success = ($outputStreams.Success | Out-String).Trim()
@@ -130,11 +144,19 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
 
                 # Generate formatted output
-                if ($cleanOutput.Count -gt 1 -or ($cleanOutput.Keys -notcontains 'Success') -or ($cleanOutput.Error -or $cleanOutput.Warning -or $cleanOutput.Information)) {
-                    $formattedOutput = @()
-
-                    # Always start with location info
-                    $formattedOutput += $LocationInfo
+                # Check if only success output exists
+                $onlySuccess = ($cleanOutput.Count -eq 1 -and $cleanOutput.Keys -contains 'Success')
+                
+                if ($onlySuccess -and -not $hasErrors) {
+                    # Simple success case: status + output
+                    if ($cleanOutput.Success) {
+                        return $statusLine + "`n`n" + $cleanOutput.Success
+                    } else {
+                        return $statusLine
+                    }
+                } else {
+                    # Complex case with multiple streams
+                    $formattedOutput = @($statusLine, "")
 
                     if ($cleanOutput.Exception) {
                         $formattedOutput += "=== EXCEPTIONS ==="
@@ -167,13 +189,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
 
                     return ($formattedOutput -join "`n").Trim()
-                } else {
-                    # Simple output: location info + results only
-                    if ($cleanOutput.Success) {
-                        return $LocationInfo + "`n" + $cleanOutput.Success
-                    } else {
-                        return $LocationInfo
-                    }
                 }
             }
 
@@ -188,7 +203,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
 
                 [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady("Your pipeline has been inserted into the PS console.")
-
             }
 
             # Handle execute command
@@ -216,12 +230,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     Write-Host $cmd
 
+                    # Measure execution time
+                    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
                     # Execute command with clean stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $cmd
 
+                    $stopwatch.Stop()
+                    $duration = $stopwatch.Elapsed.TotalSeconds
+
                     # Display results in console
                     $streamResults.Success | Out-Default
-
 
                     # Display exceptions in console
                     if ($streamResults.Exception -and $streamResults.Exception.Count -gt 0) {
@@ -233,6 +252,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             }
                         }
                     }
+
                     # Display errors in console
                     if ($streamResults.Error -and $streamResults.Error.Count -gt 0 -and (-not $streamResults.Exception -or $streamResults.Exception.Count -eq 0)) {
                         foreach ($err in $streamResults.Error) {
@@ -251,10 +271,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         provider = (Get-Location).Provider.Name
                     }
 
-                    $locationInfo = "Your pipeline executed in: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
 
-                    # Generate MCP formatted output
-                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo
+                    # Generate MCP formatted output with duration
+                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
 
                     [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
@@ -272,7 +292,14 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent = $null
 
                 try {
-                    $results = Invoke-Expression $silentCmd
+                    # Measure execution time
+                    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+                    # Execute command with stream capture
+                    $streamResults = Invoke-CommandWithAllStreams -Command $silentCmd
+
+                    $stopwatch.Stop()
+                    $duration = $stopwatch.Elapsed.TotalSeconds
 
                     # Get current location info
                     $currentLocation = @{
@@ -281,15 +308,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         provider = (Get-Location).Provider.Name
                     }
 
-                    $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
 
-                    if ($results -ne $null) {
-                        $output = $results | Out-String
-                        $combinedOutput = $locationInfo + "`n" + $output.Trim()
-                        [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($combinedOutput)
-                    } else {
-                        [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($locationInfo)
-                    }
+                    # Generate MCP formatted output with duration
+                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
+
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
                 catch {
                     $currentLocation = @{
@@ -298,7 +322,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         provider = (Get-Location).Provider.Name
                     }
 
-                    $locationInfo = "Current Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
                     $errorMessage = "Error: $($_.Exception.Message)"
 
                     [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($locationInfo + "`n" + $errorMessage)
