@@ -48,6 +48,14 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - AI effectively leverages well-known command-line tools like Git or Docker
 - PowerShell.MCP fundamentally transforms the MCP ecosystem by making virtually any command-line tool AI-accessible without custom development
 
+**📚 No RAG or Context Grounding Required**
+- Simply gather necessary documents and files in a folder
+- Tell the AI assistant "Check this folder" in your prompt
+- AI instantly accesses all the knowledge needed for the task
+- Works with any content: documentation, project templates, code samples, configurations, and more
+- No need for complex RAG systems or context grounding infrastructure
+- Natural and intuitive way to provide domain-specific knowledge to AI
+
 **🎯 Ready-to-Use Built-in Prompts**
 - 8 specialized prompts for development, analysis, administration, and learning scenarios
 - Intelligent automation with native language support and interactive guidance
