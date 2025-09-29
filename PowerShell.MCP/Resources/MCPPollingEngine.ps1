@@ -33,16 +33,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     return @{
                         Success = $outVar
                         Error = $errorVar
+                        Exception = @()
                         Warning = $warningVar
                         Information = $informationVar
                     }
                 }
                 catch {
-                    $errorVar += $_
+                    $exceptionVar = @($_)
 
                     return @{
                         Success = $outVar
-                        Error = $errorVar
+                        Error = @()
+                        Exception = $exceptionVar
                         Warning = $warningVar
                         Information = $informationVar
                     }
@@ -59,6 +61,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $outputStreams = @{
                     Success = @()
                     Error = @()
+                    Exception = @()
                     Warning = @()
                     Information = @()
                 }
@@ -72,6 +75,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                 }
 
+
+                # Process exceptions
+                foreach($ex in $StreamResults.Exception) { 
+                    if ($ex -is [System.Management.Automation.ErrorRecord]) {
+                        $outputStreams.Exception += $ex.Exception.Message
+                    } else {
+                        $outputStreams.Exception += $ex.ToString()
+                    }
+                }
                 # Process warnings
                 foreach($warn in $StreamResults.Warning) { 
                     if ($warn -is [System.Management.Automation.WarningRecord]) {
@@ -104,6 +116,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $structuredOutput = @{
                     Success = ($outputStreams.Success | Out-String).Trim()
                     Error = ($outputStreams.Error -join "`n").Trim()
+                    Exception = ($outputStreams.Exception -join "`n").Trim()
                     Warning = ($outputStreams.Warning -join "`n").Trim()
                     Information = ($outputStreams.Information -join "`n").Trim()
                 }
@@ -123,6 +136,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Always start with location info
                     $formattedOutput += $LocationInfo
 
+                    if ($cleanOutput.Exception) {
+                        $formattedOutput += "=== EXCEPTIONS ==="
+                        $formattedOutput += $cleanOutput.Exception
+                        $formattedOutput += ""
+                    }
+
                     if ($cleanOutput.Error) {
                         $formattedOutput += "=== ERRORS ==="
                         $formattedOutput += $cleanOutput.Error
@@ -135,15 +154,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         $formattedOutput += ""
                     }
 
+                    if ($cleanOutput.Success) {
+                        $formattedOutput += "=== SUCCESS ==="
+                        $formattedOutput += $cleanOutput.Success
+                        $formattedOutput += ""
+                    }
+
                     if ($cleanOutput.Information) {
                         $formattedOutput += "=== INFO ==="
                         $formattedOutput += $cleanOutput.Information
                         $formattedOutput += ""
-                    }
-
-                    $formattedOutput += "=== OUTPUT ==="
-                    if ($cleanOutput.Success) {
-                        $formattedOutput += $cleanOutput.Success
                     }
 
                     return ($formattedOutput -join "`n").Trim()
@@ -199,8 +219,30 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Execute command with clean stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $cmd
 
-                    # Display results in console (Success のみ)
+                    # Display results in console
                     $streamResults.Success | Out-Default
+
+
+                    # Display exceptions in console
+                    if ($streamResults.Exception -and $streamResults.Exception.Count -gt 0) {
+                        foreach ($ex in $streamResults.Exception) {
+                            if ($ex -is [System.Management.Automation.ErrorRecord]) {
+                                Write-Host $ex.Exception.Message -ForegroundColor Red
+                            } else {
+                                Write-Host $ex.ToString() -ForegroundColor Red
+                            }
+                        }
+                    }
+                    # Display errors in console
+                    if ($streamResults.Error -and $streamResults.Error.Count -gt 0 -and (-not $streamResults.Exception -or $streamResults.Exception.Count -eq 0)) {
+                        foreach ($err in $streamResults.Error) {
+                            if ($err -is [System.Management.Automation.ErrorRecord]) {
+                                Write-Host $err.Exception.Message -ForegroundColor Red
+                            } else {
+                                Write-Host $err.ToString() -ForegroundColor Red
+                            }
+                        }
+                    }
 
                     # Get current location info
                     $currentLocation = @{
