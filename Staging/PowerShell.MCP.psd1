@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.2.2'
+ModuleVersion = '1.2.3'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -109,7 +109,7 @@ PrivateData = @{
         Platforms = @('Windows')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.2.2 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.2.3 - Enterprise-Ready MCP Server
 
 === Key Features ===
 • 🤝 Shared Console Experience - AI and users collaborate in the same PowerShell session
@@ -165,4 +165,3 @@ HelpInfoURI = 'https://github.com/yotsuda/PowerShell.MCP#readme'
 # DefaultCommandPrefix = ''
 
 }
-
