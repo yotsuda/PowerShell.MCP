@@ -36,6 +36,14 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - Real-time streaming of output as commands run
 - Complex multi-step operations flow naturally
 
+**🔗 PowerShell Pipeline Composability**
+- PowerShell naturally chains commands together, passing rich data between them
+- AI assistants leverage this composability to build sophisticated workflows from simple building blocks
+- Example: "Show me the top 5 largest log files" becomes `Get-ChildItem *.log | sort Length -Descending | select -First 5`
+- Unlike approaches that expose each cmdlet as individual MCP tools, PowerShell.MCP enables AI to freely combine any commands into flexible pipelines
+- You describe what you want in natural language - AI constructs the optimal pipeline automatically
+- No need to understand pipeline syntax yourself - just tell AI what you need
+
 **🔍 Comprehensive Output Stream Capture**
 - Command output is captured and returned to the AI assistant, with PowerShell's critical streams (error, warning, success, information) completely separated
 - Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
@@ -79,6 +87,12 @@ PS C:\MyProject\WebApp> git status             # Shows git status
 PS C:\MyProject\WebApp> dotnet build           # Builds the project
 PS C:\MyProject\WebApp> $env:NODE_ENV = "dev"  # Sets variable
 PS C:\MyProject\WebApp> ./scripts/deploy.ps1   # Runs scripts with env vars intact
+
+# PowerShell pipeline example - objects flow through each stage
+PS C:\MyProject\WebApp> Get-ChildItem *.log | 
+    where Length -gt 1MB | 
+    sort LastWriteTime -Descending | 
+    select Name, Length, LastWriteTime
 ```
 
 Transform natural language requests into PowerShell automation - from simple file operations to complex system administration tasks, all while maintaining complete visibility and control.
