@@ -36,6 +36,11 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - Real-time streaming of output as commands run
 - Complex multi-step operations flow naturally
 
+**🔍 Comprehensive Output Stream Capture**
+- Command output is captured and returned to the AI assistant, with PowerShell's critical streams (error, warning, success, information) completely separated
+- Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
+- Clear execution statistics for every command: duration, error count, warning count, and info count
+
 **🔗 PowerShell Pipeline Composability**
 - PowerShell naturally chains commands together, passing rich data between them
 - AI assistants leverage this composability to build sophisticated workflows from simple building blocks
@@ -43,11 +48,6 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - Unlike approaches that expose each cmdlet as individual MCP tools, PowerShell.MCP enables AI to freely combine any commands into flexible pipelines
 - You describe what you want in natural language - AI constructs the optimal pipeline automatically
 - No need to understand pipeline syntax yourself - just tell AI what you need
-
-**🔍 Comprehensive Output Stream Capture**
-- Command output is captured and returned to the AI assistant, with PowerShell's critical streams (error, warning, success, information) completely separated
-- Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
-- Clear execution statistics for every command: duration, error count, warning count, and info count
 
 **🌐 Universal Modules & CLI Tools Integration**
 - PowerShell.MCP acts as a universal bridge, instantly making any PowerShell modules or CLI tools available as fully functional MCP servers
