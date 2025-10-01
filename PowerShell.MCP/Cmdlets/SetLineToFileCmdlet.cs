@@ -15,7 +15,7 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
     public string[] Path { get; set; } = null!;
 
     [Parameter(Position = 1)]
-    public object Content { get; set; }
+    public object[] Content { get; set; }
 
     [Parameter]
     public int[]? LineRange { get; set; }

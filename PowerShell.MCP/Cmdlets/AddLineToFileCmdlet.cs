@@ -15,7 +15,7 @@ public class AddLineToFileCmdlet : TextFileCmdletBase
     public string[] Path { get; set; } = null!;
 
     [Parameter(Mandatory = true, Position = 1)]
-    public object Content { get; set; } = null!;
+    public object[] Content { get; set; } = null!;
 
     [Parameter(ParameterSetName = "LineNumber", Mandatory = true)]
     public int LineNumber { get; set; }
