@@ -29,23 +29,18 @@ Removes one or more lines from a text file either by specifying a line range or 
 
 ## EXAMPLES
 
-### Example 1: Remove a single line
+### Example 1: Remove specific lines or ranges
 ```powershell
 PS C:\> Remove-LineFromFile data.txt -LineRange 5
 Removed 1 line(s) from data.txt
-```
 
-Removes line 5 from the file.
-
-### Example 2: Remove a range of lines
-```powershell
 PS C:\> Remove-LineFromFile data.txt -LineRange 10,15
 Removed 6 line(s) from data.txt
 ```
 
-Removes lines 10 through 15 (inclusive), a total of 6 lines.
+Removes line 5, or lines 10-15 (inclusive). Use -LineRange for precise line-based deletion.
 
-### Example 3: Remove all DEBUG lines
+### Example 2: Remove all DEBUG lines
 ```powershell
 PS C:\> Remove-LineFromFile app.log -Pattern "^DEBUG:"
 Removed 47 line(s) from app.log
@@ -53,7 +48,7 @@ Removed 47 line(s) from app.log
 
 Removes all lines starting with "DEBUG:". Useful for cleaning log files.
 
-### Example 4: Remove empty lines
+### Example 3: Remove empty lines
 ```powershell
 PS C:\> Remove-LineFromFile data.txt -Pattern "^\s*$"
 Removed 12 line(s) from data.txt
@@ -61,7 +56,7 @@ Removed 12 line(s) from data.txt
 
 Removes all empty or whitespace-only lines.
 
-### Example 5: Remove TODO comments
+### Example 4: Remove TODO comments
 ```powershell
 PS C:\> Remove-LineFromFile Program.cs -Pattern "//\s*TODO"
 Removed 3 line(s) from Program.cs
@@ -69,7 +64,7 @@ Removed 3 line(s) from Program.cs
 
 Removes all lines containing TODO comments.
 
-### Example 6: No matches found
+### Example 5: No matches found
 ```powershell
 PS C:\> Remove-LineFromFile data.txt -Pattern "NOTEXIST"
 WARNING: No lines matched. File not modified.
@@ -186,7 +181,7 @@ Accept wildcard characters: False
 ```
 
 ### -ProgressAction
-{{ Fill ProgressAction Description }}
+Common parameter for controlling progress display behavior. See about_CommonParameters for details.
 
 ```yaml
 Type: ActionPreference
@@ -212,32 +207,25 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ### System.Object
 ## NOTES
 
-**BEST PRACTICE - Verify before deletion:**
-```powershell
-# 1. Preview what will be deleted
-Show-TextFile app.log -Pattern "^DEBUG:"
+BEST PRACTICE - Verify before deletion:
+1. Preview what will be deleted: Show-TextFile app.log -Pattern "^DEBUG:"
+2. Remove matching lines: Remove-LineFromFile app.log -Pattern "^DEBUG:"
+3. Verify the result: Show-TextFile app.log -LineRange 1,20
 
-# 2. Remove matching lines
-Remove-LineFromFile app.log -Pattern "^DEBUG:"
-
-# 3. Verify the result
-Show-TextFile app.log -LineRange 1,20
-```
-
-**Pattern matching tips:**
+Pattern matching tips:
 - Test your pattern with Show-TextFile -Pattern first
 - Use anchors (^ for start, $ for end) for precise matching
 - Remember that ALL matching lines are removed
 
-**Safety considerations:**
+Safety considerations:
 - No undo after removal (unless you used -Backup or have version control)
 - If no lines match, the file remains unchanged with a warning
 - Use -LineRange for precise deletion of known line numbers
 - Use -Pattern for content-based deletion
 
-**Common patterns:**
-- Empty lines: `^\s*$`
-- Comments: `^\s*//` or `^\s*#`
-- Debug statements: `console\.log|System\.out\.println`
+Common patterns:
+- Empty lines: ^\s*$
+- Comments: ^\s*// or ^\s*#
+- Debug statements: console\.log|System\.out\.println
 
 ## RELATED LINKS

@@ -45,19 +45,14 @@ PS C:\> Show-TextFile Program.cs
    4: namespace Example
 ```
 
-Displays the entire file with 1-based line numbers (4-digit format).
+Displays the entire file with 1-based line numbers.
 
-### Example 2: Display a single line
+### Example 2: Display specific lines or ranges
 ```powershell
 PS C:\> Show-TextFile Program.cs -LineRange 17
 ==> Program.cs <==
   17:             return a + b; // BUG: Should be a - b
-```
 
-Shows only line 17. Useful for checking a specific line mentioned in compiler errors.
-
-### Example 3: Display a range of lines
-```powershell
 PS C:\> Show-TextFile Program.cs -LineRange 14,17
 ==> Program.cs <==
   14:         // ERROR: This method is broken
@@ -66,9 +61,9 @@ PS C:\> Show-TextFile Program.cs -LineRange 14,17
   17:             return a + b; // BUG: Should be a - b
 ```
 
-Shows lines 14 through 17 (inclusive). Both endpoints are included in the output.
+Shows a single line (17) or a range (14-17). Useful for examining code around compiler errors.
 
-### Example 4: Search for pattern
+### Example 3: Search for pattern
 ```powershell
 PS C:\> Show-TextFile Program.cs -Pattern "TODO|ERROR"
 ==> Program.cs <==
@@ -78,7 +73,7 @@ PS C:\> Show-TextFile Program.cs -Pattern "TODO|ERROR"
 
 Searches for lines matching the regex pattern. Matching lines are prefixed with * for easy identification.
 
-### Example 5: Search within a line range
+### Example 4: Search within a line range
 ```powershell
 PS C:\> Show-TextFile Program.cs -Pattern "public" -LineRange 7,12
 ==> Program.cs <==
@@ -88,7 +83,7 @@ PS C:\> Show-TextFile Program.cs -Pattern "public" -LineRange 7,12
 
 Combines pattern search with line range. Only searches within lines 7-12.
 
-### Example 6: Process multiple files with wildcards
+### Example 5: Process multiple files with wildcards
 ```powershell
 PS C:\> Show-TextFile *.cs
 ==> Calculator.cs <==
@@ -189,32 +184,23 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ### System.Object
 ## NOTES
 
-**Typical LLM workflow:**
-```powershell
-# 1. Find the problem area
-Show-TextFile Program.cs -Pattern "ERROR"
+Typical LLM workflow:
+1. Find the problem area: Show-TextFile Program.cs -Pattern "ERROR"
+2. Examine context: Show-TextFile Program.cs -LineRange 45,55
+3. Make the fix: Update-TextFile Program.cs -LineRange 48 -OldValue "Bug" -NewValue "Fix"
+4. Verify the fix: Show-TextFile Program.cs -LineRange 45,55
 
-# 2. Examine context around the match
-Show-TextFile Program.cs -LineRange 45,55
-
-# 3. Make the fix
-Update-TextFile Program.cs -LineRange 48 -OldValue "Bug" -NewValue "Fix"
-
-# 4. Verify the fix
-Show-TextFile Program.cs -LineRange 45,55
-```
-
-**Line numbering:**
+Line numbering:
 - Line numbers are 1-based (first line is 1, not 0)
 - Matches editor line numbers and compiler error messages
 - Line numbers are always displayed in 4-digit format for alignment
 
-**Pattern matching:**
+Pattern matching:
 - Matching lines are prefixed with * for easy identification
 - Combine -Pattern with -LineRange to search within a specific section
 - Use Show-TextFile to test regex patterns before using them in Update-TextFile
 
-**Multiple files:**
+Multiple files:
 - Wildcards are supported (*.cs, test*.txt, etc.)
 - Files are separated by blank lines with headers
 - Useful for quickly surveying related files

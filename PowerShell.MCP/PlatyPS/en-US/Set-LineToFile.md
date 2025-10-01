@@ -22,13 +22,6 @@ Replaces specified lines with new content or deletes them if content is omitted.
 
 ## EXAMPLES
 
-### Example 1
-```powershell
-PS C:\> {{ Add example code here }}
-```
-
-## EXAMPLES
-
 ### Example 1: Replace a single line
 ```powershell
 PS C:\> Set-LineToFile config.txt -LineRange 5 -Content "Port=9000"
@@ -47,11 +40,14 @@ Replaces lines 10-12 with a single line, effectively condensing 3 lines into 1.
 
 ### Example 3: Delete lines by omitting content
 ```powershell
+PS C:\> Set-LineToFile data.txt -LineRange 3
+Updated data.txt: 1 line(s) deleted
+
 PS C:\> Set-LineToFile data.txt -LineRange 5,7
 Updated data.txt: 3 line(s) deleted
 ```
 
-When -Content is omitted, the specified lines are deleted.
+When -Content is omitted, the specified line(s) are deleted. Works with single lines or ranges.
 
 ### Example 4: Replace entire file content
 ```powershell
@@ -72,13 +68,12 @@ Updated config.txt: 10 line(s) replaced
 
 Read the file as an array, modify specific elements, then write back the entire array.
 
-### Example 6: Single line deletion
-```powershell
-PS C:\> Set-LineToFile data.txt -LineRange 3
-Updated data.txt: 1 line(s) deleted
-```
+## PARAMETERS
 
-Deletes a single line (line 3) by omitting content.
+### -Backup
+Creates a timestamped backup file before modifying. Recommended for important files.
+
+```yaml
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases:
@@ -89,6 +84,7 @@ Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
+
 
 ### -Confirm
 Prompts you for confirmation before running the cmdlet.
@@ -182,7 +178,7 @@ Accept wildcard characters: False
 ```
 
 ### -ProgressAction
-{{ Fill ProgressAction Description }}
+Common parameter for controlling progress display behavior. See about_CommonParameters for details.
 
 ```yaml
 Type: ActionPreference
@@ -208,27 +204,20 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ### System.Object
 ## NOTES
 
-**BEST PRACTICE - Always verify before replacing:**
-```powershell
-# 1. First, check what you're about to replace
-Show-TextFile config.txt -LineRange 30,40
+BEST PRACTICE - Always verify before replacing:
+1. First, check what you're about to replace: Show-TextFile config.txt -LineRange 30,40
+2. Then perform the replacement: Set-LineToFile config.txt -LineRange 30,40 -Content $newContent
+3. Verify the result: Show-TextFile config.txt -LineRange 30,40
 
-# 2. Then perform the replacement
-Set-LineToFile config.txt -LineRange 30,40 -Content $newContent
+This three-step workflow (Show -> Set -> Show) prevents accidental data loss by confirming line numbers before modification.
 
-# 3. Verify the result
-Show-TextFile config.txt -LineRange 30,40
-```
-
-This three-step workflow (Show → Set → Show) prevents accidental data loss by confirming line numbers before modification.
-
-**Line number tips:**
-- Use `Show-TextFile -Pattern` to find the line numbers you need
+Line number tips:
+- Use Show-TextFile -Pattern to find the line numbers you need
 - Line numbers are 1-based, matching editor displays
 - Both endpoints in a range are inclusive (5,10 includes lines 5 through 10)
 - When Content is omitted, the specified lines are deleted
 
-**Metadata preservation:**
+Metadata preservation:
 - File encoding is auto-detected and preserved
 - Newline style (CRLF/LF/CR) is preserved
 - Trailing newline presence is preserved

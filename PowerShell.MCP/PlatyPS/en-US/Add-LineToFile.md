@@ -28,6 +28,58 @@ Add-LineToFile [-Path] <String[]> [-Content] <Object[]> [-AtEnd] [-Encoding <Str
 Inserts one or more lines into a text file at a specified line number or at the end. The inserted content becomes the specified line number, shifting existing lines down. Handles empty files gracefully. Preserves file metadata (encoding, newlines).
 
 
+## EXAMPLES
+
+### Example 1: Insert lines at specific positions
+```powershell
+PS C:\> Add-LineToFile Program.cs -LineNumber 1 -Content "using System.Linq;"
+Added 1 line(s) to Program.cs at line 1
+
+PS C:\> Add-LineToFile script.ps1 -LineNumber 10 -Content "# TODO: Implement this feature"
+Added 1 line(s) to script.ps1 at line 10
+```
+
+Inserts content at line 1 (beginning) or line 10 (middle). The original content shifts down.
+
+### Example 2: Append to the end of the file
+```powershell
+PS C:\> Add-LineToFile log.txt -AtEnd -Content "Process completed at $(Get-Date)"
+Added 1 line(s) to log.txt at end
+```
+
+Appends a timestamped message to the end of the file.
+
+### Example 3: Insert multiple lines
+```powershell
+PS C:\> $headers = @("using System;", "using System.Collections.Generic;", "using System.Linq;")
+PS C:\> Add-LineToFile Program.cs -LineNumber 1 -Content $headers
+Added 3 line(s) to Program.cs at line 1
+```
+
+Inserts multiple using statements as a block at the beginning.
+
+### Example 4: Insert into an empty file
+```powershell
+PS C:\> Add-LineToFile empty.txt -LineNumber 1 -Content "First line"
+Added 1 line(s) to empty.txt at line 1
+```
+
+Works correctly with empty files. The content becomes the first line.
+
+### Example 5: With backup
+```powershell
+PS C:\> Add-LineToFile config.txt -LineNumber 5 -Content "NewSetting=Value" -Backup
+Added 1 line(s) to config.txt at line 5
+PS C:\> Get-ChildItem config.txt*
+
+Name
+----
+config.txt
+config.txt.20251001120000.bak
+```
+
+Creates a backup before modifying, useful for important configuration files.
+
 ## PARAMETERS
 
 ### -AtEnd
@@ -152,7 +204,7 @@ Accept wildcard characters: False
 ```
 
 ### -ProgressAction
-{{ Fill ProgressAction Description }}
+Common parameter for controlling progress display behavior. See about_CommonParameters for details.
 
 ```yaml
 Type: ActionPreference
@@ -178,31 +230,28 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ### System.Object
 ## NOTES
 
-**BEST PRACTICE - Verify insertion point:**
-```powershell
-# 1. Check the area where you'll insert
-Show-TextFile Program.cs -LineRange 1,5
+BEST PRACTICE - Verify insertion point:
 
-# 2. Insert the line
-Add-LineToFile Program.cs -LineNumber 3 -Content "using System.Linq;"
+1. Check the area where you'll insert:
+   Show-TextFile Program.cs -LineRange 1,5
 
-# 3. Verify the insertion
-Show-TextFile Program.cs -LineRange 1,6
-```
+2. Insert the line:
+   Add-LineToFile Program.cs -LineNumber 3 -Content "using System.Linq;"
 
-**Understanding line numbers:**
+3. Verify the insertion:
+   Show-TextFile Program.cs -LineRange 1,6
+
+Understanding line numbers:
 - The content becomes the specified line number
 - Original lines at and after that position shift down
 - Line number 1 means "insert at the beginning"
 - -AtEnd always appends at the end, regardless of file size
 
-**Multiple line insertion:**
+Multiple line insertion:
 - Pass an array to insert multiple lines at once
 - All lines are inserted as a contiguous block
 - They are inserted in the order provided
 
-**Empty file handling:**
+Empty file handling:
 - Works correctly with empty files
 - -LineNumber 1 is the only valid choice for empty files
-
-## RELATED LINKS
