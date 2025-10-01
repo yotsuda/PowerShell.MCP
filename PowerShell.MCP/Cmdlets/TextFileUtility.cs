@@ -308,6 +308,11 @@ public static class TextFileUtility
         if (lineRange == null || lineRange.Length == 0)
             return (1, int.MaxValue);
         
+        if (lineRange.Length > 2)
+        {
+            throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20");
+        }
+        
         int startLine = lineRange[0];
         int endLine = lineRange.Length > 1 ? lineRange[1] : startLine;
         

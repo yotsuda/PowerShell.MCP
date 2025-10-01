@@ -107,6 +107,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
         if (LineRange != null && LineRange.Length > 0)
         {
+            if (LineRange.Length > 2)
+            {
+                throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20");
+            }
             startLine = LineRange[0];
             endLine = LineRange.Length > 1 ? LineRange[1] : startLine;
         }
@@ -136,6 +140,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         int endLine = int.MaxValue;
         if (LineRange != null && LineRange.Length > 0)
         {
+            if (LineRange.Length > 2)
+            {
+                throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20");
+            }
             startLine = LineRange[0];
             endLine = LineRange.Length > 1 ? LineRange[1] : startLine;
         }
