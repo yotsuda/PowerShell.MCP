@@ -10,8 +10,9 @@ namespace PowerShell.MCP.Cmdlets
     [Cmdlet(VerbsCommon.Show, "TextFile")]
     public class ShowTextFileCmdlet : PSCmdlet
     {
-        [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true)]
-        public string Path { get; set; } = null!;
+        [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+        [SupportsWildcards]
+        public string[] Path { get; set; } = null!;
 
         [Parameter(ParameterSetName = "LineRange")]
         [Parameter(ParameterSetName = "Pattern")]
@@ -23,33 +24,40 @@ namespace PowerShell.MCP.Cmdlets
 
         protected override void ProcessRecord()
         {
-            var resolvedPath = GetResolvedProviderPathFromPSPath(Path, out _).FirstOrDefault();
-            if (string.IsNullOrEmpty(resolvedPath) || !File.Exists(resolvedPath))
+            foreach (var path in Path)
             {
-                WriteError(new ErrorRecord(
-                    new FileNotFoundException($"File not found: {Path}"),
-                    "FileNotFound",
-                    ErrorCategory.ObjectNotFound,
-                    Path));
-                return;
-            }
-
-            try
-            {
-                var encoding = TextFileUtility.DetectEncoding(resolvedPath);
-
-                if (!string.IsNullOrEmpty(Pattern))
+                var resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                
+                foreach (var resolvedPath in resolvedPaths)
                 {
-                    ShowWithPattern(resolvedPath, encoding);
+                    if (!File.Exists(resolvedPath))
+                    {
+                        WriteError(new ErrorRecord(
+                            new FileNotFoundException($"File not found: {path}"),
+                            "FileNotFound",
+                            ErrorCategory.ObjectNotFound,
+                            path));
+                        continue;
+                    }
+
+                    try
+                    {
+                        var encoding = TextFileUtility.DetectEncoding(resolvedPath);
+
+                        if (!string.IsNullOrEmpty(Pattern))
+                        {
+                            ShowWithPattern(resolvedPath, encoding);
+                        }
+                        else
+                        {
+                            ShowWithLineRange(resolvedPath, encoding);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(new ErrorRecord(ex, "ShowTextFileFailed", ErrorCategory.ReadError, resolvedPath));
+                    }
                 }
-                else
-                {
-                    ShowWithLineRange(resolvedPath, encoding);
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(ex, "ShowTextFileFailed", ErrorCategory.ReadError, resolvedPath));
             }
         }
 

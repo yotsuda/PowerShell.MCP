@@ -9,8 +9,9 @@ namespace PowerShell.MCP.Cmdlets
     [Cmdlet(VerbsData.Update, "TextFile", SupportsShouldProcess = true)]
     public class UpdateTextFileCmdlet : PSCmdlet
     {
-        [Parameter(Mandatory = true, Position = 0)]
-        public string Path { get; set; } = null!;
+        [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+        [SupportsWildcards]
+        public string[] Path { get; set; } = null!;
 
         [Parameter(ParameterSetName = "Literal", Mandatory = true)]
         public string OldValue { get; set; } = null!;
@@ -38,32 +39,38 @@ namespace PowerShell.MCP.Cmdlets
 
         protected override void ProcessRecord()
         {
-            var resolvedPath = GetResolvedProviderPathFromPSPath(Path, out _).FirstOrDefault();
-            if (string.IsNullOrEmpty(resolvedPath) || !File.Exists(resolvedPath))
+            foreach (var path in Path)
             {
-                WriteError(new ErrorRecord(
-                    new FileNotFoundException($"File not found: {Path}"),
-                    "FileNotFound",
-                    ErrorCategory.ObjectNotFound,
-                    Path));
-                return;
-            }
-
-
-            try
-            {
-                if (ParameterSetName == "ContentReplacement")
+                var resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                
+                foreach (var resolvedPath in resolvedPaths)
                 {
-                    ProcessContentReplacement(resolvedPath);
+                    if (!File.Exists(resolvedPath))
+                    {
+                        WriteError(new ErrorRecord(
+                            new FileNotFoundException($"File not found: {path}"),
+                            "FileNotFound",
+                            ErrorCategory.ObjectNotFound,
+                            path));
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (ParameterSetName == "ContentReplacement")
+                        {
+                            ProcessContentReplacement(resolvedPath);
+                        }
+                        else
+                        {
+                            ProcessStringReplacement(resolvedPath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(new ErrorRecord(ex, "UpdateFailed", ErrorCategory.WriteError, resolvedPath));
+                    }
                 }
-                else
-                {
-                    ProcessStringReplacement(resolvedPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(ex, "UpdateFailed", ErrorCategory.WriteError, resolvedPath));
             }
         }
 

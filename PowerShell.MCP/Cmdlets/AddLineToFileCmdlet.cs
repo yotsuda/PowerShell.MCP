@@ -6,7 +6,7 @@ namespace PowerShell.MCP.Cmdlets
     public class AddLineToFileCmdlet : PSCmdlet
     {
         [Parameter(Mandatory = true, Position = 0)]
-        public string Path { get; set; } = null!;
+        public string[] Path { get; set; } = null!;
 
         [Parameter(Mandatory = true, Position = 1)]
         public object Content { get; set; } = null!;
@@ -22,113 +22,119 @@ namespace PowerShell.MCP.Cmdlets
 
         protected override void ProcessRecord()
         {
-            var resolvedPath = GetResolvedProviderPathFromPSPath(Path, out _).FirstOrDefault();
-            if (string.IsNullOrEmpty(resolvedPath) || !File.Exists(resolvedPath))
+            foreach (var path in Path)
             {
-                WriteError(new ErrorRecord(
-                    new FileNotFoundException($"File not found: {Path}"),
-                    "FileNotFound",
-                    ErrorCategory.ObjectNotFound,
-                    Path));
-                return;
-            }
-
-            try
-            {
-
-                var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
-
-                // Content を文字列配列に変換
-                string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
-
-                int insertAt = AtEnd.IsPresent ? int.MaxValue : LineNumber;
-
-                if (ShouldProcess(resolvedPath, $"Add {contentLines.Length} line(s) at line {insertAt}"))
+                var resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                
+                foreach (var resolvedPath in resolvedPaths)
                 {
-                    if (Backup)
+                    if (!File.Exists(resolvedPath))
                     {
-                        var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                        WriteVerbose($"Created backup: {backupPath}");
+                        WriteError(new ErrorRecord(
+                            new FileNotFoundException($"File not found: {path}"),
+                            "FileNotFound",
+                            ErrorCategory.ObjectNotFound,
+                            path));
+                        continue;
                     }
-
-                    var tempFile = System.IO.Path.GetTempFileName();
-                    bool inserted = false;
 
                     try
                     {
-                        using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
+                        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
+
+                        // Content を文字列配列に変換
+                        string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
+
+                        int insertAt = AtEnd.IsPresent ? int.MaxValue : LineNumber;
+
+                        if (ShouldProcess(resolvedPath, $"Add {contentLines.Length} line(s) at line {insertAt}"))
                         {
-                            if (!enumerator.MoveNext())
+                            if (Backup)
                             {
-                                // 空ファイル：先頭に挿入
-                                WriteContentLines(writer, contentLines, metadata, false);
-                                inserted = true;
+                                var backupPath = TextFileUtility.CreateBackup(resolvedPath);
+                                WriteVerbose($"Created backup: {backupPath}");
                             }
-                            else
+
+                            var tempFile = System.IO.Path.GetTempFileName();
+                            bool inserted = false;
+
+                            try
                             {
-                                int lineNumber = 1;
-                                string currentLine = enumerator.Current;
-                                bool hasNext = enumerator.MoveNext();
-
-                                while (true)
+                                using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
+                                using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                                 {
-                                    // 挿入位置に到達したら、新しい内容を先に書き込む
-                                    if (!inserted && lineNumber == insertAt)
+                                    if (!enumerator.MoveNext())
                                     {
-                                        WriteContentLines(writer, contentLines, metadata, true);
+                                        // 空ファイル：先頭に挿入
+                                        WriteContentLines(writer, contentLines, metadata, false);
                                         inserted = true;
-                                    }
-
-                                    // 現在の行を書き込む
-                                    writer.Write(currentLine);
-
-                                    if (hasNext)
-                                    {
-                                        writer.Write(metadata.NewlineSequence);
-                                        lineNumber++;
-                                        currentLine = enumerator.Current;
-                                        hasNext = enumerator.MoveNext();
                                     }
                                     else
                                     {
-                                        // 最終行の後に挿入（AtEnd）
-                                        if (!inserted)
+                                        int lineNumber = 1;
+                                        string currentLine = enumerator.Current;
+                                        bool hasNext = enumerator.MoveNext();
+
+                                        while (true)
                                         {
-                                            writer.Write(metadata.NewlineSequence);
-                                            WriteContentLines(writer, contentLines, metadata, false);
-                                            inserted = true;
+                                            // 挿入位置に到達したら、新しい内容を先に書き込む
+                                            if (!inserted && lineNumber == insertAt)
+                                            {
+                                                WriteContentLines(writer, contentLines, metadata, true);
+                                                inserted = true;
+                                            }
+
+                                            // 現在の行を書き込む
+                                            writer.Write(currentLine);
+
+                                            if (hasNext)
+                                            {
+                                                writer.Write(metadata.NewlineSequence);
+                                                lineNumber++;
+                                                currentLine = enumerator.Current;
+                                                hasNext = enumerator.MoveNext();
+                                            }
+                                            else
+                                            {
+                                                // 最終行の後に挿入（AtEnd）
+                                                if (!inserted)
+                                                {
+                                                    writer.Write(metadata.NewlineSequence);
+                                                    WriteContentLines(writer, contentLines, metadata, false);
+                                                    inserted = true;
+                                                }
+                                                else if (metadata.HasTrailingNewline)
+                                                {
+                                                    writer.Write(metadata.NewlineSequence);
+                                                }
+                                                break;
+                                            }
                                         }
-                                        else if (metadata.HasTrailingNewline)
-                                        {
-                                            writer.Write(metadata.NewlineSequence);
-                                        }
-                                        break;
                                     }
                                 }
+
+                                // アトミックに置換
+                                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
+
+                                WriteInformation(new InformationRecord(
+                                    $"Added {contentLines.Length} line(s) to {System.IO.Path.GetFileName(resolvedPath)} at line {insertAt}",
+                                    resolvedPath));
+                            }
+                            catch
+                            {
+                                if (File.Exists(tempFile))
+                                {
+                                    File.Delete(tempFile);
+                                }
+                                throw;
                             }
                         }
-
-                        // アトミックに置換
-                        TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
-
-                        WriteInformation(new InformationRecord(
-                            $"Added {contentLines.Length} line(s) to {System.IO.Path.GetFileName(resolvedPath)} at line {insertAt}",
-                            resolvedPath));
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        if (File.Exists(tempFile))
-                        {
-                            File.Delete(tempFile);
-                        }
-                        throw;
+                        WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
             }
         }
 
@@ -145,6 +151,5 @@ namespace PowerShell.MCP.Cmdlets
                 }
             }
         }
-
     }
 }

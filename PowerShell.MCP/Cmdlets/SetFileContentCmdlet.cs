@@ -8,8 +8,9 @@ namespace PowerShell.MCP.Cmdlets
     [Cmdlet(VerbsCommon.Set, "FileContent", SupportsShouldProcess = true)]
     public class SetFileContentCmdlet : PSCmdlet
     {
-        [Parameter(Mandatory = true, Position = 0)]
-        public string Path { get; set; } = null!;
+        [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+        [SupportsWildcards]
+        public string[] Path { get; set; } = null!;
 
         [Parameter(Position = 1)]
         public object Content { get; set; } = null!;
@@ -22,69 +23,74 @@ namespace PowerShell.MCP.Cmdlets
 
         protected override void ProcessRecord()
         {
-            var resolvedPath = GetResolvedProviderPathFromPSPath(Path, out _).FirstOrDefault();
-            if (string.IsNullOrEmpty(resolvedPath) || !File.Exists(resolvedPath))
+            foreach (var path in Path)
             {
-                WriteError(new ErrorRecord(
-                    new FileNotFoundException($"File not found: {Path}"),
-                    "FileNotFound",
-                    ErrorCategory.ObjectNotFound,
-                    Path));
-                return;
-            }
+                var resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
 
-            try
-            {
-
-                var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
-                string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
-                
-                var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
-                bool isFullFileReplace = LineRange == null;
-
-                if (ShouldProcess(resolvedPath, "Set file content"))
+                foreach (var resolvedPath in resolvedPaths)
                 {
-                    if (Backup)
+                    if (!File.Exists(resolvedPath))
                     {
-                        var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                        WriteVerbose($"Created backup: {backupPath}");
+                        WriteError(new ErrorRecord(
+                            new FileNotFoundException($"File not found: {path}"),
+                            "FileNotFound",
+                            ErrorCategory.ObjectNotFound,
+                            path));
+                        continue;
                     }
-
-                    var tempFile = System.IO.Path.GetTempFileName();
 
                     try
                     {
-                        // 共通メソッドを使用
-                        int linesChanged = TextFileUtility.ReplaceLineRange(
-                            resolvedPath,
-                            tempFile,
-                            metadata,
-                            LineRange,
-                            contentLines);
+                        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
+                        string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
 
-                        // アトミックに置換
-                        TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
+                        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
+                        bool isFullFileReplace = LineRange == null;
 
-                        var action = Content == null ? "deleted" : "replaced";
-                        WriteInformation(new InformationRecord(
-                            $"Updated {System.IO.Path.GetFileName(resolvedPath)}: {linesChanged} line(s) {action}",
-                            resolvedPath));
-                    }
-                    catch
-                    {
-                        if (File.Exists(tempFile))
+                        if (ShouldProcess(resolvedPath, "Set file content"))
                         {
-                            File.Delete(tempFile);
+                            if (Backup)
+                            {
+                                var backupPath = TextFileUtility.CreateBackup(resolvedPath);
+                                WriteVerbose($"Created backup: {backupPath}");
+                            }
+
+                            var tempFile = System.IO.Path.GetTempFileName();
+
+                            try
+                            {
+                                // 共通メソッドを使用
+                                int linesChanged = TextFileUtility.ReplaceLineRange(
+                                    resolvedPath,
+                                    tempFile,
+                                    metadata,
+                                    LineRange,
+                                    contentLines);
+
+                                // アトミックに置換
+                                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
+
+                                var action = Content == null ? "deleted" : "replaced";
+                                WriteInformation(new InformationRecord(
+                                    $"Updated {System.IO.Path.GetFileName(resolvedPath)}: {linesChanged} line(s) {action}",
+                                    resolvedPath));
+                            }
+                            catch
+                            {
+                                if (File.Exists(tempFile))
+                                {
+                                    File.Delete(tempFile);
+                                }
+                                throw;
+                            }
                         }
-                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(new ErrorRecord(ex, "SetFailed", ErrorCategory.WriteError, resolvedPath));
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(ex, "SetFailed", ErrorCategory.WriteError, resolvedPath));
-            }
         }
-
     }
 }

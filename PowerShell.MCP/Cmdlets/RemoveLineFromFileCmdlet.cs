@@ -9,8 +9,9 @@ namespace PowerShell.MCP.Cmdlets
     [Cmdlet(VerbsCommon.Remove, "LineFromFile", SupportsShouldProcess = true)]
     public class RemoveLineFromFileCmdlet : PSCmdlet
     {
-        [Parameter(Mandatory = true, Position = 0)]
-        public string Path { get; set; } = null!;
+        [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+        [SupportsWildcards]
+        public string[] Path { get; set; } = null!;
 
         [Parameter(ParameterSetName = "LineRange", Mandatory = true)]
         public int[] LineRange { get; set; } = null!;
@@ -23,137 +24,143 @@ namespace PowerShell.MCP.Cmdlets
 
         protected override void ProcessRecord()
         {
-            var resolvedPath = GetResolvedProviderPathFromPSPath(Path, out _).FirstOrDefault();
-            if (string.IsNullOrEmpty(resolvedPath) || !File.Exists(resolvedPath))
+            foreach (var path in Path)
             {
-                WriteError(new ErrorRecord(
-                    new FileNotFoundException($"File not found: {Path}"),
-                    "FileNotFound",
-                    ErrorCategory.ObjectNotFound,
-                    Path));
-                return;
-            }
-
-            try
-            {
-
-                var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
-
-                int startLine = int.MaxValue;
-                int endLine = int.MaxValue;
-                Regex regex = null;
-
-                if (ParameterSetName == "LineRange")
+                var resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                
+                foreach (var resolvedPath in resolvedPaths)
                 {
-                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
-                }
-                else
-                {
-                    regex = new Regex(Pattern);
-                }
-
-                if (ShouldProcess(resolvedPath, "Remove lines from file"))
-                {
-                    if (Backup)
+                    if (!File.Exists(resolvedPath))
                     {
-                        var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                        WriteVerbose($"Created backup: {backupPath}");
+                        WriteError(new ErrorRecord(
+                            new FileNotFoundException($"File not found: {path}"),
+                            "FileNotFound",
+                            ErrorCategory.ObjectNotFound,
+                            path));
+                        continue;
                     }
-
-                    var tempFile = System.IO.Path.GetTempFileName();
-                    int linesRemoved = 0;
 
                     try
                     {
-                        using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
+                        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
+
+                        int startLine = int.MaxValue;
+                        int endLine = int.MaxValue;
+                        Regex regex = null;
+
+                        if (ParameterSetName == "LineRange")
                         {
-                            if (!enumerator.MoveNext())
-                            {
-                                // 空ファイル
-                                File.Delete(tempFile);
-                                return;
-                            }
-
-                            int lineNumber = 1;
-                            string currentLine = enumerator.Current;
-                            bool hasNext = enumerator.MoveNext();
-                            bool isFirstOutputLine = true;
-
-                            while (true)
-                            {
-                                bool shouldRemove = false;
-
-                                if (ParameterSetName == "LineRange")
-                                {
-                                    shouldRemove = lineNumber >= startLine && lineNumber <= endLine;
-                                }
-                                else
-                                {
-                                    shouldRemove = regex.IsMatch(currentLine);
-                                }
-
-                                if (!shouldRemove)
-                                {
-                                    // 最初の出力行以外は改行を前に追加
-                                    if (!isFirstOutputLine)
-                                    {
-                                        writer.Write(metadata.NewlineSequence);
-                                    }
-                                    
-                                    writer.Write(currentLine);
-                                    isFirstOutputLine = false;
-                                }
-                                else
-                                {
-                                    linesRemoved++;
-                                }
-
-                                if (hasNext)
-                                {
-                                    lineNumber++;
-                                    currentLine = enumerator.Current;
-                                    hasNext = enumerator.MoveNext();
-                                }
-                                else
-                                {
-                                    // 最終行：元々末尾改行があった場合のみ追加
-                                    if (!shouldRemove && metadata.HasTrailingNewline)
-                                    {
-                                        writer.Write(metadata.NewlineSequence);
-                                    }
-                                    break;
-                                }
-                            }
+                            (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
+                        }
+                        else
+                        {
+                            regex = new Regex(Pattern);
                         }
 
-                        if (linesRemoved == 0)
+                        if (ShouldProcess(resolvedPath, "Remove lines from file"))
                         {
-                            WriteWarning("No lines matched. File not modified.");
-                            File.Delete(tempFile);
-                            return;
+                            if (Backup)
+                            {
+                                var backupPath = TextFileUtility.CreateBackup(resolvedPath);
+                                WriteVerbose($"Created backup: {backupPath}");
+                            }
+
+                            var tempFile = System.IO.Path.GetTempFileName();
+                            int linesRemoved = 0;
+
+                            try
+                            {
+                                using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
+                                using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
+                                {
+                                    if (!enumerator.MoveNext())
+                                    {
+                                        // 空ファイル
+                                        File.Delete(tempFile);
+                                        continue;
+                                    }
+
+                                    int lineNumber = 1;
+                                    string currentLine = enumerator.Current;
+                                    bool hasNext = enumerator.MoveNext();
+                                    bool isFirstOutputLine = true;
+
+                                    while (true)
+                                    {
+                                        bool shouldRemove = false;
+
+                                        if (ParameterSetName == "LineRange")
+                                        {
+                                            shouldRemove = lineNumber >= startLine && lineNumber <= endLine;
+                                        }
+                                        else
+                                        {
+                                            shouldRemove = regex.IsMatch(currentLine);
+                                        }
+
+                                        if (!shouldRemove)
+                                        {
+                                            // 最初の出力行以外は改行を前に追加
+                                            if (!isFirstOutputLine)
+                                            {
+                                                writer.Write(metadata.NewlineSequence);
+                                            }
+                                            
+                                            writer.Write(currentLine);
+                                            isFirstOutputLine = false;
+                                        }
+                                        else
+                                        {
+                                            linesRemoved++;
+                                        }
+
+                                        if (hasNext)
+                                        {
+                                            lineNumber++;
+                                            currentLine = enumerator.Current;
+                                            hasNext = enumerator.MoveNext();
+                                        }
+                                        else
+                                        {
+                                            // 最終行：元々末尾改行があった場合のみ追加
+                                            if (!shouldRemove && metadata.HasTrailingNewline)
+                                            {
+                                                writer.Write(metadata.NewlineSequence);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (linesRemoved == 0)
+                                {
+                                    WriteWarning("No lines matched. File not modified.");
+                                    File.Delete(tempFile);
+                                    continue;
+                                }
+
+                                // アトミックに置換
+                                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
+
+                                WriteInformation(new InformationRecord(
+                                    $"Removed {linesRemoved} line(s) from {System.IO.Path.GetFileName(resolvedPath)}",
+                                    resolvedPath));
+                            }
+                            catch
+                            {
+                                if (File.Exists(tempFile))
+                                {
+                                    File.Delete(tempFile);
+                                }
+                                throw;
+                            }
                         }
-
-                        // アトミックに置換
-                        TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
-
-                        WriteInformation(new InformationRecord(
-                            $"Removed {linesRemoved} line(s) from {System.IO.Path.GetFileName(resolvedPath)}",
-                            resolvedPath));
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        if (File.Exists(tempFile))
-                        {
-                            File.Delete(tempFile);
-                        }
-                        throw;
+                        WriteError(new ErrorRecord(ex, "RemoveLineFailed", ErrorCategory.WriteError, resolvedPath));
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(ex, "RemoveLineFailed", ErrorCategory.WriteError, resolvedPath));
             }
         }
     }
