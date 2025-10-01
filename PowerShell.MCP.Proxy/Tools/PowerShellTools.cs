@@ -22,7 +22,7 @@ public static class PowerShellTools
     }
 
     [McpServerTool]
-    [Description("Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.")]
+    [Description("Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes. CRITICAL - Text file editing: Do NOT use Get-Content/Set-Content for text file operations. This module includes LLM-optimized text editing cmdlets that preserve file metadata (encoding, newlines) and provide better error handling: Show-TextFile (view with line numbers), Update-TextFile (find/replace), Set-LineToFile (replace lines), Add-LineToFile (insert lines), Remove-LineFromFile (delete lines). Use Get-Help <cmdlet-name> for details.")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]
