@@ -57,7 +57,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 if (!File.Exists(resolvedPath))
                 {
                     WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {resolvedPath}"),
+                        new FileNotFoundException($"File not found: {path}"),
                         "FileNotFound",
                         ErrorCategory.ObjectNotFound,
                         resolvedPath));
@@ -102,18 +102,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private void ShowWithLineRange(string filePath, System.Text.Encoding encoding)
     {
-        int startLine = 1;
-        int endLine = int.MaxValue;
-
-        if (LineRange != null && LineRange.Length > 0)
-        {
-            if (LineRange.Length > 2)
-            {
-                throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20");
-            }
-            startLine = LineRange[0];
-            endLine = LineRange.Length > 1 ? LineRange[1] : startLine;
-        }
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
         // Skip/Take で必要な範囲だけを取得（LINQの遅延評価で効率的）
         int skipCount = startLine - 1;
@@ -136,17 +125,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         var regex = new Regex(Pattern);
 
         // 行範囲を取得
-        int startLine = 1;
-        int endLine = int.MaxValue;
-        if (LineRange != null && LineRange.Length > 0)
-        {
-            if (LineRange.Length > 2)
-            {
-                throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20");
-            }
-            startLine = LineRange[0];
-            endLine = LineRange.Length > 1 ? LineRange[1] : startLine;
-        }
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
         // Skip/Take で範囲を絞り込んでからパターンマッチ
         int skipCount = startLine - 1;
@@ -177,6 +156,3 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         }
     }
 }
-
-
-

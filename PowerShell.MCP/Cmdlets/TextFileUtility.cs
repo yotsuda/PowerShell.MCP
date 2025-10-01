@@ -261,10 +261,10 @@ public static class TextFileUtility
     /// <summary>
     /// オブジェクトを文字列配列に変換
     /// </summary>
-    public static string?[]? ConvertToStringArray(object content)
+    public static string[] ConvertToStringArray(object? content)
     {
         if (content == null)
-            return null;
+            return Array.Empty<string>();
 
         if (content is string str)
         {
@@ -273,6 +273,24 @@ public static class TextFileUtility
         else if (content is string[] arr)
         {
             return arr;
+        }
+        else if (content is object[] objArr)
+        {
+            // object[] の場合、各要素を処理
+            var result = new List<string>();
+            foreach (var item in objArr)
+            {
+                if (item is string s)
+                {
+                    // 文字列の場合、改行で分割
+                    result.AddRange(s.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None));
+                }
+                else if (item != null)
+                {
+                    result.Add(item.ToString() ?? string.Empty);
+                }
+            }
+            return result.ToArray();
         }
         else if (content is System.Collections.IEnumerable enumerable)
         {
@@ -303,7 +321,7 @@ public static class TextFileUtility
     /// <summary>
     /// LineRange パラメータから開始行と終了行を取得
     /// </summary>
-    public static (int StartLine, int EndLine) ParseLineRange(int[] lineRange)
+    public static (int StartLine, int EndLine) ParseLineRange(int[]? lineRange)
     {
         if (lineRange == null || lineRange.Length == 0)
             return (1, int.MaxValue);
@@ -323,7 +341,7 @@ public static class TextFileUtility
     /// ファイル全体を新しい内容で置換
     /// LLM向け：シンプルで予測可能な動作
     /// </summary>
-    public static int ReplaceEntireFile(
+    public static (int LinesRemoved, int LinesInserted) ReplaceEntireFile(
         string inputPath,
         string outputPath,
         FileMetadata metadata,
@@ -346,7 +364,7 @@ public static class TextFileUtility
         // ファイル全体を置換
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
-            if (contentLines != null && contentLines.Length > 0)
+            if (contentLines.Length > 0)
             {
                 for (int i = 0; i < contentLines.Length; i++)
                 {
@@ -359,14 +377,14 @@ public static class TextFileUtility
             }
         }
         
-        return originalLineCount;
+        return (originalLineCount, contentLines.Length);
     }
 
     /// <summary>
     /// 指定行範囲を置換（1パスストリーミング）
     /// LLM向け：メモリ効率的で大きなファイルに対応
     /// </summary>
-    public static int ReplaceLineRangeStreaming(
+    public static (int LinesRemoved, int LinesInserted) ReplaceLineRangeStreaming(
         string inputPath,
         string outputPath,
         FileMetadata metadata,
@@ -382,7 +400,7 @@ public static class TextFileUtility
             if (!enumerator.MoveNext())
             {
                 // 空ファイル：何もしない
-                return 0;
+                return (0, 0);
             }
 
             int lineNumber = 1;
@@ -405,7 +423,7 @@ public static class TextFileUtility
                     // 置換範囲内：最初の行で置換内容を書き込む
                     if (!replacementDone)
                     {
-                        if (contentLines != null && contentLines.Length > 0)
+                        if (contentLines.Length > 0)
                         {
                             if (!isFirstLine) writer.Write(metadata.NewlineSequence);
                             for (int i = 0; i < contentLines.Length; i++)
@@ -446,7 +464,7 @@ public static class TextFileUtility
             }
         }
 
-        return linesChanged;
+        return (linesChanged, contentLines.Length);
     }
 
     /// <summary>

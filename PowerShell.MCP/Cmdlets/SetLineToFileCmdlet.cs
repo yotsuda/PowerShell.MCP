@@ -79,14 +79,15 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
                         }
 
                         var tempFile = System.IO.Path.GetTempFileName();
-                        int linesChanged = 0;
+                        int linesRemoved = 0;
+                        int linesInserted = 0;
 
                         try
                         {
                             if (isFullFileReplace)
                             {
                                 // ファイル全体を置換
-                                linesChanged = TextFileUtility.ReplaceEntireFile(
+                                (linesRemoved, linesInserted) = TextFileUtility.ReplaceEntireFile(
                                     resolvedPath,
                                     tempFile,
                                     metadata,
@@ -95,7 +96,7 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
                             else
                             {
                                 // 行範囲を置換
-                                linesChanged = TextFileUtility.ReplaceLineRangeStreaming(
+                                (linesRemoved, linesInserted) = TextFileUtility.ReplaceLineRangeStreaming(
                                     resolvedPath,
                                     tempFile,
                                     metadata,
@@ -107,8 +108,27 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
                             // アトミックに置換
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-                            var action = Content == null ? "deleted" : "replaced";
-                            WriteObject($"Updated {GetDisplayPath(path, resolvedPath)}: {linesChanged} line(s) {action}");
+                            // より詳細なメッセージ
+                            string message;
+                            if (linesInserted == 0)
+                            {
+                                // 削除のみ
+                                message = $"Removed {linesRemoved} line(s)";
+                            }
+                            else if (linesInserted == linesRemoved)
+                            {
+                                // 同じ行数で置換
+                                message = $"Replaced {linesRemoved} line(s)";
+                            }
+                            else
+                            {
+                                // 行数が変わる置換
+                                int netChange = linesInserted - linesRemoved;
+                                string netStr = netChange > 0 ? $"+{netChange}" : netChange.ToString();
+                                message = $"Replaced {linesRemoved} line(s) with {linesInserted} line(s) (net: {netStr})";
+                            }
+                            
+                            WriteObject($"Updated {GetDisplayPath(path, resolvedPath)}: {message}");
                         }
                         catch
                         {
