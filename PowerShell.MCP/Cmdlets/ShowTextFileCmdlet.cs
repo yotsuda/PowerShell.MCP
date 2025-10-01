@@ -67,9 +67,12 @@ public class ShowTextFileCmdlet : PSCmdlet
                         WriteObject("");
                     }
                     
-                    // カレントディレクトリからの相対パスを取得
+                    // カレントディレクトリを FileSystem Path に解決
                     var currentDirectory = SessionState.Path.CurrentFileSystemLocation.Path;
-                    var relativePath = TextFileUtility.GetRelativePath(currentDirectory, resolvedPath);
+                    var currentResolved = GetResolvedProviderPathFromPSPath(currentDirectory, out _).FirstOrDefault() ?? currentDirectory;
+                    
+                    // 両方とも FileSystem Path から相対パスを計算
+                    var relativePath = TextFileUtility.GetRelativePath(currentResolved, resolvedPath);
                     
                     // 常に相対パスをヘッダーとして表示
                     WriteObject($"==> {relativePath} <==");

@@ -144,7 +144,7 @@ public class UpdateTextFileCmdlet : PSCmdlet
 
                 var action = contentLines == null ? "deleted" : "replaced";
                 WriteInformation(new InformationRecord(
-                    $"Updated {TextFileUtility.GetRelativePath(SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {linesChanged} line(s) {action}",
+                    $"Updated {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {linesChanged} line(s) {action}",
                     resolvedPath));
             }
             catch
@@ -231,7 +231,7 @@ public class UpdateTextFileCmdlet : PSCmdlet
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                 WriteInformation(new InformationRecord(
-                    $"Updated {TextFileUtility.GetRelativePath(SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {replacementCount} replacement(s) made",
+                    $"Updated {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {replacementCount} replacement(s) made",
                     resolvedPath));
             }
             catch

@@ -100,7 +100,7 @@ public class AddLineToFileCmdlet : PSCmdlet
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                             WriteInformation(new InformationRecord(
-                                $"Added {contentLines.Length} line(s) to {TextFileUtility.GetRelativePath(SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)} at line {insertAt}",
+                                $"Added {contentLines.Length} line(s) to {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)} at line {insertAt}",
                                 resolvedPath));
                         }
                         catch
