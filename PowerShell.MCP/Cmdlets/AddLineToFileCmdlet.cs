@@ -44,10 +44,26 @@ namespace PowerShell.MCP.Cmdlets
 
             try
             {
+                // ファイルサイズチェック
+                var (shouldContinue, warningMsg) = TextFileUtility.CheckFileSize(resolvedPath, Force);
+                if (!shouldContinue)
+                {
+                    WriteError(new ErrorRecord(
+                        new InvalidOperationException(warningMsg),
+                        "FileTooLarge",
+                        ErrorCategory.InvalidOperation,
+                        resolvedPath));
+                    return;
+                }
+                if (warningMsg != null)
+                {
+                    WriteWarning(warningMsg);
+                }
+
                 var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
 
                 // Content を文字列配列に変換
-                string[] contentLines = ConvertToStringArray(Content);
+                string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
 
                 int insertAt = AtStart.IsPresent ? 1 : (AtEnd.IsPresent ? int.MaxValue : LineNumber);
 
@@ -65,7 +81,7 @@ namespace PowerShell.MCP.Cmdlets
                     try
                     {
                         using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding))
+                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                         {
                             if (!enumerator.MoveNext())
                             {
@@ -118,15 +134,7 @@ namespace PowerShell.MCP.Cmdlets
                         }
 
                         // アトミックに置換
-                        var backupTemp = resolvedPath + ".tmp";
-                        if (File.Exists(backupTemp))
-                        {
-                            File.Delete(backupTemp);
-                        }
-                        
-                        File.Move(resolvedPath, backupTemp);
-                        File.Move(tempFile, resolvedPath);
-                        File.Delete(backupTemp);
+                        TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                         WriteInformation(new InformationRecord(
                             $"Added {contentLines.Length} line(s) to {System.IO.Path.GetFileName(resolvedPath)} at line {insertAt}",
@@ -153,7 +161,7 @@ namespace PowerShell.MCP.Cmdlets
             for (int i = 0; i < contentLines.Length; i++)
             {
                 writer.Write(contentLines[i]);
-                
+
                 // 各行の後に改行を追加（最後の行は条件による）
                 if (i < contentLines.Length - 1 || addTrailingNewline)
                 {
@@ -162,24 +170,5 @@ namespace PowerShell.MCP.Cmdlets
             }
         }
 
-        private string[] ConvertToStringArray(object content)
-        {
-            if (content is string str)
-            {
-                return new[] { str };
-            }
-            else if (content is string[] arr)
-            {
-                return arr;
-            }
-            else if (content is System.Collections.IEnumerable enumerable)
-            {
-                return enumerable.Cast<object>().Select(o => o?.ToString() ?? string.Empty).ToArray();
-            }
-            else
-            {
-                return new[] { content.ToString() };
-            }
-        }
     }
 }

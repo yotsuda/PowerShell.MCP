@@ -41,10 +41,9 @@ namespace PowerShell.MCP.Cmdlets
                 var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
 
                 // Content を文字列配列に変換
-                string[] contentLines = ConvertToStringArray(Content);
+                string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
 
-                int startLine = LineRange != null && LineRange.Length > 0 ? LineRange[0] : 1;
-                int endLine = LineRange != null && LineRange.Length > 1 ? LineRange[1] : int.MaxValue;
+                var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
                 bool isFullFileReplace = LineRange == null;
 
                 if (ShouldProcess(resolvedPath, "Set file content"))
@@ -63,7 +62,7 @@ namespace PowerShell.MCP.Cmdlets
                         if (isFullFileReplace)
                         {
                             // ファイル全体を置換
-                            using (var writer = new StreamWriter(tempFile, false, metadata.Encoding))
+                            using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                             {
                                 if (contentLines != null)
                                 {
@@ -87,7 +86,7 @@ namespace PowerShell.MCP.Cmdlets
                         {
                             // 行範囲を置換（1パスストリーミング）
                             using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-                            using (var writer = new StreamWriter(tempFile, false, metadata.Encoding))
+                            using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                             {
                                 if (!enumerator.MoveNext())
                                 {
@@ -175,15 +174,7 @@ namespace PowerShell.MCP.Cmdlets
                         }
 
                         // アトミックに置換
-                        var backupTemp = resolvedPath + ".tmp";
-                        if (File.Exists(backupTemp))
-                        {
-                            File.Delete(backupTemp);
-                        }
-                        
-                        File.Move(resolvedPath, backupTemp);
-                        File.Move(tempFile, resolvedPath);
-                        File.Delete(backupTemp);
+                        TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                         var action = Content == null ? "deleted" : "replaced";
                         WriteInformation(new InformationRecord(
@@ -206,27 +197,5 @@ namespace PowerShell.MCP.Cmdlets
             }
         }
 
-        private string[] ConvertToStringArray(object content)
-        {
-            if (content == null)
-                return null;
-
-            if (content is string str)
-            {
-                return str.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            }
-            else if (content is string[] arr)
-            {
-                return arr;
-            }
-            else if (content is System.Collections.IEnumerable enumerable)
-            {
-                return enumerable.Cast<object>().Select(o => o?.ToString() ?? string.Empty).ToArray();
-            }
-            else
-            {
-                return new[] { content.ToString() };
-            }
-        }
     }
 }

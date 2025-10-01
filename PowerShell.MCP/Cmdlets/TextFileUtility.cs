@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace PowerShell.MCP.Cmdlets
@@ -64,39 +66,54 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// 改行コードと末尾改行を検出
+        /// 改行コードと末尾改行を検出（ストリーミング方式、大きなファイルに対応）
         /// </summary>
         public static (string NewlineSequence, bool HasTrailingNewline) DetectNewline(string filePath, Encoding encoding)
         {
-            using (var reader = new StreamReader(filePath, encoding))
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var reader = new StreamReader(stream, encoding))
             {
+                if (stream.Length == 0)
+                    return (Environment.NewLine, false);
+                
+                // 最初の改行を検出（ストリーミング）
                 string detectedNewline = Environment.NewLine;
-                bool hasTrailingNewline = false;
-
-                // 最初の改行を検出
+                bool foundNewline = false;
                 int ch;
+                
                 while ((ch = reader.Read()) != -1)
                 {
                     if (ch == '\r')
                     {
                         detectedNewline = reader.Peek() == '\n' ? "\r\n" : "\r";
+                        foundNewline = true;
                         break;
                     }
                     else if (ch == '\n')
                     {
                         detectedNewline = "\n";
+                        foundNewline = true;
                         break;
                     }
                 }
-
-                // 末尾改行を検出
-                if (reader.BaseStream.Length > 0)
+                
+                // 末尾改行を検出（末尾の数バイトのみ読む）
+                bool hasTrailingNewline = false;
+                
+                if (stream.Length > 0)
                 {
-                    reader.BaseStream.Seek(-1, SeekOrigin.End);
-                    int lastChar = reader.Read();
-                    hasTrailingNewline = (lastChar == '\n' || lastChar == '\r');
+                    // 末尾から最大4バイト読む（UTF-32の\rまたは\nが最大4バイト）
+                    long seekPosition = Math.Max(0, stream.Length - 4);
+                    stream.Seek(seekPosition, SeekOrigin.Begin);
+                    
+                    // 新しいStreamReaderで末尾を読む
+                    using (var tailReader = new StreamReader(stream, encoding, false, 1024, true))
+                    {
+                        var tail = tailReader.ReadToEnd();
+                        hasTrailingNewline = tail.EndsWith("\r\n") || tail.EndsWith("\n") || tail.EndsWith("\r");
+                    }
                 }
-
+                
                 return (detectedNewline, hasTrailingNewline);
             }
         }
@@ -122,7 +139,7 @@ namespace PowerShell.MCP.Cmdlets
 
             try
             {
-                using (var writer = new StreamWriter(tempFile, false, metadata.Encoding))
+                using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536)) // 64KB buffer
                 {
                     writeAction(writer);
                 }
@@ -149,31 +166,27 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// 1パスストリーミング処理でファイルを処理
+        /// 1パスストリーミング処理でファイルを処理（最適化版）
         /// 行を1つずつ処理し、メモリ効率的に書き込む
         /// </summary>
-        /// <param name="inputPath">入力ファイルパス</param>
-        /// <param name="outputPath">出力ファイルパス</param>
-        /// <param name="metadata">ファイルメタデータ</param>
-        /// <param name="lineProcessor">行処理関数 (line, lineNumber) => processedLine</param>
         public static void ProcessFileStreaming(
             string inputPath,
             string outputPath,
             FileMetadata metadata,
             Func<string, int, string> lineProcessor)
         {
-            using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())
-            using (var writer = new StreamWriter(outputPath, false, metadata.Encoding))
+            using (var reader = new StreamReader(inputPath, metadata.Encoding, false, 65536)) // 64KB buffer
+            using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536)) // 64KB buffer
             {
-                if (!enumerator.MoveNext())
+                string currentLine = reader.ReadLine();
+                if (currentLine == null)
                 {
                     // 空ファイル
                     return;
                 }
                 
                 int lineNumber = 1;
-                string currentLine = enumerator.Current;
-                bool hasNext = enumerator.MoveNext();
+                string nextLine = reader.ReadLine();
                 
                 while (true)
                 {
@@ -181,13 +194,13 @@ namespace PowerShell.MCP.Cmdlets
                     string processedLine = lineProcessor(currentLine, lineNumber);
                     writer.Write(processedLine);
                     
-                    if (hasNext)
+                    if (nextLine != null)
                     {
                         // 次の行があるので改行を追加
                         writer.Write(metadata.NewlineSequence);
                         lineNumber++;
-                        currentLine = enumerator.Current;
-                        hasNext = enumerator.MoveNext();
+                        currentLine = nextLine;
+                        nextLine = reader.ReadLine();
                     }
                     else
                     {
@@ -221,6 +234,60 @@ namespace PowerShell.MCP.Cmdlets
             }
 
             return (true, null);
+        }
+        /// <summary>
+        /// オブジェクトを文字列配列に変換
+        /// </summary>
+        public static string[] ConvertToStringArray(object content)
+        {
+            if (content == null)
+                return null;
+
+            if (content is string str)
+            {
+                return str.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            }
+            else if (content is string[] arr)
+            {
+                return arr;
+            }
+            else if (content is System.Collections.IEnumerable enumerable)
+            {
+                return enumerable.Cast<object>().Select(o => o?.ToString() ?? string.Empty).ToArray();
+            }
+            else
+            {
+                return new[] { content.ToString() };
+            }
+        }
+
+        /// <summary>
+        /// 一時ファイルを使ってアトミックにファイルを置換
+        /// </summary>
+        public static void ReplaceFileAtomic(string targetPath, string tempFile)
+        {
+            var backupTemp = targetPath + ".tmp";
+            if (File.Exists(backupTemp))
+            {
+                File.Delete(backupTemp);
+            }
+
+            File.Move(targetPath, backupTemp);
+            File.Move(tempFile, targetPath);
+        }
+
+        /// <summary>
+        /// LineRange パラメータから開始行と終了行を取得
+        /// </summary>
+        public static (int StartLine, int EndLine) ParseLineRange(int[] lineRange)
+        {
+            if (lineRange == null || lineRange.Length == 0)
+                return (1, int.MaxValue);
+            
+            int startLine = lineRange[0];
+            int endLine = lineRange.Length > 1 ? lineRange[1] : startLine;
+            
+            return (startLine, endLine);
         }
     }
 }

@@ -39,6 +39,22 @@ namespace PowerShell.MCP.Cmdlets
 
             try
             {
+                // ファイルサイズチェック
+                var (shouldContinue, warningMsg) = TextFileUtility.CheckFileSize(resolvedPath, Force);
+                if (!shouldContinue)
+                {
+                    WriteError(new ErrorRecord(
+                        new InvalidOperationException(warningMsg),
+                        "FileTooLarge",
+                        ErrorCategory.InvalidOperation,
+                        resolvedPath));
+                    return;
+                }
+                if (warningMsg != null)
+                {
+                    WriteWarning(warningMsg);
+                }
+
                 var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
 
                 int startLine = int.MaxValue;
@@ -47,8 +63,7 @@ namespace PowerShell.MCP.Cmdlets
 
                 if (ParameterSetName == "LineRange")
                 {
-                    startLine = LineRange[0];
-                    endLine = LineRange.Length > 1 ? LineRange[1] : startLine;
+                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
                 }
                 else
                 {
@@ -69,7 +84,7 @@ namespace PowerShell.MCP.Cmdlets
                     try
                     {
                         using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding))
+                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                         {
                             if (!enumerator.MoveNext())
                             {
@@ -138,15 +153,7 @@ namespace PowerShell.MCP.Cmdlets
                         }
 
                         // アトミックに置換
-                        var backupTemp = resolvedPath + ".tmp";
-                        if (File.Exists(backupTemp))
-                        {
-                            File.Delete(backupTemp);
-                        }
-                        
-                        File.Move(resolvedPath, backupTemp);
-                        File.Move(tempFile, resolvedPath);
-                        File.Delete(backupTemp);
+                        TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                         WriteInformation(new InformationRecord(
                             $"Removed {linesRemoved} line(s) from {System.IO.Path.GetFileName(resolvedPath)}",

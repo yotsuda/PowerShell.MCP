@@ -20,7 +20,7 @@ namespace PowerShell.MCP.Cmdlets
         public string Pattern { get; set; }
 
         [Parameter]
-        public int Context { get; set; } = 2;
+        public int Context { get; set; } = 0;
 
         protected override void ProcessRecord()
         {
