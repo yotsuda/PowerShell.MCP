@@ -98,4 +98,20 @@ public abstract class TextFileCmdletBase : PSCmdlet
             return false;
         }
     }
+
+    /// <summary>
+    /// LineRangeパラメータをバリデーション
+    /// 3個以上の値が指定された場合は終了エラーをthrow
+    /// </summary>
+    protected void ValidateLineRange(int[]? lineRange)
+    {
+        if (lineRange != null && lineRange.Length > 2)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20"),
+                "InvalidLineRange",
+                ErrorCategory.InvalidArgument,
+                lineRange));
+        }
+    }
 }

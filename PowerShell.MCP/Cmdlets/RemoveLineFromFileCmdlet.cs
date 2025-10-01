@@ -29,6 +29,9 @@ public class RemoveLineFromFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
+        // LineRangeバリデーション（最優先）
+        ValidateLineRange(LineRange);
+
         foreach (var path in Path)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
@@ -104,12 +107,10 @@ public class RemoveLineFromFileCmdlet : TextFileCmdletBase
                             using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
                             using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                             {
+                                // 空ファイルは上でチェック済み
                                 if (!enumerator.MoveNext())
                                 {
-                                    // 空ファイル（念のため）
-                                    File.Delete(tempFile);
-                                    WriteWarning("File is empty. Nothing to remove.");
-                                    continue;
+                                    throw new InvalidOperationException("Unexpected empty file");
                                 }
 
                                 int lineNumber = 1;

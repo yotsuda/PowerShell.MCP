@@ -28,6 +28,9 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
+        // LineRangeバリデーション（最優先）
+        ValidateLineRange(LineRange);
+
         foreach (var path in Path)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;

@@ -34,6 +34,9 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
+        // LineRangeバリデーション（最優先）
+        ValidateLineRange(LineRange);
+
         foreach (var path in Path)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
@@ -81,6 +84,14 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     _totalFilesProcessed++;
 
                     var encoding = TextFileUtility.GetEncoding(resolvedPath, Encoding);
+
+                    // 空ファイルの処理
+                    var fileInfo = new FileInfo(resolvedPath);
+                    if (fileInfo.Length == 0)
+                    {
+                        WriteWarning("File is empty");
+                        continue;
+                    }
 
                     if (!string.IsNullOrEmpty(Pattern))
                     {

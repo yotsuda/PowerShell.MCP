@@ -38,9 +38,11 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
-
     protected override void ProcessRecord()
     {
+        // LineRangeバリデーション（最優先）
+        ValidateLineRange(LineRange);
+
         foreach (var path in Path)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
@@ -96,7 +98,20 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
         
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
-        if (ShouldProcess(resolvedPath, $"Update text in file"))
+        // より具体的なアクション説明
+        string actionDescription;
+        if (isLiteral)
+        {
+            string rangeInfo = LineRange != null ? $" in lines {startLine}-{endLine}" : "";
+            actionDescription = $"Replace '{OldValue}' with '{NewValue}'{rangeInfo}";
+        }
+        else
+        {
+            string rangeInfo = LineRange != null ? $" in lines {startLine}-{endLine}" : "";
+            actionDescription = $"Replace pattern '{Pattern}' with '{Replacement}'{rangeInfo}";
+        }
+
+        if (ShouldProcess(resolvedPath, actionDescription))
         {
             // バックアップ
             if (Backup)
