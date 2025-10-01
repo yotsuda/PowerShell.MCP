@@ -173,7 +173,7 @@ public class RemoveLineFromFileCmdlet : PSCmdlet
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                             WriteInformation(new InformationRecord(
-                                $"Removed {linesRemoved} line(s) from {System.IO.Path.GetFileName(resolvedPath)}",
+                                $"Removed {linesRemoved} line(s) from {TextFileUtility.GetRelativePath(SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}",
                                 resolvedPath));
                         }
                         catch
@@ -194,4 +194,5 @@ public class RemoveLineFromFileCmdlet : PSCmdlet
         }
     }
 }
+
 

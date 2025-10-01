@@ -298,7 +298,7 @@ public static class TextFileUtility
         string[] contentLines)
     {
         int linesChanged = 0;
-        
+
         using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
@@ -370,5 +370,41 @@ public static class TextFileUtility
         }
 
         return linesChanged;
+    }
+
+    /// <summary>
+    /// カレントディレクトリからの相対パスを取得
+    /// </summary>
+    public static string GetRelativePath(string fromPath, string toPath)
+    {
+        try
+        {
+            // 両方のパスを正規化
+            fromPath = System.IO.Path.GetFullPath(fromPath);
+            toPath = System.IO.Path.GetFullPath(toPath);
+                
+            // 同じドライブかチェック
+            if (System.IO.Path.GetPathRoot(fromPath) != System.IO.Path.GetPathRoot(toPath))
+            {
+                // 異なるドライブの場合は絶対パスを返す
+                return toPath;
+            }
+                
+            var fromUri = new Uri(fromPath.EndsWith(System.IO.Path.DirectorySeparatorChar.ToString()) 
+                ? fromPath 
+                : fromPath + System.IO.Path.DirectorySeparatorChar);
+            var toUri = new Uri(toPath);
+                
+            var relativeUri = fromUri.MakeRelativeUri(toUri);
+            var relativePath = Uri.UnescapeDataString(relativeUri.ToString());
+                
+            // バックスラッシュに変換（Windows）
+            return relativePath.Replace('/', System.IO.Path.DirectorySeparatorChar);
+        }
+        catch
+        {
+            // エラー時は絶対パスを返す
+            return toPath;
+        }
     }
 }

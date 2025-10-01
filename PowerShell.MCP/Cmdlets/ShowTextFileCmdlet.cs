@@ -5,7 +5,7 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// テキストファイルの内容を行番号付きで表示
-/// LLM最適化：行番号は常に4桁、パターンマッチは*でマーク
+/// LLM最適化：行番号は常に4桁、パターンマッチは*でマーク、常にカレントディレクトリからの相対パスを表示
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextFile", DefaultParameterSetName = "Default")]
 public class ShowTextFileCmdlet : PSCmdlet
@@ -25,6 +25,7 @@ public class ShowTextFileCmdlet : PSCmdlet
     [Parameter(ParameterSetName = "Pattern", Mandatory = true)]
     public string Pattern { get; set; } = null!;
 
+    private int _totalFilesProcessed = 0;
 
     protected override void ProcessRecord()
     {
@@ -60,6 +61,21 @@ public class ShowTextFileCmdlet : PSCmdlet
 
                 try
                 {
+                    // ファイル間の空行（最初のファイル以外）
+                    if (_totalFilesProcessed > 0)
+                    {
+                        WriteObject("");
+                    }
+                    
+                    // カレントディレクトリからの相対パスを取得
+                    var currentDirectory = SessionState.Path.CurrentFileSystemLocation.Path;
+                    var relativePath = TextFileUtility.GetRelativePath(currentDirectory, resolvedPath);
+                    
+                    // 常に相対パスをヘッダーとして表示
+                    WriteObject($"==> {relativePath} <==");
+                    
+                    _totalFilesProcessed++;
+
                     var encoding = TextFileUtility.DetectEncoding(resolvedPath);
 
                     if (!string.IsNullOrEmpty(Pattern))
@@ -78,6 +94,7 @@ public class ShowTextFileCmdlet : PSCmdlet
             }
         }
     }
+
 
     private void ShowWithLineRange(string filePath, System.Text.Encoding encoding)
     {
@@ -148,3 +165,5 @@ public class ShowTextFileCmdlet : PSCmdlet
         }
     }
 }
+
+

@@ -103,7 +103,7 @@ public class SetFileContentCmdlet : PSCmdlet
 
                             var action = Content == null ? "deleted" : "replaced";
                             WriteInformation(new InformationRecord(
-                                $"Updated {System.IO.Path.GetFileName(resolvedPath)}: {linesChanged} line(s) {action}",
+                                $"Updated {TextFileUtility.GetRelativePath(SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {linesChanged} line(s) {action}",
                                 resolvedPath));
                         }
                         catch
@@ -124,4 +124,5 @@ public class SetFileContentCmdlet : PSCmdlet
         }
     }
 }
+
 
