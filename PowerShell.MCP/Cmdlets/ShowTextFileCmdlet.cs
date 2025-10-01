@@ -19,8 +19,6 @@ namespace PowerShell.MCP.Cmdlets
         [Parameter(ParameterSetName = "Pattern", Mandatory = true)]
         public string Pattern { get; set; }
 
-        [Parameter]
-        public int Context { get; set; } = 0;
 
         protected override void ProcessRecord()
         {
@@ -63,14 +61,9 @@ namespace PowerShell.MCP.Cmdlets
             {
                 startLine = LineRange[0];
                 endLine = LineRange.Length > 1 ? LineRange[1] : startLine;
-
-                // Context を適用
-                startLine = Math.Max(1, startLine - Context);
-                endLine = endLine + Context;
             }
 
-
-            // Skip/Take で必要な範囲だけを取得（1パスのみ）
+            // Skip/Take で必要な範囲だけを取得（LINQの遅延評価で効率的）
             int skipCount = startLine - 1;
             int takeCount = endLine - startLine + 1;
             
@@ -90,54 +83,15 @@ namespace PowerShell.MCP.Cmdlets
         {
             var regex = new Regex(Pattern);
             
-            // ===== 1パス目: マッチ行番号を収集（行番号のみメモリに保持） =====
-            var matchedLineNumbers = File.ReadLines(filePath, encoding)
-                .Select((line, index) => new { LineNumber = index + 1, IsMatch = regex.IsMatch(line) })
-                .Where(x => x.IsMatch)
-                .Select(x => x.LineNumber)
-                .ToHashSet();
-
-            if (matchedLineNumbers.Count == 0)
+            // 1パス処理：マッチした行のみ表示
+            int lineNumber = 1;
+            foreach (var line in File.ReadLines(filePath, encoding))
             {
-                WriteWarning("No matches found.");
-                return;
-            }
-
-            // Context を適用して表示する行番号の範囲を計算
-            var linesToShow = new HashSet<int>();
-            foreach (var matchLine in matchedLineNumbers)
-            {
-                int contextStart = Math.Max(1, matchLine - Context);
-                int contextEnd = matchLine + Context;
-                
-                for (int i = contextStart; i <= contextEnd; i++)
+                if (regex.IsMatch(line))
                 {
-                    linesToShow.Add(i);
+                    WriteObject($"*{lineNumber.ToString().PadLeft(3)}: {line}");
                 }
-            }
-
-
-            // ===== 2パス目: 表示範囲をLINQで効率的に取得 =====
-            var displayLines = File.ReadLines(filePath, encoding)
-                .Select((line, index) => new { 
-                    LineNumber = index + 1, 
-                    Line = line 
-                })
-                .Where(x => linesToShow.Contains(x.LineNumber)); // 該当行のみフィルタ（遅延評価）
-
-            int? lastShownLine = null;
-            foreach (var item in displayLines)
-            {
-                // 行が連続していない場合は区切り線を表示
-                if (lastShownLine.HasValue && item.LineNumber - lastShownLine.Value > 1)
-                {
-                    WriteObject(new string('-', 6));
-                }
-
-                // マッチした行には * を付ける
-                var prefix = matchedLineNumbers.Contains(item.LineNumber) ? "*" : " ";
-                WriteObject($"{prefix}{item.LineNumber.ToString().PadLeft(3)}: {item.Line}");
-                lastShownLine = item.LineNumber;
+                lineNumber++;
             }
         }
     }
