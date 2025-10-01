@@ -21,6 +21,9 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
     public int[]? LineRange { get; set; }
 
     [Parameter]
+    public string? Encoding { get; set; }
+
+    [Parameter]
     public SwitchParameter Backup { get; set; }
 
     protected override void ProcessRecord()
@@ -57,7 +60,7 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
 
                 try
                 {
-                    var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
+                    var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
                     string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
 
                     var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);

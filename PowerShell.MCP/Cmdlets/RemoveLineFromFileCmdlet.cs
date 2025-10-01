@@ -22,6 +22,9 @@ public class RemoveLineFromFileCmdlet : TextFileCmdletBase
     public string Pattern { get; set; } = null!;
 
     [Parameter]
+    public string? Encoding { get; set; }
+
+    [Parameter]
     public SwitchParameter Backup { get; set; }
 
     protected override void ProcessRecord()
@@ -58,7 +61,7 @@ public class RemoveLineFromFileCmdlet : TextFileCmdletBase
 
                 try
                 {
-                    var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
+                    var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
 
                     int startLine = int.MaxValue;
                     int endLine = int.MaxValue;

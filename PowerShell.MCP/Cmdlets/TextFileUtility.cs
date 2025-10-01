@@ -76,6 +76,74 @@ public static class TextFileUtility
     }
 
     /// <summary>
+    /// エンコーディングを取得（明示的指定または自動検出）
+    /// </summary>
+    public static Encoding GetEncoding(string filePath, string? encodingName)
+    {
+        if (!string.IsNullOrEmpty(encodingName))
+        {
+            try
+            {
+                // 特別なエイリアスの処理
+                return encodingName.ToLowerInvariant() switch
+                {
+                    "utf-8" or "utf8" => new UTF8Encoding(false),
+                    "utf-8-bom" or "utf8-bom" or "utf8bom" => new UTF8Encoding(true),
+                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" => Encoding.GetEncoding("shift_jis"),
+                    "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
+                    "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
+                    "ascii" => Encoding.ASCII,
+                    "unicode" or "utf-16" or "utf16" or "utf-16le" or "utf16le" => Encoding.Unicode,
+                    "utf-16be" or "utf16be" => Encoding.BigEndianUnicode,
+                    "utf-32" or "utf32" or "utf-32le" or "utf32le" => Encoding.UTF32,
+                    "utf-32be" or "utf32be" => new UTF32Encoding(true, true),
+                    _ => Encoding.GetEncoding(encodingName)
+                };
+            }
+            catch
+            {
+                // エンコーディング名が無効な場合は自動検出にフォールバック
+                return DetectEncoding(filePath);
+            }
+        }
+
+        return DetectEncoding(filePath);
+    }
+
+    /// <summary>
+    /// ファイルのメタデータを検出（明示的エンコーディング指定対応）
+    /// </summary>
+    public static FileMetadata DetectFileMetadata(string filePath, string? encodingName)
+    {
+        var fileInfo = new FileInfo(filePath);
+        
+        // 空ファイルの場合はデフォルトのメタデータを返す
+        if (fileInfo.Length == 0)
+        {
+            var defaultEncoding = !string.IsNullOrEmpty(encodingName) 
+                ? GetEncoding(filePath, encodingName) 
+                : new UTF8Encoding(false);
+            
+            return new FileMetadata
+            {
+                Encoding = defaultEncoding,
+                NewlineSequence = Environment.NewLine,
+                HasTrailingNewline = false
+            };
+        }
+        
+        var encoding = GetEncoding(filePath, encodingName);
+        var (newline, hasTrailing) = DetectNewline(filePath, encoding);
+
+        return new FileMetadata
+        {
+            Encoding = encoding,
+            NewlineSequence = newline,
+            HasTrailingNewline = hasTrailing
+        };
+    }
+
+    /// <summary>
     /// 改行コードと末尾改行を検出（ストリーミング方式、大きなファイルに対応）
     /// </summary>
     public static (string NewlineSequence, bool HasTrailingNewline) DetectNewline(string filePath, Encoding encoding)

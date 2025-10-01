@@ -25,6 +25,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     [Parameter(ParameterSetName = "Pattern", Mandatory = true)]
     public string Pattern { get; set; } = null!;
 
+    [Parameter(ParameterSetName = "Default")]
+    [Parameter(ParameterSetName = "LineRange")]
+    [Parameter(ParameterSetName = "Pattern")]
+    public string? Encoding { get; set; }
+
     private int _totalFilesProcessed = 0;
 
     protected override void ProcessRecord()
@@ -75,7 +80,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     
                     _totalFilesProcessed++;
 
-                    var encoding = TextFileUtility.DetectEncoding(resolvedPath);
+                    var encoding = TextFileUtility.GetEncoding(resolvedPath, Encoding);
 
                     if (!string.IsNullOrEmpty(Pattern))
                     {

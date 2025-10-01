@@ -24,6 +24,9 @@ public class AddLineToFileCmdlet : TextFileCmdletBase
     public SwitchParameter AtEnd { get; set; }
 
     [Parameter]
+    public string? Encoding { get; set; }
+
+    [Parameter]
     public SwitchParameter Backup { get; set; }
 
     protected override void ProcessRecord()
@@ -60,7 +63,7 @@ public class AddLineToFileCmdlet : TextFileCmdletBase
 
                 try
                 {
-                    var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
+                    var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
 
                     // Content を文字列配列に変換
                     string[] contentLines = TextFileUtility.ConvertToStringArray(Content);

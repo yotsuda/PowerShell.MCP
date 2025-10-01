@@ -31,6 +31,10 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
     [Parameter(ParameterSetName = "Regex")]
     public int[]? LineRange { get; set; }
 
+    [Parameter(ParameterSetName = "Literal")]
+    [Parameter(ParameterSetName = "Regex")]
+    public string? Encoding { get; set; }
+
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
@@ -84,7 +88,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
     /// </summary>
     private void ProcessStringReplacement(string originalPath, string resolvedPath)
     {
-        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
+        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
         
         int replacementCount = 0;
         var isLiteral = ParameterSetName == "Literal";
