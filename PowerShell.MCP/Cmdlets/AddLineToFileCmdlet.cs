@@ -103,9 +103,7 @@ public class AddLineToFileCmdlet : TextFileCmdletBase
                                 ? "at end" 
                                 : $"at line {insertAt}";
                             
-                            WriteInformation(new InformationRecord(
-                                $"Added {contentLines.Length} line(s) to {GetDisplayPath(path, resolvedPath)} {locationMessage}",
-                                resolvedPath));
+                            WriteObject($"Added {contentLines.Length} line(s) to {GetDisplayPath(path, resolvedPath)} {locationMessage}");
                         }
                         catch
                         {

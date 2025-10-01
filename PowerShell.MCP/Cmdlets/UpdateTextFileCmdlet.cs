@@ -5,7 +5,7 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// テキストファイルの内容を更新
-/// LLM最適化：文字列置換、正規表現置換、行範囲置換の3つのモード
+/// LLM最適化：文字列リテラル置換と正規表現置換の2つのモード
 /// </summary>
 [Cmdlet(VerbsData.Update, "TextFile", SupportsShouldProcess = true)]
 public class UpdateTextFileCmdlet : TextFileCmdletBase
@@ -27,12 +27,8 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
     [Parameter(ParameterSetName = "Regex", Mandatory = true)]
     public string Replacement { get; set; } = null!;
 
-    [Parameter(ParameterSetName = "ContentReplacement", Mandatory = true)]
-    public object Content { get; set; } = null!;
-
     [Parameter(ParameterSetName = "Literal")]
     [Parameter(ParameterSetName = "Regex")]
-    [Parameter(ParameterSetName = "ContentReplacement")]
     public int[] LineRange { get; set; }
 
     [Parameter]
@@ -73,87 +69,12 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
 
                 try
                 {
-                    if (ParameterSetName == "ContentReplacement")
-                    {
-                        ProcessContentReplacement(path, resolvedPath);
-                    }
-                    else
-                    {
-                        ProcessStringReplacement(path, resolvedPath);
-                    }
+                    ProcessStringReplacement(path, resolvedPath);
                 }
                 catch (Exception ex)
                 {
                     WriteError(new ErrorRecord(ex, "UpdateFailed", ErrorCategory.WriteError, resolvedPath));
                 }
-            }
-        }
-    }
-
-    /// <summary>
-    /// 行範囲置換またはファイル全体置換を処理
-    /// </summary>
-    private void ProcessContentReplacement(string originalPath, string resolvedPath)
-    {
-        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
-        string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
-        
-        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
-        bool isFullFileReplace = LineRange == null;
-
-        string actionDescription = isFullFileReplace 
-            ? "Replace entire file content" 
-            : $"Replace lines {startLine}-{endLine}";
-
-        if (ShouldProcess(resolvedPath, actionDescription))
-        {
-            if (Backup)
-            {
-                var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                WriteVerbose($"Created backup: {backupPath}");
-            }
-
-            var tempFile = System.IO.Path.GetTempFileName();
-            int linesChanged = 0;
-
-            try
-            {
-                if (isFullFileReplace)
-                {
-                    // ファイル全体を置換
-                    linesChanged = TextFileUtility.ReplaceEntireFile(
-                        resolvedPath,
-                        tempFile,
-                        metadata,
-                        contentLines);
-                }
-                else
-                {
-                    // 行範囲を置換
-                    linesChanged = TextFileUtility.ReplaceLineRangeStreaming(
-                        resolvedPath,
-                        tempFile,
-                        metadata,
-                        startLine,
-                        endLine,
-                        contentLines);
-                }
-
-                // アトミックに置換
-                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
-
-                var action = contentLines == null ? "deleted" : "replaced";
-                WriteInformation(new InformationRecord(
-                    $"Updated {GetDisplayPath(originalPath, resolvedPath)}: {linesChanged} line(s) {action}",
-                    resolvedPath));
-            }
-            catch
-            {
-                if (File.Exists(tempFile))
-                {
-                    File.Delete(tempFile);
-                }
-                throw;
             }
         }
     }
@@ -230,9 +151,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
                 // アトミックに置換
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-                WriteInformation(new InformationRecord(
-                    $"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made",
-                    resolvedPath));
+                WriteObject($"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made");
             }
             catch
             {

@@ -172,9 +172,7 @@ public class RemoveLineFromFileCmdlet : TextFileCmdletBase
                             // アトミックに置換
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-                            WriteInformation(new InformationRecord(
-                                $"Removed {linesRemoved} line(s) from {GetDisplayPath(path, resolvedPath)}",
-                                resolvedPath));
+                            WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(path, resolvedPath)}");
                         }
                         catch
                         {

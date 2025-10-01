@@ -105,9 +105,7 @@ public class SetFileContentCmdlet : TextFileCmdletBase
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                             var action = Content == null ? "deleted" : "replaced";
-                            WriteInformation(new InformationRecord(
-                                $"Updated {GetDisplayPath(path, resolvedPath)}: {linesChanged} line(s) {action}",
-                                resolvedPath));
+                            WriteObject($"Updated {GetDisplayPath(path, resolvedPath)}: {linesChanged} line(s) {action}");
                         }
                         catch
                         {
