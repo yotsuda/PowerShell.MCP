@@ -3,11 +3,11 @@ using System.Management.Automation;
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// ファイルの内容を完全に置き換え
+/// ファイルの行を設定
 /// LLM最適化：行範囲指定または全体置換、Content省略で削除
 /// </summary>
-[Cmdlet(VerbsCommon.Set, "FileContent", SupportsShouldProcess = true)]
-public class SetFileContentCmdlet : TextFileCmdletBase
+[Cmdlet(VerbsCommon.Set, "LineToFile", SupportsShouldProcess = true)]
+public class SetLineToFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
