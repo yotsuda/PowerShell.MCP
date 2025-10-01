@@ -7,7 +7,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// LLM最適化：行番号指定または末尾追加、空ファイルにも対応
 /// </summary>
 [Cmdlet(VerbsCommon.Add, "LineToFile", SupportsShouldProcess = true)]
-public class AddLineToFileCmdlet : PSCmdlet
+public class AddLineToFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
@@ -100,7 +100,7 @@ public class AddLineToFileCmdlet : PSCmdlet
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                             WriteInformation(new InformationRecord(
-                                $"Added {contentLines.Length} line(s) to {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)} at line {insertAt}",
+                                $"Added {contentLines.Length} line(s) to {GetDisplayPath(path, resolvedPath)} at line {insertAt}",
                                 resolvedPath));
                         }
                         catch
@@ -125,7 +125,7 @@ public class AddLineToFileCmdlet : PSCmdlet
     /// 空ファイルの処理：新しい内容のみを書き込む
     /// LLM向け：空ファイルは末尾改行なしとして扱う
     /// </summary>
-    private void HandleEmptyFile(string outputPath, string[] contentLines, TextFileUtility.FileMetadata metadata)
+    private static void HandleEmptyFile(string outputPath, string[] contentLines, TextFileUtility.FileMetadata metadata)
     {
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
@@ -146,7 +146,7 @@ public class AddLineToFileCmdlet : PSCmdlet
     /// <summary>
     /// 通常のファイルへの行挿入処理
     /// </summary>
-    private void InsertLines(
+    private static void InsertLines(
         string inputPath, 
         string outputPath, 
         string[] contentLines, 
@@ -233,4 +233,5 @@ public class AddLineToFileCmdlet : PSCmdlet
         }
     }
 }
+
 

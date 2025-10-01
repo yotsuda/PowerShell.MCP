@@ -8,7 +8,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// LLM最適化：行番号は常に4桁、パターンマッチは*でマーク、常にカレントディレクトリからの相対パスを表示
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextFile", DefaultParameterSetName = "Default")]
-public class ShowTextFileCmdlet : PSCmdlet
+public class ShowTextFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "Default")]
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "LineRange")]
@@ -67,15 +67,11 @@ public class ShowTextFileCmdlet : PSCmdlet
                         WriteObject("");
                     }
                     
-                    // カレントディレクトリを FileSystem Path に解決
-                    var currentDirectory = SessionState.Path.CurrentFileSystemLocation.Path;
-                    var currentResolved = GetResolvedProviderPathFromPSPath(currentDirectory, out _).FirstOrDefault() ?? currentDirectory;
+                    // 表示用パスを決定（PS Drive パスを保持）
+                    var displayPath = GetDisplayPath(path, resolvedPath);
                     
-                    // 両方とも FileSystem Path から相対パスを計算
-                    var relativePath = TextFileUtility.GetRelativePath(currentResolved, resolvedPath);
-                    
-                    // 常に相対パスをヘッダーとして表示
-                    WriteObject($"==> {relativePath} <==");
+                    // ヘッダーとして表示
+                    WriteObject($"==> {displayPath} <==");
                     
                     _totalFilesProcessed++;
 
@@ -168,5 +164,6 @@ public class ShowTextFileCmdlet : PSCmdlet
         }
     }
 }
+
 
 

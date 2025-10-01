@@ -193,7 +193,7 @@ public static class TextFileUtility
     /// <summary>
     /// オブジェクトを文字列配列に変換
     /// </summary>
-    public static string[] ConvertToStringArray(object content)
+    public static string?[]? ConvertToStringArray(object content)
     {
         if (content == null)
             return null;
@@ -212,7 +212,7 @@ public static class TextFileUtility
         }
         else
         {
-            return new[] { content.ToString() };
+            return [content.ToString()];
         }
     }
 

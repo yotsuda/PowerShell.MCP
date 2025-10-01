@@ -8,7 +8,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// LLM最適化：行範囲指定またはパターンマッチで削除
 /// </summary>
 [Cmdlet(VerbsCommon.Remove, "LineFromFile", SupportsShouldProcess = true)]
-public class RemoveLineFromFileCmdlet : PSCmdlet
+public class RemoveLineFromFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
@@ -173,7 +173,7 @@ public class RemoveLineFromFileCmdlet : PSCmdlet
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                             WriteInformation(new InformationRecord(
-                                $"Removed {linesRemoved} line(s) from {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}",
+                                $"Removed {linesRemoved} line(s) from {GetDisplayPath(path, resolvedPath)}",
                                 resolvedPath));
                         }
                         catch
@@ -194,5 +194,6 @@ public class RemoveLineFromFileCmdlet : PSCmdlet
         }
     }
 }
+
 
 

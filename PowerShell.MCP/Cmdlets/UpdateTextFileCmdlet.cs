@@ -8,7 +8,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// LLM最適化：文字列置換、正規表現置換、行範囲置換の3つのモード
 /// </summary>
 [Cmdlet(VerbsData.Update, "TextFile", SupportsShouldProcess = true)]
-public class UpdateTextFileCmdlet : PSCmdlet
+public class UpdateTextFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
@@ -75,11 +75,11 @@ public class UpdateTextFileCmdlet : PSCmdlet
                 {
                     if (ParameterSetName == "ContentReplacement")
                     {
-                        ProcessContentReplacement(resolvedPath);
+                        ProcessContentReplacement(path, resolvedPath);
                     }
                     else
                     {
-                        ProcessStringReplacement(resolvedPath);
+                        ProcessStringReplacement(path, resolvedPath);
                     }
                 }
                 catch (Exception ex)
@@ -93,7 +93,7 @@ public class UpdateTextFileCmdlet : PSCmdlet
     /// <summary>
     /// 行範囲置換またはファイル全体置換を処理
     /// </summary>
-    private void ProcessContentReplacement(string resolvedPath)
+    private void ProcessContentReplacement(string originalPath, string resolvedPath)
     {
         var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
         string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
@@ -144,7 +144,7 @@ public class UpdateTextFileCmdlet : PSCmdlet
 
                 var action = contentLines == null ? "deleted" : "replaced";
                 WriteInformation(new InformationRecord(
-                    $"Updated {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {linesChanged} line(s) {action}",
+                    $"Updated {GetDisplayPath(originalPath, resolvedPath)}: {linesChanged} line(s) {action}",
                     resolvedPath));
             }
             catch
@@ -161,7 +161,7 @@ public class UpdateTextFileCmdlet : PSCmdlet
     /// <summary>
     /// 文字列リテラル置換または正規表現置換を処理
     /// </summary>
-    private void ProcessStringReplacement(string resolvedPath)
+    private void ProcessStringReplacement(string originalPath, string resolvedPath)
     {
         var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
         
@@ -231,7 +231,7 @@ public class UpdateTextFileCmdlet : PSCmdlet
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                 WriteInformation(new InformationRecord(
-                    $"Updated {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {replacementCount} replacement(s) made",
+                    $"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made",
                     resolvedPath));
             }
             catch
@@ -245,5 +245,6 @@ public class UpdateTextFileCmdlet : PSCmdlet
         }
     }
 }
+
 
 

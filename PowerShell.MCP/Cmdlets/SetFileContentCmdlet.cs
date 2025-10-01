@@ -7,7 +7,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// LLM最適化：行範囲指定または全体置換、Content省略で削除
 /// </summary>
 [Cmdlet(VerbsCommon.Set, "FileContent", SupportsShouldProcess = true)]
-public class SetFileContentCmdlet : PSCmdlet
+public class SetFileContentCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
@@ -103,7 +103,7 @@ public class SetFileContentCmdlet : PSCmdlet
 
                             var action = Content == null ? "deleted" : "replaced";
                             WriteInformation(new InformationRecord(
-                                $"Updated {TextFileUtility.GetRelativePath(GetResolvedProviderPathFromPSPath(SessionState.Path.CurrentFileSystemLocation.Path, out _).FirstOrDefault() ?? SessionState.Path.CurrentFileSystemLocation.Path, resolvedPath)}: {linesChanged} line(s) {action}",
+                                $"Updated {GetDisplayPath(path, resolvedPath)}: {linesChanged} line(s) {action}",
                                 resolvedPath));
                         }
                         catch
@@ -124,5 +124,3 @@ public class SetFileContentCmdlet : PSCmdlet
         }
     }
 }
-
-
