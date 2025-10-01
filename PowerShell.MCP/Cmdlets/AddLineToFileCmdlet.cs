@@ -99,8 +99,12 @@ public class AddLineToFileCmdlet : TextFileCmdletBase
                             // アトミックに置換
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
+                            string locationMessage = AtEnd.IsPresent 
+                                ? "at end" 
+                                : $"at line {insertAt}";
+                            
                             WriteInformation(new InformationRecord(
-                                $"Added {contentLines.Length} line(s) to {GetDisplayPath(path, resolvedPath)} at line {insertAt}",
+                                $"Added {contentLines.Length} line(s) to {GetDisplayPath(path, resolvedPath)} {locationMessage}",
                                 resolvedPath));
                         }
                         catch

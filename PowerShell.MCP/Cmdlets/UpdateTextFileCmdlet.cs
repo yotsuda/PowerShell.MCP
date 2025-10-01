@@ -121,11 +121,11 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
                 if (isFullFileReplace)
                 {
                     // ファイル全体を置換
-                    linesChanged = TextFileUtility.ReplaceEntireFile(tempFile, metadata, contentLines);
-                    
-                    // 元のファイルを読んで tempFile に書き込んだ後、置換
-                    File.Copy(resolvedPath, tempFile, true);
-                    linesChanged = TextFileUtility.ReplaceEntireFile(tempFile, metadata, contentLines);
+                    linesChanged = TextFileUtility.ReplaceEntireFile(
+                        resolvedPath,
+                        tempFile,
+                        metadata,
+                        contentLines);
                 }
                 else
                 {

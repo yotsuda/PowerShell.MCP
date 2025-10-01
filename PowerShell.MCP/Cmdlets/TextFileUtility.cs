@@ -251,6 +251,7 @@ public static class TextFileUtility
     /// LLM向け：シンプルで予測可能な動作
     /// </summary>
     public static int ReplaceEntireFile(
+        string inputPath,
         string outputPath,
         FileMetadata metadata,
         string[] contentLines)
@@ -258,11 +259,14 @@ public static class TextFileUtility
         int originalLineCount = 0;
         
         // 元のファイルの行数をカウント（情報提供用）
-        using (var reader = new StreamReader(outputPath, metadata.Encoding))
+        if (File.Exists(inputPath))
         {
-            while (reader.ReadLine() != null)
+            using (var reader = new StreamReader(inputPath, metadata.Encoding))
             {
-                originalLineCount++;
+                while (reader.ReadLine() != null)
+                {
+                    originalLineCount++;
+                }
             }
         }
 
