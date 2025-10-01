@@ -135,9 +135,7 @@ Add to your Claude Desktop configuration:
 
 ### 5. Restart Claude Desktop and test
 - Restart Claude Desktop to activate the integration
-- Try: "Show me the PowerShell version"
-
-**💡 First-time tip**: Start with simple commands to familiarize yourself with the shared console experience.
+- See the **Examples** section below for your first demo!
 
 ## Limitations
 - **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C. To cancel AI-executed commands, close the PowerShell console
@@ -145,9 +143,14 @@ Add to your Claude Desktop configuration:
 
 ## Examples
 
-PowerShell.MCP provides **8 carefully curated built-in prompts** accessible directly from MCP clients through the prompts list feature. Try them out!
+### 🎨 First-Time Demo
+Experience PowerShell.MCP's capabilities with these engaging demonstrations:
 
-Here are additional useful prompt examples you can try:
+- "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
+- "Try out different styles of notifications using the BurntToast module"
+- "Automate Notepad: type text and smoothly move the window in a circle"
+
+After trying these demos, explore the 8 built-in prompts in your MCP client's prompts list, or ask AI to explain any command - learning by doing is the best approach.
 
 ### 🔧 Basic System Information
 - "Tell me the current date and time"
@@ -193,13 +196,6 @@ Here are additional useful prompt examples you can try:
 - "Show me how to use the pipeline effectively"
 - "Demonstrate advanced filtering with Where-Object"
 - "Create a custom PowerShell function"
-
-### 💡 Getting Started Tips
-1. **Start Simple**: Try basic system information commands first
-2. **Explore Built-in Prompts**: Use the 8 curated prompts in your MCP client
-3. **Build Complexity**: Progress from single commands to pipelines
-4. **Learn by Doing**: Ask AI to explain what each command does
-5. **Stay Safe**: Test in non-production environments first
 
 ### 🎭 Interactive Experience
 PowerShell.MCP transforms your AI assistant into a powerful system administrator. Simply describe what you want to accomplish in natural language:
