@@ -118,14 +118,14 @@ namespace PowerShell.MCP.Cmdlets
                                     {
                                         if (!replacementDone)
                                         {
-                                            // 範囲開始：置換内容を出力
-                                            if (!isFirstLine)
-                                            {
-                                                writer.Write(metadata.NewlineSequence);
-                                            }
-                                            
+                                            // 範囲開始：置換内容を出力（削除の場合は何も出力しない）
                                             if (contentLines != null && contentLines.Length > 0)
                                             {
+                                                if (!isFirstLine)
+                                                {
+                                                    writer.Write(metadata.NewlineSequence);
+                                                }
+                                                
                                                 for (int i = 0; i < contentLines.Length; i++)
                                                 {
                                                     if (i > 0)
@@ -134,11 +134,12 @@ namespace PowerShell.MCP.Cmdlets
                                                     }
                                                     writer.Write(contentLines[i]);
                                                 }
+                                                isFirstLine = false;
                                             }
                                             // contentLines が null または空の場合は何も出力しない（削除）
+                                            // isFirstLine は変更しない（次の行が最初の行になる）
                                             
                                             replacementDone = true;
-                                            isFirstLine = false;
                                             linesChanged = endLine - startLine + 1;
                                         }
                                         // 範囲内の残りの行はスキップ

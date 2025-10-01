@@ -69,8 +69,6 @@ namespace PowerShell.MCP.Cmdlets
                 endLine = endLine + Context;
             }
 
-            // 行番号の幅を計算（推定）
-            int width = Math.Max(endLine.ToString().Length, 3);
 
             // Skip/Take で必要な範囲だけを取得（1パスのみ）
             int skipCount = startLine - 1;
@@ -83,7 +81,7 @@ namespace PowerShell.MCP.Cmdlets
             int currentLine = startLine;
             foreach (var line in lines)
             {
-                WriteObject($"{currentLine.ToString().PadLeft(width)}: {line}");
+                WriteObject($"{currentLine.ToString().PadLeft(4)}: {line}");
                 currentLine++;
             }
         }
@@ -118,8 +116,6 @@ namespace PowerShell.MCP.Cmdlets
                 }
             }
 
-            // 行番号の幅を計算
-            int width = linesToShow.Max().ToString().Length;
 
             // ===== 2パス目: 表示範囲をLINQで効率的に取得 =====
             var displayLines = File.ReadLines(filePath, encoding)
@@ -135,12 +131,12 @@ namespace PowerShell.MCP.Cmdlets
                 // 行が連続していない場合は区切り線を表示
                 if (lastShownLine.HasValue && item.LineNumber - lastShownLine.Value > 1)
                 {
-                    WriteObject(new string('-', width + 2));
+                    WriteObject(new string('-', 6));
                 }
 
                 // マッチした行には * を付ける
                 var prefix = matchedLineNumbers.Contains(item.LineNumber) ? "*" : " ";
-                WriteObject($"{prefix}{item.LineNumber.ToString().PadLeft(width)}: {item.Line}");
+                WriteObject($"{prefix}{item.LineNumber.ToString().PadLeft(3)}: {item.Line}");
                 lastShownLine = item.LineNumber;
             }
         }
