@@ -10,19 +10,16 @@ namespace PowerShell.MCP.Cmdlets
     public class RemoveLineFromFileCmdlet : PSCmdlet
     {
         [Parameter(Mandatory = true, Position = 0)]
-        public string Path { get; set; }
+        public string Path { get; set; } = null!;
 
         [Parameter(ParameterSetName = "LineRange", Mandatory = true)]
-        public int[] LineRange { get; set; }
+        public int[] LineRange { get; set; } = null!;
 
         [Parameter(ParameterSetName = "Pattern", Mandatory = true)]
-        public string Pattern { get; set; }
+        public string Pattern { get; set; } = null!;
 
         [Parameter]
         public SwitchParameter Backup { get; set; }
-
-        [Parameter]
-        public SwitchParameter Force { get; set; }
 
         protected override void ProcessRecord()
         {
@@ -39,21 +36,6 @@ namespace PowerShell.MCP.Cmdlets
 
             try
             {
-                // ファイルサイズチェック
-                var (shouldContinue, warningMsg) = TextFileUtility.CheckFileSize(resolvedPath, Force);
-                if (!shouldContinue)
-                {
-                    WriteError(new ErrorRecord(
-                        new InvalidOperationException(warningMsg),
-                        "FileTooLarge",
-                        ErrorCategory.InvalidOperation,
-                        resolvedPath));
-                    return;
-                }
-                if (warningMsg != null)
-                {
-                    WriteWarning(warningMsg);
-                }
 
                 var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
 

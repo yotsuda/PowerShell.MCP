@@ -11,13 +11,14 @@ namespace PowerShell.MCP.Cmdlets
     public class ShowTextFileCmdlet : PSCmdlet
     {
         [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true)]
-        public string Path { get; set; }
+        public string Path { get; set; } = null!;
 
         [Parameter(ParameterSetName = "LineRange")]
-        public int[] LineRange { get; set; }
+        [Parameter(ParameterSetName = "Pattern")]
+        public int[]? LineRange { get; set; }
 
         [Parameter(ParameterSetName = "Pattern", Mandatory = true)]
-        public string Pattern { get; set; }
+        public string Pattern { get; set; } = null!;
 
 
         protected override void ProcessRecord()
@@ -66,7 +67,7 @@ namespace PowerShell.MCP.Cmdlets
             // Skip/Take で必要な範囲だけを取得（LINQの遅延評価で効率的）
             int skipCount = startLine - 1;
             int takeCount = endLine - startLine + 1;
-            
+
             var lines = File.ReadLines(filePath, encoding)
                 .Skip(skipCount)
                 .Take(takeCount);
@@ -74,7 +75,7 @@ namespace PowerShell.MCP.Cmdlets
             int currentLine = startLine;
             foreach (var line in lines)
             {
-                WriteObject($"{currentLine.ToString().PadLeft(4)}: {line}");
+                WriteObject($"{currentLine,4}: {line}");
                 currentLine++;
             }
         }
@@ -82,16 +83,41 @@ namespace PowerShell.MCP.Cmdlets
         private void ShowWithPattern(string filePath, System.Text.Encoding encoding)
         {
             var regex = new Regex(Pattern);
-            
-            // 1パス処理：マッチした行のみ表示
-            int lineNumber = 1;
-            foreach (var line in File.ReadLines(filePath, encoding))
+
+            // 行範囲を取得
+            int startLine = 1;
+            int endLine = int.MaxValue;
+            if (LineRange != null && LineRange.Length > 0)
+            {
+                startLine = LineRange[0];
+                endLine = LineRange.Length > 1 ? LineRange[1] : startLine;
+            }
+
+            // Skip/Take で範囲を絞り込んでからパターンマッチ
+            int skipCount = startLine - 1;
+            int takeCount = endLine - startLine + 1;
+
+            var linesToSearch = File.ReadLines(filePath, encoding)
+                .Skip(skipCount)
+                .Take(takeCount);
+
+            int matchCount = 0;
+            int lineNumber = startLine;
+
+            foreach (var line in linesToSearch)
             {
                 if (regex.IsMatch(line))
                 {
                     WriteObject($"*{lineNumber.ToString().PadLeft(3)}: {line}");
+                    matchCount++;
                 }
                 lineNumber++;
+            }
+
+            // マッチが見つからない場合は警告
+            if (matchCount == 0)
+            {
+                WriteWarning($"No lines matched pattern: {Pattern}");
             }
         }
     }

@@ -1,7 +1,3 @@
-using System;
-using System.Collections;
-using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace PowerShell.MCP.Cmdlets
@@ -216,26 +212,6 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// ファイルサイズをチェック
-        /// </summary>
-        /// <returns>処理を続行すべきかどうか（100MB超でForce未指定の場合false）</returns>
-        public static (bool ShouldContinue, string WarningMessage) CheckFileSize(string filePath, bool force)
-        {
-            var fileInfo = new FileInfo(filePath);
-            
-            if (fileInfo.Length > 100 * 1024 * 1024 && !force)
-            {
-                return (false, "File is larger than 100MB. Use -Force to proceed.");
-            }
-
-            if (fileInfo.Length > 50 * 1024 * 1024)
-            {
-                return (true, $"File is larger than 50MB ({fileInfo.Length / 1024 / 1024}MB). This may take some time.");
-            }
-
-            return (true, null);
-        }
-        /// <summary>
         /// オブジェクトを文字列配列に変換
         /// </summary>
         public static string[] ConvertToStringArray(object content)
@@ -288,6 +264,110 @@ namespace PowerShell.MCP.Cmdlets
             int endLine = lineRange.Length > 1 ? lineRange[1] : startLine;
             
             return (startLine, endLine);
+        }
+        
+        /// <summary>
+        /// ファイルの行範囲を置換（共通ロジック）
+        /// </summary>
+        /// <param name="inputPath">入力ファイルパス</param>
+        /// <param name="outputPath">出力ファイルパス</param>
+        /// <param name="metadata">ファイルメタデータ</param>
+        /// <param name="lineRange">置換する行範囲（null の場合はファイル全体）</param>
+        /// <param name="contentLines">置換後の内容（null の場合は削除）</param>
+        /// <returns>変更された行数</returns>
+        public static int ReplaceLineRange(
+            string inputPath,
+            string outputPath,
+            FileMetadata metadata,
+            int[] lineRange,
+            string[] contentLines)
+        {
+            var (startLine, endLine) = ParseLineRange(lineRange);
+            bool isFullFileReplace = lineRange == null;
+            int linesChanged = 0;
+
+            if (isFullFileReplace)
+            {
+                // ファイル全体を置換
+                using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
+                {
+                    if (contentLines != null)
+                    {
+                        for (int i = 0; i < contentLines.Length; i++)
+                        {
+                            writer.Write(contentLines[i]);
+                            if (i < contentLines.Length - 1 || metadata.HasTrailingNewline)
+                            {
+                                writer.Write(metadata.NewlineSequence);
+                            }
+                        }
+                    }
+                }
+                linesChanged = File.ReadLines(inputPath, metadata.Encoding).Count();
+            }
+            else
+            {
+                // 行範囲を置換（1パスストリーミング）
+                using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())
+                using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
+                {
+                    if (!enumerator.MoveNext()) return 0;
+
+                    int lineNumber = 1;
+                    string currentLine = enumerator.Current;
+                    bool hasNext = enumerator.MoveNext();
+                    bool replacementDone = false;
+                    bool isFirstLine = true;
+
+                    while (true)
+                    {
+                        if (lineNumber < startLine)
+                        {
+                            if (!isFirstLine) writer.Write(metadata.NewlineSequence);
+                            writer.Write(currentLine);
+                            isFirstLine = false;
+                        }
+                        else if (lineNumber >= startLine && lineNumber <= endLine)
+                        {
+                            if (!replacementDone)
+                            {
+                                if (contentLines != null && contentLines.Length > 0)
+                                {
+                                    if (!isFirstLine) writer.Write(metadata.NewlineSequence);
+                                    for (int i = 0; i < contentLines.Length; i++)
+                                    {
+                                        if (i > 0) writer.Write(metadata.NewlineSequence);
+                                        writer.Write(contentLines[i]);
+                                    }
+                                    isFirstLine = false;
+                                }
+                                replacementDone = true;
+                                linesChanged = endLine - startLine + 1;
+                            }
+                        }
+                        else
+                        {
+                            if (!isFirstLine) writer.Write(metadata.NewlineSequence);
+                            writer.Write(currentLine);
+                            isFirstLine = false;
+                        }
+
+                        if (hasNext)
+                        {
+                            lineNumber++;
+                            currentLine = enumerator.Current;
+                            hasNext = enumerator.MoveNext();
+                        }
+                        else
+                        {
+                            if (metadata.HasTrailingNewline) writer.Write(metadata.NewlineSequence);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return linesChanged;
         }
     }
 }

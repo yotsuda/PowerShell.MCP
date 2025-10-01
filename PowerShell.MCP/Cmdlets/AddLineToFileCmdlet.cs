@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using System.Linq;
 using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets
@@ -9,25 +6,19 @@ namespace PowerShell.MCP.Cmdlets
     public class AddLineToFileCmdlet : PSCmdlet
     {
         [Parameter(Mandatory = true, Position = 0)]
-        public string Path { get; set; }
+        public string Path { get; set; } = null!;
 
         [Parameter(Mandatory = true, Position = 1)]
-        public object Content { get; set; }
+        public object Content { get; set; } = null!;
 
         [Parameter(ParameterSetName = "LineNumber", Mandatory = true)]
         public int LineNumber { get; set; }
-
-        [Parameter(ParameterSetName = "AtStart")]
-        public SwitchParameter AtStart { get; set; }
 
         [Parameter(ParameterSetName = "AtEnd")]
         public SwitchParameter AtEnd { get; set; }
 
         [Parameter]
         public SwitchParameter Backup { get; set; }
-
-        [Parameter]
-        public SwitchParameter Force { get; set; }
 
         protected override void ProcessRecord()
         {
@@ -44,28 +35,13 @@ namespace PowerShell.MCP.Cmdlets
 
             try
             {
-                // ファイルサイズチェック
-                var (shouldContinue, warningMsg) = TextFileUtility.CheckFileSize(resolvedPath, Force);
-                if (!shouldContinue)
-                {
-                    WriteError(new ErrorRecord(
-                        new InvalidOperationException(warningMsg),
-                        "FileTooLarge",
-                        ErrorCategory.InvalidOperation,
-                        resolvedPath));
-                    return;
-                }
-                if (warningMsg != null)
-                {
-                    WriteWarning(warningMsg);
-                }
 
                 var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
 
                 // Content を文字列配列に変換
                 string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
 
-                int insertAt = AtStart.IsPresent ? 1 : (AtEnd.IsPresent ? int.MaxValue : LineNumber);
+                int insertAt = AtEnd.IsPresent ? int.MaxValue : LineNumber;
 
                 if (ShouldProcess(resolvedPath, $"Add {contentLines.Length} line(s) at line {insertAt}"))
                 {
@@ -156,7 +132,7 @@ namespace PowerShell.MCP.Cmdlets
             }
         }
 
-        private void WriteContentLines(StreamWriter writer, string[] contentLines, TextFileUtility.FileMetadata metadata, bool addTrailingNewline)
+        private static void WriteContentLines(StreamWriter writer, string[] contentLines, TextFileUtility.FileMetadata metadata, bool addTrailingNewline)
         {
             for (int i = 0; i < contentLines.Length; i++)
             {

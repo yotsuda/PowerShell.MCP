@@ -10,22 +10,22 @@ namespace PowerShell.MCP.Cmdlets
     public class UpdateTextFileCmdlet : PSCmdlet
     {
         [Parameter(Mandatory = true, Position = 0)]
-        public string Path { get; set; }
+        public string Path { get; set; } = null!;
 
         [Parameter(ParameterSetName = "Literal", Mandatory = true)]
-        public string OldValue { get; set; }
+        public string OldValue { get; set; } = null!;
 
         [Parameter(ParameterSetName = "Literal", Mandatory = true)]
-        public string NewValue { get; set; }
+        public string NewValue { get; set; } = null!;
 
         [Parameter(ParameterSetName = "Regex", Mandatory = true)]
-        public string Pattern { get; set; }
+        public string Pattern { get; set; } = null!;
 
         [Parameter(ParameterSetName = "Regex", Mandatory = true)]
-        public string Replacement { get; set; }
+        public string Replacement { get; set; } = null!;
 
         [Parameter(ParameterSetName = "ContentReplacement", Mandatory = true)]
-        public object Content { get; set; }
+        public object Content { get; set; } = null!;
 
         [Parameter(ParameterSetName = "Literal")]
         [Parameter(ParameterSetName = "Regex")]
@@ -35,8 +35,6 @@ namespace PowerShell.MCP.Cmdlets
         [Parameter]
         public SwitchParameter Backup { get; set; }
 
-        [Parameter]
-        public SwitchParameter Force { get; set; }
 
         protected override void ProcessRecord()
         {
@@ -51,21 +49,6 @@ namespace PowerShell.MCP.Cmdlets
                 return;
             }
 
-            // ファイルサイズチェック
-            var (shouldContinue, warningMsg) = TextFileUtility.CheckFileSize(resolvedPath, Force);
-            if (!shouldContinue)
-            {
-                WriteError(new ErrorRecord(
-                    new InvalidOperationException(warningMsg),
-                    "FileTooLarge",
-                    ErrorCategory.InvalidOperation,
-                    resolvedPath));
-                return;
-            }
-            if (warningMsg != null)
-            {
-                WriteWarning(warningMsg);
-            }
 
             try
             {
@@ -87,8 +70,6 @@ namespace PowerShell.MCP.Cmdlets
         private void ProcessContentReplacement(string resolvedPath)
         {
             var metadata = TextFileUtility.DetectFileMetadata(resolvedPath);
-            
-            // Content を文字列配列に変換
             string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
             
             var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
@@ -103,117 +84,16 @@ namespace PowerShell.MCP.Cmdlets
                 }
 
                 var tempFile = System.IO.Path.GetTempFileName();
-                int linesChanged = 0;
 
                 try
                 {
-                    if (isFullFileReplace)
-                    {
-                        // ファイル全体を置換
-                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
-                        {
-                            if (contentLines != null)
-                            {
-                                for (int i = 0; i < contentLines.Length; i++)
-                                {
-                                    writer.Write(contentLines[i]);
-                                    
-                                    // 最後の行以外、または元々末尾改行があった場合
-                                    if (i < contentLines.Length - 1 || metadata.HasTrailingNewline)
-                                    {
-                                        writer.Write(metadata.NewlineSequence);
-                                    }
-                                }
-                            }
-                        }
-
-                        linesChanged = File.ReadLines(resolvedPath, metadata.Encoding).Count();
-                    }
-                    else
-                    {
-                        // 行範囲を置換（1パスストリーミング）
-                        using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
-                        {
-                            if (!enumerator.MoveNext())
-                            {
-                                File.Delete(tempFile);
-                                return;
-                            }
-
-                            int lineNumber = 1;
-                            string currentLine = enumerator.Current;
-                            bool hasNext = enumerator.MoveNext();
-                            bool replacementDone = false;
-                            bool isFirstLine = true;
-
-                            while (true)
-                            {
-                                if (lineNumber < startLine)
-                                {
-                                    // 範囲前：そのまま出力
-                                    if (!isFirstLine)
-                                    {
-                                        writer.Write(metadata.NewlineSequence);
-                                    }
-                                    writer.Write(currentLine);
-                                    isFirstLine = false;
-                                }
-                                else if (lineNumber >= startLine && lineNumber <= endLine)
-                                {
-                                    if (!replacementDone)
-                                    {
-                                        // 範囲開始：置換内容を出力
-                                        if (contentLines != null && contentLines.Length > 0)
-                                        {
-                                            if (!isFirstLine)
-                                            {
-                                                writer.Write(metadata.NewlineSequence);
-                                            }
-                                            
-                                            for (int i = 0; i < contentLines.Length; i++)
-                                            {
-                                                if (i > 0)
-                                                {
-                                                    writer.Write(metadata.NewlineSequence);
-                                                }
-                                                writer.Write(contentLines[i]);
-                                            }
-                                            isFirstLine = false;
-                                        }
-                                        
-                                        replacementDone = true;
-                                        linesChanged = endLine - startLine + 1;
-                                    }
-                                }
-                                else
-                                {
-                                    // 範囲後：そのまま出力
-                                    if (!isFirstLine)
-                                    {
-                                        writer.Write(metadata.NewlineSequence);
-                                    }
-                                    writer.Write(currentLine);
-                                    isFirstLine = false;
-                                }
-
-                                if (hasNext)
-                                {
-                                    lineNumber++;
-                                    currentLine = enumerator.Current;
-                                    hasNext = enumerator.MoveNext();
-                                }
-                                else
-                                {
-                                    if (metadata.HasTrailingNewline)
-                                    {
-                                        writer.Write(metadata.NewlineSequence);
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    // 共通メソッドを使用
+                    int linesChanged = TextFileUtility.ReplaceLineRange(
+                        resolvedPath,
+                        tempFile,
+                        metadata,
+                        LineRange,
+                        contentLines);
 
                     // アトミックに置換
                     TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
