@@ -162,7 +162,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
 
                 if (!hasMatch)
                 {
-                    WriteWarning("No matches found. File not modified.");
+                    WriteObject($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made");
                     File.Delete(tempFile);
                     return;
                 }

@@ -7,27 +7,21 @@ namespace PowerShell.MCP.Cmdlets;
 /// テキストファイルの内容を行番号付きで表示
 /// LLM最適化：行番号は常に4桁、パターンマッチは*でマーク、常にカレントディレクトリからの相対パスを表示
 /// </summary>
-[Cmdlet(VerbsCommon.Show, "TextFile", DefaultParameterSetName = "Default")]
+[Cmdlet(VerbsCommon.Show, "TextFile")]
 public class ShowTextFileCmdlet : TextFileCmdletBase
 {
-    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "Default")]
-    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "LineRange")]
-    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "Pattern")]
+    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 
-    [Parameter(ParameterSetName = "Default")]
-    [Parameter(ParameterSetName = "LineRange")]
-    [Parameter(ParameterSetName = "Pattern")]
+    [Parameter]
     public int[]? LineRange { get; set; }
 
-    [Parameter(ParameterSetName = "Pattern", Mandatory = true)]
-    public string Pattern { get; set; } = null!;
+    [Parameter]
+    public string? Pattern { get; set; }
 
-    [Parameter(ParameterSetName = "Default")]
-    [Parameter(ParameterSetName = "LineRange")]
-    [Parameter(ParameterSetName = "Pattern")]
+    [Parameter]
     public string? Encoding { get; set; }
 
     private int _totalFilesProcessed = 0;
@@ -124,10 +118,19 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             .Take(takeCount);
 
         int currentLine = startLine;
+        bool hasOutput = false;
+
         foreach (var line in lines)
         {
             WriteObject($"{currentLine,4}: {line}");
             currentLine++;
+            hasOutput = true;
+        }
+
+        // 1行も出力されなかった場合のみメッセージ
+        if (!hasOutput && LineRange != null)
+        {
+            WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
         }
     }
 
@@ -148,9 +151,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
         int matchCount = 0;
         int lineNumber = startLine;
+        bool hasLines = false;
 
         foreach (var line in linesToSearch)
         {
+            hasLines = true;
             if (regex.IsMatch(line))
             {
                 // LLM向け：行番号フォーマットを統一（4桁）
@@ -160,8 +165,13 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             lineNumber++;
         }
 
-        // マッチが見つからない場合は警告
-        if (matchCount == 0)
+        // 指定範囲が存在しない場合
+        if (!hasLines && LineRange != null)
+        {
+            WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
+        }
+        // マッチが見つからない場合
+        else if (matchCount == 0)
         {
             WriteWarning($"No lines matched pattern: {Pattern}");
         }

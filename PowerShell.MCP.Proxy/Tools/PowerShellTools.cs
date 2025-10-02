@@ -30,8 +30,7 @@ Local variables are NOT preserved between invoke_expression calls. Use $script: 
 ⚠️ CRITICAL - Text File Operations:
 NEVER use Get-Content or Set-Content for text file operations. This module includes LLM-optimized cmdlets that preserve file metadata (encoding, newlines) and provide better error handling:
 
-• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Encoding <string>]
-  Show-TextFile [-Path] <string[]> -Pattern <regex> [-Context <int>] [-Encoding <string>]
+• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Pattern <string>] [-Encoding <string>] [<CommonParameters>]
 
 • Update-TextFile [-Path] <string[]> -OldValue <string> -NewValue <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
   Update-TextFile [-Path] <string[]> -Pattern <regex> -Replacement <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
