@@ -43,6 +43,14 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
 - Clear execution statistics for every command: duration, error count, warning count, and info count
 
+**📝 LLM-Optimized Text File Operations**
+- Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
+- To address this, 5 specialized cmdlets designed specifically for AI assistants handle text file operations reliably
+- Single-pass processing architecture enables up to 100x faster performance than Get/Set-Content on large files
+- 1-based line numbering eliminates array index confusion and matches compiler error messages
+- Automatic encoding detection and preservation (UTF-8/16/32, Shift-JIS, line endings)
+- Pattern matching with regex support and capture groups
+
 **🔗 PowerShell Pipeline Composability**
 - PowerShell naturally chains commands together, passing rich data between them
 - AI assistants leverage this composability to build sophisticated workflows from simple building blocks
@@ -120,7 +128,7 @@ Import-Module PowerShell.MCP
 ### 3. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
-# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.3
+# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.4
 ```
 
 ### 4. Configure Claude Desktop
@@ -129,7 +137,7 @@ Add to your Claude Desktop configuration:
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.3\\bin\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.4\\bin\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
