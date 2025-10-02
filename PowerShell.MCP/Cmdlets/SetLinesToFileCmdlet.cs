@@ -18,6 +18,7 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
     public object[]? Content { get; set; }
 
     [Parameter]
+    [ValidateLineRange]
     public int[]? LineRange { get; set; }
 
     [Parameter]

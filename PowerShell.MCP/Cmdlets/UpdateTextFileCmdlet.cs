@@ -29,6 +29,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
 
     [Parameter(ParameterSetName = "Literal")]
     [Parameter(ParameterSetName = "Regex")]
+    [ValidateLineRange]
     public int[]? LineRange { get; set; }
 
     [Parameter(ParameterSetName = "Literal")]

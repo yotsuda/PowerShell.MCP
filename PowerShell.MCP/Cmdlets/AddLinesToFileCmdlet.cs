@@ -18,6 +18,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     public object[] Content { get; set; } = null!;
 
     [Parameter(ParameterSetName = "LineNumber", Mandatory = true)]
+    [ValidateRange(1, int.MaxValue)]
     public int LineNumber { get; set; }
 
     [Parameter(ParameterSetName = "AtEnd", Mandatory = true)]
