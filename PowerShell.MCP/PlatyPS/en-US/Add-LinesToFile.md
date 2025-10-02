@@ -27,7 +27,6 @@ Add-LinesToFile [-Path] <String[]> [-Content] <Object[]> [-AtEnd] [-Encoding <St
 ## DESCRIPTION
 Inserts one or more lines into a text file at a specified line number or at the end. The inserted content becomes the specified line number, shifting existing lines down. Handles empty files gracefully. Preserves file metadata (encoding, newlines).
 
-
 ## EXAMPLES
 
 ### Example 1: Insert lines at specific positions
@@ -259,3 +258,5 @@ Empty file handling:
 
 - Works correctly with empty files
 - -LineNumber 1 is the only valid choice for empty files
+
+## RELATED LINKS

@@ -40,8 +40,7 @@ NEVER use Get-Content or Set-Content for text file operations. This module inclu
 
 • Set-LinesToFile [-Path] <string[]> [-LineRange <int[]>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
 
-• Remove-LinesFromFile [-Path] <string[]> -LineRange <int[]> [-Encoding <string>] [-Backup]
-  Remove-LinesFromFile [-Path] <string[]> -Pattern <regex> [-Encoding <string>] [-Backup]
+• Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Pattern <string>] [-Encoding <string>] [-Backup]
 
 IMPORTANT: 
 - <string[]> and <int[]> mean these parameters accept ARRAYS (multiple values)

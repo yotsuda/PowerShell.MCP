@@ -75,7 +75,6 @@ config.js: 0 replacement(s) made
 
 If the search string is not found, the cmdlet reports 0 replacements and the file remains unchanged.
 
-
 ## PARAMETERS
 
 ### -Backup

@@ -12,20 +12,13 @@ Remove lines from a text file by line range or pattern matching
 
 ## SYNTAX
 
-### LineRange
 ```
-Remove-LinesFromFile [-Path] <String[]> -LineRange <Int32[]> [-Encoding <String>] [-Backup]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
-```
-
-### Pattern
-```
-Remove-LinesFromFile [-Path] <String[]> -Pattern <String> [-Encoding <String>] [-Backup]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Remove-LinesFromFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Encoding <String>]
+ [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Removes one or more lines from a text file either by specifying a line range or by matching a regular expression pattern. All matching lines are removed. Preserves file metadata (encoding, newlines).
+Removes one or more lines from a text file either by specifying a line range, matching a regular expression pattern, or both. When both LineRange and Pattern are specified, only lines within the range that match the pattern are removed. Preserves file metadata (encoding, newlines).
 
 ## EXAMPLES
 
@@ -64,7 +57,15 @@ Removed 3 line(s) from Program.cs
 
 Removes all lines containing TODO comments.
 
-### Example 5: No matches found
+### Example 5: Combine LineRange and Pattern (AND condition)
+```powershell
+PS C:\> Remove-LinesFromFile app.log -LineRange 100,200 -Pattern "^DEBUG:"
+Removed 12 line(s) from app.log
+```
+
+Removes only DEBUG lines within lines 100-200. Both conditions must be met (AND).
+
+### Example 6: No matches found
 ```powershell
 PS C:\> Remove-LinesFromFile data.txt -Pattern "NOTEXIST"
 WARNING: No lines matched. File not modified.
@@ -120,14 +121,14 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Specifies the line range to remove. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 10,20). Both endpoints are inclusive. Cannot be used with -Pattern.
+Specifies the line range to remove. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 10,20). Both endpoints are inclusive. Can be combined with -Pattern for AND condition.
 
 ```yaml
 Type: Int32[]
-Parameter Sets: LineRange
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -150,14 +151,14 @@ Accept wildcard characters: True
 ```
 
 ### -Pattern
-Regular expression pattern to match lines for removal. All matching lines are removed. Cannot be used with -LineRange.
+Regular expression pattern to match lines for removal. All matching lines are removed. Can be combined with -LineRange for AND condition.
 
 ```yaml
 Type: String
-Parameter Sets: Pattern
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -208,6 +209,8 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## NOTES
 
+At least one of -LineRange or -Pattern must be specified.
+
 BEST PRACTICE - Verify before deletion:
 
 1. Preview what will be deleted: Show-TextFile app.log -Pattern "^DEBUG:"
@@ -220,12 +223,19 @@ Pattern matching tips:
 - Use anchors (^ for start, $ for end) for precise matching
 - Remember that ALL matching lines are removed
 
+Combining parameters:
+
+- LineRange only: Removes specific lines by number
+- Pattern only: Removes all lines matching the pattern
+- LineRange + Pattern: Removes only matching lines within the specified range (AND condition)
+
 Safety considerations:
 
 - No undo after removal (unless you used -Backup or have version control)
 - If no lines match, the file remains unchanged with a warning
 - Use -LineRange for precise deletion of known line numbers
 - Use -Pattern for content-based deletion
+- Use both for targeted deletion within a specific section
 
 Common patterns:
 

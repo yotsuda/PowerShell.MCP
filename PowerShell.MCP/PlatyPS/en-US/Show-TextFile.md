@@ -12,21 +12,8 @@ Display text file contents with line numbers
 
 ## SYNTAX
 
-### Default (Default)
 ```
-Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Encoding <String>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
-```
-
-### LineRange
-```
-Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Encoding <String>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
-```
-
-### Pattern
-```
-Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] -Pattern <String> [-Encoding <String>]
+Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Encoding <String>]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -147,10 +134,10 @@ Specifies a regular expression pattern to search for. Only lines matching the pa
 
 ```yaml
 Type: String
-Parameter Sets: Pattern
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False

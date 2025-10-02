@@ -5,7 +5,7 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// ファイルから行を削除
-/// LLM最適化：行範囲指定またはパターンマッチで削除
+/// LLM最適化：行範囲指定またはパターンマッチで削除（両方の組み合わせも可能）
 /// </summary>
 [Cmdlet(VerbsCommon.Remove, "LinesFromFile", SupportsShouldProcess = true)]
 public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
@@ -15,11 +15,11 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 
-    [Parameter(ParameterSetName = "LineRange", Mandatory = true)]
-    public int[] LineRange { get; set; } = null!;
+    [Parameter]
+    public int[]? LineRange { get; set; }
 
-    [Parameter(ParameterSetName = "Pattern", Mandatory = true)]
-    public string Pattern { get; set; } = null!;
+    [Parameter]
+    public string? Pattern { get; set; }
 
     [Parameter]
     public string? Encoding { get; set; }
@@ -27,11 +27,23 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
+    protected override void BeginProcessing()
+    {
+        // LineRange と Pattern の少なくとも一方が指定されているかチェック
+        if (LineRange == null && string.IsNullOrEmpty(Pattern))
+        {
+            throw new PSArgumentException("At least one of -LineRange or -Pattern must be specified.");
+        }
+
+        // LineRange バリデーション
+        if (LineRange != null)
+        {
+            ValidateLineRange(LineRange);
+        }
+    }
+
     protected override void ProcessRecord()
     {
-        // LineRangeバリデーション（最優先）
-        ValidateLineRange(LineRange);
-
         foreach (var path in Path)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
@@ -68,17 +80,27 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                     int startLine = int.MaxValue;
                     int endLine = int.MaxValue;
-                    Regex regex = null;
+                    Regex? regex = null;
+
+                    // 削除条件の準備
+                    bool useLineRange = LineRange != null;
+                    bool usePattern = !string.IsNullOrEmpty(Pattern);
 
                     string actionDescription;
-                    if (ParameterSetName == "LineRange")
+                    if (useLineRange && usePattern)
                     {
-                        (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
+                        (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
+                        regex = new Regex(Pattern!);
+                        actionDescription = $"Remove lines {startLine}-{endLine} matching pattern: {Pattern}";
+                    }
+                    else if (useLineRange)
+                    {
+                        (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
                         actionDescription = $"Remove lines {startLine}-{endLine}";
                     }
-                    else
+                    else // usePattern only
                     {
-                        regex = new Regex(Pattern);
+                        regex = new Regex(Pattern!);
                         actionDescription = $"Remove lines matching pattern: {Pattern}";
                     }
 
@@ -122,13 +144,20 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 {
                                     bool shouldRemove = false;
 
-                                    if (ParameterSetName == "LineRange")
+                                    // 条件判定：LineRange AND/OR Pattern
+                                    if (useLineRange && usePattern)
+                                    {
+                                        // 両方指定されている場合はAND条件
+                                        shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
+                                                      regex!.IsMatch(currentLine);
+                                    }
+                                    else if (useLineRange)
                                     {
                                         shouldRemove = lineNumber >= startLine && lineNumber <= endLine;
                                     }
-                                    else
+                                    else // usePattern only
                                     {
-                                        shouldRemove = regex.IsMatch(currentLine);
+                                        shouldRemove = regex!.IsMatch(currentLine);
                                     }
 
                                     if (!shouldRemove)
@@ -196,6 +225,3 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
         }
     }
 }
-
-
-

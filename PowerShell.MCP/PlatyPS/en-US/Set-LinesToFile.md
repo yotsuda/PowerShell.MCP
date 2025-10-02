@@ -13,8 +13,8 @@ Replace or delete specific lines in a text file
 ## SYNTAX
 
 ```
-Set-LinesToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineRange <Int32[]>] [-Encoding <String>] [-Backup]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Set-LinesToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineRange <Int32[]>] [-Encoding <String>]
+ [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -73,7 +73,6 @@ Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
-
 
 ### -Confirm
 Prompts you for confirmation before running the cmdlet.
