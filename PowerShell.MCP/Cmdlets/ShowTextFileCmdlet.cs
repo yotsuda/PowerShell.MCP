@@ -137,7 +137,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private void ShowWithPattern(string filePath, System.Text.Encoding encoding)
     {
-        var regex = new Regex(Pattern);
+        var regex = new Regex(Pattern, RegexOptions.Compiled);
 
         // 行範囲を取得
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
