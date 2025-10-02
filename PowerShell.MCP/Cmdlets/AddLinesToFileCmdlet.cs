@@ -20,7 +20,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     [Parameter(ParameterSetName = "LineNumber", Mandatory = true)]
     public int LineNumber { get; set; }
 
-    [Parameter(ParameterSetName = "AtEnd")]
+    [Parameter(ParameterSetName = "AtEnd", Mandatory = true)]
     public SwitchParameter AtEnd { get; set; }
 
     [Parameter]

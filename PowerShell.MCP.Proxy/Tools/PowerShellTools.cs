@@ -24,13 +24,16 @@ public static class PowerShellTools
     [McpServerTool]
     [Description(@"Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.
 
+⚠️ IMPORTANT - Verbose/Debug Output Streams:
+Verbose and Debug streams are NOT captured and NOT visible to the LLM. These streams display only in the user's console. If you need verbose/debug information from a command, ask the user to copy it from the console and share it with you.
+
 ⚠️ IMPORTANT - Variable Scope:
 Local variables are NOT preserved between invoke_expression calls. Use $script: or $global: scope to share variables across calls.
 
 ⚠️ CRITICAL - Text File Operations:
 NEVER use Get-Content or Set-Content for text file operations. This module includes LLM-optimized cmdlets that preserve file metadata (encoding, newlines) and provide better error handling:
 
-• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Pattern <string>] [-Encoding <string>] [<CommonParameters>]
+• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Pattern <string>] [-Encoding <string>]
 
 • Update-TextFile [-Path] <string[]> -OldValue <string> -NewValue <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
   Update-TextFile [-Path] <string[]> -Pattern <regex> -Replacement <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
@@ -38,7 +41,7 @@ NEVER use Get-Content or Set-Content for text file operations. This module inclu
 • Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> -LineNumber <int> [-Encoding <string>] [-Backup]
   Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> -AtEnd [-Encoding <string>] [-Backup]
 
-• Set-LinesToFile [-Path] <string[]> [-LineRange <int[]>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
+• Set-LinesToFile [-Path] <string[]> [[-Content] <Object[]>] [-LineRange <int[]>] [-Encoding <string>] [-Backup]
 
 • Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Pattern <string>] [-Encoding <string>] [-Backup]
 
