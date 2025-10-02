@@ -55,7 +55,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 - PowerShell naturally chains commands together, passing rich data between them
 - AI assistants leverage this composability to build sophisticated workflows from simple building blocks
 - Example: "Show me the top 5 largest log files" becomes `Get-ChildItem *.log | sort Length -Descending | select -First 5`
-- Unlike approaches that expose each cmdlet as individual MCP tools, PowerShell.MCP enables AI to freely combine any commands into flexible pipelines
+- Unlike approaches that expose each cmdlet/CLI tool as individual MCP tools, PowerShell.MCP enables AI to freely combine any commands into flexible pipelines
 - You describe what you want in natural language - AI constructs the optimal pipeline automatically
 - No need to understand pipeline syntax yourself - just tell AI what you need
 
