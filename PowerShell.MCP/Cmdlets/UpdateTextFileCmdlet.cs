@@ -95,7 +95,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
         
         int replacementCount = 0;
         var isLiteral = ParameterSetName == "Literal";
-        var regex = isLiteral ? null : new Regex(Pattern);
+        var regex = isLiteral ? null : new Regex(Pattern, RegexOptions.Compiled);
         
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
