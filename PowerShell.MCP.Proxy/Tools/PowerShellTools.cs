@@ -22,7 +22,38 @@ public static class PowerShellTools
     }
 
     [McpServerTool]
-    [Description("Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes. CRITICAL - Text file editing: Do NOT use Get-Content/Set-Content for text file operations. This module includes LLM-optimized text editing cmdlets that preserve file metadata (encoding, newlines) and provide better error handling: Show-TextFile (view with line numbers), Update-TextFile (find/replace), Set-LineToFile (replace lines), Add-LineToFile (insert lines), Remove-LineFromFile (delete lines). Use Get-Help <cmdlet-name> for details.")]
+    [Description(@"Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.
+
+⚠️ IMPORTANT - Variable Scope:
+Local variables are NOT preserved between invoke_expression calls. Use $script: or $global: scope to share variables across calls.
+
+⚠️ CRITICAL - Text File Operations:
+NEVER use Get-Content or Set-Content for text file operations. This module includes LLM-optimized cmdlets that preserve file metadata (encoding, newlines) and provide better error handling:
+
+• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Encoding <string>]
+  Show-TextFile [-Path] <string[]> -Pattern <regex> [-Context <int>] [-Encoding <string>]
+
+• Update-TextFile [-Path] <string[]> -OldValue <string> -NewValue <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
+  Update-TextFile [-Path] <string[]> -Pattern <regex> -Replacement <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
+
+• Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> -LineNumber <int> [-Encoding <string>] [-Backup]
+  Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> -AtEnd [-Encoding <string>] [-Backup]
+
+• Set-LinesToFile [-Path] <string[]> [-LineRange <int[]>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
+
+• Remove-LinesFromFile [-Path] <string[]> -LineRange <int[]> [-Encoding <string>] [-Backup]
+  Remove-LinesFromFile [-Path] <string[]> -Pattern <regex> [-Encoding <string>] [-Backup]
+
+IMPORTANT: 
+- <string[]> and <int[]> mean these parameters accept ARRAYS (multiple values)
+- Content parameter in Add-LinesToFile accepts Object[] - you can pass string arrays for multiple lines
+- Always check parameter types before using - arrays can be passed directly without loops
+
+USE BUILT-IN PARAMETERS:
+  ✅ CORRECT: Show-TextFile file.txt -LineRange 10,20
+  ❌ WRONG: Show-TextFile file.txt | Select-Object -Skip 9 -First 11
+
+For detailed examples: Get-Help <cmdlet-name> -Examples")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]

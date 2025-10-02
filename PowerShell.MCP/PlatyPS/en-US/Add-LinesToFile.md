@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# Add-LineToFile
+# Add-LinesToFile
 
 ## SYNOPSIS
 Insert lines into a text file at a specific position or at the end
@@ -14,13 +14,13 @@ Insert lines into a text file at a specific position or at the end
 
 ### LineNumber
 ```
-Add-LineToFile [-Path] <String[]> [-Content] <Object[]> -LineNumber <Int32> [-Encoding <String>] [-Backup]
+Add-LinesToFile [-Path] <String[]> [-Content] <Object[]> -LineNumber <Int32> [-Encoding <String>] [-Backup]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### AtEnd
 ```
-Add-LineToFile [-Path] <String[]> [-Content] <Object[]> [-AtEnd] [-Encoding <String>] [-Backup]
+Add-LinesToFile [-Path] <String[]> [-Content] <Object[]> [-AtEnd] [-Encoding <String>] [-Backup]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -32,10 +32,10 @@ Inserts one or more lines into a text file at a specified line number or at the 
 
 ### Example 1: Insert lines at specific positions
 ```powershell
-PS C:\> Add-LineToFile Program.cs -LineNumber 1 -Content "using System.Linq;"
+PS C:\> Add-LinesToFile Program.cs -LineNumber 1 -Content "using System.Linq;"
 Added 1 line(s) to Program.cs at line 1
 
-PS C:\> Add-LineToFile script.ps1 -LineNumber 10 -Content "# TODO: Implement this feature"
+PS C:\> Add-LinesToFile script.ps1 -LineNumber 10 -Content "# TODO: Implement this feature"
 Added 1 line(s) to script.ps1 at line 10
 ```
 
@@ -43,7 +43,7 @@ Inserts content at line 1 (beginning) or line 10 (middle). The original content 
 
 ### Example 2: Append to the end of the file
 ```powershell
-PS C:\> Add-LineToFile log.txt -AtEnd -Content "Process completed at $(Get-Date)"
+PS C:\> Add-LinesToFile log.txt -AtEnd -Content "Process completed at $(Get-Date)"
 Added 1 line(s) to log.txt at end
 ```
 
@@ -52,7 +52,7 @@ Appends a timestamped message to the end of the file.
 ### Example 3: Insert multiple lines
 ```powershell
 PS C:\> $headers = @("using System;", "using System.Collections.Generic;", "using System.Linq;")
-PS C:\> Add-LineToFile Program.cs -LineNumber 1 -Content $headers
+PS C:\> Add-LinesToFile Program.cs -LineNumber 1 -Content $headers
 Added 3 line(s) to Program.cs at line 1
 ```
 
@@ -60,7 +60,7 @@ Inserts multiple using statements as a block at the beginning.
 
 ### Example 4: Insert into an empty file
 ```powershell
-PS C:\> Add-LineToFile empty.txt -LineNumber 1 -Content "First line"
+PS C:\> Add-LinesToFile empty.txt -LineNumber 1 -Content "First line"
 Added 1 line(s) to empty.txt at line 1
 ```
 
@@ -68,7 +68,7 @@ Works correctly with empty files. The content becomes the first line.
 
 ### Example 5: With backup
 ```powershell
-PS C:\> Add-LineToFile config.txt -LineNumber 5 -Content "NewSetting=Value" -Backup
+PS C:\> Add-LinesToFile config.txt -LineNumber 5 -Content "NewSetting=Value" -Backup
 Added 1 line(s) to config.txt at line 5
 PS C:\> Get-ChildItem config.txt*
 
@@ -236,7 +236,7 @@ BEST PRACTICE - Verify insertion point:
    Show-TextFile Program.cs -LineRange 1,5
 
 2. Insert the line:
-   Add-LineToFile Program.cs -LineNumber 3 -Content "using System.Linq;"
+   Add-LinesToFile Program.cs -LineNumber 3 -Content "using System.Linq;"
 
 3. Verify the insertion:
    Show-TextFile Program.cs -LineRange 1,6

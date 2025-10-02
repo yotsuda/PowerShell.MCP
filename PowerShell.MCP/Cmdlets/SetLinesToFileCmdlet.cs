@@ -6,8 +6,8 @@ namespace PowerShell.MCP.Cmdlets;
 /// ファイルの行を設定
 /// LLM最適化：行範囲指定または全体置換、Content省略で削除
 /// </summary>
-[Cmdlet(VerbsCommon.Set, "LineToFile", SupportsShouldProcess = true)]
-public class SetLineToFileCmdlet : TextFileCmdletBase
+[Cmdlet(VerbsCommon.Set, "LinesToFile", SupportsShouldProcess = true)]
+public class SetLinesToFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
@@ -15,7 +15,7 @@ public class SetLineToFileCmdlet : TextFileCmdletBase
     public string[] Path { get; set; } = null!;
 
     [Parameter(Position = 1)]
-    public object[] Content { get; set; }
+    public object[]? Content { get; set; }
 
     [Parameter]
     public int[]? LineRange { get; set; }

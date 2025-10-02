@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# Remove-LineFromFile
+# Remove-LinesFromFile
 
 ## SYNOPSIS
 Remove lines from a text file by line range or pattern matching
@@ -14,13 +14,13 @@ Remove lines from a text file by line range or pattern matching
 
 ### LineRange
 ```
-Remove-LineFromFile [-Path] <String[]> -LineRange <Int32[]> [-Encoding <String>] [-Backup]
+Remove-LinesFromFile [-Path] <String[]> -LineRange <Int32[]> [-Encoding <String>] [-Backup]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Pattern
 ```
-Remove-LineFromFile [-Path] <String[]> -Pattern <String> [-Encoding <String>] [-Backup]
+Remove-LinesFromFile [-Path] <String[]> -Pattern <String> [-Encoding <String>] [-Backup]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -31,10 +31,10 @@ Removes one or more lines from a text file either by specifying a line range or 
 
 ### Example 1: Remove specific lines or ranges
 ```powershell
-PS C:\> Remove-LineFromFile data.txt -LineRange 5
+PS C:\> Remove-LinesFromFile data.txt -LineRange 5
 Removed 1 line(s) from data.txt
 
-PS C:\> Remove-LineFromFile data.txt -LineRange 10,15
+PS C:\> Remove-LinesFromFile data.txt -LineRange 10,15
 Removed 6 line(s) from data.txt
 ```
 
@@ -42,7 +42,7 @@ Removes line 5, or lines 10-15 (inclusive). Use -LineRange for precise line-base
 
 ### Example 2: Remove all DEBUG lines
 ```powershell
-PS C:\> Remove-LineFromFile app.log -Pattern "^DEBUG:"
+PS C:\> Remove-LinesFromFile app.log -Pattern "^DEBUG:"
 Removed 47 line(s) from app.log
 ```
 
@@ -50,7 +50,7 @@ Removes all lines starting with "DEBUG:". Useful for cleaning log files.
 
 ### Example 3: Remove empty lines
 ```powershell
-PS C:\> Remove-LineFromFile data.txt -Pattern "^\s*$"
+PS C:\> Remove-LinesFromFile data.txt -Pattern "^\s*$"
 Removed 12 line(s) from data.txt
 ```
 
@@ -58,7 +58,7 @@ Removes all empty or whitespace-only lines.
 
 ### Example 4: Remove TODO comments
 ```powershell
-PS C:\> Remove-LineFromFile Program.cs -Pattern "//\s*TODO"
+PS C:\> Remove-LinesFromFile Program.cs -Pattern "//\s*TODO"
 Removed 3 line(s) from Program.cs
 ```
 
@@ -66,7 +66,7 @@ Removes all lines containing TODO comments.
 
 ### Example 5: No matches found
 ```powershell
-PS C:\> Remove-LineFromFile data.txt -Pattern "NOTEXIST"
+PS C:\> Remove-LinesFromFile data.txt -Pattern "NOTEXIST"
 WARNING: No lines matched. File not modified.
 ```
 
@@ -209,7 +209,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 BEST PRACTICE - Verify before deletion:
 1. Preview what will be deleted: Show-TextFile app.log -Pattern "^DEBUG:"
-2. Remove matching lines: Remove-LineFromFile app.log -Pattern "^DEBUG:"
+2. Remove matching lines: Remove-LinesFromFile app.log -Pattern "^DEBUG:"
 3. Verify the result: Show-TextFile app.log -LineRange 1,20
 
 Pattern matching tips:

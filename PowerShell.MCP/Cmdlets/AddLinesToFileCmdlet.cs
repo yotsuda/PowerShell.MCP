@@ -6,8 +6,8 @@ namespace PowerShell.MCP.Cmdlets;
 /// ファイルに行を挿入
 /// LLM最適化：行番号指定または末尾追加、空ファイルにも対応
 /// </summary>
-[Cmdlet(VerbsCommon.Add, "LineToFile", SupportsShouldProcess = true)]
-public class AddLineToFileCmdlet : TextFileCmdletBase
+[Cmdlet(VerbsCommon.Add, "LinesToFile", SupportsShouldProcess = true)]
+public class AddLinesToFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]

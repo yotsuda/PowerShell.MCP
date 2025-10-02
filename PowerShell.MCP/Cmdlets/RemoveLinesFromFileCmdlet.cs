@@ -7,8 +7,8 @@ namespace PowerShell.MCP.Cmdlets;
 /// ファイルから行を削除
 /// LLM最適化：行範囲指定またはパターンマッチで削除
 /// </summary>
-[Cmdlet(VerbsCommon.Remove, "LineFromFile", SupportsShouldProcess = true)]
-public class RemoveLineFromFileCmdlet : TextFileCmdletBase
+[Cmdlet(VerbsCommon.Remove, "LinesFromFile", SupportsShouldProcess = true)]
+public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 {
     [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]

@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# Set-LineToFile
+# Set-LinesToFile
 
 ## SYNOPSIS
 Replace or delete specific lines in a text file
@@ -13,7 +13,7 @@ Replace or delete specific lines in a text file
 ## SYNTAX
 
 ```
-Set-LineToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineRange <Int32[]>] [-Encoding <String>] [-Backup]
+Set-LinesToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineRange <Int32[]>] [-Encoding <String>] [-Backup]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -24,7 +24,7 @@ Replaces specified lines with new content or deletes them if content is omitted.
 
 ### Example 1: Replace a single line
 ```powershell
-PS C:\> Set-LineToFile config.txt -LineRange 5 -Content "Port=9000"
+PS C:\> Set-LinesToFile config.txt -LineRange 5 -Content "Port=9000"
 Updated config.txt: 1 line(s) replaced
 ```
 
@@ -32,7 +32,7 @@ Replaces line 5 with the new content.
 
 ### Example 2: Replace multiple lines with one line
 ```powershell
-PS C:\> Set-LineToFile config.txt -LineRange 10,12 -Content "Server=https://localhost:8080"
+PS C:\> Set-LinesToFile config.txt -LineRange 10,12 -Content "Server=https://localhost:8080"
 Updated config.txt: 3 line(s) replaced
 ```
 
@@ -40,10 +40,10 @@ Replaces lines 10-12 with a single line, effectively condensing 3 lines into 1.
 
 ### Example 3: Delete lines by omitting content
 ```powershell
-PS C:\> Set-LineToFile data.txt -LineRange 3
+PS C:\> Set-LinesToFile data.txt -LineRange 3
 Updated data.txt: 1 line(s) deleted
 
-PS C:\> Set-LineToFile data.txt -LineRange 5,7
+PS C:\> Set-LinesToFile data.txt -LineRange 5,7
 Updated data.txt: 3 line(s) deleted
 ```
 
@@ -51,7 +51,7 @@ When -Content is omitted, the specified line(s) are deleted. Works with single l
 
 ### Example 4: Replace entire file content
 ```powershell
-PS C:\> Set-LineToFile config.txt -Content @("Line 1", "Line 2", "Line 3")
+PS C:\> Set-LinesToFile config.txt -Content @("Line 1", "Line 2", "Line 3")
 Updated config.txt: 5 line(s) replaced
 ```
 
@@ -62,7 +62,7 @@ When -LineRange is omitted, replaces the entire file content. The original file 
 PS C:\> $lines = Get-Content config.txt
 PS C:\> $lines[1] = "ServerName=production"
 PS C:\> $lines[4] = "Port=443"
-PS C:\> Set-LineToFile config.txt -Content $lines
+PS C:\> Set-LinesToFile config.txt -Content $lines
 Updated config.txt: 10 line(s) replaced
 ```
 
@@ -206,7 +206,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 BEST PRACTICE - Always verify before replacing:
 1. First, check what you're about to replace: Show-TextFile config.txt -LineRange 30,40
-2. Then perform the replacement: Set-LineToFile config.txt -LineRange 30,40 -Content $newContent
+2. Then perform the replacement: Set-LinesToFile config.txt -LineRange 30,40 -Content $newContent
 3. Verify the result: Show-TextFile config.txt -LineRange 30,40
 
 This three-step workflow (Show -> Set -> Show) prevents accidental data loss by confirming line numbers before modification.

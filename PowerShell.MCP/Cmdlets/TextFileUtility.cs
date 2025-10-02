@@ -218,42 +218,41 @@ public static class TextFileUtility
         FileMetadata metadata,
         Func<string, int, string> lineProcessor)
     {
-        using (var reader = new StreamReader(inputPath, metadata.Encoding, false, 65536)) // 64KB buffer
-        using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536)) // 64KB buffer
+        using var reader = new StreamReader(inputPath, metadata.Encoding, false, 65536); // 64KB buffer
+        using var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536); // 64KB buffer
+
+        string currentLine = reader.ReadLine();
+        if (currentLine == null)
         {
-            string currentLine = reader.ReadLine();
-            if (currentLine == null)
-            {
-                // 空ファイル
-                return;
-            }
+            // 空ファイル
+            return;
+        }
             
-            int lineNumber = 1;
-            string nextLine = reader.ReadLine();
+        int lineNumber = 1;
+        string nextLine = reader.ReadLine();
             
-            while (true)
-            {
-                // 行を処理
-                string processedLine = lineProcessor(currentLine, lineNumber);
-                writer.Write(processedLine);
+        while (true)
+        {
+            // 行を処理
+            string processedLine = lineProcessor(currentLine, lineNumber);
+            writer.Write(processedLine);
                 
-                if (nextLine != null)
+            if (nextLine != null)
+            {
+                // 次の行があるので改行を追加
+                writer.Write(metadata.NewlineSequence);
+                lineNumber++;
+                currentLine = nextLine;
+                nextLine = reader.ReadLine();
+            }
+            else
+            {
+                // 最終行：末尾改行が元々あった場合のみ追加
+                if (metadata.HasTrailingNewline)
                 {
-                    // 次の行があるので改行を追加
                     writer.Write(metadata.NewlineSequence);
-                    lineNumber++;
-                    currentLine = nextLine;
-                    nextLine = reader.ReadLine();
                 }
-                else
-                {
-                    // 最終行：末尾改行が元々あった場合のみ追加
-                    if (metadata.HasTrailingNewline)
-                    {
-                        writer.Write(metadata.NewlineSequence);
-                    }
-                    break;
-                }
+                break;
             }
         }
     }
