@@ -91,7 +91,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     if (useLineRange && usePattern)
                     {
                         (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
-                        regex = new Regex(Pattern!);
+                        regex = new Regex(Pattern!, RegexOptions.Compiled);
                         actionDescription = $"Remove lines {startLine}-{endLine} matching pattern: {Pattern}";
                     }
                     else if (useLineRange)
@@ -101,7 +101,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     }
                     else // usePattern only
                     {
-                        regex = new Regex(Pattern!);
+                        regex = new Regex(Pattern!, RegexOptions.Compiled);
                         actionDescription = $"Remove lines matching pattern: {Pattern}";
                     }
 
