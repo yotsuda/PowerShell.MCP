@@ -48,7 +48,7 @@ Uses regex to change "const" declarations to "let" while preserving variable nam
 ### Example 3: Replace within a specific line range
 ```powershell
 PS C:$> Update-TextFile data.txt -LineRange 10,20 -OldValue "old" -NewValue "new"
-Updated data.txt: 3 replacement(s) made
+Updated data.txt: 11 replacement(s) made
 ```
 
 Only replaces matches within lines 10-20 (inclusive). Lines outside this range are unchanged.
@@ -70,18 +70,11 @@ Creates a timestamped backup file before making changes. Useful for critical fil
 ### Example 5: No matches found
 ```powershell
 PS C:$> Update-TextFile config.js -OldValue "NotExist" -NewValue "Something"
-WARNING: No matches found. File not modified.
+config.js: 0 replacement(s) made
 ```
 
-If the search string is not found, a warning is displayed and the file remains unchanged.
+If the search string is not found, the cmdlet reports 0 replacements and the file remains unchanged.
 
-### Example 6: Preview changes with -WhatIf
-```powershell
-PS C:$> Update-TextFile config.js -OldValue "staging" -NewValue "production" -WhatIf
-What if: Performing the operation "Update text in file" on target "C:$Temp$config.js".
-```
-
-Shows what would happen without actually modifying the file. Useful for verifying changes before applying them.
 
 ## PARAMETERS
 
@@ -191,7 +184,7 @@ Accept wildcard characters: True
 ```
 
 ### -Pattern
-Regular expression pattern to search for. Use with -Replacement parameter. Supports capture groups (, , etc.).
+Regular expression pattern to search for. Use with -Replacement parameter. Supports capture groups ($1, $2, etc.).
 
 ```yaml
 Type: String
@@ -206,7 +199,7 @@ Accept wildcard characters: False
 ```
 
 ### -Replacement
-The replacement string for regex replacement. Used with -Pattern parameter. Supports backreferences (, , etc.) to captured groups.
+The replacement string for regex replacement. Used with -Pattern parameter. Supports backreferences ($1, $2, etc.) to captured groups. Note: In PowerShell strings, escape the dollar sign with a backtick (` $1`) to prevent variable expansion.
 
 ```yaml
 Type: String
@@ -261,29 +254,39 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ### System.Object
+
 ## NOTES
 
 BEST PRACTICE - Verify before and after:
+
 1. Check current content: Show-TextFile config.js -Pattern "localhost"
+
 2. Make the replacement: Update-TextFile config.js -OldValue "localhost" -NewValue "production"
+
 3. Verify the change: Show-TextFile config.js -Pattern "production"
 
 CRITICAL - Handling special characters (dollar, braces, quotes):
+
 When replacing code with special characters, ALWAYS use here-strings.
 Example: $old = @'...'@ and $new = @'...'@ then Update-TextFile file.cs -OldValue $old -NewValue $new
+
 Here-strings (@'...'@) treat ALL characters literally.
 
 When to use -LineRange:
+
 - Limit to specific section (use Show-TextFile line numbers)
 - Avoid unintended replacements elsewhere
 - Essential when text appears multiple times
 
 When to use -Backup:
+
 - Files not under version control
 - Critical configuration changes
 
 Regular expression mode:
+
 - Use for complex transformations
 - Test first: Show-TextFile -Pattern "regex"
 - Escape special regex chars: . * + ? [ ] ( ) { } ^ $ |
+
 ## RELATED LINKS

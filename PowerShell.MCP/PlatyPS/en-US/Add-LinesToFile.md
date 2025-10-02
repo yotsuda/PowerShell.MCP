@@ -228,6 +228,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ### System.Object
+
 ## NOTES
 
 BEST PRACTICE - Verify insertion point:
@@ -242,16 +243,19 @@ BEST PRACTICE - Verify insertion point:
    Show-TextFile Program.cs -LineRange 1,6
 
 Understanding line numbers:
+
 - The content becomes the specified line number
 - Original lines at and after that position shift down
 - Line number 1 means "insert at the beginning"
 - -AtEnd always appends at the end, regardless of file size
 
 Multiple line insertion:
+
 - Pass an array to insert multiple lines at once
 - All lines are inserted as a contiguous block
 - They are inserted in the order provided
 
 Empty file handling:
+
 - Works correctly with empty files
 - -LineNumber 1 is the only valid choice for empty files

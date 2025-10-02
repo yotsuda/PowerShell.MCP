@@ -182,26 +182,34 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ### System.Object
+
 ## NOTES
 
 Typical LLM workflow:
+
 1. Find the problem area: Show-TextFile Program.cs -Pattern "ERROR"
+
 2. Examine context: Show-TextFile Program.cs -LineRange 45,55
+
 3. Make the fix: Update-TextFile Program.cs -LineRange 48 -OldValue "Bug" -NewValue "Fix"
+
 4. Verify the fix: Show-TextFile Program.cs -LineRange 45,55
 
 Line numbering:
+
 - Line numbers are 1-based (first line is 1, not 0)
 - Matches editor line numbers and compiler error messages
-- Line numbers are always displayed in 4-digit format for alignment
 
 Pattern matching:
+
 - Matching lines are prefixed with * for easy identification
 - Combine -Pattern with -LineRange to search within a specific section
 - Use Show-TextFile to test regex patterns before using them in Update-TextFile
 
 Multiple files:
+
 - Wildcards are supported (*.cs, test*.txt, etc.)
 - Files are separated by blank lines with headers
 - Useful for quickly surveying related files
+
 ## RELATED LINKS

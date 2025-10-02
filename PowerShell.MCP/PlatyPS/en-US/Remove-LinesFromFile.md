@@ -43,7 +43,7 @@ Removes line 5, or lines 10-15 (inclusive). Use -LineRange for precise line-base
 ### Example 2: Remove all DEBUG lines
 ```powershell
 PS C:\> Remove-LinesFromFile app.log -Pattern "^DEBUG:"
-Removed 47 line(s) from app.log
+Removed 23 line(s) from app.log
 ```
 
 Removes all lines starting with "DEBUG:". Useful for cleaning log files.
@@ -51,7 +51,7 @@ Removes all lines starting with "DEBUG:". Useful for cleaning log files.
 ### Example 3: Remove empty lines
 ```powershell
 PS C:\> Remove-LinesFromFile data.txt -Pattern "^\s*$"
-Removed 12 line(s) from data.txt
+Removed 7 line(s) from data.txt
 ```
 
 Removes all empty or whitespace-only lines.
@@ -205,25 +205,30 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ### System.Object
+
 ## NOTES
 
 BEST PRACTICE - Verify before deletion:
+
 1. Preview what will be deleted: Show-TextFile app.log -Pattern "^DEBUG:"
 2. Remove matching lines: Remove-LinesFromFile app.log -Pattern "^DEBUG:"
 3. Verify the result: Show-TextFile app.log -LineRange 1,20
 
 Pattern matching tips:
+
 - Test your pattern with Show-TextFile -Pattern first
 - Use anchors (^ for start, $ for end) for precise matching
 - Remember that ALL matching lines are removed
 
 Safety considerations:
+
 - No undo after removal (unless you used -Backup or have version control)
 - If no lines match, the file remains unchanged with a warning
 - Use -LineRange for precise deletion of known line numbers
 - Use -Pattern for content-based deletion
 
 Common patterns:
+
 - Empty lines: ^\s*$
 - Comments: ^\s*// or ^\s*#
 - Debug statements: console\.log|System\.out\.println
