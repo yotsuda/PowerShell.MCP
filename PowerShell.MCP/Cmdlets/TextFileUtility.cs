@@ -306,6 +306,14 @@ public static class TextFileUtility
     /// </summary>
     public static void ReplaceFileAtomic(string targetPath, string tempFile)
     {
+        // 新規ファイルの場合は単純に移動
+        if (!File.Exists(targetPath))
+        {
+            File.Move(tempFile, targetPath);
+            return;
+        }
+
+        // 既存ファイルの場合はアトミック置換
         var backupTemp = targetPath + ".tmp";
         if (File.Exists(backupTemp))
         {
