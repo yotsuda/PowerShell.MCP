@@ -4,7 +4,7 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// ファイルに行を追加（新規作成も可能）
-/// LLM最適化：新規・既存ファイル共に-AtEnd/-LineNumberが必須（2つのパラメータセット）
+/// LLM最適化:新規ファイルではパラメータ不要、既存ファイルでは-AtEndまたは-LineNumberが必須
 /// </summary>
 [Cmdlet(VerbsCommon.Add, "LinesToFile", SupportsShouldProcess = true)]
 public class AddLinesToFileCmdlet : TextFileCmdletBase
@@ -41,16 +41,6 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             ThrowTerminatingError(new ErrorRecord(
                 new ArgumentException("Cannot specify both -AtEnd and -LineNumber."),
                 "ConflictingParameters",
-                ErrorCategory.InvalidArgument,
-                null));
-        }
-
-        // どちらも指定されていない場合はエラー
-        if (!AtEnd.IsPresent && LineNumber == 0)
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Either -AtEnd or -LineNumber must be specified."),
-                "ParameterRequired",
                 ErrorCategory.InvalidArgument,
                 null));
         }
@@ -129,16 +119,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             // ワイルドカード展開された全てのファイルを処理
             foreach (var resolvedPath in resolvedPaths)
             {
-                // 新規ファイルの場合、-LineNumber は1のみ許可
-                if (isNewFile && LineNumber > 1)
-                {
-                    WriteError(new ErrorRecord(
-                        new InvalidOperationException($"For new files, -LineNumber must be 1. Specified: {LineNumber}"),
-                        "InvalidLineNumber",
-                        ErrorCategory.InvalidArgument,
-                        inputPath));
-                    continue;
-                }
+
 
                 try
                 {
@@ -166,10 +147,20 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     /// </summary>
     private void CreateNewFile(string resolvedPath, string originalPath)
     {
+        // 新規ファイル作成時に -AtEnd/-LineNumber が指定されている場合は警告
+        if (AtEnd.IsPresent)
+        {
+            WriteWarning($"-AtEnd parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
+        }
+        if (LineNumber > 0)
+        {
+            WriteWarning($"-LineNumber parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
+        }
+
         // 新規ファイル作成時に -Backup が指定されている場合は警告
         if (Backup)
         {
-            WriteWarning($"Backup parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
+            WriteWarning($"-Backup parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
         }
         
         var metadata = new TextFileUtility.FileMetadata
@@ -226,9 +217,19 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     /// </summary>
     private void AddToExistingFile(string resolvedPath, string originalPath)
     {
+        // 既存ファイルでは -AtEnd または -LineNumber のいずれかが必要
+        if (!AtEnd.IsPresent && LineNumber == 0)
+        {
+            WriteError(new ErrorRecord(
+                new ArgumentException("For existing files, either -AtEnd or -LineNumber must be specified."),
+                "ParameterRequired",
+                ErrorCategory.InvalidArgument,
+                resolvedPath));
+            return;
+        }
+
         var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
         string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
-
         int insertAt = AtEnd.IsPresent ? int.MaxValue : LineNumber;
         
         string actionDescription = AtEnd.IsPresent 

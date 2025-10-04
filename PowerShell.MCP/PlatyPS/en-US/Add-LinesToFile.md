@@ -34,7 +34,7 @@ Inserts lines at specified position or appends to end or creates new file. Accep
 Add-LinesToFile app.log -LineNumber 1 -Content "# Header"              # At beginning
 Add-LinesToFile app.log -LineNumber 10 -Content "// Inserted line"     # Middle
 Add-LinesToFile app.log -AtEnd -Content "# Footer"                     # At end
-Add-LinesToFile new.txt -Content "First line" -LineNumber 1            # Creates file
+Add-LinesToFile new.txt -Content "First line"                          # Creates file (no params needed)
 ```
 
 ### Example 2: Insert multiple lines
@@ -51,6 +51,8 @@ Get-ChildItem *.cs | Where-Object { (Get-Content $_ -First 1) -notmatch "using" 
 
 Important:
 - -LineNumber and -AtEnd are mutually exclusive
+- New files: -LineNumber/-AtEnd are optional (ignored with warning if specified)
+- Existing files: Either -LineNumber or -AtEnd is required
 - Content accepts string or string array
 - Creates new file if it doesn't exist
 - Pipeline: accepts FileInfo via PSPath property
@@ -58,7 +60,7 @@ Important:
 ## PARAMETERS
 
 ### -AtEnd
-Appends the content at the end of the file. Cannot be used with -LineNumber.
+Appends the content at the end of the file.
 
 ```yaml
 Type: SwitchParameter
@@ -133,7 +135,7 @@ Accept wildcard characters: False
 ```
 
 ### -LineNumber
-The line number where content will be inserted (1-based). The inserted content becomes this line number, shifting existing lines down. Cannot be used with -AtEnd.
+The line number where content will be inserted (1-based). The inserted content becomes this line number, shifting existing lines down.
 
 ```yaml
 Type: Int32
@@ -248,8 +250,8 @@ Multiple line insertion:
 New file creation:
 
 - Creates new files if they don't exist
-- -LineNumber must be 1 for new files (or use -AtEnd)
+- -LineNumber and -AtEnd are optional (ignored with warning if specified)
 - Wildcards cannot create new files (path must be literal)
-- -Backup parameter is ignored when creating new files
+- -Backup parameter is ignored when creating new files (with warning)
 
 ## RELATED LINKS
