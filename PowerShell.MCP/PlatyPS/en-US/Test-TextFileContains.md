@@ -29,72 +29,31 @@ Tests if file contains matching text (literal or regex) within specified line ra
 
 ## EXAMPLES
 
-### Example 1: Basic search - literal string or regex pattern
+### Example 1: Basic usage - literal string or regex
 ```powershell
-# Check if file contains literal string (simple, no escaping needed)
-PS C:\> Test-TextFileContains app.log -Contains "ERROR"
-True
-
-# Check if file matches regex pattern (powerful matching)
-PS C:\> Test-TextFileContains app.log -Pattern "^(ERROR|CRITICAL):"
-True
-
-# Returns False when not found
-PS C:\> Test-TextFileContains app.log -Contains "SUCCESS"
-False
+Test-TextFileContains app.log -Contains "ERROR"                          # Literal
+Test-TextFileContains app.log -Pattern "^(ERROR|WARN):"                  # Regex
+if (Test-TextFileContains config.ini -Contains "Debug=true") { ... }     # Conditional
 ```
 
-Use -Contains for simple literal string searches. Use -Pattern for advanced regex matching. Returns True/False for easy use in conditional logic.
-
-### Example 2: Use in conditional statements and scripts
+### Example 2: Multiple files - wildcards or pipeline
 ```powershell
-# Simple if statement
-PS C:\> if (Test-TextFileContains config.ini -Contains "Debug=true") {
-    Write-Host "Debug mode is enabled" -ForegroundColor Yellow
-}
-
-# Complex conditional logic
-PS C:\> if (Test-TextFileContains app.log -Pattern "FATAL|CRITICAL") {
-    Send-MailMessage -To "admin@example.com" -Subject "Critical Error Detected"
-}
-
-# Validation in deployment scripts
-PS C:\> if (-not (Test-TextFileContains web.config -Contains "ProductionMode=true")) {
-    throw "Configuration file is not set to production mode"
-}
+Test-TextFileContains *.log -Contains "FATAL"                            # Wildcards
+Get-ChildItem *.log | Test-TextFileContains -Contains "ERROR"            # Pipeline
+Get-ChildItem *.txt | Where-Object Length -gt 1KB | Test-TextFileContains -Pattern "X"
 ```
 
-Common usage pattern for conditional execution based on file content. Perfect for validation, monitoring, and deployment scripts.
-
-### Example 3: Search within line range and multiple files
+### Example 3: LineRange and encoding
 ```powershell
-# Search only within specific section (lines 1000-2000)
-PS C:\> Test-TextFileContains large.txt -Contains "TARGET" -LineRange 1000,2000
-False
-
-# Check multiple files with wildcards (returns True if ANY file matches)
-PS C:\> Test-TextFileContains *.log -Contains "FATAL"
-True
-
-# Combine wildcards and line range
-PS C:\> Test-TextFileContains *.config -LineRange 1,10 -Contains "version=2.0"
-True
+Test-TextFileContains large.txt -Contains "X" -LineRange 1000,2000       # Partial search
+Test-TextFileContains sjis.txt -Contains "日本語" -Encoding Shift_JIS    # Non-UTF8
 ```
 
-Use -LineRange to search specific sections of large files. Use wildcards to check multiple files (OR logic - returns True if any file matches).
-
-### Example 4: Advanced usage with encodings
-```powershell
-# Specify encoding for non-UTF8 files
-PS C:\> Test-TextFileContains sjis.txt -Contains "日本語" -Encoding Shift_JIS
-True
-
-# Auto-detection works for most files (when -Encoding omitted)
-PS C:\> Test-TextFileContains utf8.txt -Contains "テキスト"
-True
-```
-
-Specify -Encoding for files with non-standard encodings. Auto-detection works for most common encodings when omitted.
+Important:
+- Returns Boolean; use in conditionals
+- -Contains (literal) and -Pattern (regex) are mutually exclusive
+- Optimized: stops on first match
+- Pipeline: accepts FileInfo via PSPath property
 
 ## PARAMETERS
 
@@ -164,12 +123,12 @@ Specifies the path to the text file(s). Supports wildcards (* and ?) for process
 ```yaml
 Type: String[]
 Parameter Sets: Path
-Aliases: FullName
+Aliases:
 
 Required: True
 Position: 0
 Default value: None
-Accept pipeline input: True (ByPropertyName, ByValue)
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: True
 ```
 

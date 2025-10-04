@@ -12,8 +12,7 @@ namespace PowerShell.MCP.Cmdlets;
 [OutputType(typeof(bool))]
 public class TestTextFileContainsCmdlet : TextFileCmdletBase
 {
-    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
-    [Alias("FullName")]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 
@@ -25,10 +24,12 @@ public class TestTextFileContainsCmdlet : TextFileCmdletBase
     [ValidateLineRange]
     public int[]? LineRange { get; set; }
 
-    [Parameter]
+    [Parameter(ParameterSetName = "Path")]
+    [Parameter(ParameterSetName = "LiteralPath")]
     public string? Pattern { get; set; }
 
-    [Parameter]
+    [Parameter(ParameterSetName = "Path")]
+    [Parameter(ParameterSetName = "LiteralPath")]
     public string? Contains { get; set; }
 
     [Parameter]

@@ -27,93 +27,35 @@ Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>]
 ## DESCRIPTION
 Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex). Optimized for LLM use with 1-based line numbering compatible with editors and compilers.
 
+
 ## EXAMPLES
 
-### Example 1: Display files - entire file or specific lines
+### Example 1: Display with line numbers
 ```powershell
-# Display entire file with line numbers (1-based)
-PS C:\> Show-TextFile Program.cs
-==> Program.cs <==
-   1: using System;
-   2: using System.Collections.Generic;
-   3:
-   4: namespace Example
-
-# Display a single line (e.g., line 17 from compiler error message)
-PS C:\> Show-TextFile Program.cs -LineRange 17
-==> Program.cs <==
-  17:             return a + b; // BUG: Should be a - b
-
-# Display a range of lines (e.g., context around error on line 15)
-PS C:\> Show-TextFile Program.cs -LineRange 14,17
-==> Program.cs <==
-  14:         // ERROR: This method is broken
-  15:         public int Subtract(int a, int b)
-  16:         {
-  17:             return a + b; // BUG: Should be a - b
+Show-TextFile Program.cs                                      # Entire file
+Show-TextFile Program.cs -LineRange 17                        # Single line
+Show-TextFile Program.cs -LineRange 14,17                     # Range
 ```
 
-Line numbers are 1-based to match editor line numbers and compiler error messages. Use -LineRange to view specific sections.
-
-### Example 2: Search for patterns - literal string or regex
+### Example 2: Filter by content
 ```powershell
-# Search with regex pattern (powerful matching)
-PS C:\> Show-TextFile Program.cs -Pattern "TODO|ERROR"
-==> Program.cs <==
-*  6:     // TODO: Implement this class
-* 14:         // ERROR: This method is broken
-
-# Search with literal string (simple, no escaping needed)
-PS C:\> Show-TextFile log.txt -Contains "[ERROR]"
-==> log.txt <==
-*  15: [ERROR] Failed to connect to database
-*  42: [ERROR] File not found: config.ini
-
-# Pattern vs Contains comparison
-PS C:\> Show-TextFile data.txt -Pattern "price.*\$100"        # Regex - requires escaping $
-PS C:\> Show-TextFile data.txt -Contains "price: $100.50"     # Literal - no escaping needed
+Show-TextFile Program.cs -Pattern "TODO|ERROR"                # Regex (marked with *)
+Show-TextFile log.txt -Contains "[ERROR]"                     # Literal (marked with *)
+Show-TextFile Program.cs -LineRange 10,50 -Pattern "bug"      # Combined
 ```
 
-Matching lines are prefixed with * for easy identification. Use -Contains for simple literal searches, -Pattern for advanced regex matching.
-
-### Example 3: Combine filters - line range + pattern
+### Example 3: Multiple files
 ```powershell
-# Search for pattern only within specific lines (lines 7-12)
-PS C:\> Show-TextFile Program.cs -Pattern "public" -LineRange 7,12
-==> Program.cs <==
-*  7:     public class Calculator
-*  9:         public int Add(int a, int b)
-
-# View specific section and highlight errors
-PS C:\> Show-TextFile app.log -LineRange 100,200 -Contains "ERROR"
-==> app.log <==
-* 145: [ERROR] Connection timeout
-* 187: [ERROR] Invalid response
+Show-TextFile *.cs                                            # Wildcards
+Get-ChildItem *.log | Show-TextFile -Contains "FATAL"         # Pipeline
+Get-ChildItem *.txt | Where-Object Length -gt 10KB | Show-TextFile -LineRange 1,100
 ```
 
-Combine -LineRange with -Pattern or -Contains to search within specific sections. Only matching lines within the range are shown.
-
-### Example 4: Process multiple files
-```powershell
-# Display multiple files with wildcards
-PS C:\> Show-TextFile *.cs
-==> Calculator.cs <==
-   1: public class Calculator
-   
-==> Program.cs <==
-   1: using System;
-
-# Search across multiple files
-PS C:\> Show-TextFile *.log -Contains "FATAL"
-==> app.log <==
-*  34: FATAL: Database connection failed
-   
-==> system.log <==
-*  12: FATAL: Out of memory
-```
-
-Files are separated by blank lines with headers showing filenames. Useful for quickly surveying related files.
-
+Important:
+- 1-based line numbers (matches editors/compilers)
+- Matching lines prefixed with *
+- -Contains (literal) and -Pattern (regex) are mutually exclusive
+- Pipeline: accepts FileInfo via PSPath property
 ## PARAMETERS
 
 ### -Encoding
@@ -152,12 +94,12 @@ Specifies the path to the text file(s). Supports wildcards (* and ?) for process
 ```yaml
 Type: String[]
 Parameter Sets: Path
-Aliases: FullName
+Aliases:
 
 Required: True
 Position: 0
 Default value: None
-Accept pipeline input: True (ByPropertyName, ByValue)
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: True
 ```
 

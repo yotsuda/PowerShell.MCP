@@ -27,66 +27,32 @@ Update-TextFile -LiteralPath <String[]> [-Contains <String>] [-Pattern <String>]
 ```
 
 ## DESCRIPTION
-Replaces matching text (literal or regex) within optional line range. Supports automatic metadata preservation (encoding, newlines) and optional backups. Optimized for LLM text editing workflows.
 
 ## EXAMPLES
 
-### Example 1: Basic text replacement - literal string and regex pattern
+### Example 1: Replace text - literal or regex
 ```powershell
-# Literal string replacement (simple, no escaping needed)
-PS C:\> Update-TextFile config.js -Contains "localhost" -Replacement "production.example.com"
-Updated config.js: 1 replacement(s) made
-
-# Regular expression with capture groups (powerful pattern matching)
-PS C:\> Update-TextFile config.js -Pattern "const (\w+) = (\d+)" -Replacement "let `$1 = `$2"
-Updated config.js: 2 replacement(s) made
+Update-TextFile config.txt -Contains "debug=false" -Replacement "debug=true"     # Literal
+Update-TextFile code.cs -Pattern "var (\w+)" -Replacement "string $1"            # Regex with capture
 ```
 
-Use -Contains/-Replacement for simple literal string replacement. Use -Pattern/-Replacement for advanced regex-based transformations with capture groups.
-
-### Example 2: Targeted replacement - line range and multiple files
+### Example 2: Targeted replacement
 ```powershell
-# Replace only within specific line range (lines 10-20 inclusive)
-PS C:\> Update-TextFile data.txt -LineRange 10,20 -Contains "old" -Replacement "new"
-Updated data.txt: 5 replacement(s) made
-
-# Process multiple files with wildcards
-PS C:\> Update-TextFile *.js -Contains "var " -Replacement "let "
-Updated app.js: 3 replacement(s) made
-Updated config.js: 1 replacement(s) made
+Update-TextFile app.cs -LineRange 10,50 -Contains "oldFunc" -Replacement "newFunc"
+Update-TextFile *.config -Contains "staging" -Replacement "production" -Backup
 ```
 
-Combine -LineRange to limit changes to specific sections. Use wildcards to update multiple files at once.
-
-### Example 3: Safe editing with backup and confirmation
+### Example 3: Pipeline and safety
 ```powershell
-# Create timestamped backup before modifying
-PS C:\> Update-TextFile important.conf -Contains "debug=true" -Replacement "debug=false" -Backup
-Updated important.conf: 1 replacement(s) made
-
-PS C:\> Get-ChildItem important.conf*
-Name
-----
-important.conf
-important.conf.20251004135500.bak
-
-# Prompt for confirmation before making changes
-PS C:\> Update-TextFile critical.ini -Pattern "timeout=\d+" -Replacement "timeout=300" -Confirm
-Confirm
-Are you sure you want to perform this action?
-[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "Y"):
+Get-ChildItem *.txt | Update-TextFile -Contains "old" -Replacement "new"
+Get-ChildItem *.cs | Update-TextFile -Pattern "TODO" -Replacement "DONE" -Backup -WhatIf
 ```
 
-Use -Backup for critical files not under version control. Use -Confirm for interactive validation before modifications.
-
-### Example 4: Preview changes with -WhatIf
-```powershell
-PS C:\> Update-TextFile config.txt -Contains "setting" -Replacement "option" -WhatIf
-What if: Performing the operation "Update text file" on target "config.txt".
-```
-
-Use -WhatIf to preview which files would be modified without actually changing them. Useful for testing patterns before execution.
-
+Important:
+- -Contains (literal) and -Pattern (regex) are mutually exclusive
+- -Backup creates timestamped .bak files
+- -WhatIf previews without changing
+- Pipeline: accepts FileInfo via PSPath property
 ## PARAMETERS
 
 ### -Backup
@@ -155,12 +121,12 @@ Specifies the path to the text file(s) to modify. Supports wildcards for process
 ```yaml
 Type: String[]
 Parameter Sets: Path
-Aliases: FullName
+Aliases:
 
 Required: True
 Position: 0
 Default value: None
-Accept pipeline input: True (ByPropertyName, ByValue)
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: True
 ```
 

@@ -13,8 +13,7 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
     private const string ErrorMessageLineRangeWithoutFile = 
         "File not found: {0}. Cannot use -LineRange with non-existent file.";
 
-    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
-    [Alias("FullName")]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 

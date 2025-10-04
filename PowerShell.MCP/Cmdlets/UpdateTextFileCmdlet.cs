@@ -10,8 +10,7 @@ namespace PowerShell.MCP.Cmdlets;
 [Cmdlet(VerbsData.Update, "TextFile", SupportsShouldProcess = true)]
 public class UpdateTextFileCmdlet : TextFileCmdletBase
 {
-    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
-    [Alias("FullName")]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 

@@ -27,76 +27,34 @@ Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Contains <
 ## DESCRIPTION
 Removes lines matching text (literal or regex) within optional range. When range and pattern are both specified, only matching lines within the range are removed. Preserves file metadata (encoding, newlines).
 
+
 ## EXAMPLES
 
-### Example 1: Remove by line number - single line or range
+### Example 1: Remove by line number or pattern
 ```powershell
-# Remove a single line
-PS C:\> Remove-LinesFromFile data.txt -LineRange 5
-Removed 1 line(s) from data.txt
-
-# Remove a range of lines (inclusive)
-PS C:\> Remove-LinesFromFile data.txt -LineRange 10,15
-Removed 6 line(s) from data.txt
+Remove-LinesFromFile app.log -LineRange 5                              # Single line
+Remove-LinesFromFile app.log -LineRange 10,20                          # Range
+Remove-LinesFromFile app.log -Contains "DEBUG"                         # Literal match
+Remove-LinesFromFile app.log -Pattern "^(DEBUG|TRACE):"                # Regex
 ```
 
-Use -LineRange for precise line-based deletion when you know the exact line numbers.
-
-### Example 2: Remove by pattern - literal string or regex
+### Example 2: Combined filters and multiple files
 ```powershell
-# Remove lines containing literal string (simple, no escaping needed)
-PS C:\> Remove-LinesFromFile app.log -Contains "DEBUG"
-Removed 23 line(s) from app.log
-
-# Remove lines matching regex pattern (powerful filtering)
-PS C:\> Remove-LinesFromFile app.log -Pattern "^(DEBUG|TRACE):"
-Removed 45 line(s) from app.log
-
-# Remove empty or whitespace-only lines
-PS C:\> Remove-LinesFromFile data.txt -Pattern "^\s*$"
-Removed 7 line(s) from data.txt
-
-# Remove TODO comments from code
-PS C:\> Remove-LinesFromFile Program.cs -Pattern "//\s*TODO"
-Removed 3 line(s) from Program.cs
+Remove-LinesFromFile app.log -LineRange 100,200 -Contains "temp"       # AND condition
+Remove-LinesFromFile *.log -Contains "DEPRECATED" -Backup              # Wildcards
 ```
 
-Use -Contains for simple literal string matching. Use -Pattern for advanced regex-based filtering.
-
-### Example 3: Combine LineRange and pattern (AND condition)
+### Example 3: Pipeline
 ```powershell
-# Remove DEBUG lines only within lines 100-200
-PS C:\> Remove-LinesFromFile app.log -LineRange 100,200 -Pattern "^DEBUG:"
-Removed 12 line(s) from app.log
-
-# Remove empty lines only in the header section (lines 1-50)
-PS C:\> Remove-LinesFromFile document.txt -LineRange 1,50 -Pattern "^\s*$"
-Removed 3 line(s) from document.txt
+Get-ChildItem *.log | Remove-LinesFromFile -Contains "DEBUG"
+Get-ChildItem *.txt | Where-Object Length -gt 1MB | Remove-LinesFromFile -LineRange 1,100 -Backup
 ```
 
-Combine -LineRange with -Pattern or -Contains to remove matching lines within specific sections. This limits pattern matching to specific sections.
-
-### Example 4: Process multiple files and handle no matches
-```powershell
-# Remove pattern from multiple files
-PS C:\> Remove-LinesFromFile *.log -Contains "DEPRECATED"
-Removed 5 line(s) from app.log
-Removed 2 line(s) from system.log
-WARNING: test.log: No lines matched. File not modified.
-
-# Use -Backup for safe deletion
-PS C:\> Remove-LinesFromFile important.txt -Pattern "temporary" -Backup
-Removed 4 line(s) from important.txt
-
-PS C:\> Get-ChildItem important.txt*
-Name
-----
-important.txt
-important.txt.20251004141000.bak
-```
-
-Use wildcards to process multiple files. Files with no matches show a warning but are not modified. Use -Backup for safe deletion of important content.
-
+Important:
+- -LineRange and -Contains/-Pattern can be combined (AND logic)
+- -Contains (literal) and -Pattern (regex) are mutually exclusive
+- Warns if no lines match (file unchanged)
+- Pipeline: accepts FileInfo via PSPath property
 ## PARAMETERS
 
 ### -Backup
@@ -165,12 +123,12 @@ Specifies the path to the text file. Supports wildcards for processing multiple 
 ```yaml
 Type: String[]
 Parameter Sets: Path
-Aliases: FullName
+Aliases:
 
 Required: True
 Position: 0
 Default value: None
-Accept pipeline input: True (ByPropertyName, ByValue)
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: True
 ```
 

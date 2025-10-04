@@ -9,8 +9,7 @@ namespace PowerShell.MCP.Cmdlets;
 [Cmdlet(VerbsCommon.Add, "LinesToFile", SupportsShouldProcess = true)]
 public class AddLinesToFileCmdlet : TextFileCmdletBase
 {
-    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
-    [Alias("FullName")]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 
