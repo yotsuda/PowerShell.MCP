@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.2.4'
+ModuleVersion = '1.2.5'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -74,6 +74,7 @@ FunctionsToExport = @()
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @(
 'Show-TextFile',
+'Test-TextFileContains',
 'Update-TextFile',
 'Add-LinesToFile',
 'Set-LinesToFile',
@@ -115,21 +116,26 @@ PrivateData = @{
         Platforms = @('Windows')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.2.4 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.2.5 - Enterprise-Ready MCP Server
 
 === Key Features ===
-• 🤝 Shared Console Experience - AI and users collaborate in the same PowerShell session
-• 🔄 Persistent State Management - Variables, modules, and authentication preserved across commands
-• ⚡ Zero-Overhead Execution - Instant command response without process startup delays
-• 🔍 Complete Stream Separation - All 6 PowerShell output streams captured and analyzed
-• 📋 Ready-to-Use Prompt Library - 8 specialized prompts for development, administration, and learning
-• 🔐 Enterprise Security - Local-only named pipe communication, no network exposure
-• 💻 Universal Compatibility - Works with Claude Desktop and any MCP-compatible client
+• 🤝 Shared Console Experience
+• 🔄 Living Workspace That Remembers Everything
+• ⚡ Instant Response, Zero Overhead
+• 🔍 Comprehensive Output Stream Capture
+• 📝 LLM-Optimized Text File Operations
+• 🔗 PowerShell Pipeline Composability
+• 🌐 Universal Modules & CLI Tools Integration
+• 📚 No RAG or Context Grounding Required
+• 🎯 Ready-to-Use Built-in Prompts
+• 🔐 Enterprise-Ready Security
 
 === First-Time Demo ===
 • "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
 • "Try out different styles of notifications using the BurntToast module"
 • "Automate Notepad: type text and smoothly move the window in a circle"
+• "Tell me how to use Git in PowerShell"
+• "How does it feel now that you have a tool like PowerShell.MCP?"
 
 === Popular Examples ===
 • "Review git changes and suggest a commit message"
