@@ -27,7 +27,6 @@ Set-LinesToFile -LiteralPath <String[]> [[-Content] <Object[]>] [-LineRange <Int
 ## DESCRIPTION
 Replaces specified line range with new content or creates new file. Omit content to delete lines. Can replace single line, range, or entire file. Preserves file metadata (encoding, newlines).
 
-
 ## EXAMPLES
 
 ### Example 1: Create or replace entire file
@@ -55,6 +54,7 @@ Important:
 - With -LineRange but no -Content: deletes lines
 - Content accepts string or string array
 - Pipeline: accepts FileInfo via PSPath property
+
 ## PARAMETERS
 
 ### -Backup

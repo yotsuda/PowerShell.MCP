@@ -27,7 +27,6 @@ Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Contains <
 ## DESCRIPTION
 Removes lines matching text (literal or regex) within optional range. When range and pattern are both specified, only matching lines within the range are removed. Preserves file metadata (encoding, newlines).
 
-
 ## EXAMPLES
 
 ### Example 1: Remove by line number or pattern
@@ -55,6 +54,7 @@ Important:
 - -Contains (literal) and -Pattern (regex) are mutually exclusive
 - Warns if no lines match (file unchanged)
 - Pipeline: accepts FileInfo via PSPath property
+
 ## PARAMETERS
 
 ### -Backup

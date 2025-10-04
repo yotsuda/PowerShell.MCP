@@ -27,7 +27,6 @@ Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>]
 ## DESCRIPTION
 Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex). Optimized for LLM use with 1-based line numbering compatible with editors and compilers.
 
-
 ## EXAMPLES
 
 ### Example 1: Display with line numbers
@@ -56,6 +55,7 @@ Important:
 - Matching lines prefixed with *
 - -Contains (literal) and -Pattern (regex) are mutually exclusive
 - Pipeline: accepts FileInfo via PSPath property
+
 ## PARAMETERS
 
 ### -Encoding

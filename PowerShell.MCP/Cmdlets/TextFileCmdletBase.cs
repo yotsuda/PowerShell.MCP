@@ -113,6 +113,16 @@ public abstract class TextFileCmdletBase : PSCmdlet
                 ErrorCategory.InvalidArgument,
                 lineRange));
         }
+        
+        // Validate start <= end when range is specified
+        if (lineRange != null && lineRange.Length == 2 && lineRange[0] > lineRange[1])
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException($"LineRange start ({lineRange[0]}) must be less than or equal to end ({lineRange[1]})"),
+                "InvalidLineRange",
+                ErrorCategory.InvalidArgument,
+                lineRange));
+        }
     }
 
     /// <summary>

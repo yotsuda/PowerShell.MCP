@@ -53,6 +53,7 @@ Important:
 - -Backup creates timestamped .bak files
 - -WhatIf previews without changing
 - Pipeline: accepts FileInfo via PSPath property
+
 ## PARAMETERS
 
 ### -Backup
