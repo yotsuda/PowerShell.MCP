@@ -114,4 +114,58 @@ public abstract class TextFileCmdletBase : PSCmdlet
                 lineRange));
         }
     }
+
+    /// <summary>
+    /// -Path または -LiteralPath からファイルパスを解決
+    /// </summary>
+    /// <param name="path">-Path パラメータの値（ワイルドカード展開あり）</param>
+    /// <param name="literalPath">-LiteralPath パラメータの値（ワイルドカード展開なし）</param>
+    /// <returns>解決されたファイルパスのコレクション</returns>
+    protected System.Collections.ObjectModel.Collection<string> ResolvePaths(string[]? path, string[]? literalPath)
+    {
+        if (path != null && path.Length > 0)
+        {
+            // -Path: ワイルドカード展開あり
+            var allPaths = new System.Collections.ObjectModel.Collection<string>();
+            foreach (var p in path)
+            {
+                try
+                {
+                    var resolved = GetResolvedProviderPathFromPSPath(p, out _);
+                    foreach (var r in resolved)
+                    {
+                        allPaths.Add(r);
+                    }
+                }
+                catch (ItemNotFoundException)
+                {
+                    // ファイルが存在しない場合は呼び出し元で処理
+                    throw;
+                }
+            }
+            return allPaths;
+        }
+        else if (literalPath != null && literalPath.Length > 0)
+        {
+            // -LiteralPath: ワイルドカード展開なし
+            var allPaths = new System.Collections.ObjectModel.Collection<string>();
+            foreach (var lp in literalPath)
+            {
+                try
+                {
+                    // GetUnresolvedProviderPathFromPSPath はワイルドカードを展開しない
+                    var resolved = GetUnresolvedProviderPathFromPSPath(lp);
+                    allPaths.Add(resolved);
+                }
+                catch (ItemNotFoundException)
+                {
+                    // ファイルが存在しない場合は呼び出し元で処理
+                    throw;
+                }
+            }
+            return allPaths;
+        }
+        
+        return new System.Collections.ObjectModel.Collection<string>();
+    }
 }

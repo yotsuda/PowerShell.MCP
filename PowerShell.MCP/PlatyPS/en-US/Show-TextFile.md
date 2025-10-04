@@ -12,34 +12,39 @@ Display text file contents with line numbers
 
 ## SYNTAX
 
+### Path
 ```
-Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Encoding <String>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
+ [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+```
+
+### LiteralPath
+```
+Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
+ [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Shows text file contents with 1-based line numbers. Supports line range display, pattern matching, and multiple encodings. Optimized for LLM use with editor/compiler-compatible line numbering.
+Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex). Optimized for LLM use with 1-based line numbering compatible with editors and compilers.
 
 ## EXAMPLES
 
-### Example 1: Display entire file with line numbers
+### Example 1: Display files - entire file or specific lines
 ```powershell
+# Display entire file with line numbers (1-based)
 PS C:\> Show-TextFile Program.cs
 ==> Program.cs <==
    1: using System;
    2: using System.Collections.Generic;
    3:
    4: namespace Example
-```
 
-Displays the entire file with 1-based line numbers.
-
-### Example 2: Display specific lines or ranges
-```powershell
+# Display a single line (e.g., line 17 from compiler error message)
 PS C:\> Show-TextFile Program.cs -LineRange 17
 ==> Program.cs <==
   17:             return a + b; // BUG: Should be a - b
 
+# Display a range of lines (e.g., context around error on line 15)
 PS C:\> Show-TextFile Program.cs -LineRange 14,17
 ==> Program.cs <==
   14:         // ERROR: This method is broken
@@ -48,39 +53,66 @@ PS C:\> Show-TextFile Program.cs -LineRange 14,17
   17:             return a + b; // BUG: Should be a - b
 ```
 
-Shows a single line (17) or a range (14-17). Useful for examining code around compiler errors.
+Line numbers are 1-based to match editor line numbers and compiler error messages. Use -LineRange to view specific sections.
 
-### Example 3: Search for pattern
+### Example 2: Search for patterns - literal string or regex
 ```powershell
+# Search with regex pattern (powerful matching)
 PS C:\> Show-TextFile Program.cs -Pattern "TODO|ERROR"
 ==> Program.cs <==
 *  6:     // TODO: Implement this class
 * 14:         // ERROR: This method is broken
+
+# Search with literal string (simple, no escaping needed)
+PS C:\> Show-TextFile log.txt -Contains "[ERROR]"
+==> log.txt <==
+*  15: [ERROR] Failed to connect to database
+*  42: [ERROR] File not found: config.ini
+
+# Pattern vs Contains comparison
+PS C:\> Show-TextFile data.txt -Pattern "price.*\$100"        # Regex - requires escaping $
+PS C:\> Show-TextFile data.txt -Contains "price: $100.50"     # Literal - no escaping needed
 ```
 
-Searches for lines matching the regex pattern. Matching lines are prefixed with * for easy identification.
+Matching lines are prefixed with * for easy identification. Use -Contains for simple literal searches, -Pattern for advanced regex matching.
 
-### Example 4: Search within a line range
+### Example 3: Combine filters - line range + pattern
 ```powershell
+# Search for pattern only within specific lines (lines 7-12)
 PS C:\> Show-TextFile Program.cs -Pattern "public" -LineRange 7,12
 ==> Program.cs <==
 *  7:     public class Calculator
 *  9:         public int Add(int a, int b)
+
+# View specific section and highlight errors
+PS C:\> Show-TextFile app.log -LineRange 100,200 -Contains "ERROR"
+==> app.log <==
+* 145: [ERROR] Connection timeout
+* 187: [ERROR] Invalid response
 ```
 
-Combines pattern search with line range. Only searches within lines 7-12.
+Combine -LineRange with -Pattern or -Contains to search within specific sections. Only matching lines within the range are shown.
 
-### Example 5: Process multiple files with wildcards
+### Example 4: Process multiple files
 ```powershell
+# Display multiple files with wildcards
 PS C:\> Show-TextFile *.cs
 ==> Calculator.cs <==
    1: public class Calculator
    
 ==> Program.cs <==
    1: using System;
+
+# Search across multiple files
+PS C:\> Show-TextFile *.log -Contains "FATAL"
+==> app.log <==
+*  34: FATAL: Database connection failed
+   
+==> system.log <==
+*  12: FATAL: Out of memory
 ```
 
-Displays multiple files. Files are separated by blank lines with headers showing filenames.
+Files are separated by blank lines with headers showing filenames. Useful for quickly surveying related files.
 
 ## PARAMETERS
 
@@ -119,7 +151,7 @@ Specifies the path to the text file(s). Supports wildcards (* and ?) for process
 
 ```yaml
 Type: String[]
-Parameter Sets: (All)
+Parameter Sets: Path
 Aliases: FullName
 
 Required: True
@@ -151,6 +183,36 @@ Common parameter for controlling progress output. See about_CommonParameters for
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -LiteralPath
+Specifies the path to the text file(s) without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
+
+```yaml
+Type: String[]
+Parameter Sets: LiteralPath
+Aliases: PSPath
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByPropertyName)
+Accept wildcard characters: False
+```
+
+### -Contains
+Specifies a literal string to search for in each line. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful for searching text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them. Matching lines are prefixed with * for easy identification.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named
@@ -192,6 +254,13 @@ Pattern matching:
 - Matching lines are prefixed with * for easy identification
 - Combine -Pattern with -LineRange to search within a specific section
 - Use Show-TextFile to test regex patterns before using them in Update-TextFile
+
+Contains vs Pattern:
+
+- Use -Contains for simple literal string searches (no regex knowledge needed)
+- Use -Pattern for advanced regex pattern matching
+- -Contains does not require escaping special characters: [, ], (, ), ., *, +, ?, $, etc.
+- If both -Pattern and -Contains are specified, -Pattern takes precedence
 
 Multiple files:
 

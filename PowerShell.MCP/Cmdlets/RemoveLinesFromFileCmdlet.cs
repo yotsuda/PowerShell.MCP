@@ -5,19 +5,26 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// ファイルから行を削除
-/// LLM最適化：行範囲指定またはパターンマッチで削除（両方の組み合わせも可能）
+/// LLM最適化：行範囲指定、文字列包含、または正規表現マッチで削除（組み合わせも可能）
 /// </summary>
 [Cmdlet(VerbsCommon.Remove, "LinesFromFile", SupportsShouldProcess = true)]
 public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 {
-    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 
+    [Parameter(ParameterSetName = "LiteralPath", Mandatory = true, ValueFromPipelineByPropertyName = true)]
+    [Alias("PSPath")]
+    public string[] LiteralPath { get; set; } = null!;
+
     [Parameter]
     [ValidateLineRange]
     public int[]? LineRange { get; set; }
+
+    [Parameter]
+    public string? Contains { get; set; }
 
     [Parameter]
     public string? Pattern { get; set; }
@@ -30,10 +37,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        // LineRange と Pattern の少なくとも一方が指定されているかチェック
-        if (LineRange == null && string.IsNullOrEmpty(Pattern))
+        // LineRange、Contains、Pattern の少なくとも一方が指定されているかチェック
+        if (LineRange == null && string.IsNullOrEmpty(Contains) && string.IsNullOrEmpty(Pattern))
         {
-            throw new PSArgumentException("At least one of -LineRange or -Pattern must be specified.");
+            throw new PSArgumentException("At least one of -LineRange, -Contains, or -Pattern must be specified.");
         }
 
         // LineRange バリデーション
@@ -45,13 +52,27 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
-        foreach (var path in Path)
+        // -Path または -LiteralPath から処理対象を取得
+        string[] inputPaths = Path ?? LiteralPath;
+        bool isLiteralPath = (LiteralPath != null);
+
+        foreach (var inputPath in inputPaths)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
             
             try
             {
-                resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                if (isLiteralPath)
+                {
+                    // -LiteralPath: ワイルドカード展開なし
+                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
+                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                }
+                else
+                {
+                    // -Path: ワイルドカード展開あり
+                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                }
             }
             catch (Exception ex)
             {
@@ -59,7 +80,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     ex,
                     "PathResolutionFailed",
                     ErrorCategory.InvalidArgument,
-                    path));
+                    inputPath));
                 continue;
             }
             
@@ -68,10 +89,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 if (!File.Exists(resolvedPath))
                 {
                     WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {path}"),
+                        new FileNotFoundException($"File not found: {inputPath}"),
                         "FileNotFound",
                         ErrorCategory.ObjectNotFound,
-                        path));
+                        inputPath));
                     continue;
                 }
 
@@ -85,10 +106,27 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                     // 削除条件の準備
                     bool useLineRange = LineRange != null;
+                    bool useContains = !string.IsNullOrEmpty(Contains);
                     bool usePattern = !string.IsNullOrEmpty(Pattern);
 
+                    // Contains と Pattern の両方が指定されている場合はエラー
+                    if (useContains && usePattern)
+                    {
+                        WriteError(new ErrorRecord(
+                            new ArgumentException("Cannot specify both -Contains and -Pattern."),
+                            "ConflictingParameters",
+                            ErrorCategory.InvalidArgument,
+                            null));
+                        continue;
+                    }
+
                     string actionDescription;
-                    if (useLineRange && usePattern)
+                    if (useLineRange && useContains)
+                    {
+                        (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
+                        actionDescription = $"Remove lines {startLine}-{endLine} containing: {Contains}";
+                    }
+                    else if (useLineRange && usePattern)
                     {
                         (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
                         regex = new Regex(Pattern!, RegexOptions.Compiled);
@@ -98,6 +136,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     {
                         (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
                         actionDescription = $"Remove lines {startLine}-{endLine}";
+                    }
+                    else if (useContains)
+                    {
+                        actionDescription = $"Remove lines containing: {Contains}";
                     }
                     else // usePattern only
                     {
@@ -145,8 +187,14 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 {
                                     bool shouldRemove = false;
 
-                                    // 条件判定：LineRange AND/OR Pattern
-                                    if (useLineRange && usePattern)
+                                    // 条件判定：LineRange AND/OR Contains/Pattern
+                                    if (useLineRange && useContains)
+                                    {
+                                        // 両方指定されている場合はAND条件
+                                        shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
+                                                      currentLine.Contains(Contains!);
+                                    }
+                                    else if (useLineRange && usePattern)
                                     {
                                         // 両方指定されている場合はAND条件
                                         shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
@@ -155,6 +203,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     else if (useLineRange)
                                     {
                                         shouldRemove = lineNumber >= startLine && lineNumber <= endLine;
+                                    }
+                                    else if (useContains)
+                                    {
+                                        shouldRemove = currentLine.Contains(Contains!);
                                     }
                                     else // usePattern only
                                     {
@@ -206,7 +258,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                             // アトミックに置換
                             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-                            WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(path, resolvedPath)}");
+                            WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(inputPath, resolvedPath)}");
                         }
                         catch
                         {

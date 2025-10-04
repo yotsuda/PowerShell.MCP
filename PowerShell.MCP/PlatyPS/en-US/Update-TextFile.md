@@ -12,68 +12,80 @@ Update text file content using string literal or regex replacement
 
 ## SYNTAX
 
-### Literal
+### Path
 ```
-Update-TextFile [-Path] <String[]> -OldValue <String> -NewValue <String> [-LineRange <Int32[]>]
- [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Update-TextFile [-Path] <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
+ [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
-### Regex
+### LiteralPath
 ```
-Update-TextFile [-Path] <String[]> -Pattern <String> -Replacement <String> [-LineRange <Int32[]>]
- [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Update-TextFile -LiteralPath <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
+ [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Replaces text in files using either literal string matching (-OldValue/-NewValue) or regular expression patterns (-Pattern/-Replacement). Supports line range limiting, automatic metadata preservation (encoding, newlines), and optional backups. Optimized for LLM text editing workflows.
+Replaces matching text (literal or regex) within optional line range. Supports automatic metadata preservation (encoding, newlines) and optional backups. Optimized for LLM text editing workflows.
 
 ## EXAMPLES
 
-### Example 1: Simple string replacement
+### Example 1: Basic text replacement - literal string and regex pattern
 ```powershell
-PS C:$> Update-TextFile config.js -OldValue "localhost" -NewValue "production.example.com"
+# Literal string replacement (simple, no escaping needed)
+PS C:\> Update-TextFile config.js -Contains "localhost" -Replacement "production.example.com"
 Updated config.js: 1 replacement(s) made
-```
 
-Replaces all occurrences of "localhost" with "production.example.com" using literal string matching.
-
-### Example 2: Regular expression replacement with capture groups
-```powershell
-PS C:$> Update-TextFile config.js -Pattern "const ($w+) = ($d+)" -Replacement "let `$1 = `$2"
+# Regular expression with capture groups (powerful pattern matching)
+PS C:\> Update-TextFile config.js -Pattern "const (\w+) = (\d+)" -Replacement "let `$1 = `$2"
 Updated config.js: 2 replacement(s) made
 ```
 
-Uses regex to change "const" declarations to "let" while preserving variable names and values.
+Use -Contains/-Replacement for simple literal string replacement. Use -Pattern/-Replacement for advanced regex-based transformations with capture groups.
 
-### Example 3: Replace within a specific line range
+### Example 2: Targeted replacement - line range and multiple files
 ```powershell
-PS C:$> Update-TextFile data.txt -LineRange 10,20 -OldValue "old" -NewValue "new"
-Updated data.txt: 11 replacement(s) made
+# Replace only within specific line range (lines 10-20 inclusive)
+PS C:\> Update-TextFile data.txt -LineRange 10,20 -Contains "old" -Replacement "new"
+Updated data.txt: 5 replacement(s) made
+
+# Process multiple files with wildcards
+PS C:\> Update-TextFile *.js -Contains "var " -Replacement "let "
+Updated app.js: 3 replacement(s) made
+Updated config.js: 1 replacement(s) made
 ```
 
-Only replaces matches within lines 10-20 (inclusive). Lines outside this range are unchanged.
+Combine -LineRange to limit changes to specific sections. Use wildcards to update multiple files at once.
 
-### Example 4: Create backup before modifying
+### Example 3: Safe editing with backup and confirmation
 ```powershell
-PS C:$> Update-TextFile important.conf -OldValue "debug=true" -NewValue "debug=false" -Backup
+# Create timestamped backup before modifying
+PS C:\> Update-TextFile important.conf -Contains "debug=true" -Replacement "debug=false" -Backup
 Updated important.conf: 1 replacement(s) made
-PS C:$> Get-ChildItem important.conf*
 
+PS C:\> Get-ChildItem important.conf*
 Name
 ----
 important.conf
-important.conf.20251001120000.bak
+important.conf.20251004135500.bak
+
+# Prompt for confirmation before making changes
+PS C:\> Update-TextFile critical.ini -Pattern "timeout=\d+" -Replacement "timeout=300" -Confirm
+Confirm
+Are you sure you want to perform this action?
+[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "Y"):
 ```
 
-Creates a timestamped backup file before making changes. Useful for critical files not under version control.
+Use -Backup for critical files not under version control. Use -Confirm for interactive validation before modifications.
 
-### Example 5: No matches found
+### Example 4: Preview changes with -WhatIf
 ```powershell
-PS C:$> Update-TextFile config.js -OldValue "NotExist" -NewValue "Something"
-config.js: 0 replacement(s) made
+PS C:\> Update-TextFile config.txt -Contains "setting" -Replacement "option" -WhatIf
+What if: Performing the operation "Update text file" on target "config.txt".
 ```
 
-If the search string is not found, the cmdlet reports 0 replacements and the file remains unchanged.
+Use -WhatIf to preview which files would be modified without actually changing them. Useful for testing patterns before execution.
 
 ## PARAMETERS
 
@@ -137,42 +149,12 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -NewValue
-The replacement string for literal string replacement. Used with -OldValue parameter. Special characters like $ are treated literally.
-
-```yaml
-Type: String
-Parameter Sets: Literal
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -OldValue
-The string to search for (literal matching). All occurrences are replaced. Use -Pattern for regex matching instead.
-
-```yaml
-Type: String
-Parameter Sets: Literal
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### -Path
 Specifies the path to the text file(s) to modify. Supports wildcards for processing multiple files.
 
 ```yaml
 Type: String[]
-Parameter Sets: (All)
+Parameter Sets: Path
 Aliases: FullName
 
 Required: True
@@ -187,10 +169,10 @@ Regular expression pattern to search for. Use with -Replacement parameter. Suppo
 
 ```yaml
 Type: String
-Parameter Sets: Regex
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -202,10 +184,10 @@ The replacement string for regex replacement. Used with -Pattern parameter. Supp
 
 ```yaml
 Type: String
-Parameter Sets: Regex
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -240,6 +222,36 @@ Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Contains
+Specifies a literal string to match in lines. Only lines containing this substring will be processed for replacement. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when filtering lines that contain regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them. When used with -Replacement but without -Pattern, the entire line containing the string is replaced.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -LiteralPath
+Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
+
+```yaml
+Type: String[]
+Parameter Sets: LiteralPath
+Aliases: PSPath
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: False
 ```
 

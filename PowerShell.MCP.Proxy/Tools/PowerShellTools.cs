@@ -33,20 +33,26 @@ Local variables are NOT preserved between invoke_expression calls. Use $script: 
 ⚠️ CRITICAL - Text File Operations:
 NEVER use Get-Content or Set-Content for text file operations. This module includes LLM-optimized cmdlets that preserve file metadata (encoding, newlines) and provide better error handling:
 
-• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Pattern <string>] [-Encoding <string>]
+• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
+  Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex).
 
-• Update-TextFile [-Path] <string[]> -OldValue <string> -NewValue <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
-  Update-TextFile [-Path] <string[]> -Pattern <regex> -Replacement <string> [-LineRange <int[]>] [-Encoding <string>] [-Backup]
+• Test-TextFileContains [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
+  Tests if file contains matching text (literal or regex) within specified line range. Returns Boolean.
 
-• Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> -LineNumber <int> [-Encoding <string>] [-Backup]
-  Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> -AtEnd [-Encoding <string>] [-Backup]
+• Update-TextFile [-Path] <string[]> [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-LineRange <int[]>] [-Encoding <string>] [-Backup] [-WhatIf]
+  Replaces matching text (literal or regex) within optional line range.
 
-• Set-LinesToFile [-Path] <string[]> [[-Content] <Object[]>] [-LineRange <int[]>] [-Encoding <string>] [-Backup]
+• Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> [-LineNumber <int>] [-AtEnd] [-Encoding <string>] [-Backup] [-WhatIf]
+  Inserts lines at specified position or appends to end. Accepts arrays for multiple lines.
 
-• Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Pattern <string>] [-Encoding <string>] [-Backup]
+• Set-LinesToFile [-Path] <string[]> [[-Content] <Object[]>] [-LineRange <int[]>] [-Encoding <string>] [-Backup] [-WhatIf]
+  Replaces specified line range with new content or creates new file. Omit content to delete lines.
 
-IMPORTANT: 
-- <string[]> and <int[]> mean these parameters accept ARRAYS (multiple values)
+• Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup] [-WhatIf]
+  Removes lines matching text (literal or regex) within optional range.
+
+IMPORTANT:
+- All cmdlets support both -Path (wildcards allowed) and -LiteralPath (exact path, no wildcard expansion)
 - Content parameter in Add-LinesToFile accepts Object[] - you can pass string arrays for multiple lines
 - Always check parameter types before using - arrays can be passed directly without loops
 

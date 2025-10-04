@@ -13,10 +13,14 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
     private const string ErrorMessageLineRangeWithoutFile = 
         "File not found: {0}. Cannot use -LineRange with non-existent file.";
 
-    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
+
+    [Parameter(ParameterSetName = "LiteralPath", Mandatory = true, ValueFromPipelineByPropertyName = true)]
+    [Alias("PSPath")]
+    public string[] LiteralPath { get; set; } = null!;
 
     [Parameter(Position = 1)]
     public object[]? Content { get; set; }
@@ -36,13 +40,27 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
         // LineRangeバリデーション（最優先）
         ValidateLineRange(LineRange);
 
-        foreach (var path in Path)
+        // -Path または -LiteralPath から処理対象を取得
+        string[] inputPaths = Path ?? LiteralPath;
+        bool isLiteralPath = (LiteralPath != null);
+
+        foreach (var inputPath in inputPaths)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
 
             try
             {
-                resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                if (isLiteralPath)
+                {
+                    // -LiteralPath: ワイルドカード展開なし
+                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
+                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                }
+                else
+                {
+                    // -Path: ワイルドカード展開あり
+                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                }
             }
             catch (ItemNotFoundException)
             {
@@ -52,28 +70,22 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
                     // 新規ファイル作成を試みる
                     resolvedPaths = new System.Collections.ObjectModel.Collection<string> 
                     { 
-                        GetUnresolvedProviderPathFromPSPath(path) 
+                        GetUnresolvedProviderPathFromPSPath(inputPath) 
                     };
                 }
                 else
                 {
-                    WriteLineRangeWithoutFileError(path);
+                    WriteError(new ErrorRecord(
+                        new FileNotFoundException(string.Format(ErrorMessageLineRangeWithoutFile, inputPath)),
+                        "FileNotFoundWithLineRange",
+                        ErrorCategory.ObjectNotFound,
+                        inputPath));
                     continue;
                 }
             }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(
-                    ex,
-                    "PathResolutionFailed",
-                    ErrorCategory.InvalidArgument,
-                    path));
-                continue;
-            }
-
             foreach (var resolvedPath in resolvedPaths)
             {
-                ProcessFile(path, resolvedPath);
+                ProcessFile(inputPath, resolvedPath);
             }
         }
     }
@@ -126,7 +138,7 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
         var metadata = new TextFileUtility.FileMetadata
         {
             Encoding = Encoding != null 
-                ? System.Text.Encoding.GetEncoding(Encoding) 
+                ? TextFileUtility.GetEncoding(resolvedPath, Encoding) 
                 : new System.Text.UTF8Encoding(false), // UTF8 without BOM
             NewlineSequence = Environment.NewLine,
             HasTrailingNewline = true  // デフォルトで末尾改行あり

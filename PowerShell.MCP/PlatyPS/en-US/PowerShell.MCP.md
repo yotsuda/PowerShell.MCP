@@ -23,6 +23,9 @@ Replace or delete specific lines in a text file
 ### [Show-TextFile](Show-TextFile.md)
 Display text file contents with line numbers
 
+### [Test-TextFileContains](Test-TextFileContains.md)
+Tests if file contains matching text (literal or regex)
+
 ### [Update-TextFile](Update-TextFile.md)
 Update text file content using string literal or regex replacement
 

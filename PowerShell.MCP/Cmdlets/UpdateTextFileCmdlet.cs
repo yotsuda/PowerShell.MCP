@@ -10,47 +10,106 @@ namespace PowerShell.MCP.Cmdlets;
 [Cmdlet(VerbsData.Update, "TextFile", SupportsShouldProcess = true)]
 public class UpdateTextFileCmdlet : TextFileCmdletBase
 {
-    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
 
-    [Parameter(ParameterSetName = "Literal", Mandatory = true)]
-    public string OldValue { get; set; } = null!;
+    [Parameter(ParameterSetName = "LiteralPath", Mandatory = true, ValueFromPipelineByPropertyName = true)]
+    [Alias("PSPath")]
+    public string[] LiteralPath { get; set; } = null!;
 
-    [Parameter(ParameterSetName = "Literal", Mandatory = true)]
-    public string NewValue { get; set; } = null!;
+    [Parameter]
+    public string? Contains { get; set; }
 
-    [Parameter(ParameterSetName = "Regex", Mandatory = true)]
-    public string Pattern { get; set; } = null!;
+    [Parameter]
+    public string? Pattern { get; set; }
 
-    [Parameter(ParameterSetName = "Regex", Mandatory = true)]
-    public string Replacement { get; set; } = null!;
+    [Parameter]
+    public string? Replacement { get; set; }
 
-    [Parameter(ParameterSetName = "Literal")]
-    [Parameter(ParameterSetName = "Regex")]
+    [Parameter]
     [ValidateLineRange]
     public int[]? LineRange { get; set; }
 
-    [Parameter(ParameterSetName = "Literal")]
-    [Parameter(ParameterSetName = "Regex")]
+    [Parameter]
     public string? Encoding { get; set; }
 
     [Parameter]
     public SwitchParameter Backup { get; set; }
+
+    protected override void BeginProcessing()
+    {
+        bool hasLiteral = !string.IsNullOrEmpty(Contains);
+        bool hasRegex = !string.IsNullOrEmpty(Pattern);
+        
+        // どちらも指定されていない
+        if (!hasLiteral && !hasRegex)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Either -Contains/-Replacement or -Pattern/-Replacement must be specified."),
+                "ParameterRequired",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+        
+        // 両方指定されている
+        if (hasLiteral && hasRegex)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Cannot specify both -Contains/-Replacement and -Pattern/-Replacement."),
+                "ConflictingParameters",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+        
+        // Literalモードで片方だけ指定されている
+        if (hasLiteral && string.IsNullOrEmpty(Replacement))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Both -Contains and -Replacement must be specified together."),
+                "IncompleteParameters",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+        
+        // Regexモードで片方だけ指定されている
+        if (hasRegex && string.IsNullOrEmpty(Replacement))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Both -Pattern and -Replacement must be specified together."),
+                "IncompleteParameters",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+    }
 
     protected override void ProcessRecord()
     {
         // LineRangeバリデーション（最優先）
         ValidateLineRange(LineRange);
 
-        foreach (var path in Path)
+        // -Path または -LiteralPath から処理対象を取得
+        string[] inputPaths = Path ?? LiteralPath;
+        bool isLiteralPath = (LiteralPath != null);
+
+        foreach (var inputPath in inputPaths)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
             
             try
             {
-                resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                if (isLiteralPath)
+                {
+                    // -LiteralPath: ワイルドカード展開なし
+                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
+                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                }
+                else
+                {
+                    // -Path: ワイルドカード展開あり
+                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                }
             }
             catch (Exception ex)
             {
@@ -58,7 +117,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
                     ex,
                     "PathResolutionFailed",
                     ErrorCategory.InvalidArgument,
-                    path));
+                    inputPath));
                 continue;
             }
             
@@ -67,16 +126,16 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
                 if (!File.Exists(resolvedPath))
                 {
                     WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {path}"),
+                        new FileNotFoundException($"File not found: {inputPath}"),
                         "FileNotFound",
                         ErrorCategory.ObjectNotFound,
-                        path));
+                        inputPath));
                     continue;
                 }
 
                 try
                 {
-                    ProcessStringReplacement(path, resolvedPath);
+                    ProcessStringReplacement(inputPath, resolvedPath);
                 }
                 catch (Exception ex)
                 {
@@ -94,7 +153,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
         var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
         
         int replacementCount = 0;
-        var isLiteral = ParameterSetName == "Literal";
+        var isLiteral = !string.IsNullOrEmpty(Contains);
         var regex = isLiteral ? null : new Regex(Pattern, RegexOptions.Compiled);
         
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
@@ -104,7 +163,7 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
         if (isLiteral)
         {
             string rangeInfo = LineRange != null ? $" in lines {startLine}-{endLine}" : "";
-            actionDescription = $"Replace '{OldValue}' with '{NewValue}'{rangeInfo}";
+            actionDescription = $"Replace '{Contains}' with '{Replacement}'{rangeInfo}";
         }
         else
         {
@@ -137,14 +196,14 @@ public class UpdateTextFileCmdlet : TextFileCmdletBase
                         {
                             if (isLiteral)
                             {
-                                if (line.Contains(OldValue))
+                                if (line.Contains(Contains))
                                 {
                                     // 置換回数を正確にカウント
-                                    int count = (line.Length - line.Replace(OldValue, "").Length) / 
-                                                Math.Max(1, OldValue.Length);
+                                    int count = (line.Length - line.Replace(Contains, "").Length) / 
+                                                Math.Max(1, Contains.Length);
                                     replacementCount += count;
                                     hasMatch = true;
-                                    return line.Replace(OldValue, NewValue);
+                                    return line.Replace(Contains, Replacement);
                                 }
                             }
                             else

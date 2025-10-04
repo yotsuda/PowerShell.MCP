@@ -12,66 +12,90 @@ Remove lines from a text file by line range or pattern matching
 
 ## SYNTAX
 
+### Path
 ```
-Remove-LinesFromFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Encoding <String>]
- [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Remove-LinesFromFile [-Path] <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
+ [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+```
+
+### LiteralPath
+```
+Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
+ [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Removes one or more lines from a text file either by specifying a line range, matching a regular expression pattern, or both. When both LineRange and Pattern are specified, only lines within the range that match the pattern are removed. Preserves file metadata (encoding, newlines).
+Removes lines matching text (literal or regex) within optional range. When range and pattern are both specified, only matching lines within the range are removed. Preserves file metadata (encoding, newlines).
 
 ## EXAMPLES
 
-### Example 1: Remove specific lines or ranges
+### Example 1: Remove by line number - single line or range
 ```powershell
+# Remove a single line
 PS C:\> Remove-LinesFromFile data.txt -LineRange 5
 Removed 1 line(s) from data.txt
 
+# Remove a range of lines (inclusive)
 PS C:\> Remove-LinesFromFile data.txt -LineRange 10,15
 Removed 6 line(s) from data.txt
 ```
 
-Removes line 5, or lines 10-15 (inclusive). Use -LineRange for precise line-based deletion.
+Use -LineRange for precise line-based deletion when you know the exact line numbers.
 
-### Example 2: Remove all DEBUG lines
+### Example 2: Remove by pattern - literal string or regex
 ```powershell
-PS C:\> Remove-LinesFromFile app.log -Pattern "^DEBUG:"
+# Remove lines containing literal string (simple, no escaping needed)
+PS C:\> Remove-LinesFromFile app.log -Contains "DEBUG"
 Removed 23 line(s) from app.log
-```
 
-Removes all lines starting with "DEBUG:". Useful for cleaning log files.
+# Remove lines matching regex pattern (powerful filtering)
+PS C:\> Remove-LinesFromFile app.log -Pattern "^(DEBUG|TRACE):"
+Removed 45 line(s) from app.log
 
-### Example 3: Remove empty lines
-```powershell
+# Remove empty or whitespace-only lines
 PS C:\> Remove-LinesFromFile data.txt -Pattern "^\s*$"
 Removed 7 line(s) from data.txt
-```
 
-Removes all empty or whitespace-only lines.
-
-### Example 4: Remove TODO comments
-```powershell
+# Remove TODO comments from code
 PS C:\> Remove-LinesFromFile Program.cs -Pattern "//\s*TODO"
 Removed 3 line(s) from Program.cs
 ```
 
-Removes all lines containing TODO comments.
+Use -Contains for simple literal string matching. Use -Pattern for advanced regex-based filtering.
 
-### Example 5: Combine LineRange and Pattern (AND condition)
+### Example 3: Combine LineRange and pattern (AND condition)
 ```powershell
+# Remove DEBUG lines only within lines 100-200
 PS C:\> Remove-LinesFromFile app.log -LineRange 100,200 -Pattern "^DEBUG:"
 Removed 12 line(s) from app.log
+
+# Remove empty lines only in the header section (lines 1-50)
+PS C:\> Remove-LinesFromFile document.txt -LineRange 1,50 -Pattern "^\s*$"
+Removed 3 line(s) from document.txt
 ```
 
-Removes only DEBUG lines within lines 100-200. Both conditions must be met (AND).
+Combine -LineRange with -Pattern or -Contains to remove lines matching both conditions. This limits pattern matching to specific sections.
 
-### Example 6: No matches found
+### Example 4: Process multiple files and handle no matches
 ```powershell
-PS C:\> Remove-LinesFromFile data.txt -Pattern "NOTEXIST"
-WARNING: No lines matched. File not modified.
+# Remove pattern from multiple files
+PS C:\> Remove-LinesFromFile *.log -Contains "DEPRECATED"
+Removed 5 line(s) from app.log
+Removed 2 line(s) from system.log
+WARNING: test.log: No lines matched. File not modified.
+
+# Use -Backup for safe deletion
+PS C:\> Remove-LinesFromFile important.txt -Pattern "temporary" -Backup
+Removed 4 line(s) from important.txt
+
+PS C:\> Get-ChildItem important.txt*
+Name
+----
+important.txt
+important.txt.20251004141000.bak
 ```
 
-If no lines match the pattern, a warning is displayed and the file remains unchanged.
+Use wildcards to process multiple files. Files with no matches show a warning but are not modified. Use -Backup for safe deletion of important content.
 
 ## PARAMETERS
 
@@ -140,7 +164,7 @@ Specifies the path to the text file. Supports wildcards for processing multiple 
 
 ```yaml
 Type: String[]
-Parameter Sets: (All)
+Parameter Sets: Path
 Aliases: FullName
 
 Required: True
@@ -193,6 +217,36 @@ Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Contains
+Specifies a literal string to match in lines. Lines containing this substring will be removed. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when searching for text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -LiteralPath
+Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
+
+```yaml
+Type: String[]
+Parameter Sets: LiteralPath
+Aliases: PSPath
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: False
 ```
 

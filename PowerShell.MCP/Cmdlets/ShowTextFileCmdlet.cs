@@ -10,10 +10,14 @@ namespace PowerShell.MCP.Cmdlets;
 [Cmdlet(VerbsCommon.Show, "TextFile")]
 public class ShowTextFileCmdlet : TextFileCmdletBase
 {
-    [Parameter(Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+    [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
     [Alias("FullName")]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
+
+    [Parameter(ParameterSetName = "LiteralPath", Mandatory = true, ValueFromPipelineByPropertyName = true)]
+    [Alias("PSPath")]
+    public string[] LiteralPath { get; set; } = null!;
 
     [Parameter]
     [ValidateLineRange]
@@ -21,6 +25,9 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     [Parameter]
     public string? Pattern { get; set; }
+    [Parameter]
+    public string? Contains { get; set; }
+
 
     [Parameter]
     public string? Encoding { get; set; }
@@ -32,13 +39,27 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         // LineRangeバリデーション（最優先）
         ValidateLineRange(LineRange);
 
-        foreach (var path in Path)
+        // -Path または -LiteralPath から処理対象を取得
+        string[] inputPaths = Path ?? LiteralPath;
+        bool isLiteralPath = (LiteralPath != null);
+
+        foreach (var inputPath in inputPaths)
         {
             System.Collections.ObjectModel.Collection<string> resolvedPaths;
             
             try
             {
-                resolvedPaths = GetResolvedProviderPathFromPSPath(path, out _);
+                if (isLiteralPath)
+                {
+                    // -LiteralPath: ワイルドカード展開なし
+                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
+                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                }
+                else
+                {
+                    // -Path: ワイルドカード展開あり
+                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                }
             }
             catch (Exception ex)
             {
@@ -46,7 +67,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     ex,
                     "PathResolutionFailed",
                     ErrorCategory.InvalidArgument,
-                    path));
+                    inputPath));
                 continue;
             }
             
@@ -55,7 +76,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 if (!File.Exists(resolvedPath))
                 {
                     WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {path}"),
+                        new FileNotFoundException($"File not found: {inputPath}"),
                         "FileNotFound",
                         ErrorCategory.ObjectNotFound,
                         resolvedPath));
@@ -71,7 +92,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     }
                     
                     // 表示用パスを決定（PS Drive パスを保持）
-                    var displayPath = GetDisplayPath(path, resolvedPath);
+                    var displayPath = GetDisplayPath(inputPath, resolvedPath);
                     
                     // ヘッダーとして表示
                     WriteObject($"==> {displayPath} <==");
@@ -91,6 +112,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     if (!string.IsNullOrEmpty(Pattern))
                     {
                         ShowWithPattern(resolvedPath, encoding);
+                    }
+                    else if (!string.IsNullOrEmpty(Contains))
+                    {
+                        ShowWithContains(resolvedPath, encoding);
                     }
                     else
                     {
@@ -175,6 +200,48 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         else if (matchCount == 0)
         {
             WriteWarning($"No lines matched pattern: {Pattern}");
+        }
+    }
+
+    private void ShowWithContains(string filePath, System.Text.Encoding encoding)
+    {
+        // 行範囲を取得
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
+
+        // Skip/Take で範囲を絞り込んでから文字列検索
+        int skipCount = startLine - 1;
+        int takeCount = endLine - startLine + 1;
+
+        var linesToSearch = File.ReadLines(filePath, encoding)
+            .Skip(skipCount)
+            .Take(takeCount);
+
+        int matchCount = 0;
+        int lineNumber = startLine;
+        bool hasLines = false;
+
+        foreach (var line in linesToSearch)
+        {
+            hasLines = true;
+            // Contains: リテラル文字列として部分一致検索（正規表現ではない）
+            if (line.Contains(Contains, StringComparison.Ordinal))
+            {
+                // LLM向け：行番号フォーマットを統一（4桁）、マッチ行に*マーク
+                WriteObject($"*{lineNumber,3}: {line}");
+                matchCount++;
+            }
+            lineNumber++;
+        }
+
+        // 指定範囲が存在しない場合
+        if (!hasLines && LineRange != null)
+        {
+            WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
+        }
+        // マッチが見つからない場合
+        else if (matchCount == 0)
+        {
+            WriteWarning($"No lines contain: {Contains}");
         }
     }
 }
