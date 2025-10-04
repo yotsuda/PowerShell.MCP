@@ -45,7 +45,7 @@ PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to 
 
 **📝 LLM-Optimized Text File Operations**
 - Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
-- To address this, PowerShell.MCP includes 5 specialized cmdlets designed specifically for AI assistants to handle text file operations reliably
+- To address this, PowerShell.MCP includes 6 specialized cmdlets designed specifically for AI assistants to handle text file operations reliably
 - Single-pass processing architecture enables up to 100x faster performance than Get/Set-Content on large files
 - 1-based line numbering eliminates array index confusion and matches compiler error messages
 - Automatic encoding detection and preservation (UTF-8/16/32, Shift-JIS, line endings)
@@ -128,7 +128,7 @@ Import-Module PowerShell.MCP
 ### 3. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
-# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.4
+# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.5
 ```
 
 ### 4. Configure Claude Desktop
@@ -137,7 +137,7 @@ Add to your Claude Desktop configuration:
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.4\\bin\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.5\\bin\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
