@@ -247,13 +247,4 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
         string netStr = netChange > 0 ? $"+{netChange}" : netChange.ToString();
         return $"Replaced {linesRemoved} line(s) with {linesInserted} line(s) (net: {netStr})";
     }
-
-    private void WriteLineRangeWithoutFileError(string path)
-    {
-        WriteError(new ErrorRecord(
-            new FileNotFoundException(string.Format(ErrorMessageLineRangeWithoutFile, path)),
-            "FileNotFoundForLineRange",
-            ErrorCategory.ObjectNotFound,
-            path));
-    }
 }

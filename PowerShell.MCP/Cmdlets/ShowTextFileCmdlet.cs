@@ -34,6 +34,14 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private int _totalFilesProcessed = 0;
 
+
+    protected override void BeginProcessing()
+    {
+        if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
+        {
+            throw new PSArgumentException("Cannot specify both -Contains and -Pattern parameters.");
+        }
+    }
     protected override void ProcessRecord()
     {
         // LineRangeバリデーション（最優先）

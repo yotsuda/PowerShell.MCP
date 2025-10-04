@@ -25,7 +25,7 @@ Add-LinesToFile -LiteralPath <String[]> [-Content] <Object[]> [-LineNumber <Int3
 ```
 
 ## DESCRIPTION
-Inserts lines at specified position or appends to end. Accepts arrays for multiple lines. Inserted content shifts existing lines down. Preserves file metadata (encoding, newlines).
+Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines. Inserted content shifts existing lines down. Preserves file metadata (encoding, newlines).
 
 ## EXAMPLES
 
@@ -61,11 +61,11 @@ Added 3 line(s) to app.log at end
 
 Pass an array of strings to -Content to insert multiple lines as a block. All lines are inserted at the specified position.
 
-### Example 3: Edge cases - empty files and multiple files
+### Example 3: Create new files and process multiple files
 ```powershell
-# Insert into an empty file (creates first line)
-PS C:\> Add-LinesToFile empty.txt -LineNumber 1 -Content "First line"
-Added 1 line(s) to empty.txt at line 1
+# Create a new file (file doesn't need to exist)
+PS C:\> Add-LinesToFile newfile.txt -LineNumber 1 -Content "First line"
+Created newfile.txt: Created 1 line(s)
 
 # Process multiple files with wildcards
 PS C:\> Add-LinesToFile *.cs -LineNumber 1 -Content "// Auto-generated comment"
@@ -73,7 +73,7 @@ Added 1 line(s) to App.cs at line 1
 Added 1 line(s) to Program.cs at line 1
 ```
 
-Works correctly with empty files. Use wildcards to insert into multiple files at once.
+Creates new files if they don't exist. -LineNumber must be 1 for new files. Use wildcards to insert into multiple existing files at once (wildcards cannot create new files).
 
 ### Example 4: Safe editing with backup
 ```powershell
@@ -279,9 +279,11 @@ Multiple line insertion:
 - All lines are inserted as a contiguous block
 - They are inserted in the order provided
 
-Empty file handling:
+New file creation:
 
-- Works correctly with empty files
-- -LineNumber 1 is the only valid choice for empty files
+- Creates new files if they don't exist
+- -LineNumber must be 1 for new files (or use -AtEnd)
+- Wildcards cannot create new files (path must be literal)
+- -Backup parameter is ignored when creating new files
 
 ## RELATED LINKS

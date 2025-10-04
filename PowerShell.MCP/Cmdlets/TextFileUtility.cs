@@ -221,7 +221,7 @@ public static class TextFileUtility
         using var reader = new StreamReader(inputPath, metadata.Encoding, false, 65536); // 64KB buffer
         using var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536); // 64KB buffer
 
-        string currentLine = reader.ReadLine();
+        string? currentLine = reader.ReadLine();
         if (currentLine == null)
         {
             // 空ファイル
@@ -229,7 +229,7 @@ public static class TextFileUtility
         }
             
         int lineNumber = 1;
-        string nextLine = reader.ReadLine();
+        string? nextLine = reader.ReadLine();
             
         while (true)
         {

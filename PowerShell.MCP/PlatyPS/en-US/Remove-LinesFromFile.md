@@ -74,7 +74,7 @@ PS C:\> Remove-LinesFromFile document.txt -LineRange 1,50 -Pattern "^\s*$"
 Removed 3 line(s) from document.txt
 ```
 
-Combine -LineRange with -Pattern or -Contains to remove lines matching both conditions. This limits pattern matching to specific sections.
+Combine -LineRange with -Pattern or -Contains to remove matching lines within specific sections. This limits pattern matching to specific sections.
 
 ### Example 4: Process multiple files and handle no matches
 ```powershell
@@ -263,7 +263,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## NOTES
 
-At least one of -LineRange or -Pattern must be specified.
+At least one of -LineRange, -Contains, or -Pattern must be specified. -Contains and -Pattern are mutually exclusive.
 
 BEST PRACTICE - Verify before deletion:
 

@@ -260,7 +260,7 @@ Contains vs Pattern:
 - Use -Contains for simple literal string searches (no regex knowledge needed)
 - Use -Pattern for advanced regex pattern matching
 - -Contains does not require escaping special characters: [, ], (, ), ., *, +, ?, $, etc.
-- If both -Pattern and -Contains are specified, -Pattern takes precedence
+- -Contains and -Pattern are mutually exclusive (cannot be used together)
 
 Multiple files:
 

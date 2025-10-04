@@ -48,7 +48,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
         try
         {
             // 元のパターンのディレクトリ部分
-            string originalDir = System.IO.Path.GetDirectoryName(originalPattern);
+            string? originalDir = System.IO.Path.GetDirectoryName(originalPattern);
             
             // 解決されたパスのファイル名
             string fileName = System.IO.Path.GetFileName(resolvedPath);
@@ -166,6 +166,6 @@ public abstract class TextFileCmdletBase : PSCmdlet
             return allPaths;
         }
         
-        return new System.Collections.ObjectModel.Collection<string>();
+        return [];
     }
 }

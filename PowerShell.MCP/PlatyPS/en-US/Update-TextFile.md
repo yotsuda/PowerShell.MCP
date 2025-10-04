@@ -299,5 +299,6 @@ Regular expression mode:
 - Use for complex transformations
 - Test first: Show-TextFile -Pattern "regex"
 - Escape special regex chars: . * + ? [ ] ( ) { } ^ $ |
+- -Contains and -Pattern are mutually exclusive (cannot be used together)
 
 ## RELATED LINKS

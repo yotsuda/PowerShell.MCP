@@ -34,6 +34,14 @@ public class TestTextFileContainsCmdlet : TextFileCmdletBase
     [Parameter]
     public string? Encoding { get; set; }
 
+
+    protected override void BeginProcessing()
+    {
+        if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
+        {
+            throw new PSArgumentException("Cannot specify both -Contains and -Pattern parameters.");
+        }
+    }
     protected override void ProcessRecord()
     {
         // LineRange validation (highest priority)

@@ -43,7 +43,7 @@ NEVER use Get-Content or Set-Content for text file operations. This module inclu
   Replaces matching text (literal or regex) within optional line range.
 
 • Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> [-LineNumber <int>] [-AtEnd] [-Encoding <string>] [-Backup] [-WhatIf]
-  Inserts lines at specified position or appends to end. Accepts arrays for multiple lines.
+  Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines.
 
 • Set-LinesToFile [-Path] <string[]> [[-Content] <Object[]>] [-LineRange <int[]>] [-Encoding <string>] [-Backup] [-WhatIf]
   Replaces specified line range with new content or creates new file. Omit content to delete lines.

@@ -37,6 +37,12 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
+        // -Contains と -Pattern の同時指定チェック
+        if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
+        {
+            throw new PSArgumentException("Cannot specify both -Contains and -Pattern parameters.");
+        }
+
         // LineRange、Contains、Pattern の少なくとも一方が指定されているかチェック
         if (LineRange == null && string.IsNullOrEmpty(Contains) && string.IsNullOrEmpty(Pattern))
         {
