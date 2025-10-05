@@ -200,7 +200,7 @@ After trying these demos, explore the 8 built-in prompts in your MCP client's pr
 ### 👨‍💻 Developer Features
 - "Review git changes and suggest a commit message"
 - "Analyze code metrics in the current project"
-- "Find TODO comments in source files"
+- "Find and fix TODOs in my code automatically"
 - "Check for outdated npm packages"
 
 ### ⚡ PowerShell Learning
