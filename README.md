@@ -112,6 +112,7 @@ Transform natural language requests into PowerShell automation - from simple fil
 ### Prerequisites
 - Windows 10/11 or Windows Server 2016+
 - Claude Desktop ([download](https://claude.ai/download)) or any MCP clients
+  - **Note: Claude Desktop is strongly recommended** as other clients may not deliver optimal performance
 - PowerShell 7.2.15 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5))
 - PSReadLine 2.3.4 or higher ([auto-installed](https://www.powershellgallery.com/packages/PSReadLine))
 
