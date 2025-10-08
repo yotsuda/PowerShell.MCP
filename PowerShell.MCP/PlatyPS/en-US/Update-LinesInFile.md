@@ -214,7 +214,7 @@ BEST PRACTICE - Always verify before replacing:
 
 3. Verify the result: Show-TextFile config.txt -LineRange 30,40
 
-This three-step workflow (Show -> Set -> Show) prevents accidental data loss by confirming line numbers before modification.
+This three-step workflow (Show -> Update -> Show) prevents accidental data loss by confirming line numbers before modification.
 
 Line number tips:
 

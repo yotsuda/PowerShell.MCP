@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -22,6 +22,18 @@
   <ItemGroup>
     <PackageReference Include="System.Management.Automation" Version="7.2.15" />
     <PackageReference Include="System.Formats.Asn1" Version="9.0.9" />
+    <!-- Ude.NetStandard を出力ディレクトリにコピー -->
+    <PackageReference Include="Ude.NetStandard" Version="1.2.0" />
   </ItemGroup>
+
+  <!-- Ude.NetStandard.dll のみを出力ディレクトリにコピー -->
+  <Target Name="CopyUdeNetStandard" AfterTargets="Build">
+    <ItemGroup>
+      <UdeDll Include="$(NuGetPackageRoot)ude.netstandard\1.2.0\lib\netstandard2.0\Ude.NetStandard.dll" Condition="Exists('$(NuGetPackageRoot)ude.netstandard\1.2.0\lib\netstandard2.0\Ude.NetStandard.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(UdeDll)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="'@(UdeDll)' != ''" />
+    <Message Text="Copied Ude.NetStandard.dll to output directory" Importance="High" Condition="'@(UdeDll)' != ''" />
+    <Warning Text="Ude.NetStandard.dll not found in NuGet packages!" Condition="'@(UdeDll)' == ''" />
+  </Target>
 
 </Project>

@@ -2,7 +2,7 @@
 Module Name: PowerShell.MCP
 Module Guid: 313962fa-c90b-424a-9c8a-d4a05f4a1481
 Download Help Link: https://github.com/yotsuda/PowerShell.MCP
-Help Version: 1.2.4
+Help Version: 1.2.6
 Locale: en-US
 ---
 

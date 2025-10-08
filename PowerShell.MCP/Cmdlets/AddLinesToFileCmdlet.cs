@@ -1,10 +1,10 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// ファイルに行を追加（新規作成も可能）
-/// LLM最適化:新規ファイルではパラメータ不要、既存ファイルでは-AtEndまたは-LineNumberが必須
+/// LLM最適化:新規ファイルはパラメータ省略可(末尾追加、-LineNumber 1 のみ許可)、既存ファイルは-AtEndまたは-LineNumberが必須
 /// </summary>
 [Cmdlet(VerbsCommon.Add, "LinesToFile", SupportsShouldProcess = true)]
 public class AddLinesToFileCmdlet : TextFileCmdletBase
@@ -35,7 +35,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        // -AtEnd と -LineNumber の排他チェック
+        // -AtEnd と -LineNumber の排他チェックのみ
         if (AtEnd.IsPresent && LineNumber > 0)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -123,16 +123,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
                 try
                 {
-                    if (isNewFile)
-                    {
-                        // 新規ファイル作成
-                        CreateNewFile(resolvedPath, inputPath);
-                    }
-                    else
-                    {
-                        // 既存ファイルへの追加
-                        AddToExistingFile(resolvedPath, inputPath);
-                    }
+                    // 新規・既存ファイル共通の処理
+                    AddToFile(resolvedPath, inputPath, isNewFile);
                 }
                 catch (Exception ex)
                 {
@@ -142,56 +134,6 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         }
     }
 
-    /// <summary>
-    /// 新規ファイルを作成
-    /// </summary>
-    private void CreateNewFile(string resolvedPath, string originalPath)
-    {
-        // 新規ファイル作成時に -AtEnd/-LineNumber が指定されている場合は警告
-        if (AtEnd.IsPresent)
-        {
-            WriteWarning($"-AtEnd parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
-        }
-        if (LineNumber > 0)
-        {
-            WriteWarning($"-LineNumber parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
-        }
-
-        // 新規ファイル作成時に -Backup が指定されている場合は警告
-        if (Backup)
-        {
-            WriteWarning($"-Backup parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
-        }
-        
-        var metadata = new TextFileUtility.FileMetadata
-        {
-            Encoding = string.IsNullOrEmpty(Encoding) ? new System.Text.UTF8Encoding(false) : TextFileUtility.GetEncoding(resolvedPath, Encoding),
-            NewlineSequence = Environment.NewLine,
-            HasTrailingNewline = false
-        };
-
-        string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
-        
-        if (ShouldProcess(resolvedPath, $"Create new file with {contentLines.Length} line(s)"))
-        {
-            var tempFile = System.IO.Path.GetTempFileName();
-
-            try
-            {
-                WriteNewContent(tempFile, contentLines, metadata);
-                File.Move(tempFile, resolvedPath, true);
-                WriteObject($"Created {GetDisplayPath(originalPath, resolvedPath)}: Created {contentLines.Length} line(s)");
-            }
-            catch
-            {
-                if (File.Exists(tempFile))
-                {
-                    File.Delete(tempFile);
-                }
-                throw;
-            }
-        }
-    }
 
     /// <summary>
     /// 新しい内容をファイルに書き込む（新規ファイルと空ファイルで共通）
@@ -213,26 +155,70 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// 既存ファイルに行を追加
+    /// ファイルに行を追加（新規・既存ファイル共通）
     /// </summary>
-    private void AddToExistingFile(string resolvedPath, string originalPath)
+    private void AddToFile(string resolvedPath, string originalPath, bool isNewFile)
     {
-        // 既存ファイルでは -AtEnd または -LineNumber のいずれかが必要
-        if (!AtEnd.IsPresent && LineNumber == 0)
+        // 既存ファイルの場合、-AtEnd または -LineNumber が必須
+        if (!isNewFile && !AtEnd.IsPresent && LineNumber == 0)
         {
             WriteError(new ErrorRecord(
-                new ArgumentException("For existing files, either -AtEnd or -LineNumber must be specified."),
-                "ParameterRequired",
+                new ArgumentException($"For existing file '{originalPath}', either -AtEnd or -LineNumber must be specified."),
+                "ParameterRequiredForExistingFile",
                 ErrorCategory.InvalidArgument,
                 resolvedPath));
             return;
         }
 
-        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
+        // メタデータの取得または作成
+        TextFileUtility.FileMetadata metadata;
+        if (isNewFile)
+        {
+            // 新規ファイル：デフォルトのメタデータを使用
+            metadata = new TextFileUtility.FileMetadata
+            {
+                Encoding = string.IsNullOrEmpty(Encoding) ? new System.Text.UTF8Encoding(false) : TextFileUtility.GetEncoding(resolvedPath, Encoding),
+                NewlineSequence = Environment.NewLine,
+                HasTrailingNewline = false
+            };
+        }
+        else
+        {
+            // 既存ファイル：ファイルからメタデータを検出
+            metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
+        }
+
         string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
-        int insertAt = AtEnd.IsPresent ? int.MaxValue : LineNumber;
         
-        string actionDescription = AtEnd.IsPresent 
+        // 新規ファイルの場合はデフォルトで末尾（AtEnd）、既存ファイルの場合は指定された位置
+        int insertAt;
+        bool effectiveAtEnd;
+        
+        if (isNewFile)
+        {
+            // 新規ファイル作成時のバリデーション
+            if (LineNumber > 1)
+            {
+                WriteError(new ErrorRecord(
+                    new ArgumentException($"For new file creation, -LineNumber must be 1 or omitted. Specified: {LineNumber}"),
+                    "InvalidLineNumberForNewFile",
+                    ErrorCategory.InvalidArgument,
+                    resolvedPath));
+                return;
+            }
+            
+            // 新規ファイル:パラメータ未指定なら末尾、LineNumber 1 または -AtEnd なら OK
+            insertAt = LineNumber > 0 ? LineNumber : int.MaxValue;
+            effectiveAtEnd = LineNumber == 0 || AtEnd.IsPresent;
+        }
+        else
+        {
+            // 既存ファイル：指定されたパラメータを使用（この時点で検証済み）
+            insertAt = AtEnd.IsPresent ? int.MaxValue : LineNumber;
+            effectiveAtEnd = AtEnd.IsPresent;
+        }
+        
+        string actionDescription = effectiveAtEnd
             ? $"Add {contentLines.Length} line(s) at end" 
             : $"Add {contentLines.Length} line(s) at line {insertAt}";
 
@@ -240,35 +226,40 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         {
             if (Backup)
             {
-                var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                WriteVerbose($"Created backup: {backupPath}");
+                if (isNewFile)
+                {
+                    WriteWarning($"-Backup parameter is ignored for new file creation: {GetDisplayPath(originalPath, resolvedPath)}");
+                }
+                else
+                {
+                    var backupPath = TextFileUtility.CreateBackup(resolvedPath);
+                    WriteVerbose($"Created backup: {backupPath}");
+                }
             }
 
             var tempFile = System.IO.Path.GetTempFileName();
 
             try
             {
-                // ファイルが空かどうかをチェック
-                var fileInfo = new FileInfo(resolvedPath);
-                if (fileInfo.Length == 0)
+                if (isNewFile || new FileInfo(resolvedPath).Length == 0)
                 {
-                    // 空ファイル：新しい内容のみを書き込む（CreateNewFileと同じロジック）
+                    // 新規ファイルまたは空ファイル：新しい内容のみを書き込む
                     WriteNewContent(tempFile, contentLines, metadata);
                 }
                 else
                 {
-                    // 通常のファイル：挿入処理
+                    // 既存の非空ファイル：挿入処理
                     InsertLines(resolvedPath, tempFile, contentLines, metadata, insertAt);
                 }
 
-                // アトミックに置換
+                // アトミックに置換（または新規作成）
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-                string locationMessage = AtEnd.IsPresent 
-                    ? "at end" 
-                    : $"at line {insertAt}";
+                string message = isNewFile 
+                    ? $"Created {GetDisplayPath(originalPath, resolvedPath)}: Created {contentLines.Length} line(s)"
+                    : $"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(AtEnd.IsPresent ? "at end" : $"at line {insertAt}")}";
                 
-                WriteObject($"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {locationMessage}");
+                WriteObject(message);
             }
             catch
             {

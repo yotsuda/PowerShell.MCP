@@ -34,7 +34,7 @@ Inserts lines at specified position or appends to end or creates new file. Accep
 Add-LinesToFile app.log -LineNumber 1 -Content "# Header"              # At beginning
 Add-LinesToFile app.log -LineNumber 10 -Content "// Inserted line"     # Middle
 Add-LinesToFile app.log -AtEnd -Content "# Footer"                     # At end
-Add-LinesToFile new.txt -Content "First line"                          # Creates file (no params needed)
+Add-LinesToFile new.txt -Content "First line"                          # Creates file (params optional)
 ```
 
 ### Example 2: Insert multiple lines
@@ -50,9 +50,9 @@ Get-ChildItem *.cs | Where-Object { (Get-Content $_ -First 1) -notmatch "using" 
 ```
 
 Important:
-- -LineNumber and -AtEnd are mutually exclusive
-- New files: -LineNumber/-AtEnd are optional (ignored with warning if specified)
+- New files: -LineNumber and -AtEnd are optional (defaults to append at end; -LineNumber only accepts 1)
 - Existing files: Either -LineNumber or -AtEnd is required
+- -LineNumber and -AtEnd are mutually exclusive
 - Content accepts string or string array
 - Creates new file if it doesn't exist
 - Pipeline: accepts FileInfo via PSPath property
@@ -250,8 +250,9 @@ Multiple line insertion:
 New file creation:
 
 - Creates new files if they don't exist
-- -LineNumber and -AtEnd are optional (ignored with warning if specified)
+- -LineNumber and -AtEnd are optional (defaults to append at end)
+- When specified, -LineNumber only accepts 1 (beginning of new file)
 - Wildcards cannot create new files (path must be literal)
-- -Backup parameter is ignored when creating new files (with warning)
+- -Backup parameter is ignored when creating new files (warning is shown if specified)
 
 ## RELATED LINKS

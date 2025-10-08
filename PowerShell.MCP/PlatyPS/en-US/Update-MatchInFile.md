@@ -27,6 +27,7 @@ Update-MatchInFile -LiteralPath <String[]> [-Contains <String>] [-Pattern <Strin
 ```
 
 ## DESCRIPTION
+Replaces matching text (literal or regex) within optional line range. Preserves file metadata (encoding, newlines). Use -Contains for literal string replacement or -Pattern for regex-based replacement with capture groups support.
 
 ## EXAMPLES
 
@@ -87,7 +88,7 @@ Accept wildcard characters: False
 ```
 
 ### -Contains
-Specifies a literal string to match in lines. Only lines containing this substring will be processed for replacement. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when filtering lines that contain regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them. When used with -Replacement but without -Pattern, the entire line containing the string is replaced.
+Specifies a literal string to match in lines. Only lines containing this substring will be processed for replacement. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when filtering lines that contain regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' ' without needing to escape them. When used with -Replacement but without -Pattern, the entire line containing the string is replaced.
 
 ```yaml
 Type: String
@@ -239,14 +240,14 @@ BEST PRACTICE - Verify before and after:
 
 1. Check current content: Show-TextFile config.js -Pattern "localhost"
 
-2. Make the replacement: Update-MatchInFile config.js -OldValue "localhost" -NewValue "production"
+2. Make the replacement: Update-MatchInFile config.js -Contains "localhost" -Replacement "production"
 
 3. Verify the change: Show-TextFile config.js -Pattern "production"
 
 CRITICAL - Handling special characters (dollar, braces, quotes):
 
 When replacing code with special characters, ALWAYS use here-strings.
-Example: $old = @'...'@ and $new = @'...'@ then Update-MatchInFile file.cs -OldValue $old -NewValue $new
+Example: $old = @'...'@ and $new = @'...'@ then Update-MatchInFile file.cs -Contains $old -Replacement $new
 
 Here-strings (@'...'@) treat ALL characters literally.
 

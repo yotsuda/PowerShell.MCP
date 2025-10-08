@@ -179,7 +179,7 @@ Accept wildcard characters: False
 ```
 
 ### -Contains
-Specifies a literal string to match in lines. Lines containing this substring will be removed. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when searching for text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them.
+Specifies a literal string to match in lines. Lines containing this substring will be removed. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when searching for text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' ' without needing to escape them.
 
 ```yaml
 Type: String

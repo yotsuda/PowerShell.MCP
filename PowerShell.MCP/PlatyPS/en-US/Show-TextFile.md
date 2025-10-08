@@ -149,7 +149,7 @@ Accept wildcard characters: False
 ```
 
 ### -Contains
-Specifies a literal string to search for in each line. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful for searching text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them. Matching lines are prefixed with * for easy identification.
+Specifies a literal string to search for in each line. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful for searching text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' ' without needing to escape them. Matching lines are prefixed with * for easy identification.
 
 ```yaml
 Type: String
@@ -182,7 +182,7 @@ Typical LLM workflow:
 
 2. Examine context: Show-TextFile Program.cs -LineRange 45,55
 
-3. Make the fix: Update-TextFile Program.cs -LineRange 48 -OldValue "Bug" -NewValue "Fix"
+3. Make the fix: Update-MatchInFile Program.cs -LineRange 48 -OldValue "Bug" -NewValue "Fix"
 
 4. Verify the fix: Show-TextFile Program.cs -LineRange 45,55
 
@@ -195,7 +195,7 @@ Pattern matching:
 
 - Matching lines are prefixed with * for easy identification
 - Combine -Pattern with -LineRange to search within a specific section
-- Use Show-TextFile to test regex patterns before using them in Update-TextFile
+- Use Show-TextFile to test regex patterns before using them in Update-MatchInFile
 
 Contains vs Pattern:
 

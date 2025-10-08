@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -50,6 +50,7 @@ public static class TextFileUtility
     /// </summary>
     public static Encoding DetectEncoding(string filePath)
     {
+        // 1. BOMチェック（高速）
         var bytes = new byte[4];
         using (var fs = File.OpenRead(filePath))
         {
@@ -71,7 +72,35 @@ public static class TextFileUtility
                 return Encoding.BigEndianUnicode; // UTF-16 BE
         }
 
-        // BOMなし: UTF-8を仮定
+        // 2. BOMなし: Ude でヒューリスティック検出
+        try
+        {
+            var detector = new Ude.CharsetDetector();
+            using (var fs = File.OpenRead(filePath))
+            {
+                detector.Feed(fs);
+                detector.DataEnd();
+            }
+            
+            if (detector.Charset != null && detector.Confidence > 0.7)
+            {
+                // 検出されたエンコーディングを返す
+                try
+                {
+                    return Encoding.GetEncoding(detector.Charset);
+                }
+                catch
+                {
+                    // エンコーディング名が無効な場合はフォールバック
+                }
+            }
+        }
+        catch
+        {
+            // Ude での検出失敗時はフォールバック
+        }
+
+        // 3. 検出失敗: UTF-8を仮定
         return new UTF8Encoding(false);
     }
 
@@ -156,7 +185,6 @@ public static class TextFileUtility
             
             // 最初の改行を検出（ストリーミング）
             string detectedNewline = Environment.NewLine;
-            bool foundNewline = false;
             int ch;
             
             while ((ch = reader.Read()) != -1)
@@ -164,13 +192,11 @@ public static class TextFileUtility
                 if (ch == '\r')
                 {
                     detectedNewline = reader.Peek() == '\n' ? "\r\n" : "\r";
-                    foundNewline = true;
                     break;
                 }
                 else if (ch == '\n')
                 {
                     detectedNewline = "\n";
-                    foundNewline = true;
                     break;
                 }
             }
