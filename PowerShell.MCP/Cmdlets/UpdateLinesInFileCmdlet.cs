@@ -3,12 +3,12 @@ using System.Management.Automation;
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// ファイルの行を設定
+/// ファイルの行を更新
 /// LLM最適化：行範囲指定または全体置換、Content省略で削除
 /// LineRange未指定時：ファイル全体の置き換え（既存）または新規作成（新規）
 /// </summary>
-[Cmdlet(VerbsCommon.Set, "LinesToFile", SupportsShouldProcess = true)]
-public class SetLinesToFileCmdlet : TextFileCmdletBase
+[Cmdlet(VerbsData.Update, "LinesInFile", SupportsShouldProcess = true)]
+public class UpdateLinesInFileCmdlet : TextFileCmdletBase
 {
     private const string ErrorMessageLineRangeWithoutFile = 
         "File not found: {0}. Cannot use -LineRange with non-existent file.";
@@ -22,11 +22,11 @@ public class SetLinesToFileCmdlet : TextFileCmdletBase
     public string[] LiteralPath { get; set; } = null!;
 
     [Parameter(Position = 1)]
-    public object[]? Content { get; set; }
-
-    [Parameter]
     [ValidateLineRange]
     public int[]? LineRange { get; set; }
+
+    [Parameter]
+    public object[]? Content { get; set; }
 
     [Parameter]
     public string? Encoding { get; set; }

@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# Update-TextFile
+# Update-MatchInFile
 
 ## SYNOPSIS
 Update text file content using string literal or regex replacement
@@ -14,14 +14,14 @@ Update text file content using string literal or regex replacement
 
 ### Path
 ```
-Update-TextFile [-Path] <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
+Update-MatchInFile [-Path] <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
  [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
  [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Update-TextFile -LiteralPath <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
+Update-MatchInFile -LiteralPath <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
  [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
  [-Confirm] [<CommonParameters>]
 ```
@@ -32,20 +32,20 @@ Update-TextFile -LiteralPath <String[]> [-Contains <String>] [-Pattern <String>]
 
 ### Example 1: Replace text - literal or regex
 ```powershell
-Update-TextFile config.txt -Contains "debug=false" -Replacement "debug=true"     # Literal
-Update-TextFile code.cs -Pattern "var (\w+)" -Replacement "string $1"            # Regex with capture
+Update-MatchInFile config.txt -Contains "debug=false" -Replacement "debug=true"     # Literal
+Update-MatchInFile code.cs -Pattern "var (\w+)" -Replacement "string $1"            # Regex with capture
 ```
 
 ### Example 2: Targeted replacement
 ```powershell
-Update-TextFile app.cs -LineRange 10,50 -Contains "oldFunc" -Replacement "newFunc"
-Update-TextFile *.config -Contains "staging" -Replacement "production" -Backup
+Update-MatchInFile app.cs -LineRange 10,50 -Contains "oldFunc" -Replacement "newFunc"
+Update-MatchInFile *.config -Contains "staging" -Replacement "production" -Backup
 ```
 
 ### Example 3: Pipeline and safety
 ```powershell
-Get-ChildItem *.txt | Update-TextFile -Contains "old" -Replacement "new"
-Get-ChildItem *.cs | Update-TextFile -Pattern "TODO" -Replacement "DONE" -Backup -WhatIf
+Get-ChildItem *.txt | Update-MatchInFile -Contains "old" -Replacement "new"
+Get-ChildItem *.cs | Update-MatchInFile -Pattern "TODO" -Replacement "DONE" -Backup -WhatIf
 ```
 
 Important:
@@ -86,6 +86,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -Contains
+Specifies a literal string to match in lines. Only lines containing this substring will be processed for replacement. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when filtering lines that contain regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them. When used with -Replacement but without -Pattern, the entire line containing the string is replaced.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -Encoding
 Specifies the character encoding. If omitted, encoding is auto-detected and preserved. Supports: utf8, utf8bom, sjis, eucjp, jis, ascii, utf16, utf32, etc.
 
@@ -113,6 +128,21 @@ Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -LiteralPath
+Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
+
+```yaml
+Type: String[]
+Parameter Sets: LiteralPath
+Aliases: PSPath
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: False
 ```
 
@@ -192,36 +222,6 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Contains
-Specifies a literal string to match in lines. Only lines containing this substring will be processed for replacement. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when filtering lines that contain regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' without needing to escape them. When used with -Replacement but without -Pattern, the entire line containing the string is replaced.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -LiteralPath
-Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
-
-```yaml
-Type: String[]
-Parameter Sets: LiteralPath
-Aliases: PSPath
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: True (ByPropertyName)
-Accept wildcard characters: False
-```
-
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -239,14 +239,14 @@ BEST PRACTICE - Verify before and after:
 
 1. Check current content: Show-TextFile config.js -Pattern "localhost"
 
-2. Make the replacement: Update-TextFile config.js -OldValue "localhost" -NewValue "production"
+2. Make the replacement: Update-MatchInFile config.js -OldValue "localhost" -NewValue "production"
 
 3. Verify the change: Show-TextFile config.js -Pattern "production"
 
 CRITICAL - Handling special characters (dollar, braces, quotes):
 
 When replacing code with special characters, ALWAYS use here-strings.
-Example: $old = @'...'@ and $new = @'...'@ then Update-TextFile file.cs -OldValue $old -NewValue $new
+Example: $old = @'...'@ and $new = @'...'@ then Update-MatchInFile file.cs -OldValue $old -NewValue $new
 
 Here-strings (@'...'@) treat ALL characters literally.
 

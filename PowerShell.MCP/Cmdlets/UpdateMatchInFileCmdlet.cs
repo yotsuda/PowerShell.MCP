@@ -4,11 +4,11 @@ using System.Text.RegularExpressions;
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// テキストファイルの内容を更新
+/// テキストファイル内のパターンマッチを更新
 /// LLM最適化：文字列リテラル置換と正規表現置換の2つのモード
 /// </summary>
-[Cmdlet(VerbsData.Update, "TextFile", SupportsShouldProcess = true)]
-public class UpdateTextFileCmdlet : TextFileCmdletBase
+[Cmdlet(VerbsData.Update, "MatchInFile", SupportsShouldProcess = true)]
+public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 {
     [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]

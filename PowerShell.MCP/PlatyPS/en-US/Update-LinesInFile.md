@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# Set-LinesToFile
+# Update-LinesInFile
 
 ## SYNOPSIS
 Replace or delete specific lines in a text file
@@ -14,13 +14,13 @@ Replace or delete specific lines in a text file
 
 ### Path
 ```
-Set-LinesToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineRange <Int32[]>] [-Encoding <String>]
+Update-LinesInFile [-Path] <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>]
  [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Set-LinesToFile -LiteralPath <String[]> [[-Content] <Object[]>] [-LineRange <Int32[]>] [-Encoding <String>]
+Update-LinesInFile -LiteralPath <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>]
  [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -31,22 +31,22 @@ Replaces specified line range with new content or creates new file. Omit content
 
 ### Example 1: Create or replace entire file
 ```powershell
-Set-LinesToFile output.txt -Content @("Line 1", "Line 2", "Line 3")    # Create/replace all
-Set-LinesToFile config.ini -Content "Setting=Value"                    # Single line
+Update-LinesInFile output.txt -Content @("Line 1", "Line 2", "Line 3")    # Create/replace all
+Update-LinesInFile config.ini -Content "Setting=Value"                    # Single line
 ```
 
 ### Example 2: Replace specific lines
 ```powershell
-Set-LinesToFile app.log -LineRange 5 -Content "New line 5"             # Single line
-Set-LinesToFile app.log -LineRange 10,15 -Content "Replacement"        # Range -> single
-Set-LinesToFile app.log -LineRange 20,22 -Content @("A", "B", "C")     # Range -> multiple
+Update-LinesInFile app.log -LineRange 5 -Content "New line 5"             # Single line
+Update-LinesInFile app.log -LineRange 10,15 -Content "Replacement"        # Range -> single
+Update-LinesInFile app.log -LineRange 20,22 -Content @("A", "B", "C")     # Range -> multiple
 ```
 
 ### Example 3: Delete lines or use pipeline
 ```powershell
-Set-LinesToFile app.log -LineRange 5,10                                # Delete (no -Content)
-Get-ChildItem *.txt | Set-LinesToFile -LineRange 1 -Content "# Updated: $(Get-Date)"
-Get-ChildItem *.log | Where-Object Length -gt 1MB | Set-LinesToFile -LineRange 1,100 -Backup
+Update-LinesInFile app.log -LineRange 5,10                                # Delete (no -Content)
+Get-ChildItem *.txt | Update-LinesInFile -LineRange 1 -Content "# Updated: $(Get-Date)"
+Get-ChildItem *.log | Where-Object Length -gt 1MB | Update-LinesInFile -LineRange 1,100 -Backup
 ```
 
 Important:
@@ -132,6 +132,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -LiteralPath
+Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
+
+```yaml
+Type: String[]
+Parameter Sets: LiteralPath
+Aliases: PSPath
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByPropertyName)
+Accept wildcard characters: False
+```
+
 ### -Path
 Specifies the path to the text file. Supports wildcards for processing multiple files.
 
@@ -178,21 +193,6 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -LiteralPath
-Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
-
-```yaml
-Type: String[]
-Parameter Sets: LiteralPath
-Aliases: PSPath
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: True (ByPropertyName)
-Accept wildcard characters: False
-```
-
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -210,7 +210,7 @@ BEST PRACTICE - Always verify before replacing:
 
 1. First, check what you're about to replace: Show-TextFile config.txt -LineRange 30,40
 
-2. Then perform the replacement: Set-LinesToFile config.txt -LineRange 30,40 -Content $newContent
+2. Then perform the replacement: Update-LinesInFile config.txt -LineRange 30,40 -Content $newContent
 
 3. Verify the result: Show-TextFile config.txt -LineRange 30,40
 

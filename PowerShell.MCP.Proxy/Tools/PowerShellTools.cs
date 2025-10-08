@@ -39,14 +39,14 @@ NEVER use Get-Content or Set-Content for text file operations. This module inclu
 • Test-TextFileContains [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
   Tests if file contains matching text (literal or regex) within specified line range. Returns Boolean.
 
-• Update-TextFile [-Path] <string[]> [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-LineRange <int[]>] [-Encoding <string>] [-Backup] [-WhatIf]
-  Replaces matching text (literal or regex) within optional line range.
-
-• Add-LinesToFile [-Path] <string[]> [-Content] <Object[]> [-LineNumber <int>] [-AtEnd] [-Encoding <string>] [-Backup] [-WhatIf]
+• Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-AtEnd] [-Content] <Object[]> [-Encoding <string>] [-Backup] [-WhatIf]
   Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines.
 
-• Set-LinesToFile [-Path] <string[]> [[-Content] <Object[]>] [-LineRange <int[]>] [-Encoding <string>] [-Backup] [-WhatIf]
+• Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup] [-WhatIf]
   Replaces specified line range with new content or creates new file. Omit content to delete lines.
+
+• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <string>] [-Replacement <string>] [-Encoding <string>] [-Backup] [-WhatIf]
+  Replaces matching text (literal or regex) within optional line range.
 
 • Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup] [-WhatIf]
   Removes lines matching text (literal or regex) within optional range.

@@ -17,15 +17,15 @@ Insert lines into a text file at a specific position or at the end
 ### [Remove-LinesFromFile](Remove-LinesFromFile.md)
 Remove lines from a text file by line range or pattern matching
 
-### [Set-LinesToFile](Set-LinesToFile.md)
-Replace or delete specific lines in a text file
-
 ### [Show-TextFile](Show-TextFile.md)
 Display text file contents with line numbers
 
 ### [Test-TextFileContains](Test-TextFileContains.md)
 Tests if file contains matching text (literal or regex)
 
-### [Update-TextFile](Update-TextFile.md)
+### [Update-LinesInFile](Update-LinesInFile.md)
+Replace or delete specific lines in a text file
+
+### [Update-MatchInFile](Update-MatchInFile.md)
 Update text file content using string literal or regex replacement
 
