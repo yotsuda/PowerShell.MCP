@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 using System.Text.RegularExpressions;
 
 namespace PowerShell.MCP.Cmdlets;
@@ -39,103 +39,58 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
-        {
-            throw new PSArgumentException("Cannot specify both -Contains and -Pattern parameters.");
-        }
+        ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
     }
+
     protected override void ProcessRecord()
     {
-        // LineRangeバリデーション（最優先）
+        // LineRangeバリデーション
         ValidateLineRange(LineRange);
 
-        // -Path または -LiteralPath から処理対象を取得
-        string[] inputPaths = Path ?? LiteralPath;
-        bool isLiteralPath = (LiteralPath != null);
-
-        foreach (var inputPath in inputPaths)
+        foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
         {
-            System.Collections.ObjectModel.Collection<string> resolvedPaths;
-            
             try
             {
-                if (isLiteralPath)
+                // ファイル間の空行（最初のファイル以外）
+                if (_totalFilesProcessed > 0)
                 {
-                    // -LiteralPath: ワイルドカード展開なし
-                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                    WriteObject("");
+                }
+                
+                // 表示用パスを決定（PS Drive パスを保持）
+                var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
+                
+                // ヘッダーとして表示
+                WriteObject($"==> {displayPath} <==");
+                
+                _totalFilesProcessed++;
+
+                var encoding = TextFileUtility.GetEncoding(fileInfo.ResolvedPath, Encoding);
+
+                // 空ファイルの処理
+                var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
+                if (fileInfoObj.Length == 0)
+                {
+                    WriteWarning("File is empty");
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(Pattern))
+                {
+                    ShowWithPattern(fileInfo.ResolvedPath, encoding);
+                }
+                else if (!string.IsNullOrEmpty(Contains))
+                {
+                    ShowWithContains(fileInfo.ResolvedPath, encoding);
                 }
                 else
                 {
-                    // -Path: ワイルドカード展開あり
-                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                    ShowWithLineRange(fileInfo.ResolvedPath, encoding);
                 }
             }
             catch (Exception ex)
             {
-                WriteError(new ErrorRecord(
-                    ex,
-                    "PathResolutionFailed",
-                    ErrorCategory.InvalidArgument,
-                    inputPath));
-                continue;
-            }
-            
-            foreach (var resolvedPath in resolvedPaths)
-            {
-                if (!File.Exists(resolvedPath))
-                {
-                    WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {inputPath}"),
-                        "FileNotFound",
-                        ErrorCategory.ObjectNotFound,
-                        resolvedPath));
-                    continue;
-                }
-
-                try
-                {
-                    // ファイル間の空行（最初のファイル以外）
-                    if (_totalFilesProcessed > 0)
-                    {
-                        WriteObject("");
-                    }
-                    
-                    // 表示用パスを決定（PS Drive パスを保持）
-                    var displayPath = GetDisplayPath(inputPath, resolvedPath);
-                    
-                    // ヘッダーとして表示
-                    WriteObject($"==> {displayPath} <==");
-                    
-                    _totalFilesProcessed++;
-
-                    var encoding = TextFileUtility.GetEncoding(resolvedPath, Encoding);
-
-                    // 空ファイルの処理
-                    var fileInfo = new FileInfo(resolvedPath);
-                    if (fileInfo.Length == 0)
-                    {
-                        WriteWarning("File is empty");
-                        continue;
-                    }
-
-                    if (!string.IsNullOrEmpty(Pattern))
-                    {
-                        ShowWithPattern(resolvedPath, encoding);
-                    }
-                    else if (!string.IsNullOrEmpty(Contains))
-                    {
-                        ShowWithContains(resolvedPath, encoding);
-                    }
-                    else
-                    {
-                        ShowWithLineRange(resolvedPath, encoding);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    WriteError(new ErrorRecord(ex, "ShowTextFileFailed", ErrorCategory.ReadError, resolvedPath));
-                }
+                WriteError(new ErrorRecord(ex, "ShowTextFileFailed", ErrorCategory.ReadError, fileInfo.ResolvedPath));
             }
         }
     }

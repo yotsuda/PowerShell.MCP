@@ -38,106 +38,57 @@ public class TestTextFileContainsCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
-        {
-            throw new PSArgumentException("Cannot specify both -Contains and -Pattern parameters.");
-        }
+        ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
     }
+
     protected override void ProcessRecord()
     {
-        // LineRange validation (highest priority)
+        // LineRange validation
         ValidateLineRange(LineRange);
-
-        // Get paths from -Path or -LiteralPath
-        string[] inputPaths = Path ?? LiteralPath;
-        bool isLiteralPath = (LiteralPath != null);
 
         // For multiple files, return true if ANY file matches (OR operation)
         bool anyMatch = false;
 
-        foreach (var inputPath in inputPaths)
+        foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
         {
-            System.Collections.ObjectModel.Collection<string> resolvedPaths;
-            
             try
             {
-                if (isLiteralPath)
+                var encoding = TextFileUtility.GetEncoding(fileInfo.ResolvedPath, Encoding);
+
+                // Check if file is empty
+                var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
+                if (fileInfoObj.Length == 0)
                 {
-                    // -LiteralPath: no wildcard expansion
-                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                    continue; // Empty file has no matches
+                }
+
+                // Perform the test based on parameters
+                bool fileMatches;
+                if (!string.IsNullOrEmpty(Pattern))
+                {
+                    fileMatches = TestWithPattern(fileInfo.ResolvedPath, encoding);
+                }
+                else if (!string.IsNullOrEmpty(Contains))
+                {
+                    fileMatches = TestWithContains(fileInfo.ResolvedPath, encoding);
                 }
                 else
                 {
-                    // -Path: wildcard expansion
-                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                    // No search criteria specified - return false
+                    fileMatches = false;
+                }
+
+                if (fileMatches)
+                {
+                    anyMatch = true;
+                    // Early exit optimization: return true immediately if match found
+                    WriteObject(true);
+                    return;
                 }
             }
             catch (Exception ex)
             {
-                WriteError(new ErrorRecord(
-                    ex,
-                    "PathResolutionFailed",
-                    ErrorCategory.InvalidArgument,
-                    inputPath));
-                continue;
-            }
-            
-            foreach (var resolvedPath in resolvedPaths)
-            {
-                if (!File.Exists(resolvedPath))
-                {
-                    WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {inputPath}"),
-                        "FileNotFound",
-                        ErrorCategory.ObjectNotFound,
-                        resolvedPath));
-                    continue;
-                }
-
-                try
-                {
-                    var encoding = TextFileUtility.GetEncoding(resolvedPath, Encoding);
-
-                    // Check if file is empty
-                    var fileInfo = new FileInfo(resolvedPath);
-                    if (fileInfo.Length == 0)
-                    {
-                        continue; // Empty file has no matches
-                    }
-
-                    // Perform the test based on parameters
-                    bool fileMatches;
-                    if (!string.IsNullOrEmpty(Pattern))
-                    {
-                        fileMatches = TestWithPattern(resolvedPath, encoding);
-                    }
-                    else if (!string.IsNullOrEmpty(Contains))
-                    {
-                        fileMatches = TestWithContains(resolvedPath, encoding);
-                    }
-                    else
-                    {
-                        // No search criteria specified - return false
-                        fileMatches = false;
-                    }
-
-                    if (fileMatches)
-                    {
-                        anyMatch = true;
-                        // Early exit optimization: if we found a match and processing multiple files,
-                        // we can return true immediately
-                        if (resolvedPaths.Count > 1 || inputPaths.Length > 1)
-                        {
-                            WriteObject(true);
-                            return;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    WriteError(new ErrorRecord(ex, "TestTextFileFailed", ErrorCategory.ReadError, resolvedPath));
-                }
+                WriteError(new ErrorRecord(ex, "TestTextFileFailed", ErrorCategory.ReadError, fileInfo.ResolvedPath));
             }
         }
 

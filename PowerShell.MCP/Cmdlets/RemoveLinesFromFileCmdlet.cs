@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 using System.Text.RegularExpressions;
 
 namespace PowerShell.MCP.Cmdlets;
@@ -39,10 +39,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
     protected override void BeginProcessing()
     {
         // -Contains と -Pattern の同時指定チェック
-        if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
-        {
-            throw new PSArgumentException("Cannot specify both -Contains and -Pattern parameters.");
-        }
+        ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
 
         // LineRange、Contains、Pattern の少なくとも一方が指定されているかチェック
         if (LineRange == null && string.IsNullOrEmpty(Contains) && string.IsNullOrEmpty(Pattern))
@@ -59,73 +56,19 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
-        // -Path または -LiteralPath から処理対象を取得
-        string[] inputPaths = Path ?? LiteralPath;
-        bool isLiteralPath = (LiteralPath != null);
-
-        foreach (var inputPath in inputPaths)
-        {
-            System.Collections.ObjectModel.Collection<string> resolvedPaths;
-            
+        foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
             try
             {
-                if (isLiteralPath)
-                {
-                    // -LiteralPath: ワイルドカード展開なし
-                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
-                }
-                else
-                {
-                    // -Path: ワイルドカード展開あり
-                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(
-                    ex,
-                    "PathResolutionFailed",
-                    ErrorCategory.InvalidArgument,
-                    inputPath));
-                continue;
-            }
-            
-            foreach (var resolvedPath in resolvedPaths)
-            {
-                if (!File.Exists(resolvedPath))
-                {
-                    WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {inputPath}"),
-                        "FileNotFound",
-                        ErrorCategory.ObjectNotFound,
-                        inputPath));
-                    continue;
-                }
+                var metadata = TextFileUtility.DetectFileMetadata(fileInfo.ResolvedPath, Encoding);
 
-                try
-                {
-                    var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
+                int startLine = int.MaxValue;
+                int endLine = int.MaxValue;
+                Regex? regex = null;
 
-                    int startLine = int.MaxValue;
-                    int endLine = int.MaxValue;
-                    Regex? regex = null;
-
-                    // 削除条件の準備
-                    bool useLineRange = LineRange != null;
-                    bool useContains = !string.IsNullOrEmpty(Contains);
-                    bool usePattern = !string.IsNullOrEmpty(Pattern);
-
-                    // Contains と Pattern の両方が指定されている場合はエラー
-                    if (useContains && usePattern)
-                    {
-                        WriteError(new ErrorRecord(
-                            new ArgumentException("Cannot specify both -Contains and -Pattern."),
-                            "ConflictingParameters",
-                            ErrorCategory.InvalidArgument,
-                            null));
-                        continue;
-                    }
+                // 削除条件の準備
+                bool useLineRange = LineRange != null;
+                bool useContains = !string.IsNullOrEmpty(Contains);
+                bool usePattern = !string.IsNullOrEmpty(Pattern);
 
                     string actionDescription;
                     if (useLineRange && useContains)
@@ -154,134 +97,132 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         actionDescription = $"Remove lines matching pattern: {Pattern}";
                     }
 
-                    if (ShouldProcess(resolvedPath, actionDescription))
+                if (ShouldProcess(fileInfo.ResolvedPath, actionDescription))
+                {
+                    if (Backup)
                     {
-                        if (Backup)
+                        var backupPath = TextFileUtility.CreateBackup(fileInfo.ResolvedPath);
+                        WriteVerbose($"Created backup: {backupPath}");
+                    }
+
+                    var tempFile = System.IO.Path.GetTempFileName();
+                    int linesRemoved = 0;
+
+                    try
+                    {
+                        // 空ファイルのチェック
+                        var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
+                        if (fileInfoObj.Length == 0)
                         {
-                            var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                            WriteVerbose($"Created backup: {backupPath}");
+                            WriteWarning("File is empty. Nothing to remove.");
+                            File.Delete(tempFile);
+                            continue;
                         }
 
-                        var tempFile = System.IO.Path.GetTempFileName();
-                        int linesRemoved = 0;
-
-                        try
+                        using (var enumerator = File.ReadLines(fileInfo.ResolvedPath, metadata.Encoding).GetEnumerator())
+                        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                         {
-                            // 空ファイルのチェック
-                            var fileInfo = new FileInfo(resolvedPath);
-                            if (fileInfo.Length == 0)
+                            // 空ファイルは上でチェック済み
+                            if (!enumerator.MoveNext())
                             {
-                                WriteWarning("File is empty. Nothing to remove.");
-                                File.Delete(tempFile);
-                                continue;
+                                throw new InvalidOperationException("Unexpected empty file");
                             }
 
-                            using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-                            using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
+                            int lineNumber = 1;
+                            string currentLine = enumerator.Current;
+                            bool hasNext = enumerator.MoveNext();
+                            bool isFirstOutputLine = true;
+
+                            while (true)
                             {
-                                // 空ファイルは上でチェック済み
-                                if (!enumerator.MoveNext())
+                                bool shouldRemove = false;
+
+                                // 条件判定：LineRange AND/OR Contains/Pattern
+                                if (useLineRange && useContains)
                                 {
-                                    throw new InvalidOperationException("Unexpected empty file");
+                                    // 両方指定されている場合はAND条件
+                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
+                                                  currentLine.Contains(Contains!);
+                                }
+                                else if (useLineRange && usePattern)
+                                {
+                                    // 両方指定されている場合はAND条件
+                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
+                                                  regex!.IsMatch(currentLine);
+                                }
+                                else if (useLineRange)
+                                {
+                                    shouldRemove = lineNumber >= startLine && lineNumber <= endLine;
+                                }
+                                else if (useContains)
+                                {
+                                    shouldRemove = currentLine.Contains(Contains!);
+                                }
+                                else // usePattern only
+                                {
+                                    shouldRemove = regex!.IsMatch(currentLine);
                                 }
 
-                                int lineNumber = 1;
-                                string currentLine = enumerator.Current;
-                                bool hasNext = enumerator.MoveNext();
-                                bool isFirstOutputLine = true;
-
-                                while (true)
+                                if (!shouldRemove)
                                 {
-                                    bool shouldRemove = false;
+                                    // 削除しない行：書き込む
+                                    if (!isFirstOutputLine)
+                                    {
+                                        writer.Write(metadata.NewlineSequence);
+                                    }
+                                    
+                                    writer.Write(currentLine);
+                                    isFirstOutputLine = false;
+                                }
+                                else
+                                {
+                                    linesRemoved++;
+                                }
 
-                                    // 条件判定：LineRange AND/OR Contains/Pattern
-                                    if (useLineRange && useContains)
+                                if (hasNext)
+                                {
+                                    lineNumber++;
+                                    currentLine = enumerator.Current;
+                                    hasNext = enumerator.MoveNext();
+                                }
+                                else
+                                {
+                                    // 最終行の処理
+                                    // 最終行を削除していない場合のみ、元の末尾改行を保持
+                                    if (!shouldRemove && metadata.HasTrailingNewline)
                                     {
-                                        // 両方指定されている場合はAND条件
-                                        shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
-                                                      currentLine.Contains(Contains!);
+                                        writer.Write(metadata.NewlineSequence);
                                     }
-                                    else if (useLineRange && usePattern)
-                                    {
-                                        // 両方指定されている場合はAND条件
-                                        shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
-                                                      regex!.IsMatch(currentLine);
-                                    }
-                                    else if (useLineRange)
-                                    {
-                                        shouldRemove = lineNumber >= startLine && lineNumber <= endLine;
-                                    }
-                                    else if (useContains)
-                                    {
-                                        shouldRemove = currentLine.Contains(Contains!);
-                                    }
-                                    else // usePattern only
-                                    {
-                                        shouldRemove = regex!.IsMatch(currentLine);
-                                    }
-
-                                    if (!shouldRemove)
-                                    {
-                                        // 削除しない行：書き込む
-                                        if (!isFirstOutputLine)
-                                        {
-                                            writer.Write(metadata.NewlineSequence);
-                                        }
-                                        
-                                        writer.Write(currentLine);
-                                        isFirstOutputLine = false;
-                                    }
-                                    else
-                                    {
-                                        linesRemoved++;
-                                    }
-
-                                    if (hasNext)
-                                    {
-                                        lineNumber++;
-                                        currentLine = enumerator.Current;
-                                        hasNext = enumerator.MoveNext();
-                                    }
-                                    else
-                                    {
-                                        // 最終行の処理
-                                        // 最終行を削除していない場合のみ、元の末尾改行を保持
-                                        if (!shouldRemove && metadata.HasTrailingNewline)
-                                        {
-                                            writer.Write(metadata.NewlineSequence);
-                                        }
-                                        break;
-                                    }
+                                    break;
                                 }
                             }
-
-                            if (linesRemoved == 0)
-                            {
-                                WriteWarning("No lines matched. File not modified.");
-                                File.Delete(tempFile);
-                                continue;
-                            }
-
-                            // アトミックに置換
-                            TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
-
-                            WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(inputPath, resolvedPath)}");
                         }
-                        catch
+
+                        if (linesRemoved == 0)
                         {
-                            if (File.Exists(tempFile))
-                            {
-                                File.Delete(tempFile);
-                            }
-                            throw;
+                            WriteWarning("No lines matched. File not modified.");
+                            File.Delete(tempFile);
+                            continue;
                         }
+
+                        // アトミックに置換
+                        TextFileUtility.ReplaceFileAtomic(fileInfo.ResolvedPath, tempFile);
+
+                        WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)}");
+                    }
+                    catch
+                    {
+                        if (File.Exists(tempFile))
+                        {
+                            File.Delete(tempFile);
+                        }
+                        throw;
                     }
                 }
-                catch (Exception ex)
-                {
-                    WriteError(new ErrorRecord(ex, "RemoveLineFailed", ErrorCategory.WriteError, resolvedPath));
-                }
+            }
+            catch (Exception ex)
+            {
+                WriteError(new ErrorRecord(ex, "RemoveLineFailed", ErrorCategory.WriteError, fileInfo.ResolvedPath));
             }
         }
     }
-}

@@ -53,83 +53,74 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         
         foreach (var inputPath in inputPaths)
         {
-            System.Collections.ObjectModel.Collection<string> resolvedPaths;
             bool isNewFile = false;
+            string? resolvedPath = null;
             
-            if (isLiteralPath)
+            // パス解決の試行
+            try
             {
-                // -LiteralPath: ワイルドカード展開なし
-                // 存在しないファイルでもパスを取得
-                var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
-                if (File.Exists(resolved))
+                if (isLiteralPath)
                 {
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                    // -LiteralPath: ワイルドカード展開なし
+                    resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
+                    isNewFile = !File.Exists(resolvedPath);
                 }
                 else
                 {
-                    // 新規ファイル
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
-                    isNewFile = true;
-                }
-            }
-            else
-            {
-                // -Path: ワイルドカード展開あり
-                try
-                {
-                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
-                }
-                catch (ItemNotFoundException)
-                {
-                    // ファイルが存在しない場合、ワイルドカードチェック
-                    if (WildcardPattern.ContainsWildcardCharacters(inputPath))
+                    // -Path: ワイルドカード展開あり
+                    try
                     {
-                        WriteError(new ErrorRecord(
-                            new InvalidOperationException($"Cannot create new file with wildcard pattern: {inputPath}"),
-                            "WildcardNotSupportedForNewFile",
-                            ErrorCategory.InvalidArgument,
-                            inputPath));
-                        continue;
+                        var resolved = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                        
+                        // 解決されたパスを処理
+                        foreach (var rPath in resolved)
+                        {
+                            try
+                            {
+                                AddToFile(rPath, inputPath, false);
+                            }
+                            catch (Exception ex)
+                            {
+                                WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, rPath));
+                            }
+                        }
+                        continue; // 正常に処理完了したので次へ
                     }
-                    
-                    // 親ディレクトリが存在すれば新規作成を試みる
-                    var parentPath = System.IO.Path.GetDirectoryName(inputPath);
-                    if (string.IsNullOrEmpty(parentPath))
+                    catch (ItemNotFoundException)
                     {
-                        parentPath = SessionState.Path.CurrentFileSystemLocation.Path;
-                    }
-                    
-                    if (Directory.Exists(parentPath))
-                    {
-                        var newFilePath = System.IO.Path.Combine(parentPath, System.IO.Path.GetFileName(inputPath));
-                        resolvedPaths = new System.Collections.ObjectModel.Collection<string> { newFilePath };
+                        // ファイルが存在しない場合、ワイルドカードチェック
+                        if (WildcardPattern.ContainsWildcardCharacters(inputPath))
+                        {
+                            WriteError(new ErrorRecord(
+                                new InvalidOperationException($"Cannot create new file with wildcard pattern: {inputPath}"),
+                                "WildcardNotSupportedForNewFile",
+                                ErrorCategory.InvalidArgument,
+                                inputPath));
+                            continue;
+                        }
+                        
+                        // 新規ファイル作成の準備
+                        resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
                         isNewFile = true;
                     }
-                    else
+                }
+                
+                // resolvedPath が設定されていれば処理
+                if (resolvedPath != null)
+                {
+                    try
                     {
-                        WriteError(new ErrorRecord(
-                            new DirectoryNotFoundException($"Parent directory not found: {parentPath}"),
-                            "ParentDirectoryNotFound",
-                            ErrorCategory.ObjectNotFound,
-                            inputPath));
-                        continue;
+                        AddToFile(resolvedPath, inputPath, isNewFile);
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
                     }
                 }
             }
-            // ワイルドカード展開された全てのファイルを処理
-            foreach (var resolvedPath in resolvedPaths)
+            catch (Exception ex)
             {
-
-
-                try
-                {
-                    // 新規・既存ファイル共通の処理
-                    AddToFile(resolvedPath, inputPath, isNewFile);
-                }
-                catch (Exception ex)
-                {
-                    WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
-                }
+                WriteError(new ErrorRecord(ex, "PathResolutionFailed", ErrorCategory.InvalidArgument, inputPath));
             }
         }
     }

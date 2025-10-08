@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -126,56 +126,144 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
-    /// -Path または -LiteralPath からファイルパスを解決
+    /// -Contains と -Pattern の排他チェック
+    /// </summary>
+    protected void ValidateContainsAndPatternMutuallyExclusive(string? contains, string? pattern)
+    {
+        if (!string.IsNullOrEmpty(contains) && !string.IsNullOrEmpty(pattern))
+        {
+            throw new PSArgumentException("Cannot specify both -Contains and -Pattern parameters.");
+        }
+    }
+
+    /// <summary>
+    /// パス解決結果を表す構造体
+    /// </summary>
+    protected struct ResolvedFileInfo
+    {
+        public string InputPath { get; set; }
+        public string ResolvedPath { get; set; }
+        public bool IsNewFile { get; set; }
+    }
+
+    /// <summary>
+    /// -Path または -LiteralPath からファイルパスを解決し、存在チェックとエラーハンドリングを行う
     /// </summary>
     /// <param name="path">-Path パラメータの値（ワイルドカード展開あり）</param>
     /// <param name="literalPath">-LiteralPath パラメータの値（ワイルドカード展開なし）</param>
-    /// <returns>解決されたファイルパスのコレクション</returns>
-    protected System.Collections.ObjectModel.Collection<string> ResolvePaths(string[]? path, string[]? literalPath)
+    /// <param name="allowNewFiles">新規ファイル作成を許可するか</param>
+    /// <param name="requireExisting">ファイルが存在しない場合にエラーを出すか</param>
+    /// <returns>解決されたファイル情報のイテレータ</returns>
+    protected IEnumerable<ResolvedFileInfo> ResolveAndValidateFiles(
+        string[]? path, 
+        string[]? literalPath,
+        bool allowNewFiles = false,
+        bool requireExisting = true)
     {
-        if (path != null && path.Length > 0)
+        var results = new List<ResolvedFileInfo>();
+        string[] inputPaths = path ?? literalPath ?? Array.Empty<string>();
+        bool isLiteralPath = (literalPath != null);
+
+        foreach (var inputPath in inputPaths)
         {
-            // -Path: ワイルドカード展開あり
-            var allPaths = new System.Collections.ObjectModel.Collection<string>();
-            foreach (var p in path)
+            System.Collections.ObjectModel.Collection<string>? resolvedPaths = null;
+            bool isNewFile = false;
+            bool hasError = false;
+            
+            try
             {
-                try
+                if (isLiteralPath)
                 {
-                    var resolved = GetResolvedProviderPathFromPSPath(p, out _);
-                    foreach (var r in resolved)
+                    // -LiteralPath: ワイルドカード展開なし
+                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
+                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                }
+                else
+                {
+                    // -Path: ワイルドカード展開あり
+                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                }
+            }
+            catch (ItemNotFoundException)
+            {
+                if (allowNewFiles)
+                {
+                    // 新規ファイル作成を試みる
+                    try
                     {
-                        allPaths.Add(r);
+                        var newPath = GetUnresolvedProviderPathFromPSPath(inputPath);
+                        results.Add(new ResolvedFileInfo
+                        {
+                            InputPath = inputPath,
+                            ResolvedPath = newPath,
+                            IsNewFile = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(new ErrorRecord(
+                            ex,
+                            "PathResolutionFailed",
+                            ErrorCategory.InvalidArgument,
+                            inputPath));
+                        hasError = true;
                     }
                 }
-                catch (ItemNotFoundException)
+                else
                 {
-                    // ファイルが存在しない場合は呼び出し元で処理
-                    throw;
+                    WriteError(new ErrorRecord(
+                        new FileNotFoundException($"File not found: {inputPath}"),
+                        "FileNotFound",
+                        ErrorCategory.ObjectNotFound,
+                        inputPath));
+                    hasError = true;
                 }
             }
-            return allPaths;
-        }
-        else if (literalPath != null && literalPath.Length > 0)
-        {
-            // -LiteralPath: ワイルドカード展開なし
-            var allPaths = new System.Collections.ObjectModel.Collection<string>();
-            foreach (var lp in literalPath)
+            catch (Exception ex)
             {
-                try
-                {
-                    // GetUnresolvedProviderPathFromPSPath はワイルドカードを展開しない
-                    var resolved = GetUnresolvedProviderPathFromPSPath(lp);
-                    allPaths.Add(resolved);
-                }
-                catch (ItemNotFoundException)
-                {
-                    // ファイルが存在しない場合は呼び出し元で処理
-                    throw;
-                }
+                WriteError(new ErrorRecord(
+                    ex,
+                    "PathResolutionFailed",
+                    ErrorCategory.InvalidArgument,
+                    inputPath));
+                hasError = true;
             }
-            return allPaths;
+            
+            if (hasError || resolvedPaths == null)
+            {
+                continue;
+            }
+            
+            foreach (var resolvedPath in resolvedPaths)
+            {
+                bool fileExists = File.Exists(resolvedPath);
+                
+                if (!fileExists)
+                {
+                    if (allowNewFiles)
+                    {
+                        isNewFile = true;
+                    }
+                    else if (requireExisting)
+                    {
+                        WriteError(new ErrorRecord(
+                            new FileNotFoundException($"File not found: {inputPath}"),
+                            "FileNotFound",
+                            ErrorCategory.ObjectNotFound,
+                            resolvedPath));
+                        continue;
+                    }
+                }
+                
+                results.Add(new ResolvedFileInfo
+                {
+                    InputPath = inputPath,
+                    ResolvedPath = resolvedPath,
+                    IsNewFile = isNewFile
+                });
+            }
         }
         
-        return [];
+        return results;
     }
 }

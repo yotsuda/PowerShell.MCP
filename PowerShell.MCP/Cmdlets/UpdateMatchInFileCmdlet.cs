@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 using System.Text.RegularExpressions;
 
 namespace PowerShell.MCP.Cmdlets;
@@ -85,61 +85,18 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
-        // LineRangeバリデーション（最優先）
+        // LineRangeバリデーション
         ValidateLineRange(LineRange);
 
-        // -Path または -LiteralPath から処理対象を取得
-        string[] inputPaths = Path ?? LiteralPath;
-        bool isLiteralPath = (LiteralPath != null);
-
-        foreach (var inputPath in inputPaths)
+        foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
         {
-            System.Collections.ObjectModel.Collection<string> resolvedPaths;
-            
             try
             {
-                if (isLiteralPath)
-                {
-                    // -LiteralPath: ワイルドカード展開なし
-                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
-                }
-                else
-                {
-                    // -Path: ワイルドカード展開あり
-                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
-                }
+                ProcessStringReplacement(fileInfo.InputPath, fileInfo.ResolvedPath);
             }
             catch (Exception ex)
             {
-                WriteError(new ErrorRecord(
-                    ex,
-                    "PathResolutionFailed",
-                    ErrorCategory.InvalidArgument,
-                    inputPath));
-                continue;
-            }
-            
-            foreach (var resolvedPath in resolvedPaths)
-            {
-                if (!File.Exists(resolvedPath))
-                {
-                    WriteError(new ErrorRecord(
-                        new FileNotFoundException($"File not found: {inputPath}"),
-                        "FileNotFound",
-                        ErrorCategory.ObjectNotFound,
-                        inputPath));
-                    continue;
-                }
-
-                try
-                {
-                    ProcessStringReplacement(inputPath, resolvedPath);
-                }
-                catch (Exception ex)
-                {
-                    WriteError(new ErrorRecord(ex, "UpdateFailed", ErrorCategory.WriteError, resolvedPath));
-                }
+                WriteError(new ErrorRecord(ex, "UpdateFailed", ErrorCategory.WriteError, fileInfo.ResolvedPath));
             }
         }
     }

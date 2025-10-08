@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -36,55 +36,26 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
-        // LineRangeバリデーション（最優先）
+        // LineRangeバリデーション
         ValidateLineRange(LineRange);
 
-        // -Path または -LiteralPath から処理対象を取得
-        string[] inputPaths = Path ?? LiteralPath;
-        bool isLiteralPath = (LiteralPath != null);
-
-        foreach (var inputPath in inputPaths)
+        // LineRange指定時は既存ファイルが必要
+        bool allowNewFiles = (LineRange == null);
+        
+        if (!allowNewFiles)
         {
-            System.Collections.ObjectModel.Collection<string> resolvedPaths;
-
-            try
+            // LineRange指定時は既存ファイル必須なので、存在しない場合はカスタムエラー
+            foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
             {
-                if (isLiteralPath)
-                {
-                    // -LiteralPath: ワイルドカード展開なし
-                    var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
-                }
-                else
-                {
-                    // -Path: ワイルドカード展開あり
-                    resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
-                }
+                ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
             }
-            catch (ItemNotFoundException)
+        }
+        else
+        {
+            // LineRange未指定時は新規ファイル作成可能
+            foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: true, requireExisting: false))
             {
-                // パスが解決できない場合（新規ファイルの可能性）
-                if (LineRange == null)
-                {
-                    // 新規ファイル作成を試みる
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> 
-                    { 
-                        GetUnresolvedProviderPathFromPSPath(inputPath) 
-                    };
-                }
-                else
-                {
-                    WriteError(new ErrorRecord(
-                        new FileNotFoundException(string.Format(ErrorMessageLineRangeWithoutFile, inputPath)),
-                        "FileNotFoundWithLineRange",
-                        ErrorCategory.ObjectNotFound,
-                        inputPath));
-                    continue;
-                }
-            }
-            foreach (var resolvedPath in resolvedPaths)
-            {
-                ProcessFile(inputPath, resolvedPath);
+                ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
             }
         }
     }
