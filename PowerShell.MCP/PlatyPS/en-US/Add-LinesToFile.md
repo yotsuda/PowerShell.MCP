@@ -34,7 +34,7 @@ Inserts lines at specified position or appends to end or creates new file. Accep
 Add-LinesToFile app.log -LineNumber 1 -Content "# Header"              # At beginning
 Add-LinesToFile app.log -LineNumber 10 -Content "// Inserted line"     # Middle
 Add-LinesToFile app.log -Content "# Footer"                            # At end (default)
-Add-LinesToFile new.txt -Content "First line"                          # Creates file (params optional)
+Add-LinesToFile new.txt -Content "First line"                          # Creates new file
 ```
 
 ### Example 2: Insert multiple lines
