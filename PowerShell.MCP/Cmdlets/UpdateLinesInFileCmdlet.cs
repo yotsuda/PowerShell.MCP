@@ -75,6 +75,29 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
             bool isFullFileReplace = LineRange == null;
 
+            // Validate line range against actual file content
+            if (fileExists && !isFullFileReplace)
+            {
+                int actualLineCount = File.ReadLines(resolvedPath, metadata.Encoding).Count();
+                
+                if (startLine > actualLineCount)
+                {
+                    throw new ArgumentException(
+                        $"Line range {startLine}-{endLine} is out of bounds. File has only {actualLineCount} line(s).",
+                        nameof(LineRange));
+                }
+                
+                if (endLine > actualLineCount)
+                {
+                    WriteWarning(
+                        $"End line {endLine} exceeds file length ({actualLineCount} lines). " +
+                        $"Will process up to line {actualLineCount}.");
+                        
+                    // Adjust endLine to actual line count
+                    endLine = actualLineCount;
+                }
+            }
+
             string actionDescription = GetActionDescription(fileExists, isFullFileReplace, startLine, endLine);
 
             if (ShouldProcess(resolvedPath, actionDescription))
@@ -82,7 +105,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 if (Backup && fileExists)
                 {
                     var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                    WriteVerbose($"Created backup: {backupPath}");
+                    WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
                 }
 
                 ExecuteFileOperation(
@@ -119,9 +142,8 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
         {
             Directory.CreateDirectory(directory);
-            WriteVerbose($"Created directory: {directory}");
+            WriteInformation($"Created directory: {directory}", new string[] { "DirectoryCreated" });
         }
-
         return metadata;
     }
 

@@ -102,7 +102,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     if (Backup)
                     {
                         var backupPath = TextFileUtility.CreateBackup(fileInfo.ResolvedPath);
-                        WriteVerbose($"Created backup: {backupPath}");
+                        WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
                     }
 
                     var tempFile = System.IO.Path.GetTempFileName();

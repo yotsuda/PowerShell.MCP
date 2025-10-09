@@ -59,7 +59,7 @@ Important:
 ## PARAMETERS
 
 ### -Backup
-Creates a timestamped backup file before modifying. Recommended for important files.
+Creates a backup file before modifying. Recommended for important files.
 
 ```yaml
 Type: SwitchParameter

@@ -58,7 +58,7 @@ Important:
 ## PARAMETERS
 
 ### -Backup
-Creates a timestamped backup file (filename.yyyyMMddHHmmss.bak) before modifying the file. Recommended for important files not under version control.
+Creates a backup file before modifying. Recommended for important files.
 
 ```yaml
 Type: SwitchParameter

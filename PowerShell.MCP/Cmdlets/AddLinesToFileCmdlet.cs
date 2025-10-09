@@ -199,7 +199,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 else
                 {
                     var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                    WriteVerbose($"Created backup: {backupPath}");
+                    WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
                 }
             }
 
