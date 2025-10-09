@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.2.5'
+ModuleVersion = '1.2.6'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -30,7 +30,7 @@ CompanyName = 'Yoshifumi Tsuda'
 Copyright = '(c) Yoshifumi Tsuda. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Enables PowerShell console to function as an MCP server for Claude Desktop and other clients.'
+Description = 'Enables PowerShell console to function as an MCP server for Claude Desktop.'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '7.2.15'
@@ -75,9 +75,9 @@ FunctionsToExport = @()
 CmdletsToExport = @(
 'Show-TextFile',
 'Test-TextFileContains',
-'Update-TextFile',
 'Add-LinesToFile',
-'Set-LinesToFile',
+'Update-LinesInFile',
+'Update-MatchInFile',
 'Remove-LinesFromFile'
 )
 
@@ -116,7 +116,7 @@ PrivateData = @{
         Platforms = @('Windows')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.2.5 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.2.6 - Enterprise-Ready MCP Server
 
 === Key Features ===
 • 🤝 Shared Console Experience
@@ -146,11 +146,28 @@ PrivateData = @{
 • "Review code files and generate development documentation"
 
 === Quick Setup ===
-1. Install-Module PowerShell.MCP
-2. Import-Module PowerShell.MCP
-3. Configure MCP client: [ModuleBase]\bin\PowerShell.MCP.Proxy.exe
-   Find path: (Get-Module PowerShell.MCP).ModuleBase
-4. Restart MCP client to activate
+1. Install PowerShell 7.2.15 or later (if not installed)
+   Refer: https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows
+2. Install-Module PowerShell.MCP
+3. Import-Module PowerShell.MCP
+4. Install Claude Desktop (recommended for optimal performance)
+   Refer: https://claude.ai/download
+5. Configure Claude Desktop
+   From top-left menu: File -> Settings -> Developer -> Edit Config
+
+   Add to Claude Desktop config (%APPDATA%\Claude\claude_desktop_config.json):
+   {
+     "mcpServers": {
+       "PowerShell": {
+         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.6\\bin\\PowerShell.MCP.Proxy.exe"
+       }
+     }
+   }
+
+   Find ModuleBase: PS> (Get-Module PowerShell.MCP).ModuleBase
+   Example: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.6\bin\PowerShell.MCP.Proxy.exe
+
+6. Restart Claude Desktop to activate
 
 === Requirements ===
 Windows 10/11, PowerShell 7.2.15+, PSReadLine 2.3.4+ (auto-loaded)
