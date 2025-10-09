@@ -417,7 +417,7 @@ public static class TextFileUtility
     /// 指定行範囲を置換（1パスストリーミング）
     /// LLM向け：メモリ効率的で大きなファイルに対応
     /// </summary>
-    public static (int LinesRemoved, int LinesInserted) ReplaceLineRangeStreaming(
+    public static (int LinesRemoved, int LinesInserted, string? WarningMessage) ReplaceLineRangeStreaming(
         string inputPath,
         string outputPath,
         FileMetadata metadata,
@@ -426,14 +426,22 @@ public static class TextFileUtility
         string[] contentLines)
     {
         int linesChanged = 0;
+        string? warningMessage = null;
+        int actualLineCount = 0;
 
         using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
             if (!enumerator.MoveNext())
             {
-                // 空ファイル：何もしない
-                return (0, 0);
+                // 空ファイル：startLine が指定されていればエラー
+                if (startLine > 0)
+                {
+                    throw new ArgumentException(
+                        $"Line range {startLine}-{endLine} is out of bounds. File has only 0 line(s).",
+                        nameof(startLine));
+                }
+                return (0, 0, null);
             }
 
             int lineNumber = 1;
@@ -444,6 +452,8 @@ public static class TextFileUtility
 
             while (true)
             {
+                actualLineCount = lineNumber;
+
                 if (lineNumber < startLine)
                 {
                     // 置換範囲より前：そのまま書き込む
@@ -467,7 +477,6 @@ public static class TextFileUtility
                             isFirstLine = false;
                         }
                         replacementDone = true;
-                        linesChanged = endLine - startLine + 1;
                     }
                     // 置換範囲内の行はスキップ
                 }
@@ -487,7 +496,27 @@ public static class TextFileUtility
                 }
                 else
                 {
-                    // 最終行処理完了：元々末尾改行があった場合のみ追加
+                    // 最終行処理完了
+                    actualLineCount = lineNumber;
+                    
+                    // 範囲外チェック（ファイル終端で判定）
+                    if (startLine > actualLineCount)
+                    {
+                        throw new ArgumentException(
+                            $"Line range {startLine}-{endLine} is out of bounds. File has only {actualLineCount} line(s).",
+                            nameof(startLine));
+                    }
+                    
+                    if (endLine > actualLineCount)
+                    {
+                        warningMessage = $"End line {endLine} exceeds file length ({actualLineCount} lines). Will process up to line {actualLineCount}.";
+                        linesChanged = actualLineCount - startLine + 1;
+                    }
+                    else
+                    {
+                        linesChanged = endLine - startLine + 1;
+                    }
+                    
                     if (metadata.HasTrailingNewline)
                     {
                         writer.Write(metadata.NewlineSequence);
@@ -497,7 +526,7 @@ public static class TextFileUtility
             }
         }
 
-        return (linesChanged, contentLines.Length);
+        return (linesChanged, contentLines.Length, warningMessage);
     }
 
     /// <summary>

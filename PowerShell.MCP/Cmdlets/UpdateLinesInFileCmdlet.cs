@@ -75,28 +75,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
             bool isFullFileReplace = LineRange == null;
 
-            // Validate line range against actual file content
-            if (fileExists && !isFullFileReplace)
-            {
-                int actualLineCount = File.ReadLines(resolvedPath, metadata.Encoding).Count();
-                
-                if (startLine > actualLineCount)
-                {
-                    throw new ArgumentException(
-                        $"Line range {startLine}-{endLine} is out of bounds. File has only {actualLineCount} line(s).",
-                        nameof(LineRange));
-                }
-                
-                if (endLine > actualLineCount)
-                {
-                    WriteWarning(
-                        $"End line {endLine} exceeds file length ({actualLineCount} lines). " +
-                        $"Will process up to line {actualLineCount}.");
-                        
-                    // Adjust endLine to actual line count
-                    endLine = actualLineCount;
-                }
-            }
 
             string actionDescription = GetActionDescription(fileExists, isFullFileReplace, startLine, endLine);
 
@@ -190,13 +168,20 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             else
             {
                 // 行範囲を置換
-                (linesRemoved, linesInserted) = TextFileUtility.ReplaceLineRangeStreaming(
+                string? warningMessage;
+                (linesRemoved, linesInserted, warningMessage) = TextFileUtility.ReplaceLineRangeStreaming(
                     resolvedPath,
                     tempFile,
                     metadata,
                     startLine,
                     endLine,
                     contentLines);
+                
+                // 警告があれば出力
+                if (!string.IsNullOrEmpty(warningMessage))
+                {
+                    WriteWarning(warningMessage);
+                }
             }
 
             // アトミックに置換
