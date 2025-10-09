@@ -87,6 +87,11 @@ public static class TextFileUtility
                 // 検出されたエンコーディングを返す
                 try
                 {
+                    // UTF-8の場合は明示的にBOMなしを返す（Encoding.GetEncoding("UTF-8")はBOM付きを返すため）
+                    if (detector.Charset.Equals("UTF-8", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return new UTF8Encoding(false);
+                    }
                     return Encoding.GetEncoding(detector.Charset);
                 }
                 catch
