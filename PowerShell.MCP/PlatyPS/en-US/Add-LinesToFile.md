@@ -14,14 +14,14 @@ Insert lines into a text file at a specific position or at the end
 
 ### Path
 ```
-Add-LinesToFile [-Path] <String[]> [-Content] <Object[]> [-LineNumber <Int32>] [-AtEnd] [-Encoding <String>]
- [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Add-LinesToFile [-Path] <String[]> [-Content] <Object[]> [-LineNumber <Int32>] [-Encoding <String>] [-Backup]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Add-LinesToFile -LiteralPath <String[]> [-Content] <Object[]> [-LineNumber <Int32>] [-AtEnd]
- [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Add-LinesToFile -LiteralPath <String[]> [-Content] <Object[]> [-LineNumber <Int32>] [-Encoding <String>]
+ [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -33,14 +33,14 @@ Inserts lines at specified position or appends to end or creates new file. Accep
 ```powershell
 Add-LinesToFile app.log -LineNumber 1 -Content "# Header"              # At beginning
 Add-LinesToFile app.log -LineNumber 10 -Content "// Inserted line"     # Middle
-Add-LinesToFile app.log -AtEnd -Content "# Footer"                     # At end
+Add-LinesToFile app.log -Content "# Footer"                            # At end (default)
 Add-LinesToFile new.txt -Content "First line"                          # Creates file (params optional)
 ```
 
 ### Example 2: Insert multiple lines
 ```powershell
 Add-LinesToFile config.ini -LineNumber 5 -Content @("Line1", "Line2", "Line3")
-Add-LinesToFile *.txt -AtEnd -Content "=== EOF ===" -Backup
+Add-LinesToFile *.txt -Content "=== EOF ===" -Backup                   # Appends to all files
 ```
 
 ### Example 3: Pipeline
@@ -50,29 +50,13 @@ Get-ChildItem *.cs | Where-Object { (Get-Content $_ -First 1) -notmatch "using" 
 ```
 
 Important:
-- New files: -LineNumber and -AtEnd are optional (defaults to append at end; -LineNumber only accepts 1)
-- Existing files: Either -LineNumber or -AtEnd is required
-- -LineNumber and -AtEnd are mutually exclusive
+- Defaults to append at end when -LineNumber is not specified
+- New files: -LineNumber only accepts 1 or omitted
 - Content accepts string or string array
 - Creates new file if it doesn't exist
 - Pipeline: accepts FileInfo via PSPath property
 
 ## PARAMETERS
-
-### -AtEnd
-Appends the content at the end of the file.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
 
 ### -Backup
 Creates a timestamped backup file before modifying. Recommended for important files.
@@ -239,7 +223,7 @@ Understanding line numbers:
 - The content becomes the specified line number
 - Original lines at and after that position shift down
 - Line number 1 means "insert at the beginning"
-- -AtEnd always appends at the end, regardless of file size
+- Omitting -LineNumber always appends at the end, regardless of file size
 
 Multiple line insertion:
 
@@ -250,7 +234,7 @@ Multiple line insertion:
 New file creation:
 
 - Creates new files if they don't exist
-- -LineNumber and -AtEnd are optional (defaults to append at end)
+- -LineNumber is optional (defaults to append at end)
 - When specified, -LineNumber only accepts 1 (beginning of new file)
 - Wildcards cannot create new files (path must be literal)
 - -Backup parameter is ignored when creating new files (warning is shown if specified)

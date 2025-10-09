@@ -39,7 +39,7 @@ NEVER use Get-Content or Set-Content for text file operations. This module inclu
 • Test-TextFileContains [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
   Tests if file contains matching text (literal or regex) within specified line range. Returns Boolean.
 
-• Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-AtEnd] [-Content] <Object[]> [-Encoding <string>] [-Backup] [-WhatIf]
+• Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup] [-WhatIf]
   Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines.
 
 • Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup] [-WhatIf]

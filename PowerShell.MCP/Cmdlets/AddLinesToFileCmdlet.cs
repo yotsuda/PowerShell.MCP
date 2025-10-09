@@ -4,7 +4,7 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// ファイルに行を追加（新規作成も可能）
-/// LLM最適化:新規ファイルはパラメータ省略可(末尾追加、-LineNumber 1 のみ許可)、既存ファイルは-AtEndまたは-LineNumberが必須
+/// LLM最適化:新規ファイル・既存ファイルともにパラメータ省略可(デフォルトで末尾追加、-LineNumber で挿入位置指定)
 /// </summary>
 [Cmdlet(VerbsCommon.Add, "LinesToFile", SupportsShouldProcess = true)]
 public class AddLinesToFileCmdlet : TextFileCmdletBase
@@ -25,26 +25,11 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     public int LineNumber { get; set; }
 
     [Parameter]
-    public SwitchParameter AtEnd { get; set; }
-
-    [Parameter]
     public string? Encoding { get; set; }
 
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
-    protected override void BeginProcessing()
-    {
-        // -AtEnd と -LineNumber の排他チェックのみ
-        if (AtEnd.IsPresent && LineNumber > 0)
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Cannot specify both -AtEnd and -LineNumber."),
-                "ConflictingParameters",
-                ErrorCategory.InvalidArgument,
-                null));
-        }
-    }
     protected override void ProcessRecord()
     {
         // -Path または -LiteralPath から処理対象を取得
@@ -150,16 +135,6 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     /// </summary>
     private void AddToFile(string resolvedPath, string originalPath, bool isNewFile)
     {
-        // 既存ファイルの場合、-AtEnd または -LineNumber が必須
-        if (!isNewFile && !AtEnd.IsPresent && LineNumber == 0)
-        {
-            WriteError(new ErrorRecord(
-                new ArgumentException($"For existing file '{originalPath}', either -AtEnd or -LineNumber must be specified."),
-                "ParameterRequiredForExistingFile",
-                ErrorCategory.InvalidArgument,
-                resolvedPath));
-            return;
-        }
 
         // メタデータの取得または作成
         TextFileUtility.FileMetadata metadata;
@@ -181,7 +156,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
         string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
         
-        // 新規ファイルの場合はデフォルトで末尾（AtEnd）、既存ファイルの場合は指定された位置
+        // LineNumber 指定がなければ末尾追加（新規・既存共通）
         int insertAt;
         bool effectiveAtEnd;
         
@@ -198,15 +173,15 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 return;
             }
             
-            // 新規ファイル:パラメータ未指定なら末尾、LineNumber 1 または -AtEnd なら OK
+            // 新規ファイル: LineNumber 未指定なら末尾追加
             insertAt = LineNumber > 0 ? LineNumber : int.MaxValue;
-            effectiveAtEnd = LineNumber == 0 || AtEnd.IsPresent;
+            effectiveAtEnd = LineNumber == 0;
         }
         else
         {
-            // 既存ファイル：指定されたパラメータを使用（この時点で検証済み）
-            insertAt = AtEnd.IsPresent ? int.MaxValue : LineNumber;
-            effectiveAtEnd = AtEnd.IsPresent;
+            // 既存ファイル: LineNumber 未指定ならデフォルトで末尾追加
+            insertAt = LineNumber > 0 ? LineNumber : int.MaxValue;
+            effectiveAtEnd = LineNumber == 0;
         }
         
         string actionDescription = effectiveAtEnd
@@ -248,7 +223,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
                 string message = isNewFile 
                     ? $"Created {GetDisplayPath(originalPath, resolvedPath)}: Created {contentLines.Length} line(s)"
-                    : $"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(AtEnd.IsPresent ? "at end" : $"at line {insertAt}")}";
+                    : $"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")}";
                 
                 WriteObject(message);
             }
@@ -314,7 +289,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     // 最終行の処理
                     if (!inserted)
                     {
-                        // AtEnd：末尾に追加
+                        // 末尾追加（デフォルト）
                         writer.Write(metadata.NewlineSequence);
                         WriteContentLines(writer, contentLines, metadata.NewlineSequence, false);
                         inserted = true;
