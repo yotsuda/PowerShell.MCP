@@ -52,7 +52,7 @@ Get-ChildItem *.cs | Where-Object { (Get-Content $_ -First 1) -notmatch "using" 
 Important:
 - Defaults to append at end when -LineNumber is not specified
 - New files: -LineNumber only accepts 1 or omitted
-- Content accepts string or string array
+- Content accepts string (single line) or array (multiple lines: @("L1", "L2", "L3"))
 - Creates new file if it doesn't exist
 - Pipeline: accepts FileInfo via PSPath property
 

@@ -52,7 +52,7 @@ Get-ChildItem *.log | Where-Object Length -gt 1MB | Update-LinesInFile -LineRang
 Important:
 - Without -LineRange: creates/replaces entire file
 - With -LineRange but no -Content: deletes lines
-- Content accepts string or string array
+- Content accepts string (single line) or array (multiple lines: @("L1", "L2", "L3"))
 - Pipeline: accepts FileInfo via PSPath property
 
 ## PARAMETERS
