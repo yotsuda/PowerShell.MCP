@@ -569,4 +569,46 @@ public static class TextFileUtility
             return toPath;
         }
     }
+    
+    /// <summary>
+    /// 必要に応じてエンコーディングを UTF-8 にアップグレード
+    /// Content に非 ASCII 文字が含まれ、現在のエンコーディングが ASCII の場合、UTF-8 にアップグレード
+    /// </summary>
+    /// <param name="metadata">ファイルメタデータ（エンコーディングが更新される可能性あり）</param>
+    /// <param name="contentLines">追加/更新する内容の行配列</param>
+    /// <param name="encodingExplicitlySpecified">エンコーディングが明示的に指定されているか</param>
+    /// <param name="upgradeMessage">アップグレードされた場合のメッセージ（アップグレードされない場合は null）</param>
+    /// <returns>エンコーディングがアップグレードされた場合は true、それ以外は false</returns>
+    public static bool TryUpgradeEncodingIfNeeded(
+        FileMetadata metadata, 
+        string[] contentLines, 
+        bool encodingExplicitlySpecified,
+        out string? upgradeMessage)
+    {
+        upgradeMessage = null;
+        
+        // エンコーディングが明示的に指定されている場合はアップグレードしない
+        if (encodingExplicitlySpecified)
+        {
+            return false;
+        }
+        
+        // 現在のエンコーディングが ASCII でない場合はアップグレード不要
+        if (metadata.Encoding.CodePage != 20127) // US-ASCII
+        {
+            return false;
+        }
+        
+        // Content に非 ASCII 文字が含まれているかチェック
+        bool containsNonAscii = contentLines.Any(line => line.Any(c => c > 127));
+        
+        if (containsNonAscii)
+        {
+            metadata.Encoding = new UTF8Encoding(false);
+            upgradeMessage = "Content contains non-ASCII characters. Upgrading encoding to UTF-8.";
+            return true;
+        }
+        
+        return false;
+    }
 }

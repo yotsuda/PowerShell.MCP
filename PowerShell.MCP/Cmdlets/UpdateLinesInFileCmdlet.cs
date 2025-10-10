@@ -1,4 +1,4 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -72,6 +72,13 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 : CreateNewFileMetadata(resolvedPath);
 
             string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
+            
+            // Content に非 ASCII 文字が含まれている場合、エンコーディングを UTF-8 にアップグレード
+            if (TextFileUtility.TryUpgradeEncodingIfNeeded(metadata, contentLines, Encoding != null, out var upgradeMessage))
+            {
+                WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
+            }
+            
             var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
             bool isFullFileReplace = LineRange == null;
 

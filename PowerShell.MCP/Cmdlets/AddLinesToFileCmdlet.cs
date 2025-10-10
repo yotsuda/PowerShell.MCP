@@ -155,6 +155,12 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         }
 
         string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
+
+        // Content に非 ASCII 文字が含まれている場合、エンコーディングを UTF-8 にアップグレード
+        if (TextFileUtility.TryUpgradeEncodingIfNeeded(metadata, contentLines, Encoding != null, out var upgradeMessage))
+        {
+            WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
+        }
         
         // LineNumber 指定がなければ末尾追加（新規・既存共通）
         int insertAt;
