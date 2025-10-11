@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
+    <value>Pengembangan perangkat lunak</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
+    <value>Bahasa pemrograman atau teknologi</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
+    <value>Jenis tugas pengembangan</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
+    <value>Jalur ke folder proyek</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
+    <value>Analisis konten</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
+    <value>Jalur ke konten yang akan dianalisis</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
+    <value>Administrasi sistem</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
+    <value>Jenis tugas administrasi sistem</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
+    <value>Modul PowerShell untuk tugas (opsional)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
+    <value>Belajar bahasa pemrograman</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage" xml:space="preserve">
+    <value>Python, C#, JavaScript, Java, Go, Rust, dll.</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
+    <value>Buat dokumen prosedur kerja</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
+    <value>Deskripsi pekerjaan atau proyek</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>Direktori kerja yang akan dianalisis</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
+    <value>Area fokus tertentu</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
+    <value>Jalankan dokumen prosedur kerja</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>Direktori kerja tempat pekerjaan akan dilakukan</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Name" xml:space="preserve">
+    <value>Belajar alat CLI</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Description" xml:space="preserve">
+    <value>Buat lingkungan pembelajaran praktis untuk alat pengembangan</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_CliTool" xml:space="preserve">
+    <value>PowerShell, Git, Docker, kubectl, dll.</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_ExperienceLevel" xml:space="preserve">
+    <value>Pemula, Menengah, Lanjutan</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
+    <value>Latihan dikte bahasa asing</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
+    <value>Bahasa target: Inggris, Prancis, Jerman, Spanyol, Italia, Tionghoa, Korea, Jepang</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
+    <value>Pendek (3-5 kata), Sedang (6-8 kata), Panjang (9-12 kata), Sangat Panjang (13-15 kata)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
+    <value>Lambat (kecepatan -2), Normal (kecepatan 0), Cepat (kecepatan +2), Sangat Cepat (kecepatan +4)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
+    <value>Bandara, Bisnis, Makanan, Rumah Sakit, Sekolah, Cuaca, Kebun Binatang</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
+    <value>Tampilkan terjemahan di samping bahasa target (aktif/nonaktif)</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
+    <value>Dukungan pengembangan perangkat lunak yang komprehensif dengan bantuan pengkodean, pengujian, dan penerapan</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
+    <value>Menganalisis konten dan memberikan wawasan dengan rekomendasi yang dapat ditindaklanjuti</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
+    <value>Menjalankan dan mengotomatiskan tugas administrasi sistem dengan PowerShell</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
+    <value>Buat lingkungan pembelajaran dan pandu pembelajaran bahasa pemrograman langkah demi langkah dengan praktik</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
+    <value>Buat dokumen prosedur kerja dan file pelacakan kemajuan.</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
+    <value>Jalankan dokumen prosedur kerja dan lacak kemajuan dengan perbaikan berkelanjutan.</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
+    <value>Mulai latihan dikte bahasa asing yang cepat dengan audio PowerShell dan evaluasi AI</value>
+  </data>
+  <data name="Param_LearnCliTools_CliTool_Name" xml:space="preserve">
+    <value>Alat CLI</value>
+  </data>
+  <data name="Param_LearnCliTools_ExperienceLevel_Name" xml:space="preserve">
+    <value>Tingkat pengalaman</value>
+  </data>
+</root>

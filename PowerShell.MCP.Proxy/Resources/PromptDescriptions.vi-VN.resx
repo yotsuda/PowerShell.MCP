@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  
+  <!-- Software Development Prompt -->
+  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
+    <value>Phát triển phần mềm</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
+    <value>Ngôn ngữ lập trình hoặc công nghệ</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
+    <value>Loại nhiệm vụ phát triển</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
+    <value>Đường dẫn đến thư mục dự án</value>
+  </data>
+  
+  <!-- Analyze Content Prompt -->
+  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
+    <value>Phân tích nội dung</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
+    <value>Đường dẫn đến nội dung để phân tích</value>
+  </data>
+  
+  <!-- System Administration Prompt -->
+  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
+    <value>Quản trị hệ thống</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
+    <value>Loại nhiệm vụ quản trị hệ thống</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
+    <value>Module PowerShell cho việc thực thi nhiệm vụ (tùy chọn)</value>
+  </data>
+  
+  <!-- Learn Programming Language Prompt -->
+  <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
+    <value>Học ngôn ngữ lập trình</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage" xml:space="preserve">
+    <value>Python, C#, JavaScript, Java, Go, Rust, v.v.</value>
+  </data>
+  
+  <!-- Create Work Procedure Prompt -->
+  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
+    <value>Tạo tài liệu quy trình làm việc</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
+    <value>Mô tả công việc hoặc dự án</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>Thư mục làm việc để phân tích</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
+    <value>Lĩnh vực tập trung cụ thể</value>
+  </data>
+  
+  <!-- Execute Work Procedure Prompt -->
+  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
+    <value>Thực thi tài liệu quy trình làm việc</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>Thư mục làm việc nơi công việc sẽ được thực hiện</value>
+  </data>
+  
+  <!-- Learn CLI Tools Prompt -->
+  <data name="Prompt_LearnCliTools_Name" xml:space="preserve">
+    <value>Học công cụ CLI</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Description" xml:space="preserve">
+    <value>Tạo môi trường học tập thực hành cho các công cụ phát triển</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_CliTool" xml:space="preserve">
+    <value>PowerShell, Git, Docker, kubectl, v.v.</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_ExperienceLevel" xml:space="preserve">
+    <value>Người mới bắt đầu, Trung cấp, Nâng cao</value>
+  </data>
+  <data name="Param_LearnCliTools_CliTool_Name" xml:space="preserve">
+    <value>Công cụ CLI</value>
+  </data>
+  <data name="Param_LearnCliTools_ExperienceLevel_Name" xml:space="preserve">
+    <value>Mức độ kinh nghiệm</value>
+  </data>
+  
+  <!-- Foreign Language Dictation Training Prompt -->
+  <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
+    <value>Luyện tập chính tả ngôn ngữ ngoại</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
+    <value>Ngôn ngữ mục tiêu: Tiếng Anh, Tiếng Pháp, Tiếng Đức, Tiếng Tây Ban Nha, Tiếng Ý, Tiếng Trung, Tiếng Hàn, Tiếng Nhật</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
+    <value>Ngắn (3-5 từ), Trung bình (6-8 từ), Dài (9-12 từ), Rất dài (13-15 từ)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
+    <value>Chậm (tốc độ -2), Bình thường (tốc độ 0), Nhanh (tốc độ +2), Rất nhanh (tốc độ +4)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
+    <value>Sân bay, Kinh doanh, Thức ăn, Bệnh viện, Trường học, Thời tiết, Sở thú</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
+    <value>Hiển thị bản dịch bên cạnh ngôn ngữ mục tiêu (bật/tắt)</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
+    <value>Hỗ trợ phát triển phần mềm toàn diện với trợ giúp về lập trình, kiểm thử và triển khai</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
+    <value>Phân tích nội dung và cung cấp thông tin chi tiết với các khuyến nghị có thể thực hiện</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
+    <value>Thực thi và tự động hóa các nhiệm vụ quản trị hệ thống với PowerShell</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
+    <value>Tạo môi trường học tập và hướng dẫn từng bước học ngôn ngữ lập trình với thực hành thực tế</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
+    <value>Tạo tài liệu quy trình làm việc và các tệp theo dõi tiến độ.</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
+    <value>Thực thi tài liệu quy trình làm việc và theo dõi tiến độ với cải tiến liên tục.</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
+    <value>Bắt đầu luyện tập chính tả ngôn ngữ ngoại nhịp độ nhanh với âm thanh PowerShell và đánh giá AI</value>
+  </data>
+</root>

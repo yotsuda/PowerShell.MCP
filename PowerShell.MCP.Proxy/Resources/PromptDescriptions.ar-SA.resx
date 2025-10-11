@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
+    <value>تطوير البرمجيات</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
+    <value>لغة البرمجة أو التقنية</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
+    <value>نوع مهمة التطوير</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
+    <value>مسار مجلد المشروع</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
+    <value>تحليل المحتوى</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
+    <value>مسار المحتوى المراد تحليله</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
+    <value>إدارة النظام</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
+    <value>نوع مهمة إدارة النظام</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
+    <value>وحدة PowerShell للمهمة (اختياري)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
+    <value>تعلم لغة البرمجة</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage" xml:space="preserve">
+    <value>Python، C#، JavaScript، Java، Go، Rust، إلخ.</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
+    <value>إنشاء وثيقة إجراء العمل</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
+    <value>وصف العمل أو المشروع</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>دليل العمل المراد تحليله</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
+    <value>منطقة التركيز المحددة</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
+    <value>تنفيذ وثيقة إجراء العمل</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>دليل العمل حيث سيتم تنفيذ العمل</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Name" xml:space="preserve">
+    <value>تعلم أدوات سطر الأوامر</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Description" xml:space="preserve">
+    <value>إنشاء بيئة تعليمية عملية لأدوات التطوير</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_CliTool" xml:space="preserve">
+    <value>PowerShell، Git، Docker، kubectl، إلخ.</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_ExperienceLevel" xml:space="preserve">
+    <value>مبتدئ، متوسط، متقدم</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
+    <value>تدريب الإملاء باللغة الأجنبية</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
+    <value>اللغة المستهدفة: الإنجليزية، الفرنسية، الألمانية، الإسبانية، الإيطالية، الصينية، الكورية، اليابانية</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
+    <value>قصيرة (3-5 كلمات)، متوسطة (6-8 كلمات)، طويلة (9-12 كلمة)، طويلة جدًا (13-15 كلمة)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
+    <value>بطيء (السرعة -2)، عادي (السرعة 0)، سريع (السرعة +2)، سريع جدًا (السرعة +4)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
+    <value>المطار، الأعمال، الطعام، المستشفى، المدرسة، الطقس، حديقة الحيوان</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
+    <value>إظهار الترجمة جنبًا إلى جنب مع اللغة المستهدفة (تشغيل/إيقاف)</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
+    <value>دعم شامل لتطوير البرمجيات مع المساعدة في البرمجة والاختبار والنشر</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
+    <value>تحليل المحتوى وتقديم رؤى مع توصيات قابلة للتنفيذ</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
+    <value>تنفيذ وأتمتة مهام إدارة النظام باستخدام PowerShell</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
+    <value>إنشاء بيئة تعليمية وتوجيه تعلم لغة البرمجة خطوة بخطوة مع الممارسة</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
+    <value>إنشاء وثيقة إجراء العمل وملفات تتبع التقدم.</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
+    <value>تنفيذ وثيقة إجراء العمل وتتبع التقدم مع التحسين المستمر.</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
+    <value>بدء تدريب الإملاء السريع باللغة الأجنبية مع صوت PowerShell وتقييم الذكاء الاصطناعي</value>
+  </data>
+  <data name="Param_LearnCliTools_CliTool_Name" xml:space="preserve">
+    <value>أداة سطر الأوامر</value>
+  </data>
+  <data name="Param_LearnCliTools_ExperienceLevel_Name" xml:space="preserve">
+    <value>مستوى الخبرة</value>
+  </data>
+</root>

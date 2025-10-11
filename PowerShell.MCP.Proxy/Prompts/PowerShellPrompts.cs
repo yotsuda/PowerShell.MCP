@@ -1,6 +1,5 @@
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
-using System.ComponentModel;
 using PowerShell.MCP.Proxy.Attributes;
 
 namespace PowerShell.MCP.Proxy.Prompts;

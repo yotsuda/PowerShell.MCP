@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  
+  <!-- Software Development Prompt -->
+  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
+    <value>การพัฒนาซอฟต์แวร์</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
+    <value>ภาษาโปรแกรมหรือเทคโนโลยี</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
+    <value>ประเภทงานพัฒนา</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
+    <value>เส้นทางไปยังโฟลเดอร์โครงการ</value>
+  </data>
+  
+  <!-- Analyze Content Prompt -->
+  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
+    <value>วิเคราะห์เนื้อหา</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
+    <value>เส้นทางไปยังเนื้อหาสำหรับการวิเคราะห์</value>
+  </data>
+  
+  <!-- System Administration Prompt -->
+  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
+    <value>การบริหารระบบ</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
+    <value>ประเภทงานบริหารระบบ</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
+    <value>โมดูล PowerShell สำหรับการทำงาน (ไม่บังคับ)</value>
+  </data>
+  
+  <!-- Learn Programming Language Prompt -->
+  <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
+    <value>เรียนรู้ภาษาโปรแกรม</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage" xml:space="preserve">
+    <value>Python, C#, JavaScript, Java, Go, Rust ฯลฯ</value>
+  </data>
+  
+  <!-- Create Work Procedure Prompt -->
+  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
+    <value>สร้างเอกสารขั้นตอนการทำงาน</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
+    <value>คำอธิบายงานหรือโครงการ</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>ไดเรกทอรีการทำงานเพื่อวิเคราะห์</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
+    <value>พื้นที่เน้นเฉพาะ</value>
+  </data>
+  
+  <!-- Execute Work Procedure Prompt -->
+  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
+    <value>ดำเนินการตามเอกสารขั้นตอนการทำงาน</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
+    <value>ไดเรกทอรีการทำงานที่จะดำเนินการ</value>
+  </data>
+  
+  <!-- Learn CLI Tools Prompt -->
+  <data name="Prompt_LearnCliTools_Name" xml:space="preserve">
+    <value>เรียนรู้เครื่องมือ CLI</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Description" xml:space="preserve">
+    <value>สร้างสภาพแวดล้อมการเรียนรู้แบบปฏิบัติจริงสำหรับเครื่องมือพัฒนา</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_CliTool" xml:space="preserve">
+    <value>PowerShell, Git, Docker, kubectl ฯลฯ</value>
+  </data>
+  <data name="Prompt_LearnCliTools_Param_ExperienceLevel" xml:space="preserve">
+    <value>ผู้เริ่มต้น, ระดับกลาง, ระดับสูง</value>
+  </data>
+  <data name="Param_LearnCliTools_CliTool_Name" xml:space="preserve">
+    <value>เครื่องมือ CLI</value>
+  </data>
+  <data name="Param_LearnCliTools_ExperienceLevel_Name" xml:space="preserve">
+    <value>ระดับประสบการณ์</value>
+  </data>
+  
+  <!-- Foreign Language Dictation Training Prompt -->
+  <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
+    <value>การฝึกคัดลอกภาษาต่างประเทศ</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
+    <value>ภาษาเป้าหมาย: อังกฤษ, ฝรั่งเศส, เยอรมัน, สเปน, อิตาลี, จีน, เกาหลี, ญี่ปุ่น</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
+    <value>สั้น (3-5 คำ), ปานกลาง (6-8 คำ), ยาว (9-12 คำ), ยาวมาก (13-15 คำ)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
+    <value>ช้า (อัตรา -2), ปกติ (อัตรา 0), เร็ว (อัตรา +2), เร็วมาก (อัตรา +4)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
+    <value>สนามบิน, ธุรกิจ, อาหาร, โรงพยาบาล, โรงเรียน, สภาพอากาศ, สวนสัตว์</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
+    <value>แสดงคำแปลควบคู่กับภาษาเป้าหมาย (เปิด/ปิด)</value>
+  </data>
+  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
+    <value>การสนับสนุนการพัฒนาซอฟต์แวร์อย่างครอบคลุมด้วยการช่วยเหลือในการเขียนโค้ด การทดสอบ และการติดตั้ง</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
+    <value>วิเคราะห์เนื้อหาและให้ข้อมูลเชิงลึกพร้อมคำแนะนำที่ปฏิบัติได้</value>
+  </data>
+  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
+    <value>ดำเนินการและทำงานบริหารระบบอัตโนมัติด้วย PowerShell</value>
+  </data>
+  <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
+    <value>สร้างสภาพแวดล้อมการเรียนรู้และแนะนำการเรียนรู้ภาษาโปรแกรมทีละขั้นตอนด้วยการปฏิบัติจริง</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
+    <value>สร้างเอกสารขั้นตอนการทำงานและไฟล์ติดตามความคืบหน้า</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
+    <value>ดำเนินการตามเอกสารขั้นตอนการทำงานและติดตามความคืบหน้าพร้อมการปรับปรุงอย่างต่อเนื่อง</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
+    <value>เริ่มการฝึกคัดลอกภาษาต่างประเทศแบบเร่งรัดด้วยเสียง PowerShell และการประเมินโดย AI</value>
+  </data>
+</root>
