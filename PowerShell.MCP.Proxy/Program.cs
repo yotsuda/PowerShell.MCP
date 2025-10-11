@@ -13,8 +13,9 @@ namespace PowerShell.MCP.Proxy
         public static async Task Main(string[] args)
         {
             // テスト用：日本語に強制（検証後はコメントアウトしてください）
-            System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("ja-JP");
-            
+            //System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("ja-JP");
+            //System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("fr-FR");
+
             //Console.Error.WriteLine("[DEBUG] Starting PowerShell.MCP.Proxy...");
 
             var builder = Host.CreateApplicationBuilder(args);

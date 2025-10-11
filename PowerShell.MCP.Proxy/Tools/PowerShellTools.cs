@@ -24,20 +24,17 @@ public static class PowerShellTools
     [McpServerTool]
     [Description(@"Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.
 
-⚠️ IMPORTANT - Verbose/Debug Output Streams:
-Verbose and Debug streams are NOT captured and NOT visible to the LLM. These streams display only in the user's console. If you need verbose/debug information from a command, ask the user to copy it from the console and share it with you.
-
-⚠️ IMPORTANT - Variable Scope:
+⚠️ CRITICAL - Variable Scope:
 Local variables are NOT preserved between invoke_expression calls. Use $script: or $global: scope to share variables across calls.
 
-⚠️ CRITICAL - Text File Operations:
-NEVER use Get-Content or Set-Content for text file operations. This module includes LLM-optimized cmdlets that preserve file metadata (encoding, newlines) and provide better error handling:
+⚠️ CRITICAL - Verbose/Debug Output:
+Verbose and Debug streams are NOT visible to you. If you need verbose/debug information, ask the user to copy it from the console and share it with you.
+
+⚠ CRITICAL - File Operations:
+When calling invoke_expression for file operations, ALWAYS use these cmdlets. NEVER use Set-Content, Get-Content, or Out-File:
 
 • Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
   Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex).
-
-• Test-TextFileContains [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
-  Tests if file contains matching text (literal or regex) within specified line range. Returns Boolean.
 
 • Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup] [-WhatIf]
   Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines.
@@ -45,22 +42,24 @@ NEVER use Get-Content or Set-Content for text file operations. This module inclu
 • Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup] [-WhatIf]
   Replaces specified line range with new content or creates new file. Omit content to delete lines.
 
-• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <string>] [-Replacement <string>] [-Encoding <string>] [-Backup] [-WhatIf]
+• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup] [-WhatIf]
   Replaces matching text (literal or regex) within optional line range.
 
 • Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup] [-WhatIf]
   Removes lines matching text (literal or regex) within optional range.
 
-IMPORTANT:
-- All cmdlets support both -Path (wildcards allowed) and -LiteralPath (exact path, no wildcard expansion)
-- Content parameter in Add-LinesToFile accepts Object[] - you can pass string arrays for multiple lines
-- Always check parameter types before using - arrays can be passed directly without loops
+• Test-TextFileContains [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
+  Tests if file contains matching text (literal or regex) within specified line range. Returns Boolean.
 
-USE BUILT-IN PARAMETERS:
-  ✅ CORRECT: Show-TextFile file.txt -LineRange 10,20
-  ❌ WRONG: Show-TextFile file.txt | Select-Object -Skip 9 -First 11
+Note: All cmdlets support -LiteralPath for exact paths and accept arrays directly (no loops needed).
 
-For detailed examples: Get-Help <cmdlet-name> -Examples")]
+Examples:
+  ✅ CORRECT: invoke_expression('Add-LinesToFile -Path file.cs -Content $code')
+  ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 10,20')
+  ❌ WRONG: invoke_expression('Set-Content -Path file.cs -Value $code')
+  ❌ WRONG: invoke_expression('Get-Content file.txt | Select-Object -Skip 9 -First 11')
+
+For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]
