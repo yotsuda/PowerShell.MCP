@@ -211,6 +211,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
 
+                $mcpOutput = $null
                 try {
                     # Display command in console
                     [Console]::WriteLine()
@@ -275,14 +276,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
-
-                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
                     Write-Host $errorMessage -ForegroundColor Red
-
-                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($errorMessage)
+                    $mcpOutput = $errorMessage
+                }
+                finally {
+                    # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
+                    if ($null -eq $mcpOutput) {
+                        $mcpOutput = "Command execution completed"
+                    }
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
             }
 
@@ -291,6 +296,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             if ($silentCmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent = $null
 
+                $mcpOutput = $null
                 try {
                     # Measure execution time
                     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -312,8 +318,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
-
-                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
                 catch {
                     $currentLocation = @{
@@ -324,8 +328,14 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
                     $errorMessage = "Error: $($_.Exception.Message)"
-
-                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($locationInfo + "`n" + $errorMessage)
+                    $mcpOutput = $locationInfo + "`n" + $errorMessage
+                }
+                finally {
+                    # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
+                    if ($null -eq $mcpOutput) {
+                        $mcpOutput = "Command execution completed"
+                    }
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
             }
 
