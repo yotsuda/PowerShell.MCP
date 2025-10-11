@@ -17,8 +17,21 @@ public static class PowerShellTools
     {
         Console.Error.WriteLine("[DEBUG] GetCurrentLocation static method called!");
         
-        // PowerShellService からの例外はそのまま通す（フォールバック判定削除）
-        return await powerShellService.GetCurrentLocationAsync(cancellationToken);
+        var result = await powerShellService.GetCurrentLocationAsync(cancellationToken);
+        
+        // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
+        if (result.Contains("The PowerShell 7 console is not running"))
+        {
+            Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
+            
+            // 自動的に start_powershell_console を実行
+            // start_powershell_console は既に "PowerShell console started successfully..." というメッセージと location 情報を返す
+            return await StartPowershellConsole(powerShellService, cancellationToken);
+        }
+        
+        // モジュールがインポートされていない場合は自動起動しない（ユーザーの選択を尊重）
+        // 通常の結果またはその他のエラーメッセージをそのまま返す
+        return result;
     }
 
     [McpServerTool]
@@ -70,8 +83,23 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     {
         Console.Error.WriteLine($"[DEBUG] InvokeExpression static method called! Pipeline: {pipeline}, ExecuteImmediately: {execute_immediately}");
         
-        // PowerShellService からの例外はそのまま通す
-        return await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
+        var result = await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
+        
+        // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
+        if (result.Contains("The PowerShell 7 console is not running"))
+        {
+            Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
+            
+            // 自動的にコンソールを起動（location情報も取得される）
+            var startResult = await StartPowershellConsole(powerShellService, cancellationToken);
+            
+            // pipeline は実行しない。AIに確認を促す（重要な情報を先頭に）
+            return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
+        }
+        
+        // モジュールがインポートされていない場合は自動起動しない（ユーザーの選択を尊重）
+        // 通常の結果またはその他のエラーメッセージをそのまま返す
+        return result;
     }
 
     [McpServerTool]
