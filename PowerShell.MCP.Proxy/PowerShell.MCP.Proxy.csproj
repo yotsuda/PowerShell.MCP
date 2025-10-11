@@ -40,4 +40,10 @@
     <TrimmerRootAssembly Include="ModelContextProtocol.Core" />
   </ItemGroup>
 
+  <!-- リソースファイルの設定 -->
+  <ItemGroup>
+    <EmbeddedResource Update="Resources\**\*.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>

@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PowerShell.MCP.Proxy.Services;
-using PowerShell.MCP.Proxy.Prompts;
 using System.Reflection;
 
 namespace PowerShell.MCP.Proxy
@@ -13,6 +12,9 @@ namespace PowerShell.MCP.Proxy
 
         public static async Task Main(string[] args)
         {
+            // テスト用：日本語に強制（検証後はコメントアウトしてください）
+            System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("ja-JP");
+            
             //Console.Error.WriteLine("[DEBUG] Starting PowerShell.MCP.Proxy...");
 
             var builder = Host.CreateApplicationBuilder(args);
@@ -34,7 +36,7 @@ namespace PowerShell.MCP.Proxy
                 .AddMcpServer()
                 .WithStdioServerTransport()
                 .WithToolsFromAssembly()
-                .WithPromptsFromAssembly(); // プロンプトを明示的に追加
+                .WithLocalizedPromptsFromAssembly(Assembly.GetExecutingAssembly()); // Use localized prompts
 
             //Console.Error.WriteLine("[DEBUG] Building and running...");
             await builder.Build().RunAsync();

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using PowerShell.MCP.Proxy.Attributes;
 
 namespace PowerShell.MCP.Proxy.Prompts;
 
@@ -8,13 +9,14 @@ namespace PowerShell.MCP.Proxy.Prompts;
 public static class PowerShellPrompts
 {
     [McpServerPrompt]
-    [Description("Comprehensive software development support with coding, testing, and deployment assistance")]
+    [LocalizedName("Prompt_SoftwareDevelopment_Name")]
+    [ResourceDescription("Prompt_SoftwareDevelopment_Description")]
     public static ChatMessage SoftwareDevelopment(
-        [Description("Programming language or technology")]
+        [ResourceDescription("Prompt_SoftwareDevelopment_Param_Technology")]
         string? technology = null,
-        [Description("Development task type")]
+        [ResourceDescription("Prompt_SoftwareDevelopment_Param_TaskType")]
         string? task_type = null,
-        [Description("Path to the project folder")]
+        [ResourceDescription("Prompt_SoftwareDevelopment_Param_ProjectPath")]
         string? project_path = null)
     {
         var technologyFocus = !string.IsNullOrEmpty(technology)
@@ -56,9 +58,10 @@ For new projects, create appropriate directory structure and initialize version 
     }
 
     [McpServerPrompt]
-    [Description("Analyze content and provide insights with actionable recommendations")]
+    [LocalizedName("Prompt_AnalyzeContent_Name")]
+    [ResourceDescription("Prompt_AnalyzeContent_Description")]
     public static ChatMessage AnalyzeContent(
-        [Description("Path to content for analysis")]
+        [ResourceDescription("Prompt_AnalyzeContent_Param_ContentPath")]
         string content_path)
     {
         var prompt = $@"LANGUAGE:
@@ -83,11 +86,12 @@ Create a detailed report file with prioritized action items and present in user'
     }
 
     [McpServerPrompt]
-    [Description("Execute and automate system administration tasks with PowerShell")]
+    [LocalizedName("Prompt_SystemAdministration_Name")]
+    [ResourceDescription("Prompt_SystemAdministration_Description")]
     public static ChatMessage SystemAdministration(
-        [Description("System administration task type")]
+        [ResourceDescription("Prompt_SystemAdministration_Param_TaskType")]
         string task_type,
-        [Description("PowerShell module for task execution (optional)")]
+        [ResourceDescription("Prompt_SystemAdministration_Param_RequiredModule")]
         string? required_module = null)
     {
         var moduleSection = !string.IsNullOrEmpty(required_module)
@@ -118,9 +122,10 @@ After completing the work, create a work report and show it to the user. Confirm
     }
 
     [McpServerPrompt]
-    [Description("Create learning environment and guide step-by-step programming language learning with hands-on practice")]
+    [LocalizedName("Prompt_LearnProgrammingLanguage_Name")]
+    [ResourceDescription("Prompt_LearnProgrammingLanguage_Description")]
     public static ChatMessage LearnProgrammingLanguage(
-        [Description("Python, C#, JavaScript, Java, Go, Rust, etc.")]
+        [ResourceDescription("Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage")]
         string programming_language)
     {
         var prompt = $@"LANGUAGE:
@@ -165,13 +170,14 @@ Remember: The goal is hands-on learning, not just demonstration. Each step shoul
     }
 
     [McpServerPrompt]
-    [Description("Create work procedure and progress tracking files.")]
+    [LocalizedName("Prompt_CreateWorkProcedure_Name")]
+    [ResourceDescription("Prompt_CreateWorkProcedure_Description")]
     public static ChatMessage CreateWorkProcedure(
-        [Description("Description of the work or project")]
+        [ResourceDescription("Prompt_CreateWorkProcedure_Param_WorkDescription")]
         string work_description,
-        [Description("Working directory to analyze")]
+        [ResourceDescription("Prompt_CreateWorkProcedure_Param_WorkingDirectory")]
         string working_directory,
-        [Description("specific focus area")]
+        [ResourceDescription("Prompt_CreateWorkProcedure_Param_FocusArea")]
         string? focus_area = "all")
     {
         var prompt = $@"LANGUAGE:
@@ -212,10 +218,11 @@ CRITICAL: Create real files on disk + user approval for commits + exact formats"
     }
 
     [McpServerPrompt]
-    [Description("Execute work procedure and track progress with continuous improvement.")]
+    [LocalizedName("Prompt_ExecuteWorkProcedure_Name")]
+    [ResourceDescription("Prompt_ExecuteWorkProcedure_Description")]
     public static ChatMessage ExecuteWorkProcedure(
-        [Description("Working directory where work will be performed")]
-    string working_directory)
+        [ResourceDescription("Prompt_ExecuteWorkProcedure_Param_WorkingDirectory")]
+        string working_directory)
     {
         var prompt = $@"LANGUAGE:
 Communicate with users in the user's native language
@@ -260,11 +267,14 @@ Start by reading documents, then execute next priority tasks while improving pro
     }
 
     [McpServerPrompt]
-    [Description("Create hands-on learning environment for development tools")]
+    [LocalizedName("Prompt_LearnCliTools_Name")]
+    [ResourceDescription("Prompt_LearnCliTools_Description")]
     public static ChatMessage LearnCliTools(
-        [Description("PowerShell, Git, Docker, kubectl, etc.")]
+        [LocalizedParameterName("Param_LearnCliTools_CliTool_Name")]
+        [ResourceDescription("Prompt_LearnCliTools_Param_CliTool")]
         string cli_tool,
-        [Description("Beginner, Intermediate, Advanced")]
+        [LocalizedParameterName("Param_LearnCliTools_ExperienceLevel_Name")]
+        [ResourceDescription("Prompt_LearnCliTools_Param_ExperienceLevel")]
         string experience_level = "Beginner")
     {
         var prompt = $@"LANGUAGE:
@@ -292,17 +302,18 @@ Make the user actively practice each step.";
     }
 
     [McpServerPrompt]
-    [Description("Start fast-paced foreign language dictation training with PowerShell audio and AI evaluation")]
+    [LocalizedName("Prompt_ForeignLanguageDictationTraining_Name")]
+    [ResourceDescription("Prompt_ForeignLanguageDictationTraining_Description")]
     public static ChatMessage ForeignLanguageDictationTraining(
-        [Description("Target language: English, French, German, Spanish, Italian, Chinese, Korean, Japanese")]
+        [ResourceDescription("Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage")]
         string target_language,
-        [Description("Short (3-5 words), Medium (6-8 words), Long (9-12 words), VeryLong (13-15 words)")]
+        [ResourceDescription("Prompt_ForeignLanguageDictationTraining_Param_SentenceLength")]
         string sentence_length = "Short",
-        [Description("Slow (rate -2), Normal (rate 0), Fast (rate +2), VeryFast (rate +4)")]
+        [ResourceDescription("Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed")]
         string speech_speed = "Normal",
-        [Description("Airport, Business, Food, Hospital, School, Weather, Zoo")]
+        [ResourceDescription("Prompt_ForeignLanguageDictationTraining_Param_Topic")]
         string topic = "General",
-        [Description("Show translation alongside target language (on/off)")]
+        [ResourceDescription("Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation")]
         string show_translation = "off")
     {
         var prompt = $@"Start RAPID {target_language} dictation training using PowerShell.MCP:
