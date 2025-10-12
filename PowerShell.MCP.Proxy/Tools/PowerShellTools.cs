@@ -1,14 +1,15 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using PowerShell.MCP.Proxy.Services;
-using PowerShell.MCP.Proxy.Models;
-using System.Text.Json;
 
 namespace PowerShell.MCP.Proxy.Tools;
 
 [McpServerToolType]
 public static class PowerShellTools
 {
+    // エラーメッセージの定数定義
+    private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";
+    
     [McpServerTool]
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
@@ -20,12 +21,12 @@ public static class PowerShellTools
         var result = await powerShellService.GetCurrentLocationAsync(cancellationToken);
         
         // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
-        if (result.Contains("The PowerShell 7 console is not running"))
+        // StartsWith を使用して、エラーメッセージの先頭部分のみをチェック
+        if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
         {
             Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
             
             // 自動的に start_powershell_console を実行
-            // start_powershell_console は既に "PowerShell console started successfully..." というメッセージと location 情報を返す
             return await StartPowershellConsole(powerShellService, cancellationToken);
         }
         
@@ -86,7 +87,8 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         var result = await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
         
         // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
-        if (result.Contains("The PowerShell 7 console is not running"))
+        // StartsWith を使用して、エラーメッセージの先頭部分のみをチェック
+        if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
         {
             Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
             

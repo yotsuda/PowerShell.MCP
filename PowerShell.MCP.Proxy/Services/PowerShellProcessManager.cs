@@ -71,6 +71,9 @@ public static class PwshNative
     [DllImport("kernel32.dll")]
     static extern IntPtr GetCurrentProcess();
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool CloseHandle(IntPtr hObject);
+
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     static extern bool CreateProcessW(
         string? lpApplicationName,
@@ -113,16 +116,21 @@ public static class PwshNative
 
     public static void LaunchPwshStrict()
     {
-        // 1) 現在ユーザーのトークンを取得
-        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, out var hToken))
-            throw new Win32Exception(Marshal.GetLastWin32Error());
-
-        // 2) そのユーザーの“既定”環境ブロックを生成（Explorer 同等）
-        if (!CreateEnvironmentBlock(out var env, hToken, false))
-            throw new Win32Exception(Marshal.GetLastWin32Error());
+        IntPtr hToken = IntPtr.Zero;
+        IntPtr env = IntPtr.Zero;
+        IntPtr hProcess = IntPtr.Zero;
+        IntPtr hThread = IntPtr.Zero;
 
         try
         {
+            // 1) 現在ユーザーのトークンを取得
+            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, out hToken))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+
+            // 2) そのユーザーの"既定"環境ブロックを生成（Explorer 同等）
+            if (!CreateEnvironmentBlock(out env, hToken, false))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
             // 3) 新しいコンソールで pwsh.exe を起動
@@ -138,17 +146,30 @@ public static class PwshNative
                 IntPtr.Zero,
                 false,
                 CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE,
-                env,                       // ← Explorer 相当の環境をそのまま渡す
-                userProfile,               // 作業ディレクトリ
+                env,
+                userProfile,
                 ref si,
                 out pi);
 
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
-            // ハンドルは必要なら CloseHandle で明示的に閉じてください
+
+            hProcess = pi.hProcess;
+            hThread = pi.hThread;
         }
         finally
         {
-            DestroyEnvironmentBlock(env);
+            // リソースの確実な解放
+            if (env != IntPtr.Zero)
+                DestroyEnvironmentBlock(env);
+            
+            if (hToken != IntPtr.Zero)
+                CloseHandle(hToken);
+            
+            if (hProcess != IntPtr.Zero)
+                CloseHandle(hProcess);
+            
+            if (hThread != IntPtr.Zero)
+                CloseHandle(hThread);
         }
     }
 }
