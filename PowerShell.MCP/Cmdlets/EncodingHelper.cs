@@ -96,16 +96,32 @@ internal static class EncodingHelper
                 // 一般的なエンコーディングエイリアスの正規化
                 return encodingName.ToLowerInvariant() switch
                 {
+                    // UTF encodings
                     "utf-8" or "utf8" => new UTF8Encoding(false),
                     "utf-8-bom" or "utf8-bom" or "utf8bom" => new UTF8Encoding(true),
-                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" => Encoding.GetEncoding("shift_jis"),
-                    "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
-                    "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
-                    "ascii" => Encoding.ASCII,
-                    "unicode" or "utf-16" or "utf16" or "utf-16le" or "utf16le" => Encoding.Unicode,
+                    "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" => Encoding.Unicode,
                     "utf-16be" or "utf16be" => Encoding.BigEndianUnicode,
                     "utf-32" or "utf32" or "utf-32le" or "utf32le" => Encoding.UTF32,
                     "utf-32be" or "utf32be" => new UTF32Encoding(true, true),
+                    
+                    // Japanese encodings
+                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" => Encoding.GetEncoding("shift_jis"),
+                    "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
+                    "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
+                    
+                    // Chinese encodings
+                    "big-5" => Encoding.GetEncoding("big5"),
+                    
+                    // Korean encodings
+                    "euckr" => Encoding.GetEncoding("euc-kr"),
+                    
+                    // Western encodings
+                    "1252" => Encoding.GetEncoding("windows-1252"),
+                    "latin-1" or "iso88591" => Encoding.GetEncoding("iso-8859-1"),
+                    
+                    // ASCII
+                    "ascii" => Encoding.ASCII,
+                    
                     _ => Encoding.GetEncoding(encodingName)
                 };
             }
