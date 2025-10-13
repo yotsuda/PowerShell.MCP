@@ -105,6 +105,41 @@ Describe "Add-LinesToFile Integration Tests" {
             $result = Get-Content $script:testFile -Encoding UTF8
             $result[-1] | Should -Be $testContent
         }
+
+        It "ASCII ファイルに日本語を追加すると自動的に UTF-8 にアップグレードされる" {
+            # ASCII エンコーディングでファイルを作成
+            $asciiFile = [System.IO.Path]::GetTempFileName()
+            [System.IO.File]::WriteAllLines($asciiFile, @("Line 1", "Line 2"), [System.Text.Encoding]::ASCII)
+            
+            try {
+                # ファイルのエンコーディングが ASCII であることを確認
+                $bytes = [System.IO.File]::ReadAllBytes($asciiFile)
+                $encoding = [System.Text.Encoding]::ASCII
+                $detectedText = $encoding.GetString($bytes)
+                $detectedText | Should -Not -BeNullOrEmpty
+                
+                # 日本語を含む内容を追加(Encoding パラメータは指定しない)
+                $infoMessages = @()
+                Add-LinesToFile -Path $asciiFile -Content "日本語のテスト" -InformationVariable infoMessages
+                
+                # エンコーディングアップグレードの情報メッセージが出ることを確認
+                $infoMessages | Should -Not -BeNullOrEmpty
+                $infoMessages.MessageData -join ' ' | Should -Match 'UTF-8'
+                
+                # ファイルが UTF-8 で読めることを確認
+                $result = Get-Content $asciiFile -Encoding UTF8
+                $result[-1] | Should -Be "日本語のテスト"
+                
+                # UTF-8 として正しく保存されていることを確認
+                $content = [System.IO.File]::ReadAllText($asciiFile, [System.Text.Encoding]::UTF8)
+                $content | Should -Match "日本語のテスト"
+            }
+            finally {
+                if (Test-Path $asciiFile) {
+                    Remove-Item $asciiFile -Force
+                }
+            }
+        }
     }
 
     Context "エラーハンドリング" {
