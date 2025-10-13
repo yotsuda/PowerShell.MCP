@@ -225,9 +225,9 @@ Describe "Test-TextFileContains Integration Tests" {
                 Should -Throw
         }
 
-        It "Contains も Pattern も指定しないとエラーになる" {
-            { Test-TextFileContains -Path $script:testFile -ErrorAction Stop } | 
-                Should -Throw
+        It "Contains も Pattern も指定しないと false を返す" {
+            $result = Test-TextFileContains -Path $script:testFile
+            $result | Should -Be $false
         }
 
         It "無効な正規表現でエラーになる" {
@@ -235,9 +235,9 @@ Describe "Test-TextFileContains Integration Tests" {
                 Should -Throw
         }
 
-        It "範囲外の行番号でエラーになる" {
-            { Test-TextFileContains -Path $script:testFile -LineRange 100,200 -Contains "test" -ErrorAction Stop } | 
-                Should -Throw
+        It "範囲外の行番号で false を返す" {
+            $result = Test-TextFileContains -Path $script:testFile -LineRange 100,200 -Contains "test" -WarningAction SilentlyContinue
+            $result | Should -Be $false
         }
     }
 

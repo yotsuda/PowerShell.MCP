@@ -1,4 +1,4 @@
-# Test-AddLinesToFileCmdlet.ps1
+﻿# Test-AddLinesToFileCmdlet.ps1
 # Add-LinesToFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -18,11 +18,12 @@ Describe "Add-LinesToFile Integration Tests" {
     AfterEach {
         # 各テスト後にクリーンアップ
         if (Test-Path $script:testFile) {
-            Remove-Item $script:testFile -Force
+            Remove-Item $script:testFile -Force -ErrorAction SilentlyContinue
         }
-        # バックアップファイルもクリーンアップ
-        Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*" | 
-            Where-Object { $_.FullName -ne $script:testFile } | Remove-Item -Force
+        # バックアップファイルもクリーンアップ（配列に変換してから削除）
+        $backupFiles = @(Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*" -ErrorAction SilentlyContinue | 
+            Where-Object { $_.FullName -ne $script:testFile })
+        $backupFiles | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
     }
 
     Context "ファイル末尾への追加" {
@@ -130,17 +131,16 @@ Describe "Add-LinesToFile Integration Tests" {
                 Should -Throw
         }
         It "H14. LineNumber > ファイル行数 で警告を出すが処理は続行" {
-            $warnings = @()
-            Add-LinesToFile -Path $script:testFile -LineNumber 1000 -Content "Test" -WarningVariable warnings -WarningAction SilentlyContinue
+            Add-LinesToFile -Path $script:testFile -LineNumber 1000 -Content "Test" -WarningAction SilentlyContinue
             # 警告が出るが、ファイルは変更される
             $result = Get-Content $script:testFile
             $result | Should -Not -BeNullOrEmpty
+        }
+
         It "H15. Content が空配列の場合はバインディングエラーになる" {
             # 実装は空配列を拒否する
             { Add-LinesToFile -Path $script:testFile -Content @() -ErrorAction Stop } | 
                 Should -Throw
-        }
-            Compare-Object $originalContent $newContent | Should -BeNullOrEmpty
         }
 
         It "H16. Content が null または空文字列で処理できる" {

@@ -228,7 +228,7 @@ internal static class FileMetadataHelper
         {
             try
             {
-                var encoding = Encoding.GetEncoding(encodingName);
+                var encoding = EncodingHelper.GetEncoding(filePath, encodingName);
                 
                 // Still need to detect newline, but can be more efficient
                 var (headerBytes, headerLength, tailBytes, tailLength) = ReadFilePartially(filePath, fileInfo.Length);
