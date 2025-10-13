@@ -98,11 +98,11 @@ internal static class EncodingHelper
                 {
                     // UTF encodings
                     "utf-8" or "utf8" => new UTF8Encoding(false),
-                    "utf-8-bom" or "utf8-bom" or "utf8bom" => new UTF8Encoding(true),
-                    "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" => Encoding.Unicode,
-                    "utf-16be" or "utf16be" => Encoding.BigEndianUnicode,
-                    "utf-32" or "utf32" or "utf-32le" or "utf32le" => Encoding.UTF32,
-                    "utf-32be" or "utf32be" => new UTF32Encoding(true, true),
+                    "utf-8-bom" or "utf8-bom" or "utf8bom" or "utf8-sig" or "utf-8-sig" => new UTF8Encoding(true),
+                    "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" or "utf16bom" or "utf-16bom" or "utf16lebom" or "utf-16lebom" => Encoding.Unicode,
+                    "utf-16be" or "utf16be" or "utf16bebom" or "utf-16bebom" => Encoding.BigEndianUnicode,
+                    "utf-32" or "utf32" or "utf-32le" or "utf32le" or "utf32bom" or "utf-32bom" or "utf32lebom" or "utf-32lebom" => Encoding.UTF32,
+                    "utf-32be" or "utf32be" or "utf32bebom" or "utf-32bebom" => new UTF32Encoding(true, true),
                     
                     // Japanese encodings
                     "shift_jis" or "shift-jis" or "shiftjis" or "sjis" => Encoding.GetEncoding("shift_jis"),
