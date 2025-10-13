@@ -31,37 +31,12 @@ public static class TextFileUtility
     {
         return EncodingHelper.DetectEncoding(filePath);
     }
+    /// <summary>
+    /// エンコーディングを取得（明示的指定または自動検出）
     /// </summary>
     public static Encoding GetEncoding(string filePath, string? encodingName)
     {
-        if (!string.IsNullOrEmpty(encodingName))
-        {
-            try
-            {
-                // 特別なエイリアスの処理
-                return encodingName.ToLowerInvariant() switch
-                {
-                    "utf-8" or "utf8" => new UTF8Encoding(false),
-                    "utf-8-bom" or "utf8-bom" or "utf8bom" => new UTF8Encoding(true),
-                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" => Encoding.GetEncoding("shift_jis"),
-                    "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
-                    "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
-                    "ascii" => Encoding.ASCII,
-                    "unicode" or "utf-16" or "utf16" or "utf-16le" or "utf16le" => Encoding.Unicode,
-                    "utf-16be" or "utf16be" => Encoding.BigEndianUnicode,
-                    "utf-32" or "utf32" or "utf-32le" or "utf32le" => Encoding.UTF32,
-                    "utf-32be" or "utf32be" => new UTF32Encoding(true, true),
-                    _ => Encoding.GetEncoding(encodingName)
-                };
-            }
-            catch
-            {
-                // エンコーディング名が無効な場合は自動検出にフォールバック
-                return DetectEncoding(filePath);
-            }
-        }
-
-        return DetectEncoding(filePath);
+        return EncodingHelper.GetEncoding(filePath, encodingName);
     }
 
     /// <summary>
