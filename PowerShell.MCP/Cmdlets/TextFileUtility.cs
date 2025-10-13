@@ -87,10 +87,7 @@ public static class TextFileUtility
     /// <returns>作成したバックアップファイルのパス</returns>
     public static string CreateBackup(string filePath)
     {
-        var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
-        var backupPath = $"{filePath}.{timestamp}.bak";
-        File.Copy(filePath, backupPath);
-        return backupPath;
+        return FileOperationHelper.CreateBackup(filePath);
     }
 
     /// <summary>
@@ -191,23 +188,7 @@ public static class TextFileUtility
     /// </summary>
     public static void ReplaceFileAtomic(string targetPath, string tempFile)
     {
-        // 新規ファイルの場合は単純に移動
-        if (!File.Exists(targetPath))
-        {
-            File.Move(tempFile, targetPath);
-            return;
-        }
-
-        // 既存ファイルの場合はアトミック置換
-        var backupTemp = targetPath + ".tmp";
-        if (File.Exists(backupTemp))
-        {
-            File.Delete(backupTemp);
-        }
-
-        File.Move(targetPath, backupTemp);
-        File.Move(tempFile, targetPath);
-        File.Delete(backupTemp);
+        FileOperationHelper.ReplaceFileAtomic(targetPath, tempFile);
     }
 
     /// <summary>
@@ -231,6 +212,8 @@ public static class TextFileUtility
     
     /// <summary>
     /// ファイル全体を新しい内容で置換
+    /// <summary>
+    /// ファイル全体を新しい内容で置換
     /// LLM向け：シンプルで予測可能な動作
     /// </summary>
     public static (int LinesRemoved, int LinesInserted) ReplaceEntireFile(
@@ -239,37 +222,7 @@ public static class TextFileUtility
         FileMetadata metadata,
         string[] contentLines)
     {
-        int originalLineCount = 0;
-        
-        // 元のファイルの行数をカウント（情報提供用）
-        if (File.Exists(inputPath))
-        {
-            using (var reader = new StreamReader(inputPath, metadata.Encoding))
-            {
-                while (reader.ReadLine() != null)
-                {
-                    originalLineCount++;
-                }
-            }
-        }
-
-        // ファイル全体を置換
-        using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
-        {
-            if (contentLines.Length > 0)
-            {
-                for (int i = 0; i < contentLines.Length; i++)
-                {
-                    writer.Write(contentLines[i]);
-                    if (i < contentLines.Length - 1 || metadata.HasTrailingNewline)
-                    {
-                        writer.Write(metadata.NewlineSequence);
-                    }
-                }
-            }
-        }
-        
-        return (originalLineCount, contentLines.Length);
+        return FileOperationHelper.ReplaceEntireFile(inputPath, outputPath, metadata, contentLines);
     }
 
     /// <summary>
