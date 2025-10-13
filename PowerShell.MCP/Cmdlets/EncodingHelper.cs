@@ -1,38 +1,55 @@
-using System.Text;
+﻿using System.Text;
 
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// Encoding detection and management helper for text file operations
+/// ULTRA-OPTIMIZED: Only reads first 64KB for detection
 /// </summary>
 internal static class EncodingHelper
 {
+    private const int DetectionBufferSize = 65536; // 64KB
+    
     /// <summary>
     /// Detect encoding from file (BOM detection + heuristic)
+    /// ULTRA-OPTIMIZED: Only reads first 64KB instead of entire file
     /// </summary>
     public static Encoding DetectEncoding(string filePath)
     {
-        var bytes = File.ReadAllBytes(filePath);
+        var fileInfo = new FileInfo(filePath);
         
         // Empty file defaults to UTF-8
-        if (bytes.Length == 0)
+        if (fileInfo.Length == 0)
             return new UTF8Encoding(false);
         
-        // BOM detection
-        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-            return new UTF8Encoding(true);
-        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-            return Encoding.Unicode;
-        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-            return Encoding.BigEndianUnicode;
-        if (bytes.Length >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFE && bytes[2] == 0x00 && bytes[3] == 0x00)
-            return Encoding.UTF32;
+        // Read only first 64KB for detection
+        int bufferSize = (int)Math.Min(DetectionBufferSize, fileInfo.Length);
+        byte[] bytes = new byte[bufferSize];
+        int bytesRead;
         
-        // Use Ude library for detection if available
+        using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
+        {
+            bytesRead = stream.Read(bytes, 0, bufferSize);
+        }
+        
+        // BOM detection (only need first 4 bytes)
+        if (bytesRead >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+            return new UTF8Encoding(true);
+        if (bytesRead >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+        {
+            // Check for UTF-32 LE
+            if (bytesRead >= 4 && bytes[2] == 0x00 && bytes[3] == 0x00)
+                return Encoding.UTF32;
+            return Encoding.Unicode;
+        }
+        if (bytesRead >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+            return Encoding.BigEndianUnicode;
+        
+        // Use Ude library for detection (it's already designed for partial content)
         try
         {
             var detector = new Ude.CharsetDetector();
-            detector.Feed(bytes, 0, Math.Min(bytes.Length, 65536));
+            detector.Feed(bytes, 0, bytesRead);
             detector.DataEnd();
             
             if (detector.Charset != null)
@@ -53,11 +70,11 @@ internal static class EncodingHelper
         }
         
         // Fallback: Check if valid UTF-8
+        // OPTIMIZATION: Use only the bytes we read (64KB max) instead of entire file
         try
         {
             var utf8 = new UTF8Encoding(false, true);
-            using var reader = new StreamReader(filePath, utf8, false);
-            reader.ReadToEnd();
+            utf8.GetString(bytes, 0, bytesRead);  // Throws if not valid UTF-8
             return new UTF8Encoding(false);
         }
         catch
