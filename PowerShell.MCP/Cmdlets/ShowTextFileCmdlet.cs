@@ -48,8 +48,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         // LineRangeバリデーション
         ValidateLineRange(LineRange);
 
-        // 全ファイルを先に収集（ヘッダー表示の判断のため）
-        var files = ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true).ToList();
+        // ResolveAndValidateFiles は IEnumerable を返すので、遅延評価のまま処理
+        var files = ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true);
 
         foreach (var fileInfo in files)
         {
