@@ -50,25 +50,20 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
         // 全ファイルを先に収集（ヘッダー表示の判断のため）
         var files = ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true).ToList();
-        bool showHeaders = files.Count > 1;
 
         foreach (var fileInfo in files)
         {
             try
             {
                 // ファイル間の空行（最初のファイル以外）
-                if (showHeaders && _totalFilesProcessed > 0)
+                if (_totalFilesProcessed > 0)
                 {
                     WriteObject("");
                 }
                 
-                // ヘッダー表示（複数ファイルの場合のみ）
-                if (showHeaders)
-                {
-                    // 表示用パスを決定（PS Drive パスを保持）
-                    var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                    WriteObject($"==> {displayPath} <==");
-                }
+                // 表示用パスを決定（PS Drive パスを保持）
+                var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
+                WriteObject($"==> {displayPath} <==");
                 
                 _totalFilesProcessed++;
 
