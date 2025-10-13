@@ -13,6 +13,13 @@ Malicious use could result in severe damage. Use responsibly and only in trusted
 
 PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to execute any cmdlets/CLI tools within a PowerShell console. Users can also execute cmdlets/CLI tools in the same console, allowing AI and users to work collaboratively. It operates at high speed without needing to launch a new console each time, while preserving the state of imported modules, functions and variables.
 
+Despite its powerful capabilities, PowerShell.MCP is built with just three carefully designed tools:
+- **start_powershell_console:** launching a persistent console
+- **get_current_location:** retrieving the current working directory
+- **invoke_expression:** executing any cmdlets/CLI tools (chainable with pipes) in the PS console
+
+This minimalist architecture provides maximum flexibility while maintaining simplicity.
+
 ### What Makes It Powerful
 
 **🤝 Shared Console Experience**
