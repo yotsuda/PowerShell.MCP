@@ -6,7 +6,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// Encoding detection and management helper for text file operations
 /// ULTRA-OPTIMIZED: Only reads first 64KB for detection
 /// </summary>
-internal static class EncodingHelper
+public static class EncodingHelper
 {
     private const int DetectionBufferSize = 65536; // 64KB
     
