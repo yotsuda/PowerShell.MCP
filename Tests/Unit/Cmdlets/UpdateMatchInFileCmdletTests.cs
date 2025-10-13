@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Text;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
@@ -48,8 +46,10 @@ public class UpdateMatchInFileCmdletTests : IDisposable
     [Fact]
     public void Replacement_SetValue_StoresCorrectly()
     {
-        var cmdlet = new UpdateMatchInFileCmdlet();
-        cmdlet.Replacement = "replaced";
+        var cmdlet = new UpdateMatchInFileCmdlet
+        {
+            Replacement = "replaced"
+        };
         Assert.Equal("replaced", cmdlet.Replacement);
     }
 

@@ -16,16 +16,16 @@
 - ✅ TextFileUtility.cs (既存)
 - ✅ TextFileCmdletBase.cs (既存)
 - ✅ ValidationAttributes.cs (既存)
-- ⚠️ PowerShellProcessManager.cs (未実装)
-- ⚠️ PowerShellService.cs (未実装)
-- ⚠️ JsonRpcModels.cs (未実装)
+- ⚠ PowerShellProcessManager.cs (未実装)
+- ⚠ PowerShellService.cs (未実装)
+- ⚠ JsonRpcModels.cs (未実装)
 
 ### 2. 統合テスト (Tests/Integration/)
 **目的**: Cmdletの実際の動作確認
 **対象**:
 - ✅ Test-AllCmdlets.ps1 (既存)
 - ✅ Test-AdvancedCmdlets.ps1 (既存)
-- ⚠️ より包括的なシナリオテスト (追加予定)
+- ⚠ より包括的なシナリオテスト (追加予定)
 
 ### 3. エンドツーエンドテスト
 **目的**: MCP プロトコル経由での完全な動作確認
@@ -101,7 +101,7 @@ cd C:\MyProj\PowerShell.MCP\Tests
 
 ## 注意事項
 
-⚠️ **重要**: PowerShell.MCP プロジェクトのビルドは、現在使用中のPowerShellセッションに影響を与える可能性があるため、必ず**新しい独立したセッション**で実行すること。
+⚠ **重要**: PowerShell.MCP プロジェクトのデプロイは AI が行うことはできない。その必要があるときはユーザーに依頼すること。
 
 ## 次のステップ
 
