@@ -1,4 +1,4 @@
-# Test-TextFileContains.Tests.ps1
+﻿# Test-TextFileContains.Tests.ps1
 # Test-TextFileContains コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -39,9 +39,9 @@ Describe "Test-TextFileContains Integration Tests" {
             $result | Should -Be $false
         }
 
-        It "大文字小文字を区別しない" {
+        It "大文字小文字を区別する（case-sensitive）" {
             $result = Test-TextFileContains -Path $script:testFile -Contains "LOCALHOST"
-            $result | Should -Be $true
+            $result | Should -Be $false  # "localhost"とは異なるため
         }
 
         It "部分一致で検索される" {

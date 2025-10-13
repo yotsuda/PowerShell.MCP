@@ -1,4 +1,4 @@
-# Remove-LinesFromFile.Tests.ps1
+﻿# Remove-LinesFromFile.Tests.ps1
 # Remove-LinesFromFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -12,13 +12,14 @@ Describe "Remove-LinesFromFile Integration Tests" {
             "Line 1: First line"
             "Line 2: Second line"
             "Line 3: Third line"
-            "ERROR: This is an error"
+            "ERROR: Connection timeout"
+            "error: invalid input"
             "Line 4: Fourth line"
             "WARNING: This is a warning"
             "Line 5: Fifth line"
             "# Footer"
         )
-        Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
+Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
     }
 
     AfterEach {
@@ -67,20 +68,21 @@ Describe "Remove-LinesFromFile Integration Tests" {
         It "指定したテキストを含む行を削除できる" {
             Remove-LinesFromFile -Path $script:testFile -Contains "ERROR"
             $result = Get-Content $script:testFile
-            $result -notcontains "ERROR: This is an error" | Should -Be $true
+            $result -notcontains "ERROR: Connection timeout" | Should -Be $true
             $result.Count | Should -Be 8
         }
 
         It "複数の行がマッチする場合、すべて削除される" {
             Remove-LinesFromFile -Path $script:testFile -Contains "Line"
             $result = Get-Content $script:testFile
-            $result.Count | Should -Be 4  # Header, ERROR, WARNING, Footer のみ残る
+            $result.Count | Should -Be 5  # Header, ERROR, error, WARNING, Footer のみ残る
         }
 
-        It "大文字小文字を区別しない" {
+        It "大文字小文字を区別する（case-sensitive）" {
             Remove-LinesFromFile -Path $script:testFile -Contains "error"
             $result = Get-Content $script:testFile
-            $result -notcontains "ERROR: This is an error" | Should -Be $true
+            $result -contains "ERROR: Connection timeout" | Should -Be $true  # 大文字ERRORは残る
+            $result -notcontains "error: invalid input" | Should -Be $true    # 小文字errorは削除される
         }
 
         It "マッチする行がない場合、何も変更されない" {
@@ -95,14 +97,14 @@ Describe "Remove-LinesFromFile Integration Tests" {
         It "正規表現にマッチする行を削除できる" {
             Remove-LinesFromFile -Path $script:testFile -Pattern "^ERROR:"
             $result = Get-Content $script:testFile
-            $result -notcontains "ERROR: This is an error" | Should -Be $true
+            $result -notcontains "ERROR: Connection timeout" | Should -Be $true
             $result.Count | Should -Be 8
         }
 
         It "複雑な正規表現パターンを使用できる" {
             Remove-LinesFromFile -Path $script:testFile -Pattern "^(ERROR|WARNING):"
             $result = Get-Content $script:testFile
-            $result -notcontains "ERROR: This is an error" | Should -Be $true
+            $result -notcontains "ERROR: Connection timeout" | Should -Be $true
             $result -notcontains "WARNING: This is a warning" | Should -Be $true
             $result.Count | Should -Be 7
         }
@@ -119,7 +121,7 @@ Describe "Remove-LinesFromFile Integration Tests" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 2,6 -Contains "ERROR"
             $result = Get-Content $script:testFile
             # 2-6行目の範囲内でERRORを含む5行目だけが削除される
-            $result -notcontains "ERROR: This is an error" | Should -Be $true
+            $result -notcontains "ERROR: Connection timeout" | Should -Be $true
             $result -contains "WARNING: This is a warning" | Should -Be $true  # 範囲外なので残る
         }
 
@@ -207,7 +209,7 @@ Describe "Remove-LinesFromFile Integration Tests" {
                 @($script:testFile, $file2) | Remove-LinesFromFile -Contains "ERROR"
                 $result1 = Get-Content $script:testFile
                 $result2 = Get-Content $file2
-                $result1 -notcontains "ERROR: This is an error" | Should -Be $true
+                $result1 -notcontains "ERROR: Connection timeout" | Should -Be $true
                 $result2 -notcontains "ERROR: Error in file2" | Should -Be $true
             }
             finally {

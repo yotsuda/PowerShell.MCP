@@ -1,4 +1,4 @@
-# Update-MatchInFile.Tests.ps1
+﻿# Update-MatchInFile.Tests.ps1
 # Update-MatchInFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -49,10 +49,10 @@ Describe "Update-MatchInFile Integration Tests" {
             $result | Should -Be $originalContent
         }
 
-        It "大文字小文字を区別しない" {
+        It "大文字小文字を区別する（case-sensitive）" {
             Update-MatchInFile -Path $script:testFile -Contains "LOCALHOST" -Replacement "server.local"
             $result = Get-Content $script:testFile
-            $result[0] | Should -Be "Server: server.local"
+            $result[0] | Should -Be "Server: localhost"  # 大文字とマッチしないため変更されない
         }
     }
 
