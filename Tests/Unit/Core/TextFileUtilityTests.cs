@@ -385,4 +385,415 @@ public class TextFileUtilityTests
             File.Delete(tempFile);
         }
     }
+
+    // ======================================================================
+    // ProcessFileStreaming Tests
+    // ======================================================================
+
+    [Fact]
+    public void ProcessFileStreaming_WithNormalFile_ProcessesAllLines()
+    {
+        // Arrange
+        var inputFile = Path.GetTempFileName();
+        var outputFile = Path.GetTempFileName();
+        var lines = new[] { "Line 1", "Line 2", "Line 3" };
+        File.WriteAllLines(inputFile, lines, new UTF8Encoding(false));
+        
+        var metadata = TextFileUtility.DetectFileMetadata(inputFile);
+        var processedLines = new List<string>();
+        
+        try
+        {
+            // Act
+            TextFileUtility.ProcessFileStreaming(
+                inputFile, 
+                outputFile, 
+                metadata,
+                (line, lineNum) => {
+                    processedLines.Add(line);
+                    return line.ToUpper();
+                });
+            
+            // Assert
+            Assert.Equal(3, processedLines.Count);
+            var result = File.ReadAllLines(outputFile);
+            Assert.Equal(3, result.Length);
+            Assert.Equal("LINE 1", result[0]);
+            Assert.Equal("LINE 2", result[1]);
+            Assert.Equal("LINE 3", result[2]);
+        }
+        finally
+        {
+            File.Delete(inputFile);
+            File.Delete(outputFile);
+        }
+    }
+
+    [Fact]
+    public void ProcessFileStreaming_WithEmptyFile_HandlesGracefully()
+    {
+        // Arrange
+        var inputFile = Path.GetTempFileName();
+        var outputFile = Path.GetTempFileName();
+        File.WriteAllText(inputFile, string.Empty);
+        
+        var metadata = TextFileUtility.DetectFileMetadata(inputFile);
+        
+        try
+        {
+            // Act
+            TextFileUtility.ProcessFileStreaming(
+                inputFile, 
+                outputFile, 
+                metadata,
+                (line, lineNum) => line.ToUpper());
+            
+            // Assert
+            var result = File.ReadAllText(outputFile);
+            Assert.Empty(result);
+        }
+        finally
+        {
+            File.Delete(inputFile);
+            File.Delete(outputFile);
+        }
+    }
+
+    [Fact]
+    public void ProcessFileStreaming_PreservesTrailingNewline()
+    {
+        // Arrange
+        var inputFile = Path.GetTempFileName();
+        var outputFile = Path.GetTempFileName();
+        File.WriteAllText(inputFile, "Line 1\nLine 2\n", new UTF8Encoding(false));
+        
+        var metadata = TextFileUtility.DetectFileMetadata(inputFile);
+        
+        try
+        {
+            // Act
+            TextFileUtility.ProcessFileStreaming(
+                inputFile, 
+                outputFile, 
+                metadata,
+                (line, lineNum) => line);
+            
+            // Assert
+            var result = File.ReadAllText(outputFile);
+            Assert.EndsWith("\n", result);
+        }
+        finally
+        {
+            File.Delete(inputFile);
+            File.Delete(outputFile);
+        }
+    }
+
+    [Fact]
+    public void ProcessFileStreaming_WithoutTrailingNewline_DoesNotAddOne()
+    {
+        // Arrange
+        var inputFile = Path.GetTempFileName();
+        var outputFile = Path.GetTempFileName();
+        File.WriteAllText(inputFile, "Line 1\nLine 2", new UTF8Encoding(false));
+        
+        var metadata = TextFileUtility.DetectFileMetadata(inputFile);
+        
+        try
+        {
+            // Act
+            TextFileUtility.ProcessFileStreaming(
+                inputFile, 
+                outputFile, 
+                metadata,
+                (line, lineNum) => line);
+            
+            // Assert
+            var result = File.ReadAllText(outputFile);
+            Assert.DoesNotMatch(@"\n$", result);
+        }
+        finally
+        {
+            File.Delete(inputFile);
+            File.Delete(outputFile);
+        }
+    }
+
+    [Fact]
+    public void ProcessFileStreaming_PreservesEncoding()
+    {
+        // Arrange
+        var inputFile = Path.GetTempFileName();
+        var outputFile = Path.GetTempFileName();
+        var content = "日本語テスト";
+        File.WriteAllText(inputFile, content, new UTF8Encoding(false));
+        
+        var metadata = TextFileUtility.DetectFileMetadata(inputFile);
+        
+        try
+        {
+            // Act
+            TextFileUtility.ProcessFileStreaming(
+                inputFile, 
+                outputFile, 
+                metadata,
+                (line, lineNum) => line);
+            
+            // Assert
+            var result = File.ReadAllText(outputFile, new UTF8Encoding(false));
+            Assert.Equal(content, result);
+        }
+        finally
+        {
+            File.Delete(inputFile);
+            File.Delete(outputFile);
+        }
+    }
+
+    [Fact]
+    public void ProcessFileStreaming_PreservesWindowsLineEndings()
+    {
+        // Arrange
+        var inputFile = Path.GetTempFileName();
+        var outputFile = Path.GetTempFileName();
+        File.WriteAllText(inputFile, "Line 1\r\nLine 2\r\nLine 3\r\n", new UTF8Encoding(false));
+        
+        var metadata = TextFileUtility.DetectFileMetadata(inputFile);
+        
+        try
+        {
+            // Act
+            TextFileUtility.ProcessFileStreaming(
+                inputFile, 
+                outputFile, 
+                metadata,
+                (line, lineNum) => line);
+            
+            // Assert
+            var result = File.ReadAllText(outputFile);
+            Assert.Contains("\r\n", result);
+            Assert.DoesNotContain("\n\n", result); // Should not have double newlines
+        }
+        finally
+        {
+            File.Delete(inputFile);
+            File.Delete(outputFile);
+        }
+    }
+
+    // ======================================================================
+    // ReplaceFileAtomic Tests
+    // ======================================================================
+
+    [Fact]
+    public void ReplaceFileAtomic_WithNewFile_CreatesFile()
+    {
+        // Arrange
+        var targetFile = Path.Combine(Path.GetTempPath(), "test_new_" + Guid.NewGuid() + ".txt");
+        var tempFile = Path.GetTempFileName();
+        File.WriteAllText(tempFile, "new content");
+        
+        try
+        {
+            // Act
+            TextFileUtility.ReplaceFileAtomic(targetFile, tempFile);
+            
+            // Assert
+            Assert.True(File.Exists(targetFile));
+            Assert.Equal("new content", File.ReadAllText(targetFile));
+            Assert.False(File.Exists(tempFile)); // Temp file should be moved
+        }
+        finally
+        {
+            if (File.Exists(targetFile))
+                File.Delete(targetFile);
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void ReplaceFileAtomic_WithExistingFile_ReplacesAtomically()
+    {
+        // Arrange
+        var targetFile = Path.GetTempFileName();
+        var tempFile = Path.GetTempFileName();
+        File.WriteAllText(targetFile, "original content");
+        File.WriteAllText(tempFile, "new content");
+        
+        try
+        {
+            // Act
+            TextFileUtility.ReplaceFileAtomic(targetFile, tempFile);
+            
+            // Assert
+            Assert.True(File.Exists(targetFile));
+            Assert.Equal("new content", File.ReadAllText(targetFile));
+            Assert.False(File.Exists(tempFile)); // Temp file should be moved
+        }
+        finally
+        {
+            if (File.Exists(targetFile))
+                File.Delete(targetFile);
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void ReplaceFileAtomic_RemovesTemporaryBackupFile()
+    {
+        // Arrange
+        var targetFile = Path.GetTempFileName();
+        var tempFile = Path.GetTempFileName();
+        File.WriteAllText(targetFile, "original");
+        File.WriteAllText(tempFile, "new");
+        var backupTemp = targetFile + ".tmp";
+        
+        try
+        {
+            // Act
+            TextFileUtility.ReplaceFileAtomic(targetFile, tempFile);
+            
+            // Assert
+            Assert.False(File.Exists(backupTemp)); // Temporary backup should be deleted
+        }
+        finally
+        {
+            if (File.Exists(targetFile))
+                File.Delete(targetFile);
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+            if (File.Exists(backupTemp))
+                File.Delete(backupTemp);
+        }
+    }
+
+    // ======================================================================
+    // TryUpgradeEncodingIfNeeded Tests
+    // ======================================================================
+
+    [Fact]
+    public void TryUpgradeEncodingIfNeeded_WithNonAsciiContent_UpgradesToUtf8()
+    {
+        // Arrange
+        var metadata = new TextFileUtility.FileMetadata
+        {
+            Encoding = Encoding.ASCII,
+            NewlineSequence = "\n",
+            HasTrailingNewline = true
+        };
+        var contentLines = new[] { "Hello", "日本語", "World" };
+        
+        // Act
+        var upgraded = TextFileUtility.TryUpgradeEncodingIfNeeded(
+            metadata, 
+            contentLines, 
+            encodingExplicitlySpecified: false,
+            out var message);
+        
+        // Assert
+        Assert.True(upgraded);
+        Assert.NotNull(message);
+        Assert.Contains("UTF-8", message);
+        Assert.IsType<UTF8Encoding>(metadata.Encoding);
+    }
+
+    [Fact]
+    public void TryUpgradeEncodingIfNeeded_WithAsciiContent_DoesNotUpgrade()
+    {
+        // Arrange
+        var metadata = new TextFileUtility.FileMetadata
+        {
+            Encoding = Encoding.ASCII,
+            NewlineSequence = "\n",
+            HasTrailingNewline = true
+        };
+        var contentLines = new[] { "Hello", "World", "ASCII only" };
+        
+        // Act
+        var upgraded = TextFileUtility.TryUpgradeEncodingIfNeeded(
+            metadata, 
+            contentLines, 
+            encodingExplicitlySpecified: false,
+            out var message);
+        
+        // Assert
+        Assert.False(upgraded);
+        Assert.Null(message);
+        Assert.Equal(Encoding.ASCII, metadata.Encoding);
+    }
+
+    [Fact]
+    public void TryUpgradeEncodingIfNeeded_WithExplicitEncoding_DoesNotUpgrade()
+    {
+        // Arrange
+        var metadata = new TextFileUtility.FileMetadata
+        {
+            Encoding = Encoding.ASCII,
+            NewlineSequence = "\n",
+            HasTrailingNewline = true
+        };
+        var contentLines = new[] { "Hello", "日本語", "World" };
+        
+        // Act
+        var upgraded = TextFileUtility.TryUpgradeEncodingIfNeeded(
+            metadata, 
+            contentLines, 
+            encodingExplicitlySpecified: true, // Explicitly specified
+            out var message);
+        
+        // Assert
+        Assert.False(upgraded);
+        Assert.Null(message);
+        Assert.Equal(Encoding.ASCII, metadata.Encoding);
+    }
+
+    [Fact]
+    public void TryUpgradeEncodingIfNeeded_WithUtf8Encoding_DoesNotUpgrade()
+    {
+        // Arrange
+        var metadata = new TextFileUtility.FileMetadata
+        {
+            Encoding = new UTF8Encoding(false),
+            NewlineSequence = "\n",
+            HasTrailingNewline = true
+        };
+        var contentLines = new[] { "Hello", "日本語", "World" };
+        
+        // Act
+        var upgraded = TextFileUtility.TryUpgradeEncodingIfNeeded(
+            metadata, 
+            contentLines, 
+            encodingExplicitlySpecified: false,
+            out var message);
+        
+        // Assert
+        Assert.False(upgraded);
+        Assert.Null(message);
+    }
+
+    [Fact]
+    public void TryUpgradeEncodingIfNeeded_WithEmptyContent_DoesNotUpgrade()
+    {
+        // Arrange
+        var metadata = new TextFileUtility.FileMetadata
+        {
+            Encoding = Encoding.ASCII,
+            NewlineSequence = "\n",
+            HasTrailingNewline = false
+        };
+        var contentLines = Array.Empty<string>();
+        
+        // Act
+        var upgraded = TextFileUtility.TryUpgradeEncodingIfNeeded(
+            metadata, 
+            contentLines, 
+            encodingExplicitlySpecified: false,
+            out var message);
+        
+        // Assert
+        Assert.False(upgraded);
+        Assert.Null(message);
+    }
 }
