@@ -148,7 +148,7 @@ Describe "Update-LinesInFile Integration Tests" {
             Set-Content -Path $file2 -Value @("File2 Line1", "File2 Line2")
             
             try {
-                @($script:testFile, $file2) | Update-LinesInFile -LineRange 1 -Content "Updated"
+                Get-Item @($script:testFile, $file2) | Update-LinesInFile -LineRange 1 -Content "Updated"
                 (Get-Content $script:testFile)[0] | Should -Be "Updated"
                 (Get-Content $file2)[0] | Should -Be "Updated"
             }

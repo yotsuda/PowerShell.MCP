@@ -1,4 +1,4 @@
-﻿# Update-MatchInFile.Tests.ps1
+# Update-MatchInFile.Tests.ps1
 # Update-MatchInFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -224,7 +224,7 @@ Describe "Update-MatchInFile Integration Tests" {
             Set-Content -Path $file2 -Value "Server: localhost"
             
             try {
-                @($script:testFile, $file2) | Update-MatchInFile -Contains "localhost" -Replacement "production"
+                Get-Item @($script:testFile, $file2) | Update-MatchInFile -Contains "localhost" -Replacement "production"
                 $result1 = Get-Content $script:testFile
                 $result2 = Get-Content $file2
                 $result1[0] | Should -Be "Server: production"

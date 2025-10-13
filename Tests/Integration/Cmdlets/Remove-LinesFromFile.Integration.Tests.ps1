@@ -1,4 +1,4 @@
-﻿# Remove-LinesFromFile.Tests.ps1
+# Remove-LinesFromFile.Tests.ps1
 # Remove-LinesFromFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -206,7 +206,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             Set-Content -Path $file2 -Value @("ERROR: Error in file2", "Normal line")
             
             try {
-                @($script:testFile, $file2) | Remove-LinesFromFile -Contains "ERROR"
+                Get-Item @($script:testFile, $file2) | Remove-LinesFromFile -Contains "ERROR"
                 $result1 = Get-Content $script:testFile
                 $result2 = Get-Content $file2
                 $result1 -notcontains "ERROR: Connection timeout" | Should -Be $true
