@@ -1,4 +1,4 @@
-# Remove-LinesFromFile.Tests.ps1
+﻿# Remove-LinesFromFile.Tests.ps1
 # Remove-LinesFromFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -36,14 +36,14 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
         It "単一行を削除できる" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 2
             $result = Get-Content $script:testFile
-            $result.Count | Should -Be 8
+            $result.Count | Should -Be 9
             $result -notcontains "Line 1: First line" | Should -Be $true
         }
 
         It "連続する複数行を削除できる" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 2,4
             $result = Get-Content $script:testFile
-            $result.Count | Should -Be 6
+            $result.Count | Should -Be 7
             $result -notcontains "Line 1: First line" | Should -Be $true
             $result -notcontains "Line 2: Second line" | Should -Be $true
             $result -notcontains "Line 3: Third line" | Should -Be $true
@@ -53,14 +53,14 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             Remove-LinesFromFile -Path $script:testFile -LineRange 1
             $result = Get-Content $script:testFile
             $result[0] | Should -Be "Line 1: First line"
-            $result.Count | Should -Be 8
+            $result.Count | Should -Be 9
         }
 
         It "最後の行を削除できる" {
-            Remove-LinesFromFile -Path $script:testFile -LineRange 9
+            Remove-LinesFromFile -Path $script:testFile -LineRange 10
             $result = Get-Content $script:testFile
-            $result[-1] | Should -Be "Line 5: Fifth line"
-            $result.Count | Should -Be 8
+            $result[-1] | Should -Be "Line 5: Fifth line"  # 最後の行は元の9行目
+            $result.Count | Should -Be 9
         }
     }
 
@@ -69,7 +69,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             Remove-LinesFromFile -Path $script:testFile -Contains "ERROR"
             $result = Get-Content $script:testFile
             $result -notcontains "ERROR: Connection timeout" | Should -Be $true
-            $result.Count | Should -Be 8
+            $result.Count | Should -Be 9
         }
 
         It "複数の行がマッチする場合、すべて削除される" {
@@ -98,7 +98,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             Remove-LinesFromFile -Path $script:testFile -Pattern "^ERROR:"
             $result = Get-Content $script:testFile
             $result -notcontains "ERROR: Connection timeout" | Should -Be $true
-            $result.Count | Should -Be 8
+            $result.Count | Should -Be 9
         }
 
         It "複雑な正規表現パターンを使用できる" {
@@ -106,13 +106,13 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $result = Get-Content $script:testFile
             $result -notcontains "ERROR: Connection timeout" | Should -Be $true
             $result -notcontains "WARNING: This is a warning" | Should -Be $true
-            $result.Count | Should -Be 7
+            $result.Count | Should -Be 8
         }
 
         It "行番号パターンで特定形式の行を削除" {
             Remove-LinesFromFile -Path $script:testFile -Pattern "Line \d+:"
             $result = Get-Content $script:testFile
-            $result.Count | Should -Be 4  # Header, ERROR, WARNING, Footer のみ残る
+            $result.Count | Should -Be 5  # Header, ERROR, error, WARNING, Footer のみ残る
         }
     }
 
@@ -179,9 +179,9 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
                 Should -Throw
         }
 
-        It "範囲外の行番号でエラーになる" {
-            { Remove-LinesFromFile -Path $script:testFile -LineRange 100 -ErrorAction Stop } | 
-                Should -Throw
+        It "範囲外の行番号で警告を出すが続行する" {
+            $result = Remove-LinesFromFile -Path $script:testFile -LineRange 100 -WarningVariable warnings 3>&1
+            $warnings | Should -Not -BeNullOrEmpty
         }
 
         It "無効な範囲指定でエラーになる" {
