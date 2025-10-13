@@ -1,4 +1,4 @@
-# Update-MatchInFile.Tests.ps1
+﻿# Update-MatchInFile.Tests.ps1
 # Update-MatchInFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -67,7 +67,7 @@ Describe "Update-MatchInFile Integration Tests" {
         }
 
         It "キャプチャグループを使用した置換ができる" {
-            Update-MatchInFile -Path $script:testFile -Pattern "Port: (\d+)" -Replacement "Port: $1$1"
+            Update-MatchInFile -Path $script:testFile -Pattern 'Port: (\d+)' -Replacement 'Port: $1$1'
             $result = Get-Content $script:testFile
             $result[1] | Should -Be "Port: 80808080"
         }
