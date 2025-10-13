@@ -105,15 +105,16 @@ internal static class EncodingHelper
                     "utf-32be" or "utf32be" or "utf32bebom" or "utf-32bebom" => new UTF32Encoding(true, true),
                     
                     // Japanese encodings
-                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" => Encoding.GetEncoding("shift_jis"),
+                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" or "cp932" => Encoding.GetEncoding("shift_jis"),
                     "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
                     "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
                     
                     // Chinese encodings
-                    "big-5" or "big5hkscs" => Encoding.GetEncoding("big5"),
+                    "big-5" or "big5hkscs" or "cp950" => Encoding.GetEncoding("big5"),
+                    "gb2312" or "gbk" or "gb18030" or "cp936" => Encoding.GetEncoding("gb2312"),
                     
                     // Korean encodings
-                    "euckr" => Encoding.GetEncoding("euc-kr"),
+                    "euckr" or "cp949" => Encoding.GetEncoding("euc-kr"),
                     
                     // Windows codepages (numeric)
                     "874" => Encoding.GetEncoding("windows-874"),     // Thai
