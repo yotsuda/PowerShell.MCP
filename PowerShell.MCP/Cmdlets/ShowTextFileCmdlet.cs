@@ -1,5 +1,6 @@
 ﻿using System.Management.Automation;
 using System.Text.RegularExpressions;
+using System.Linq;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -47,7 +48,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         // LineRangeバリデーション
         ValidateLineRange(LineRange);
 
-        foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
+        // ResolveAndValidateFiles は IEnumerable を返すので、遅延評価のまま処理
+        var files = ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true);
+
+        foreach (var fileInfo in files)
         {
             try
             {
@@ -59,8 +63,6 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 
                 // 表示用パスを決定（PS Drive パスを保持）
                 var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                
-                // ヘッダーとして表示
                 WriteObject($"==> {displayPath} <==");
                 
                 _totalFilesProcessed++;

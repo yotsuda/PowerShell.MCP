@@ -128,7 +128,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
     /// <summary>
     /// -Contains と -Pattern の排他チェック
     /// </summary>
-    protected void ValidateContainsAndPatternMutuallyExclusive(string? contains, string? pattern)
+    protected static void ValidateContainsAndPatternMutuallyExclusive(string? contains, string? pattern)
     {
         if (!string.IsNullOrEmpty(contains) && !string.IsNullOrEmpty(pattern))
         {
@@ -160,13 +160,13 @@ public abstract class TextFileCmdletBase : PSCmdlet
         bool allowNewFiles = false,
         bool requireExisting = true)
     {
-        var results = new List<ResolvedFileInfo>();
-        string[] inputPaths = path ?? literalPath ?? Array.Empty<string>();
+        string[] inputPaths = path ?? literalPath ?? [];
         bool isLiteralPath = (literalPath != null);
 
         foreach (var inputPath in inputPaths)
         {
             System.Collections.ObjectModel.Collection<string>? resolvedPaths = null;
+            ResolvedFileInfo? newFileInfo = null;
             bool isNewFile = false;
             bool hasError = false;
             
@@ -176,7 +176,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
                 {
                     // -LiteralPath: ワイルドカード展開なし
                     var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
-                    resolvedPaths = new System.Collections.ObjectModel.Collection<string> { resolved };
+                    resolvedPaths = [resolved];
                 }
                 else
                 {
@@ -192,12 +192,12 @@ public abstract class TextFileCmdletBase : PSCmdlet
                     try
                     {
                         var newPath = GetUnresolvedProviderPathFromPSPath(inputPath);
-                        results.Add(new ResolvedFileInfo
+                        newFileInfo = new ResolvedFileInfo
                         {
                             InputPath = inputPath,
                             ResolvedPath = newPath,
                             IsNewFile = true
-                        });
+                        };
                     }
                     catch (Exception ex)
                     {
@@ -229,6 +229,13 @@ public abstract class TextFileCmdletBase : PSCmdlet
                 hasError = true;
             }
             
+            // catchブロックの外でyield returnを実行
+            if (newFileInfo != null)
+            {
+                yield return newFileInfo.Value;
+                continue;
+            }
+            
             if (hasError || resolvedPaths == null)
             {
                 continue;
@@ -255,15 +262,13 @@ public abstract class TextFileCmdletBase : PSCmdlet
                     }
                 }
                 
-                results.Add(new ResolvedFileInfo
+                yield return new ResolvedFileInfo
                 {
                     InputPath = inputPath,
                     ResolvedPath = resolvedPath,
                     IsNewFile = isNewFile
-                });
+                };
             }
         }
-        
-        return results;
     }
 }

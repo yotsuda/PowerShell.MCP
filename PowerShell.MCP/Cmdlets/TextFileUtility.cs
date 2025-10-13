@@ -21,28 +21,7 @@ public static class TextFileUtility
     /// </summary>
     public static FileMetadata DetectFileMetadata(string filePath)
     {
-        var fileInfo = new FileInfo(filePath);
-        
-        // 空ファイルの場合はデフォルトのメタデータを返す
-        if (fileInfo.Length == 0)
-        {
-            return new FileMetadata
-            {
-                Encoding = new UTF8Encoding(false),
-                NewlineSequence = Environment.NewLine,
-                HasTrailingNewline = false
-            };
-        }
-        
-        var encoding = DetectEncoding(filePath);
-        var (newline, hasTrailing) = DetectNewline(filePath, encoding);
-
-        return new FileMetadata
-        {
-            Encoding = encoding,
-            NewlineSequence = newline,
-            HasTrailingNewline = hasTrailing
-        };
+        return FileMetadataHelper.DetectFileMetadata(filePath);
     }
 
     /// <summary>
@@ -50,98 +29,14 @@ public static class TextFileUtility
     /// </summary>
     public static Encoding DetectEncoding(string filePath)
     {
-        // 1. BOMチェック（高速）
-        var bytes = new byte[4];
-        using (var fs = File.OpenRead(filePath))
-        {
-            int bytesRead = fs.Read(bytes, 0, 4);
-            
-            if (bytesRead >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-                return new UTF8Encoding(true); // UTF-8 with BOM
-            
-            if (bytesRead >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFE && bytes[2] == 0x00 && bytes[3] == 0x00)
-                return Encoding.UTF32; // UTF-32 LE
-            
-            if (bytesRead >= 4 && bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0xFE && bytes[3] == 0xFF)
-                return new UTF32Encoding(true, true); // UTF-32 BE
-            
-            if (bytesRead >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-                return Encoding.Unicode; // UTF-16 LE
-            
-            if (bytesRead >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-                return Encoding.BigEndianUnicode; // UTF-16 BE
-        }
-
-        // 2. BOMなし: Ude でヒューリスティック検出
-        try
-        {
-            var detector = new Ude.CharsetDetector();
-            using (var fs = File.OpenRead(filePath))
-            {
-                detector.Feed(fs);
-                detector.DataEnd();
-            }
-            
-            if (detector.Charset != null && detector.Confidence > 0.7)
-            {
-                // 検出されたエンコーディングを返す
-                try
-                {
-                    // UTF-8の場合は明示的にBOMなしを返す（Encoding.GetEncoding("UTF-8")はBOM付きを返すため）
-                    if (detector.Charset.Equals("UTF-8", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return new UTF8Encoding(false);
-                    }
-                    return Encoding.GetEncoding(detector.Charset);
-                }
-                catch
-                {
-                    // エンコーディング名が無効な場合はフォールバック
-                }
-            }
-        }
-        catch
-        {
-            // Ude での検出失敗時はフォールバック
-        }
-
-        // 3. 検出失敗: UTF-8を仮定
-        return new UTF8Encoding(false);
+        return EncodingHelper.DetectEncoding(filePath);
     }
-
     /// <summary>
     /// エンコーディングを取得（明示的指定または自動検出）
     /// </summary>
     public static Encoding GetEncoding(string filePath, string? encodingName)
     {
-        if (!string.IsNullOrEmpty(encodingName))
-        {
-            try
-            {
-                // 特別なエイリアスの処理
-                return encodingName.ToLowerInvariant() switch
-                {
-                    "utf-8" or "utf8" => new UTF8Encoding(false),
-                    "utf-8-bom" or "utf8-bom" or "utf8bom" => new UTF8Encoding(true),
-                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" => Encoding.GetEncoding("shift_jis"),
-                    "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
-                    "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
-                    "ascii" => Encoding.ASCII,
-                    "unicode" or "utf-16" or "utf16" or "utf-16le" or "utf16le" => Encoding.Unicode,
-                    "utf-16be" or "utf16be" => Encoding.BigEndianUnicode,
-                    "utf-32" or "utf32" or "utf-32le" or "utf32le" => Encoding.UTF32,
-                    "utf-32be" or "utf32be" => new UTF32Encoding(true, true),
-                    _ => Encoding.GetEncoding(encodingName)
-                };
-            }
-            catch
-            {
-                // エンコーディング名が無効な場合は自動検出にフォールバック
-                return DetectEncoding(filePath);
-            }
-        }
-
-        return DetectEncoding(filePath);
+        return EncodingHelper.GetEncoding(filePath, encodingName);
     }
 
     /// <summary>
@@ -149,82 +44,16 @@ public static class TextFileUtility
     /// </summary>
     public static FileMetadata DetectFileMetadata(string filePath, string? encodingName)
     {
-        var fileInfo = new FileInfo(filePath);
-        
-        // 空ファイルの場合はデフォルトのメタデータを返す
-        if (fileInfo.Length == 0)
-        {
-            var defaultEncoding = !string.IsNullOrEmpty(encodingName) 
-                ? GetEncoding(filePath, encodingName) 
-                : new UTF8Encoding(false);
-            
-            return new FileMetadata
-            {
-                Encoding = defaultEncoding,
-                NewlineSequence = Environment.NewLine,
-                HasTrailingNewline = false
-            };
-        }
-        
-        var encoding = GetEncoding(filePath, encodingName);
-        var (newline, hasTrailing) = DetectNewline(filePath, encoding);
-
-        return new FileMetadata
-        {
-            Encoding = encoding,
-            NewlineSequence = newline,
-            HasTrailingNewline = hasTrailing
-        };
+        return FileMetadataHelper.DetectFileMetadata(filePath, encodingName);
     }
 
     /// <summary>
-    /// 改行コードと末尾改行を検出（ストリーミング方式、大きなファイルに対応）
+    /// 改行コードと末尾改行を検出
     /// </summary>
-    public static (string NewlineSequence, bool HasTrailingNewline) DetectNewline(string filePath, Encoding encoding)
+    public static (string NewlineSequence, bool HasTrailingNewline) DetectNewline(
+        string filePath, Encoding encoding)
     {
-        using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-        using (var reader = new StreamReader(stream, encoding))
-        {
-            if (stream.Length == 0)
-                return (Environment.NewLine, false);
-            
-            // 最初の改行を検出（ストリーミング）
-            string detectedNewline = Environment.NewLine;
-            int ch;
-            
-            while ((ch = reader.Read()) != -1)
-            {
-                if (ch == '\r')
-                {
-                    detectedNewline = reader.Peek() == '\n' ? "\r\n" : "\r";
-                    break;
-                }
-                else if (ch == '\n')
-                {
-                    detectedNewline = "\n";
-                    break;
-                }
-            }
-            
-            // 末尾改行を検出（末尾の数バイトのみ読む）
-            bool hasTrailingNewline = false;
-            
-            if (stream.Length > 0)
-            {
-                // 末尾から最大4バイト読む（UTF-32の\rまたは\nが最大4バイト）
-                long seekPosition = Math.Max(0, stream.Length - 4);
-                stream.Seek(seekPosition, SeekOrigin.Begin);
-                
-                // 新しいStreamReaderで末尾を読む
-                using (var tailReader = new StreamReader(stream, encoding, false, 1024, true))
-                {
-                    var tail = tailReader.ReadToEnd();
-                    hasTrailingNewline = tail.EndsWith("\r\n") || tail.EndsWith("\n") || tail.EndsWith("\r");
-                }
-            }
-            
-            return (detectedNewline, hasTrailingNewline);
-        }
+        return FileMetadataHelper.DetectNewline(filePath, encoding);
     }
 
     /// <summary>
@@ -233,10 +62,7 @@ public static class TextFileUtility
     /// <returns>作成したバックアップファイルのパス</returns>
     public static string CreateBackup(string filePath)
     {
-        var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
-        var backupPath = $"{filePath}.{timestamp}.bak";
-        File.Copy(filePath, backupPath);
-        return backupPath;
+        return FileOperationHelper.CreateBackup(filePath);
     }
 
     /// <summary>
@@ -337,23 +163,7 @@ public static class TextFileUtility
     /// </summary>
     public static void ReplaceFileAtomic(string targetPath, string tempFile)
     {
-        // 新規ファイルの場合は単純に移動
-        if (!File.Exists(targetPath))
-        {
-            File.Move(tempFile, targetPath);
-            return;
-        }
-
-        // 既存ファイルの場合はアトミック置換
-        var backupTemp = targetPath + ".tmp";
-        if (File.Exists(backupTemp))
-        {
-            File.Delete(backupTemp);
-        }
-
-        File.Move(targetPath, backupTemp);
-        File.Move(tempFile, targetPath);
-        File.Delete(backupTemp);
+        FileOperationHelper.ReplaceFileAtomic(targetPath, tempFile);
     }
 
     /// <summary>
@@ -377,6 +187,8 @@ public static class TextFileUtility
     
     /// <summary>
     /// ファイル全体を新しい内容で置換
+    /// <summary>
+    /// ファイル全体を新しい内容で置換
     /// LLM向け：シンプルで予測可能な動作
     /// </summary>
     public static (int LinesRemoved, int LinesInserted) ReplaceEntireFile(
@@ -385,37 +197,7 @@ public static class TextFileUtility
         FileMetadata metadata,
         string[] contentLines)
     {
-        int originalLineCount = 0;
-        
-        // 元のファイルの行数をカウント（情報提供用）
-        if (File.Exists(inputPath))
-        {
-            using (var reader = new StreamReader(inputPath, metadata.Encoding))
-            {
-                while (reader.ReadLine() != null)
-                {
-                    originalLineCount++;
-                }
-            }
-        }
-
-        // ファイル全体を置換
-        using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
-        {
-            if (contentLines.Length > 0)
-            {
-                for (int i = 0; i < contentLines.Length; i++)
-                {
-                    writer.Write(contentLines[i]);
-                    if (i < contentLines.Length - 1 || metadata.HasTrailingNewline)
-                    {
-                        writer.Write(metadata.NewlineSequence);
-                    }
-                }
-            }
-        }
-        
-        return (originalLineCount, contentLines.Length);
+        return FileOperationHelper.ReplaceEntireFile(inputPath, outputPath, metadata, contentLines);
     }
 
     /// <summary>
@@ -585,30 +367,7 @@ public static class TextFileUtility
         bool encodingExplicitlySpecified,
         out string? upgradeMessage)
     {
-        upgradeMessage = null;
-        
-        // エンコーディングが明示的に指定されている場合はアップグレードしない
-        if (encodingExplicitlySpecified)
-        {
-            return false;
-        }
-        
-        // 現在のエンコーディングが ASCII でない場合はアップグレード不要
-        if (metadata.Encoding.CodePage != 20127) // US-ASCII
-        {
-            return false;
-        }
-        
-        // Content に非 ASCII 文字が含まれているかチェック
-        bool containsNonAscii = contentLines.Any(line => line.Any(c => c > 127));
-        
-        if (containsNonAscii)
-        {
-            metadata.Encoding = new UTF8Encoding(false);
-            upgradeMessage = "Content contains non-ASCII characters. Upgrading encoding to UTF-8.";
-            return true;
-        }
-        
-        return false;
+        return EncodingHelper.TryUpgradeEncodingIfNeeded(
+            metadata, contentLines, encodingExplicitlySpecified, out upgradeMessage);
     }
 }

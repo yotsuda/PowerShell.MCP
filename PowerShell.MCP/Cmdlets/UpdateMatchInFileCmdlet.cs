@@ -108,9 +108,16 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     {
         var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
         
+        // Replacement に非 ASCII 文字が含まれている場合、エンコーディングを UTF-8 にアップグレード
+        if (!string.IsNullOrEmpty(Replacement) && 
+            EncodingHelper.TryUpgradeEncodingIfNeeded(metadata, [Replacement], Encoding != null, out var upgradeMessage))
+        {
+            WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
+        }
+        
         int replacementCount = 0;
         var isLiteral = !string.IsNullOrEmpty(Contains);
-        var regex = isLiteral ? null : new Regex(Pattern, RegexOptions.Compiled);
+        var regex = isLiteral ? null : new Regex(Pattern!, RegexOptions.Compiled);
         
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
