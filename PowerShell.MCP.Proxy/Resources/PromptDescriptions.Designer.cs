@@ -61,6 +61,15 @@ namespace PowerShell.MCP.Proxy.Resources {
         }
         
         /// <summary>
+        ///   CLI Tool に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Param_LearnCliTools_CliTool_Name {
+            get {
+                return ResourceManager.GetString("Param_LearnCliTools_CliTool_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Experience Level に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Param_LearnCliTools_ExperienceLevel_Name {
@@ -93,6 +102,42 @@ namespace PowerShell.MCP.Proxy.Resources {
         internal static string Prompt_AnalyzeContent_Param_ContentPath {
             get {
                 return ResourceManager.GetString("Prompt_AnalyzeContent_Param_ContentPath", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Create themed interactive maps using PowerShell.Map (hot springs tours, ramen maps, etc.) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Prompt_CreateInteractiveMap_Description {
+            get {
+                return ResourceManager.GetString("Prompt_CreateInteractiveMap_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Create Map に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Prompt_CreateInteractiveMap_Name {
+            get {
+                return ResourceManager.GetString("Prompt_CreateInteractiveMap_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Map theme (e.g., Hot Springs Tour in Japan, Ramen Map in Otemachi, Tourist Spots in Tokyo) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Prompt_CreateInteractiveMap_Param_MapTheme {
+            get {
+                return ResourceManager.GetString("Prompt_CreateInteractiveMap_Param_MapTheme", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Target area (e.g., All Japan, Tokyo, Osaka). Will be determined during conversation if not specified. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Prompt_CreateInteractiveMap_Param_TargetArea {
+            get {
+                return ResourceManager.GetString("Prompt_CreateInteractiveMap_Param_TargetArea", resourceCulture);
             }
         }
         
@@ -232,6 +277,15 @@ namespace PowerShell.MCP.Proxy.Resources {
         }
         
         /// <summary>
+        ///   Create hands-on learning environment for development tools に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Prompt_LearnCliTools_Description {
+            get {
+                return ResourceManager.GetString("Prompt_LearnCliTools_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Learn CLI Tools に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Prompt_LearnCliTools_Name {
@@ -250,7 +304,7 @@ namespace PowerShell.MCP.Proxy.Resources {
         }
         
         /// <summary>
-        ///   CLI Tool に類似しているローカライズされた文字列を検索します。
+        ///   Beginner, Intermediate, Advanced に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Prompt_LearnCliTools_Param_ExperienceLevel {
             get {

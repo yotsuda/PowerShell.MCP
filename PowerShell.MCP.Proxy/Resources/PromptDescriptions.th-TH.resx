@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -181,5 +181,17 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>เริ่มการฝึกคัดลอกภาษาต่างประเทศแบบเร่งรัดด้วยเสียง PowerShell และการประเมินโดย AI</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Name" xml:space="preserve">
+    <value>สร้างแผนที่</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Description" xml:space="preserve">
+    <value>สร้างแผนที่ตามธีมโดยใช้ PowerShell.Map (ทัวร์น้ำพุร้อน, แผนที่อาหาร, ฯลฯ)</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Param_MapTheme" xml:space="preserve">
+    <value>สถานที่ท่องเที่ยว, ร้านอาหารอร่อย, วัดสวยงาม</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
+    <value>ทั่วประเทศ, กรุงเทพฯ, เชียงใหม่</value>
   </data>
 </root>

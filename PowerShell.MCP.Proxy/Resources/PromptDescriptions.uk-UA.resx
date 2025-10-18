@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -181,5 +181,17 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Початок швидкого тренування диктантів іноземною мовою з аудіо PowerShell та оцінкою ШІ</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Name" xml:space="preserve">
+    <value>Створити карту</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Description" xml:space="preserve">
+    <value>Створюйте тематичні карти за допомогою PowerShell.Map (тури термальними джерелами, гастрономічні карти тощо)</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Param_MapTheme" xml:space="preserve">
+    <value>Визначні місця, Ресторани, Затишні кав'ярні</value>
+  </data>
+  <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
+    <value>Вся Україна, Київ, Львів</value>
   </data>
 </root>
