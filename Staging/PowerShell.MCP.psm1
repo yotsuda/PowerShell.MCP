@@ -7,7 +7,7 @@ $ExecutionContext.SessionState.Module.OnRemove = {
         #Write-Host "[PowerShell.MCP] Module removal detected, starting cleanup..." -ForegroundColor Yellow
         
         # Load and execute MCPCleanup.ps1 from embedded resources
-        $assembly = [System.Reflection.Assembly]::GetAssembly([PowerShell.MCP.MCPProvider])
+        $assembly = [System.Reflection.Assembly]::GetAssembly([PowerShell.MCP.MCPModuleInitializer])
         $resourceName = "PowerShell.MCP.Resources.MCPCleanup.ps1"
         
         $stream = $assembly.GetManifestResourceStream($resourceName)

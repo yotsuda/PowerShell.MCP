@@ -1,4 +1,4 @@
-using System.IO.Pipes;
+﻿using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 
@@ -25,15 +25,9 @@ public class NamedPipeServer : IDisposable
     public const string PipeName = "PowerShell.MCP.Communication";
     //public const string PipeName = "PowerShell.MCP.Communication-debug";
     private const int MaxConcurrentConnections = 2; // 2つのパイプインスタンス
-    private readonly MCPProvider _provider;
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
     private bool _disposed = false;
-
-    public NamedPipeServer(MCPProvider provider)
-    {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-    }
 
     /// <summary>
     /// Named Pipe サーバーを開始します
@@ -136,7 +130,7 @@ public class NamedPipeServer : IDisposable
             string? proxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement proxyVersionElement)
                 ? proxyVersionElement.GetString() : "Not detected";
 
-            if (proxyVersion != MCPProvider.ServerVersion)
+            if (proxyVersion != MCPModuleInitializer.ServerVersion)
             {
                 string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\")");
                 //string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\") -replace '\\\\', '\\\\'");
@@ -146,7 +140,7 @@ public class NamedPipeServer : IDisposable
 $@"PowerShell MCP Configuration Error
 
 ISSUE: PowerShell.MCP.Proxy.exe version is outdated.
-- PowerShell.MCP module version: {MCPProvider.ServerVersion}
+- PowerShell.MCP module version: {MCPModuleInitializer.ServerVersion}
 - Proxy executable version: {proxyVersion}
 
 ACTION REQUIRED: Update your MCP client configuration
@@ -165,7 +159,7 @@ Please provide how to update the MCP client configuration to the user.";
                 // busyレスポンスを返す
                 var busyResponse = @"Cannot execute new pipeline while previous pipeline is running (cannot be cancelled with Ctrl+C). Options:
 1. Wait for completion
-2. Force terminate console and restart (auto-executed by LLM if selected)
+2. Manually terminate console (LLM will then restart automatically)
 
 LLM should prompt user to choose.";
 
@@ -217,7 +211,7 @@ LLM should prompt user to choose.";
     {
         return method switch
         {
-            "get_current_location" => MCPProvider.GetCurrentLocation(),
+            "get_current_location" => MCPModuleInitializer.GetCurrentLocation(),
             "invoke_expression" => ExecuteInvokeExpression(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
