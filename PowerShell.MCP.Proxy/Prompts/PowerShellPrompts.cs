@@ -80,7 +80,53 @@ Perform analysis including:
 Use -WhatIf for safety and confirm with user before making changes. For sensitive operations, provide commands for manual execution.
 If the specified path is not found, confirm the correct path with user.
 
-Create a detailed report file with prioritized action items and present in user's preferred format (.html or .md).";
+## HTML Report Generation
+
+**CRITICAL - Variable Scope:** Use `$script:` for ALL variables used across multiple invoke_expression calls.
+
+**CRITICAL - Chart.js Data:** Use ForEach-Object to extract arrays, not .Count property.
+```powershell
+# ❌ WRONG: ($data | Select -First 10).Count  # Returns single number
+# ✅ CORRECT: 
+$script:labels = ($script:data | Select -First 10 | % {{ $_.Name }}) | ConvertTo-Json -Compress -AsArray
+$script:values = ($script:data | Select -First 10 | % {{ $_.Count }}) | ConvertTo-Json -Compress -AsArray
+```
+
+**CRITICAL - Data Validation:** After preparing Chart.js data, ALWAYS verify format using Write-Host.
+```powershell
+# MANDATORY: Validate all chart data variables are JSON arrays
+Write-Host ""Labels: $script:labels""  # Must show [""value""] not ""value""
+Write-Host ""Values: $script:values""  # Must show [10] not 10
+```
+
+**CRITICAL - CSS Contrast:** When using gradients, child elements inherit parent text color. All elements with `background: white` MUST explicitly set `color: #333` to prevent invisible white-on-white text.
+```css
+/* Parent with gradient may set color: white */
+.executive-summary {{ background: linear-gradient(...); color: white; }}
+/* Child with white background MUST override inherited color */
+.insights li {{ background: white; color: #333; /* REQUIRED - overrides parent */ }}
+```
+
+**Design:**
+- Chart.js (https://cdn.jsdelivr.net/npm/chart.js) for visualizations
+- Colors: Primary #2C5F8D, Success #5A9B6C, Warning #D68A4F, Error #C4564D, Background #F5F7FA
+- Use cohesive color palette with visual harmony - diversify colors across charts
+- Use gradients for depth and visual interest (CSS backgrounds AND Chart.js charts - use createLinearGradient)
+- Responsive, print-friendly, with ""Back to Top"" button
+
+**Structure:**
+- Executive Summary with key metrics and 3-5 insights
+- Quick Actions with prioritized steps
+- Visual Charts for distributions and trends
+- Detailed Analysis with patterns and root causes
+- Recommendations with actionable steps
+
+**Output:**
+1. Generate HTML with interactive charts
+2. Save to: `$env:TEMP\AnalysisReport_$(Get-Date -Format 'yyyyMMdd_HHmmss').html`
+3. Open: `Start-Process $reportPath`
+
+Present in user's preferred format (.html for rich visualizations, .md for simple text).";
         return new ChatMessage(ChatRole.User, prompt);
     }
 

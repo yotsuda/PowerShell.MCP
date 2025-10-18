@@ -50,16 +50,16 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
 • Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
   Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex).
 
-• Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup] [-WhatIf]
+• Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
   Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines.
 
-• Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup] [-WhatIf]
+• Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup]
   Replaces specified line range with new content or creates new file. Omit content to delete lines.
 
-• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup] [-WhatIf]
+• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup]
   Replaces matching text (literal or regex) within optional line range.
 
-• Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup] [-WhatIf]
+• Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup]
   Removes lines matching text (literal or regex) within optional range.
 
 • Test-TextFileContains [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
