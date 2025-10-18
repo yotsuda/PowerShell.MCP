@@ -63,7 +63,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
         
         // Literalモードで片方だけ指定されている
-        if (hasLiteral && string.IsNullOrEmpty(Replacement))
+        if (hasLiteral && Replacement == null)
         {
             ThrowTerminatingError(new ErrorRecord(
                 new ArgumentException("Both -Contains and -Replacement must be specified together."),
@@ -73,7 +73,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
         
         // Regexモードで片方だけ指定されている
-        if (hasRegex && string.IsNullOrEmpty(Replacement))
+        if (hasRegex && Replacement == null)
         {
             ThrowTerminatingError(new ErrorRecord(
                 new ArgumentException("Both -Pattern and -Replacement must be specified together."),
@@ -206,6 +206,3 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
     }
 }
-
-
-
