@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.2.8'
+ModuleVersion = '1.2.9'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -33,7 +33,7 @@ Copyright = '(c) Yoshifumi Tsuda. All rights reserved.'
 Description = 'Enables PowerShell console to function as an MCP server for Claude Desktop.'
 
 # Minimum version of the PowerShell engine required by this module
-PowerShellVersion = '7.2.15'
+PowerShellVersion = '7.2'
 
 # Name of the PowerShell host required by this module
 # PowerShellHostName = ''
@@ -116,7 +116,7 @@ PrivateData = @{
         Platforms = @('Windows')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.2.8 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.2.9 - Enterprise-Ready MCP Server
 
 === Key Features ===
 • 🤝 Shared Console Experience
@@ -159,13 +159,12 @@ PrivateData = @{
    {
      "mcpServers": {
        "PowerShell": {
-         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.8\\bin\\PowerShell.MCP.Proxy.exe"
+         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.9\\bin\\PowerShell.MCP.Proxy.exe"
        }
      }
    }
 
    Find ModuleBase: PS> (Get-Module PowerShell.MCP).ModuleBase
-   Example: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.8\bin\PowerShell.MCP.Proxy.exe
 
 6. Restart Claude Desktop to activate
 

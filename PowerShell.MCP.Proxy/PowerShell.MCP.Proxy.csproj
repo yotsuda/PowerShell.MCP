@@ -5,7 +5,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.2.8.0</Version>
+    <Version>1.2.9.0</Version>
     
     <!-- Single File デプロイ設定 -->
     <PublishSingleFile>true</PublishSingleFile>
@@ -44,6 +44,18 @@
   <ItemGroup>
     <EmbeddedResource Update="Resources\**\*.resx">
       <Generator>ResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Resources\PromptDescriptions.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>PromptDescriptions.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Resources\PromptDescriptions.resx">
+      <LastGenOutput>PromptDescriptions.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
 </Project>
