@@ -115,7 +115,7 @@ namespace PowerShell.MCP.Proxy.Resources {
         }
         
         /// <summary>
-        ///   Create Map に類似しているローカライズされた文字列を検索します。
+        ///   Create Interactive Map に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Prompt_CreateInteractiveMap_Name {
             get {
@@ -124,7 +124,7 @@ namespace PowerShell.MCP.Proxy.Resources {
         }
         
         /// <summary>
-        ///   Map theme (e.g., Hot Springs Tour in Japan, Ramen Map in Otemachi, Tourist Spots in Tokyo) に類似しているローカライズされた文字列を検索します。
+        ///   Best Pizza Spots, Historic Pubs, Stylish Cafes に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Prompt_CreateInteractiveMap_Param_MapTheme {
             get {
@@ -133,7 +133,7 @@ namespace PowerShell.MCP.Proxy.Resources {
         }
         
         /// <summary>
-        ///   Target area (e.g., All Japan, Tokyo, Osaka). Will be determined during conversation if not specified. に類似しているローカライズされた文字列を検索します。
+        ///   United States, New York, California に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Prompt_CreateInteractiveMap_Param_TargetArea {
             get {

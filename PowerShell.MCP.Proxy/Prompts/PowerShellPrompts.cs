@@ -63,22 +63,13 @@ For new projects, create appropriate directory structure and initialize version 
         [ResourceDescription("Prompt_AnalyzeContent_Param_ContentPath")]
         string content_path)
     {
-        var prompt = $@"LANGUAGE:
-Communicate with users in the user's native language
+        var prompt = $@"Analyze '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
 
-Analyze the content at '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
+**FIRST**: Ask user to choose:
+1. Report format (html or md)
+2. Preferred language for the report
 
-First, confirm the analysis scope with the user before starting.
-
-Perform analysis including:
-- Basic content structure and file distribution
-- Project type detection (Git, .NET, Node.js, Python, etc.)
-- For development projects: Git status, code review suggestions, commit message recommendations
-- Security and cleanup opportunities
-- Performance optimization suggestions
-
-Use -WhatIf for safety and confirm with user before making changes. For sensitive operations, provide commands for manual execution.
-If the specified path is not found, confirm the correct path with user.
+Then confirm analysis scope before proceeding.
 
 ## HTML Report Generation
 
@@ -108,25 +99,29 @@ Write-Host ""Values: $script:values""  # Must show [10] not 10
 ```
 
 **Design:**
-- Chart.js (https://cdn.jsdelivr.net/npm/chart.js) for visualizations
-- Colors: Primary #2C5F8D, Success #5A9B6C, Warning #D68A4F, Error #C4564D, Background #F5F7FA
+- Chart.js (https://cdn.jsdelivr.net/npm/chart.js)
 - Use cohesive color palette with visual harmony - diversify colors across charts
-- Use gradients for depth and visual interest (CSS backgrounds AND Chart.js charts - use createLinearGradient)
+- Use gradients for depth (CSS backgrounds AND Chart.js charts - createLinearGradient)
 - Responsive, print-friendly, with ""Back to Top"" button
+- **CRITICAL**: Display analysis target path at the top of the report (in title or header section)
 
-**Structure:**
-- Executive Summary with key metrics and 3-5 insights
-- Quick Actions with prioritized steps
-- Visual Charts for distributions and trends
-- Detailed Analysis with patterns and root causes
-- Recommendations with actionable steps
+**Structure:** 
+- **MANDATORY**: Title/Header section displaying the analysis target path
+- Plan the optimal report structure based on content type (e.g., HAR files, logs, CSV, JSON, text)
+- Common sections to consider: Executive Summary, Key Findings, Visual Charts, Detailed Analysis, Recommendations, Conclusion
+- Adapt sections to best suit the analysis subject
 
-**Output:**
-1. Generate HTML with interactive charts
-2. Save to: `$env:TEMP\AnalysisReport_$(Get-Date -Format 'yyyyMMdd_HHmmss').html`
-3. Open: `Start-Process $reportPath`
+## Output
 
-Present in user's preferred format (.html for rich visualizations, .md for simple text).";
+Generate filename using content name from path and save to source folder:
+```powershell
+$contentName = Split-Path '{content_path}' -Leaf
+$sourceFolder = Split-Path '{content_path}' -Parent
+$reportPath = ""$sourceFolder\AnalysisReport_${{contentName}}_$(Get-Date -Format 'yyyyMMdd_HHmmss').<ext>""
+```
+
+**HTML**: Save to `$reportPath.html` → `Start-Process $reportPath`
+**Markdown**: Save to `$reportPath.md` → `Start-Process notepad $reportPath`";
         return new ChatMessage(ChatRole.User, prompt);
     }
 
@@ -425,6 +420,90 @@ RULES:
 - FAST pace, minimal delays between questions
 - Generate natural, everyday conversational sentences within the specified topic and length
 - Restore console on stop: [Win32]::ShowWindow([Win32]::GetConsoleWindow(),9)";
+
+        return new ChatMessage(ChatRole.User, prompt);
+    }
+
+
+    [McpServerPrompt]
+    [LocalizedName("Prompt_CreateInteractiveMap_Name")]
+    [ResourceDescription("Prompt_CreateInteractiveMap_Description")]
+    public static ChatMessage CreateInteractiveMap(
+        [ResourceDescription("Prompt_CreateInteractiveMap_Param_MapTheme")]
+        string map_theme,
+        [ResourceDescription("Prompt_CreateInteractiveMap_Param_TargetArea")]
+        string? target_area = null)
+    {
+        var areaSection = !string.IsNullOrEmpty(target_area)
+            ? $"Target area: {target_area}"
+            : "Target area: (to be determined)";
+
+        var prompt = $@"LANGUAGE:
+Communicate with users in the user's native language
+
+Create interactive map for ""{map_theme}"" using PowerShell.Map module.
+{areaSection}
+
+**IMPORTANT: If both theme and target area are provided in parameters, skip user confirmation and immediately start map creation.**
+
+WORKFLOW:
+1. If theme/area incomplete, confirm with user first
+2. Research locations (web search if needed)
+3. Create markers with labels/colors
+4. Display map using Show-OpenStreetMap
+5. **CRITICAL - Validate coordinates after display:**
+   - Examine the latitude/longitude of all markers in the result
+   - Calculate median or expected coordinates for the target area
+   - Identify outliers (markers with significantly different lat/lon)
+   - If outliers exist (distance > 0.5 degrees from median):
+     * Inform user which markers are outside the target area
+     * Remove outliers from marker list
+     * Re-display map with valid markers only
+6. After displaying the validated map, offer to start an automated tour: Ask user if they would like to begin a tour of all locations using Start-OpenStreetMapTour
+
+## PowerShell.Map Key Commands
+
+Show-OpenStreetMap -Markers:
+# Hashtable format (recommended)
+$markers = @(
+    @{{Location=""Tokyo""; Label=""🗼 Tokyo Tower""; Color=""red""}}
+    @{{Location=""Osaka""; Label=""🏯 Osaka Castle""; Color=""blue""}}
+)
+Show-OpenStreetMap -Markers $markers
+
+# Pipe-delimited: ""Location|Label|Color""
+Show-OpenStreetMap -Markers ""Tokyo|🗼 Tokyo Tower|red"", ""Osaka|🏯 Osaka Castle|blue""
+
+# Colors: red, blue, green, orange, violet, yellow, grey, black, gold
+
+Show-OpenStreetMapRoute:
+Show-OpenStreetMapRoute -From Tokyo -To Osaka -Color ""#ff0000"" -Width 6
+
+Start-OpenStreetMapTour:
+Start-OpenStreetMapTour Tokyo, Osaka, Kyoto -Duration 1.5 -PauseTime 2
+
+## Coordinate Validation Example
+After Show-OpenStreetMap, check results:
+```powershell
+# If result shows markers with vastly different coordinates:
+# Ageo area: lat ~35.95-36.00, lon ~139.54-139.64
+# Outlier: lat 35.03, lon 135.74 (different prefecture!)
+# → Remove outlier and re-display
+```
+
+## Map Theme Examples
+- Hot springs (♨️): Research famous onsen, color by region/type
+- Ramen shops (🍜): Collect shops with ratings, color by style
+- Tourist spots: Category-based colors (temples⛩️, museums🏛️, parks🌳)
+
+## Best Practices
+- Use emoji in labels for visual appeal
+- Color-code by category/rating/region
+- Keep labels concise
+- For 10+ locations, save as CSV for reuse
+- Map auto-opens at http://localhost:8765/ on first display
+- Always validate coordinates to ensure all markers are in the correct geographic area
+- If no window found, suggest opening browser manually at http://localhost:8765/";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
