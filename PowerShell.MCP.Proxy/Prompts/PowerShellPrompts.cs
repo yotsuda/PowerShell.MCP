@@ -1,6 +1,8 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Hosting;
 using ModelContextProtocol.Server;
 using PowerShell.MCP.Proxy.Attributes;
+using System;
 
 namespace PowerShell.MCP.Proxy.Prompts;
 
@@ -362,64 +364,49 @@ Settings: {target_language} | Length: {sentence_length} | Speed: {speech_speed} 
 
 WORKFLOW:
 1. Start PowerShell → Minimize + Initialize Speech:
-Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{{ [DllImport(""user32.dll"")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(""kernel32.dll"")]public static extern IntPtr GetConsoleWindow();}}'; [Win32]::ShowWindow([Win32]::GetConsoleWindow(),2); Add-Type -AssemblyName System.Speech; $global:speech = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speech.Rate = 0
-
-2. Check available voices and configure for {target_language}:
-$speech.GetInstalledVoices() | ForEach-Object {{ Write-Host ""Voice: $($_.VoiceInfo.Name) - Language: $($_.VoiceInfo.Culture)"" }}
-
-3. Show guidance in user's native language
-4. Generate {sentence_length} {target_language} sentence → Play 2x in single PowerShell command at {speech_speed} (rate: Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
-5. User responds in THIS CHAT (not PowerShell console)
-6. Show minimal feedback with tip → Immediately continue
-7. Repeat until 'stop'
+   Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class Win32{{ [DllImport(""user32.dll"")]public static extern bool ShowWindow(IntPtr hWnd,int nCmdShow);[DllImport(""kernel32.dll"")]public static extern IntPtr GetConsoleWindow();}}'; [Win32]::ShowWindow([Win32]::GetConsoleWindow(),2); Add-Type -AssemblyName System.Speech; $global:speech = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speech.Rate = 0
+2. Check available voices and set for {target_language}:
+   $speech.GetInstalledVoices() | ForEach-Object {{ Write-Host ""Voice: $($_.VoiceInfo.Name) - Language: $($_.VoiceInfo.Culture)"" }}
+3. Show guidance (user’s native language)
+4. Generate {sentence_length} {target_language} sentence → Play twice at {speech_speed}
+   (Slow=-2, Normal=0, Fast=+2, VeryFast=+4)
+5. User answers in this chat (not PowerShell)
+6. Before each new question, replay the previous sentence once, then play the new one twice.
+7. Show brief feedback → Continue immediately
+8. Say ""stop"" to end → Restore console: [Win32]::ShowWindow([Win32]::GetConsoleWindow(),9)
 
 SENTENCE LENGTHS: Short=3-5, Medium=6-8, Long=9-12, VeryLong=13-15 words
-
 SPEECH RATE MAPPING: Slow=-2, Normal=0, Fast=+2, VeryFast=+4
 
-GUIDANCE TEMPLATE (user's native language):
+GUIDANCE TEMPLATE:
 🎯 DICTATION TRAINING - {sentence_length} sentences at {speech_speed} speed
-- Audio from minimized PowerShell
-- Answer in THIS CHAT
-- Say 'stop' to end
-- Say 'repeat' to hear again
-- Say 'faster' or 'slower' to adjust speech speed
-- Say 'longer' or 'shorter' to change sentence length
-- Say 'info' to show current settings
-- Say 'skip' to move to next question
-- Say 'back' to replay previous question
-- Say single topic word to generate sentence about that topic (e.g., 'airport', 'business', 'zoo')
-- Say 'translation on/off' to toggle translation display
+
+* Audio from minimized PowerShell
+* Answer here in chat
+* Commands: stop / repeat / faster / slower / longer / shorter / info / skip / back
+* Say topic word (e.g., ""airport"") to change theme
+* Say ""translation on/off"" to toggle translation
 
 QUESTION FORMAT:
 **Question [X]** ([correct]/[total] correct)
-{(show_translation == "on" ? "[Show translation if enabled]" : "[No translation shown]")}
+{(show_translation == "on" ? "[Show translation]" : "[No translation]")}
 
-AUDIO PLAYBACK COMMAND (use this exact format):
-$speech.Rate = [rate_value]; $speech.Speak(""[sentence]""); $speech.Speak(""[sentence]"")
+AUDIO COMMAND:
+$speech.Rate=[rate]; $speech.Speak(""[previous_sentence]""); Start-Sleep -Seconds 1; $speech.Speak(""[sentence]""); $speech.Speak(""[sentence]"")
 
-FEEDBACK FORMAT (with tip):
-✅/❌ ([correct]/[total]) | Answer: [correct] XX% | Tip: [brief learning tip]
-
-Examples:
-**Question 1** (0/0 correct)
-✅ (1/1) | Answer: I like cats 100% | Tip: Perfect listening!
-
-**Question 2** (1/1 correct)  
-❌ (1/2) | Answer: She is happy 67% | Tip: Focus on 'love' vs 'like'
+FEEDBACK FORMAT:
+✅/❌ ([correct] / [total]) | Accuracy: [score] % | Tip: [brief tip]
 
 RULES:
-- Native language for guidance/feedback, target language for dictation only
-- Never show answer before user response
-- Use single invoke_expression with: $speech.Rate = [rate]; $speech.Speak(""sentence""); $speech.Speak(""sentence"")
-- Accept phonetically equivalent answers and common spelling variations as correct
-- Match exact word count for {sentence_length}
-- Calculate word-level accuracy: (correct words / total words) × 100%
-- Track question number and cumulative correct/total count
-- ONE brief tip per feedback in user's native language
-- FAST pace, minimal delays between questions
-- Generate natural, everyday conversational sentences within the specified topic and length
-- Restore console on stop: [Win32]::ShowWindow([Win32]::GetConsoleWindow(),9)";
+- Guidance / feedback in native language, dictation in target language
+- Replay previous sentence before next question
+- Don't show answers before user responds
+- Accept phonetic / spelling variations
+- Match {sentence_length}, calculate(correct words / total) × 100 %
+- One short tip per feedback
+- Keep pace fast and natural
+- Use everyday sentences for {{topic}}
+-Restore console on stop: [Win32]::ShowWindow([Win32]::GetConsoleWindow(), 9)";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
@@ -460,6 +447,7 @@ WORKFLOW:
      * Remove outliers from marker list
      * Re-display map with valid markers only
 6. After displaying the validated map, offer to start an automated tour: Ask user if they would like to begin a tour of all locations using Start-OpenStreetMapTour
+7. After displaying the tour, re-display all spots again.
 
 ## PowerShell.Map Key Commands
 
