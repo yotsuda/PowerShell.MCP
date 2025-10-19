@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
 
@@ -31,7 +31,7 @@ public class UpdateMatchInFileCmdletTests : IDisposable
     public void Path_SetValue_StoresCorrectly()
     {
         var cmdlet = new UpdateMatchInFileCmdlet();
-        cmdlet.Path = new[] { "test.txt" };
+        cmdlet.Path = ["test.txt"];
         Assert.NotNull(cmdlet.Path);
     }
 
@@ -59,12 +59,12 @@ public class UpdateMatchInFileCmdletTests : IDisposable
         // Arrange: ASCIIファイルを作成
         var testFile = Path.GetTempFileName();
         File.WriteAllText(testFile, "Line 1\nLine 2\nLine 3", Encoding.ASCII);
-        
+
         try
         {
             // Act: エンコーディングを検出
             var encoding = EncodingHelper.DetectEncoding(testFile);
-            
+
             // Assert: ASCIIとして検出される
             Assert.Equal(20127, encoding.CodePage); // US-ASCII
         }
@@ -84,17 +84,17 @@ public class UpdateMatchInFileCmdletTests : IDisposable
             NewlineSequence = "\r\n",
             HasTrailingNewline = true
         };
-        
-        string[] contentWithNonAscii = new[] { "こんにちは", "世界" };
-        
+
+        string[] contentWithNonAscii = ["こんにちは", "世界"];
+
         // Act: アップグレードが必要かチェック
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
-            metadata, 
-            contentWithNonAscii, 
+            metadata,
+            contentWithNonAscii,
             false, // エンコーディングが明示的に指定されていない
             out string? upgradeMessage
         );
-        
+
         // Assert: UTF-8にアップグレードされる
         Assert.True(upgraded);
         Assert.NotNull(upgradeMessage);
@@ -111,17 +111,17 @@ public class UpdateMatchInFileCmdletTests : IDisposable
             NewlineSequence = "\r\n",
             HasTrailingNewline = true
         };
-        
-        string[] contentWithNonAscii = new[] { "こんにちは" };
-        
+
+        string[] contentWithNonAscii = ["こんにちは"];
+
         // Act: エンコーディングが明示的に指定されている場合
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
-            metadata, 
-            contentWithNonAscii, 
+            metadata,
+            contentWithNonAscii,
             true, // エンコーディングが明示的に指定されている
             out string? upgradeMessage
         );
-        
+
         // Assert: アップグレードされない
         Assert.False(upgraded);
         Assert.Null(upgradeMessage);
@@ -138,17 +138,17 @@ public class UpdateMatchInFileCmdletTests : IDisposable
             NewlineSequence = "\r\n",
             HasTrailingNewline = true
         };
-        
-        string[] asciiContent = new[] { "Hello", "World" };
-        
+
+        string[] asciiContent = ["Hello", "World"];
+
         // Act: アップグレードチェック
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
-            metadata, 
-            asciiContent, 
+            metadata,
+            asciiContent,
             false,
             out string? upgradeMessage
         );
-        
+
         // Assert: アップグレードされない
         Assert.False(upgraded);
         Assert.Null(upgradeMessage);
@@ -165,17 +165,17 @@ public class UpdateMatchInFileCmdletTests : IDisposable
             NewlineSequence = "\r\n",
             HasTrailingNewline = true
         };
-        
-        string[] contentWithNonAscii = new[] { "こんにちは" };
-        
+
+        string[] contentWithNonAscii = ["こんにちは"];
+
         // Act: アップグレードチェック
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
-            metadata, 
-            contentWithNonAscii, 
+            metadata,
+            contentWithNonAscii,
             false,
             out string? upgradeMessage
         );
-        
+
         // Assert: 既にUTF-8なのでアップグレードされない
         Assert.False(upgraded);
         Assert.Null(upgradeMessage);
