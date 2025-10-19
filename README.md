@@ -82,7 +82,7 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Natural and intuitive way to provide domain-specific knowledge to AI
 
 **🎯 Ready-to-Use Built-in Prompts**
-- 8 specialized prompts for development, analysis, administration, and learning scenarios
+- 9 specialized prompts for development, analysis, administration, and learning scenarios
 - Intelligent automation with native language support and interactive guidance
 - Built-in safety measures, progress tracking, and hands-on learning environments
 - Accessible directly through MCP client prompts list - no command writing required
@@ -120,7 +120,7 @@ Transform natural language requests into PowerShell automation - from simple fil
 - Windows 10/11 or Windows Server 2016+
 - Claude Desktop ([download](https://claude.ai/download)) or any MCP clients
   - **Note: Claude Desktop is strongly recommended** as other clients may not deliver optimal performance
-- PowerShell 7.2.15 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5))
+- PowerShell 7.2 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5))
 - PSReadLine 2.3.4 or higher ([auto-installed](https://www.powershellgallery.com/packages/PSReadLine))
 
 ### 1. Open PowerShell 7
@@ -136,7 +136,7 @@ Import-Module PowerShell.MCP
 ### 3. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
-# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.8
+# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.9
 ```
 
 ### 4. Configure Claude Desktop
@@ -145,7 +145,7 @@ Add to your Claude Desktop configuration:
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.8\\bin\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.9\\bin\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
