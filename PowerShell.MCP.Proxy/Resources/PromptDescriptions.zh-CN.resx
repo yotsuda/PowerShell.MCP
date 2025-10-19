@@ -170,7 +170,7 @@
     <value>创建互动地图</value>
   </data>
   <data name="Prompt_CreateInteractiveMap_Description" xml:space="preserve">
-    <value>使用 PowerShell.Map 创建主题地图（温泉游、美食地图等）</value>
+    <value>使用 PowerShell.Map 创建主题地图（茶馆、古迹、小吃街等）</value>
   </data>
   <data name="Prompt_CreateInteractiveMap_Param_MapTheme" xml:space="preserve">
     <value>景点游览、火锅店、特色茶馆</value>
