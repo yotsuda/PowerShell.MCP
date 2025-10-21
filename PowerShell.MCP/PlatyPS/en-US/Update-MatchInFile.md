@@ -31,29 +31,11 @@ Replaces matching text (literal or regex) within optional line range. Preserves 
 
 ## EXAMPLES
 
-### Example 1: Replace text - literal or regex
+### Example 1: Replace text
 ```powershell
 Update-MatchInFile config.txt -Contains "debug=false" -Replacement "debug=true"     # Literal
-Update-MatchInFile code.cs -Pattern "var (\w+)" -Replacement "string $1"            # Regex with capture
+Update-MatchInFile code.cs -Pattern "var (\w+)" -Replacement "string $1"            # Regex with capture groups
 ```
-
-### Example 2: Targeted replacement
-```powershell
-Update-MatchInFile app.cs -LineRange 10,50 -Contains "oldFunc" -Replacement "newFunc"
-Update-MatchInFile *.config -Contains "staging" -Replacement "production" -Backup
-```
-
-### Example 3: Pipeline and safety
-```powershell
-Get-ChildItem *.txt | Update-MatchInFile -Contains "old" -Replacement "new"
-Get-ChildItem *.cs | Update-MatchInFile -Pattern "TODO" -Replacement "DONE" -Backup -WhatIf
-```
-
-Important:
-- -Contains (literal) and -Pattern (regex) are mutually exclusive
-- -Backup creates timestamped .bak files
-- -WhatIf previews without changing
-- Pipeline: accepts FileInfo via PSPath property
 
 ## PARAMETERS
 
@@ -270,7 +252,3 @@ Regular expression mode:
 - -Contains and -Pattern are mutually exclusive (cannot be used together)
 
 ## RELATED LINKS
-
-
-
-

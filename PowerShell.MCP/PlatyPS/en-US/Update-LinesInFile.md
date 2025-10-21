@@ -29,35 +29,14 @@ Replaces specified line range with new content or creates new file. Omit content
 
 ## EXAMPLES
 
-### Example 1: Create or replace entire file
+### Example 1: Replace, delete, or create file
 ```powershell
-Update-LinesInFile output.txt -Content @("Line 1", "Line 2", "Line 3")    # Create/replace all
-Update-LinesInFile config.ini -Content "Setting=Value"                    # Single line
+Update-LinesInFile file.txt -LineRange 5,10 -Content "New"    # Replace lines 5-10
+Update-LinesInFile file.txt -LineRange 5,10                   # Delete lines 5-10 (no -Content)
+Update-LinesInFile file.txt -Content @("L1", "L2")            # Replace entire file (no -LineRange)
 ```
 
-### Example 2: Replace specific lines
-```powershell
-Update-LinesInFile app.log -LineRange 5 -Content "New line 5"             # Single line
-Update-LinesInFile app.log -LineRange 10,15 -Content "Replacement"        # Range -> single
-Update-LinesInFile app.log -LineRange 20,22 -Content @("A", "B", "C")     # Range -> multiple
-```
-
-### Example 3: Delete lines or use pipeline
-```powershell
-Update-LinesInFile app.log -LineRange 5,10                                # Delete (no -Content)
-Get-ChildItem *.txt | Update-LinesInFile -LineRange 1 -Content "# Updated: $(Get-Date)"
-Get-ChildItem *.log | Where-Object Length -gt 1MB | Update-LinesInFile -LineRange 1,100 -Backup
-```
-
-Important:
-- Without -LineRange: creates/replaces entire file
-- With -LineRange but no -Content: deletes lines
-- Content accepts string (single line) or array (multiple lines: @("L1", "L2", "L3"))
-- Pipeline: accepts FileInfo via PSPath property
-
-## PARAMETERS
-
-### -Backup
+### Backup
 Creates a backup file before modifying. Recommended for important files.
 
 ```yaml
@@ -72,7 +51,7 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Confirm
+### Confirm
 Prompts you for confirmation before running the cmdlet.
 
 ```yaml
@@ -83,6 +62,147 @@ Aliases: cf
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### Content
+The new content to set. Can be a string, array of strings, or omitted to delete lines. If omitted, the specified line range is deleted.
+
+```yaml
+Type: Object[]
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: 1
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### Encoding
+Specifies the character encoding. If omitted, encoding is auto-detected and preserved.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### LineRange
+Specifies the line range to replace. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 replaces from line 100 to end of file). If omitted, replaces the entire file.
+
+```yaml
+Type: Int32[]
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### LiteralPath
+Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
+
+```yaml
+Type: String[]
+Parameter Sets: LiteralPath
+Aliases: PSPath
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByPropertyName)
+Accept wildcard characters: False
+```
+
+### Path
+Specifies the path to the text file. Supports wildcards for processing multiple files.
+
+```yaml
+Type: String[]
+Parameter Sets: Path
+Aliases:
+
+Required: True
+Position: 0
+Default value: None
+Accept pipeline input: True (ByPropertyName)
+Accept wildcard characters: True
+```
+
+### WhatIf
+Shows what would happen if the cmdlet runs.
+The cmdlet is not run.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: wi
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### ProgressAction
+Common parameter for controlling progress display behavior. See about_CommonParameters for details.
+
+```yaml
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### CommonParameters
+This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
+
+## PARAMETERS
+
+### -Backup
+Creates a backup file before modifying. Recommended for important files.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -118,7 +238,7 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Specifies the line range to replace. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 replaces from line 100 to end of file). If omitted, replaces the entire file.
+Specifies the line range to replace. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). If omitted, replaces the entire file.
 
 ```yaml
 Type: Int32[]
@@ -163,8 +283,7 @@ Accept wildcard characters: True
 ```
 
 ### -WhatIf
-Shows what would happen if the cmdlet runs.
-The cmdlet is not run.
+Shows what would happen if the cmdlet runs. The cmdlet is not run.
 
 ```yaml
 Type: SwitchParameter
@@ -173,7 +292,7 @@ Aliases: wi
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -230,7 +349,3 @@ Metadata preservation:
 - Trailing newline presence is preserved
 
 ## RELATED LINKS
-
-
-
-

@@ -29,31 +29,11 @@ Tests if file contains matching text (literal or regex) within specified line ra
 
 ## EXAMPLES
 
-### Example 1: Basic usage - literal string or regex
+### Example 1: Test if file contains text (returns Boolean)
 ```powershell
-Test-TextFileContains app.log -Contains "ERROR"                          # Literal
-Test-TextFileContains app.log -Pattern "^(ERROR|WARN):"                  # Regex
-if (Test-TextFileContains config.ini -Contains "Debug=true") { ... }     # Conditional
+Test-TextFileContains app.log -Contains "ERROR"               # Literal
+Test-TextFileContains app.log -Pattern "^(ERROR|WARN):"       # Regex
 ```
-
-### Example 2: Multiple files - wildcards or pipeline
-```powershell
-Test-TextFileContains *.log -Contains "FATAL"                            # Wildcards
-Get-ChildItem *.log | Test-TextFileContains -Contains "ERROR"            # Pipeline
-Get-ChildItem *.txt | Where-Object Length -gt 1KB | Test-TextFileContains -Pattern "X"
-```
-
-### Example 3: LineRange and encoding
-```powershell
-Test-TextFileContains large.txt -Contains "X" -LineRange 1000,2000       # Partial search
-Test-TextFileContains sjis.txt -Contains "日本語" -Encoding Shift_JIS    # Non-UTF8
-```
-
-Important:
-- Returns Boolean; use in conditionals
-- -Contains (literal) and -Pattern (regex) are mutually exclusive
-- Optimized: stops on first match
-- Pipeline: accepts FileInfo via PSPath property
 
 ## PARAMETERS
 
@@ -203,6 +183,3 @@ Multiple files:
 - Early termination applies across files (stops at first match)
 
 ## RELATED LINKS
-
-
-

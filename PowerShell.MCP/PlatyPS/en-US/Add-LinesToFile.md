@@ -29,32 +29,12 @@ Inserts lines at specified position or appends to end or creates new file. Accep
 
 ## EXAMPLES
 
-### Example 1: Insert at specific positions
+### Example 1: Insert or append lines
 ```powershell
-Add-LinesToFile app.log -LineNumber 1 -Content "# Header"              # At beginning
-Add-LinesToFile app.log -LineNumber 10 -Content "// Inserted line"     # Middle
-Add-LinesToFile app.log -Content "# Footer"                            # At end (default)
-Add-LinesToFile new.txt -Content "First line"                          # Creates new file
+Add-LinesToFile app.log -LineNumber 10 -Content "Inserted"    # Insert at line 10
+Add-LinesToFile app.log -Content "Appended"                   # Append at end (default, no -LineNumber)
+Add-LinesToFile new.txt -Content "First line"                 # Creates new file if not exists
 ```
-
-### Example 2: Insert multiple lines
-```powershell
-Add-LinesToFile config.ini -LineNumber 5 -Content @("Line1", "Line2", "Line3")
-Add-LinesToFile *.txt -Content "=== EOF ===" -Backup                   # Appends to all files
-```
-
-### Example 3: Pipeline
-```powershell
-Get-ChildItem *.config | Add-LinesToFile -LineNumber 1 -Content "# Auto-generated"
-Get-ChildItem *.cs | Where-Object { (Get-Content $_ -First 1) -notmatch "using" } | Add-LinesToFile -LineNumber 1 -Content "using System;"
-```
-
-Important:
-- Defaults to append at end when -LineNumber is not specified
-- New files: -LineNumber only accepts 1 or omitted
-- Content accepts string (single line) or array (multiple lines: @("L1", "L2", "L3"))
-- Creates new file if it doesn't exist
-- Pipeline: accepts FileInfo via PSPath property
 
 ## PARAMETERS
 

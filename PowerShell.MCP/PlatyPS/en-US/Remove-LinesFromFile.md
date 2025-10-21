@@ -29,31 +29,11 @@ Removes lines matching text (literal or regex) within optional range. When range
 
 ## EXAMPLES
 
-### Example 1: Remove by line number or pattern
+### Example 1: Remove by pattern or combined filter
 ```powershell
-Remove-LinesFromFile app.log -LineRange 5                              # Single line
-Remove-LinesFromFile app.log -LineRange 10,20                          # Range
-Remove-LinesFromFile app.log -Contains "DEBUG"                         # Literal match
-Remove-LinesFromFile app.log -Pattern "^(DEBUG|TRACE):"                # Regex
+Remove-LinesFromFile app.log -Pattern "^DEBUG:"               # Regex match
+Remove-LinesFromFile app.log -LineRange 100,200 -Contains "temp"  # AND condition (range AND pattern)
 ```
-
-### Example 2: Combined filters and multiple files
-```powershell
-Remove-LinesFromFile app.log -LineRange 100,200 -Contains "temp"       # AND condition
-Remove-LinesFromFile *.log -Contains "DEPRECATED" -Backup              # Wildcards
-```
-
-### Example 3: Pipeline
-```powershell
-Get-ChildItem *.log | Remove-LinesFromFile -Contains "DEBUG"
-Get-ChildItem *.txt | Where-Object Length -gt 1MB | Remove-LinesFromFile -LineRange 1,100 -Backup
-```
-
-Important:
-- -LineRange and -Contains/-Pattern can be combined (AND logic)
-- -Contains (literal) and -Pattern (regex) are mutually exclusive
-- Warns if no lines match (file unchanged)
-- Pipeline: accepts FileInfo via PSPath property
 
 ## PARAMETERS
 
@@ -256,6 +236,3 @@ Common patterns:
 - Debug statements: console\.log|System\.out\.println
 
 ## RELATED LINKS
-
-
-
