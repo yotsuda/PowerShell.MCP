@@ -88,7 +88,7 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Specifies the line range to search. Accepts 1 or 2 values: single line number (e.g., 5) or start-end range (e.g., 5,10). Both endpoints are inclusive. Line numbers are 1-based. Only lines within this range are searched.
+Specifies the line range to search. Accepts 1 or 2 values: single line number (e.g., 5) or start-end range (e.g., 5,10). Both endpoints are inclusive. Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 processes from line 100 to end of file). Only lines within this range are searched.
 
 ```yaml
 Type: Int32[]
@@ -203,3 +203,6 @@ Multiple files:
 - Early termination applies across files (stops at first match)
 
 ## RELATED LINKS
+
+
+

@@ -103,7 +103,7 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Specifies the line range to remove. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 10,20). Both endpoints are inclusive. Can be combined with -Pattern for AND condition.
+Specifies the line range to remove. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 10,20). Both endpoints are inclusive. Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 removes from line 100 to end of file). Can be combined with -Pattern for AND condition.
 
 ```yaml
 Type: Int32[]
@@ -256,3 +256,6 @@ Common patterns:
 - Debug statements: console\.log|System\.out\.println
 
 ## RELATED LINKS
+
+
+

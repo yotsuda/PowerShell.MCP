@@ -118,7 +118,7 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Specifies the line range to replace. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). If omitted, replaces the entire file.
+Specifies the line range to replace. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 replaces from line 100 to end of file). If omitted, replaces the entire file.
 
 ```yaml
 Type: Int32[]
@@ -230,3 +230,7 @@ Metadata preservation:
 - Trailing newline presence is preserved
 
 ## RELATED LINKS
+
+
+
+

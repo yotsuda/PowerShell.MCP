@@ -25,7 +25,7 @@ Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>]
 ```
 
 ## DESCRIPTION
-Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex). Optimized for LLM use with 1-based line numbering compatible with editors and compilers.
+Displays file contents with line numbers. When using -Contains or -Pattern, matching lines are highlighted with ANSI reverse video and displayed with 3 lines of context before and after each match. Filter by line range and/or matching text (literal or regex). Optimized for LLM use with 1-based line numbering compatible with editors and compilers.
 
 ## EXAMPLES
 
@@ -48,6 +48,22 @@ Show-TextFile Program.cs -LineRange 10,50 -Pattern "bug"      # Combined
 Show-TextFile *.cs                                            # Wildcards
 Get-ChildItem *.log | Show-TextFile -Contains "FATAL"         # Pipeline
 Get-ChildItem *.txt | Where-Object Length -gt 10KB | Show-TextFile -LineRange 1,100
+
+### Example 4: Negative LineRange values (end of file)
+```powershell
+Show-TextFile log.txt -LineRange 100,-1                       # From line 100 to end
+Show-TextFile config.ini -LineRange 50,0                       # From line 50 to end (0 = end)
+Show-TextFile Program.cs -LineRange 1,-1                       # Entire file (same as no range)
+```
+
+### Example 5: Context display with search
+```powershell
+# When using -Contains or -Pattern, matching lines are shown with 3 lines of context
+Show-TextFile Program.cs -Contains "TODO"                      # Shows TODO with surrounding context
+Show-TextFile error.log -Pattern "ERROR|FATAL"                 # Shows errors with context
+# Matched text is highlighted with ANSI reverse video for easy identification
+```
+
 ```
 
 Important:
@@ -74,7 +90,7 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Specifies the line range to display. Accepts 1 or 2 values: single line number (e.g., 5) or start-end range (e.g., 5,10). Both endpoints are inclusive. Line numbers are 1-based.
+Specifies the line range to display. Accepts 1 or 2 values: single line number (e.g., 5) or start-end range (e.g., 5,10). Both endpoints are inclusive. Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 displays from line 100 to end of file).
 
 ```yaml
 Type: Int32[]
@@ -104,7 +120,7 @@ Accept wildcard characters: True
 ```
 
 ### -Pattern
-Specifies a regular expression pattern to search for. Only lines matching the pattern are displayed. Matching lines are prefixed with * for easy identification. Can be combined with -LineRange to search within a specific range.
+Specifies a regular expression pattern to search for. Matching lines are displayed with 3 lines of context before and after, with matched text highlighted using ANSI reverse video. Matching lines are prefixed with * for easy identification. Can be combined with -LineRange to search within a specific range.
 
 ```yaml
 Type: String
@@ -149,7 +165,7 @@ Accept wildcard characters: False
 ```
 
 ### -Contains
-Specifies a literal string to search for in each line. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful for searching text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' ' without needing to escape them. Matching lines are prefixed with * for easy identification.
+Specifies a literal string to search for in each line. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. Matching lines are displayed with 3 lines of context before and after, with matched text highlighted using ANSI reverse video. This is useful for searching text that contains regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' ' without needing to escape them. Matching lines are prefixed with * for easy identification.
 
 ```yaml
 Type: String
@@ -211,3 +227,5 @@ Multiple files:
 - Useful for quickly surveying related files
 
 ## RELATED LINKS
+
+

@@ -118,7 +118,7 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Limits replacement to specific lines. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). Only matches within this range are replaced.
+Limits replacement to specific lines. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 searches from line 100 to end of file). Only matches within this range are replaced.
 
 ```yaml
 Type: Int32[]
@@ -270,3 +270,7 @@ Regular expression mode:
 - -Contains and -Pattern are mutually exclusive (cannot be used together)
 
 ## RELATED LINKS
+
+
+
+
