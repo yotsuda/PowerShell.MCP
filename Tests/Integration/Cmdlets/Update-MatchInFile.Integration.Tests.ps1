@@ -244,7 +244,7 @@ Describe "Update-MatchInFile Integration Tests" {
         }
 
         It "Pattern + 空文字列でマッチしたテキストを削除できる" {
-            Set-Content -Path $script:testFile -Value "Price: $99.99 (tax included)" -Encoding UTF8
+            Set-Content -Path $script:testFile -Value 'Price: $99.99 (tax included)' -Encoding UTF8
             Update-MatchInFile -Path $script:testFile -Pattern '\$[\d.]+\s*' -Replacement ""
             $result = Get-Content $script:testFile -Raw
             $result.Trim() | Should -Be "Price: (tax included)"

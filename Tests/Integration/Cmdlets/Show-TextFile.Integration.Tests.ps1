@@ -1,4 +1,4 @@
-# Test-ShowTextFileCmdlet.ps1
+﻿# Test-ShowTextFileCmdlet.ps1
 # Show-TextFile コマンドレットの統合テスト（既存 + HIGH優先度）
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -61,8 +61,8 @@ Describe "Show-TextFile Integration Tests" {
         It "Contains パラメータで文字列を検索できる" {
             $result = Show-TextFile -Path $script:testFile -Contains "Third"
             $result | Should -Not -BeNullOrEmpty
-            # 実データ行（ヘッダーの次）をチェック
-            $result[1] | Should -Match "Third"
+            # 新実装: 前後3行のコンテキストと共に表示されるため、結果内にマッチ行が含まれることを確認
+            $result | Where-Object { $_ -match '\*.*Third' } | Should -Not -BeNullOrEmpty
         }
 
         It "Pattern パラメータで正規表現検索できる" {
