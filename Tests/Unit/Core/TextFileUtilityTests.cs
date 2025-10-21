@@ -1,4 +1,4 @@
-using Xunit;
+﻿using Xunit;
 using PowerShell.MCP.Cmdlets;
 using System.Text;
 
@@ -795,5 +795,70 @@ public class TextFileUtilityTests
         // Assert
         Assert.False(upgraded);
         Assert.Null(message);
+    }
+
+    // ======================================================================
+    // ParseLineRange Tests - Zero and Negative Values (End of File)
+    // ======================================================================
+
+    [Theory]
+    [InlineData(100, -1, 100, int.MaxValue)]  // -1 means end of file
+    [InlineData(100, 0, 100, int.MaxValue)]   // 0 means end of file
+    [InlineData(50, -99, 50, int.MaxValue)]   // Any negative value means end of file
+    [InlineData(1, -1, 1, int.MaxValue)]      // From first line to end
+    public void ParseLineRange_WithZeroOrNegativeEnd_ReturnsMaxValue(int start, int end, int expectedStart, int expectedEnd)
+    {
+        // Arrange
+        var lineRange = new int[] { start, end };
+        
+        // Act
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
+        
+        // Assert
+        Assert.Equal(expectedStart, startLine);
+        Assert.Equal(expectedEnd, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_WithSingleValue_ReturnsSameStartAndEnd()
+    {
+        // Arrange
+        var lineRange = new int[] { 100 };
+        
+        // Act
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
+        
+        // Assert
+        Assert.Equal(100, startLine);
+        Assert.Equal(100, endLine);  // Single value = that line only
+    }
+
+    [Theory]
+    [InlineData(1, 10)]
+    [InlineData(50, 100)]
+    [InlineData(200, 300)]
+    public void ParseLineRange_WithPositiveRange_ReturnsExactRange(int start, int end)
+    {
+        // Arrange
+        var lineRange = new int[] { start, end };
+        
+        // Act
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
+        
+        // Assert
+        Assert.Equal(start, startLine);
+        Assert.Equal(end, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_WithMoreThanTwoValues_ThrowsArgumentException()
+    {
+        // Arrange
+        var lineRange = new int[] { 1, 2, 3 };
+        
+        // Act & Assert
+        var exception = Assert.Throws<ArgumentException>(() => 
+            TextFileUtility.ParseLineRange(lineRange));
+        Assert.Contains("LineRange accepts 1 or 2 values", exception.Message);
     }
 }

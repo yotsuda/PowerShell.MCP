@@ -130,85 +130,188 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     private void ShowWithPattern(string filePath, System.Text.Encoding encoding)
     {
         var regex = new Regex(Pattern, RegexOptions.Compiled);
-
-        // 行範囲を取得
-        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
-
-        // Skip/Take で範囲を絞り込んでからパターンマッチ
-        int skipCount = startLine - 1;
-        int takeCount = endLine - startLine + 1;
-
-        var linesToSearch = File.ReadLines(filePath, encoding)
-            .Skip(skipCount)
-            .Take(takeCount);
-
-        int matchCount = 0;
-        int lineNumber = startLine;
-        bool hasLines = false;
-
-        foreach (var line in linesToSearch)
-        {
-            hasLines = true;
-            if (regex.IsMatch(line))
-            {
-                // LLM向け：行番号フォーマットを統一（4桁）
-                WriteObject($"*{lineNumber,3}: {line}");
-                matchCount++;
-            }
-            lineNumber++;
-        }
-
-        // 指定範囲が存在しない場合
-        if (!hasLines && LineRange != null)
-        {
-            WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
-        }
-        // マッチが見つからない場合
-        else if (matchCount == 0)
-        {
-            WriteWarning($"No lines matched pattern: {Pattern}");
-        }
+        ShowWithMatch(filePath, encoding, line => regex.IsMatch(line), "pattern", Pattern, true);
     }
 
     private void ShowWithContains(string filePath, System.Text.Encoding encoding)
     {
+        ShowWithMatch(filePath, encoding, 
+            line => line.Contains(Contains, StringComparison.Ordinal), 
+            "contain", Contains, false);
+    }
+
+    /// <summary>
+    /// マッチ条件に基づいて行を検索し、前後の文脈と共に表示
+    /// </summary>
+    private void ShowWithMatch(
+        string filePath, 
+        System.Text.Encoding encoding, 
+        Func<string, bool> matchPredicate,
+        string matchTypeForWarning,
+        string matchValue,
+        bool isRegex)
+    {
         // 行範囲を取得
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
-        // Skip/Take で範囲を絞り込んでから文字列検索
-        int skipCount = startLine - 1;
-        int takeCount = endLine - startLine + 1;
+        // 1st pass: マッチした行番号を収集（LineRange 範囲内のみ効率的に読み込み）
+        var matchedLines = new List<int>();
 
         var linesToSearch = File.ReadLines(filePath, encoding)
-            .Skip(skipCount)
-            .Take(takeCount);
+            .Skip(startLine - 1)
+            .Take(endLine - startLine + 1);
 
-        int matchCount = 0;
         int lineNumber = startLine;
         bool hasLines = false;
 
         foreach (var line in linesToSearch)
         {
             hasLines = true;
-            // Contains: リテラル文字列として部分一致検索（正規表現ではない）
-            if (line.Contains(Contains, StringComparison.Ordinal))
+            if (matchPredicate(line))
             {
-                // LLM向け：行番号フォーマットを統一（4桁）、マッチ行に*マーク
-                WriteObject($"*{lineNumber,3}: {line}");
-                matchCount++;
+                matchedLines.Add(lineNumber);
             }
             lineNumber++;
         }
 
-        // 指定範囲が存在しない場合
-        if (!hasLines && LineRange != null)
-        {
-            WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
-        }
         // マッチが見つからない場合
-        else if (matchCount == 0)
+        if (matchedLines.Count == 0)
         {
-            WriteWarning($"No lines contain: {Contains}");
+            if (!hasLines && LineRange != null)
+            {
+                WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
+            }
+            else
+            {
+                string message = matchTypeForWarning == "pattern" 
+                    ? $"No lines matched pattern: {matchValue}"
+                    : $"No lines contain: {matchValue}";
+                WriteWarning(message);
+            }
+            return;
+        }
+
+        // 範囲を計算してマージ（前後3行の文脈）
+        var ranges = CalculateAndMergeRanges(matchedLines, endLine, contextLines: 3);
+
+        // 2nd pass: 範囲ごとに出力（反転表示付き）
+        OutputRangesWithContext(filePath, encoding, ranges, matchedLines, matchValue, isRegex);
+    }
+
+    /// <summary>
+    /// マッチした行番号から前後の文脈を含む範囲を計算し、重複する範囲をマージ
+    /// </summary>
+    private List<(int start, int end)> CalculateAndMergeRanges(
+        List<int> matchedLines, int maxLine, int contextLines)
+    {
+        var ranges = new List<(int start, int end)>();
+
+        // 各マッチの前後N行の範囲を計算
+        foreach (var lineNum in matchedLines)
+        {
+            int start = Math.Max(1, lineNum - contextLines);
+            int end = Math.Min(maxLine, lineNum + contextLines);
+            ranges.Add((start, end));
+        }
+
+        // 範囲をソート
+        ranges.Sort();
+
+        // 重複または隣接する範囲をマージ
+        var merged = new List<(int start, int end)>();
+        var current = ranges[0];
+
+        for (int i = 1; i < ranges.Count; i++)
+        {
+            if (ranges[i].start <= current.end + 1)
+            {
+                // 範囲が重複または隣接 → マージ
+                current = (current.start, Math.Max(current.end, ranges[i].end));
+            }
+            else
+            {
+                // 範囲が離れている → 現在の範囲を確定し、次の範囲へ
+                merged.Add(current);
+                current = ranges[i];
+            }
+        }
+        merged.Add(current);
+
+        return merged;
+    }
+    /// <summary>
+    /// 指定された範囲を効率的に出力（ファイルを1回だけ読み込み、マッチ部分を反転表示）
+    /// </summary>
+    private void OutputRangesWithContext(
+        string filePath, 
+        System.Text.Encoding encoding, 
+        List<(int start, int end)> ranges,
+        List<int> matchedLines,
+        string searchValue,
+        bool isRegex)
+    {
+        var matchedSet = new HashSet<int>(matchedLines);
+        int rangeIndex = 0;
+        int currentLine = 1;
+        bool inRange = false;
+
+        // ANSIエスケープシーケンス（反転表示）
+        string reverseOn = $"{(char)27}[7m";
+        string reverseOff = $"{(char)27}[0m";
+
+        foreach (var line in File.ReadLines(filePath, encoding))
+        {
+            // 全ての範囲を処理済みなら終了
+            if (rangeIndex >= ranges.Count)
+                break;
+
+            var (start, end) = ranges[rangeIndex];
+
+            // 現在の範囲に到達したか？
+            if (currentLine >= start && currentLine <= end)
+            {
+                if (!inRange)
+                {
+                    // 範囲の最初の行
+                    inRange = true;
+                }
+
+                var prefix = matchedSet.Contains(currentLine) ? "*" : " ";
+                
+                // マッチ行の場合、マッチ部分を反転表示
+                string displayLine = line;
+                if (matchedSet.Contains(currentLine))
+                {
+                    if (isRegex)
+                    {
+                        // 正規表現の場合
+                        var regex = new Regex(searchValue, RegexOptions.Compiled);
+                        displayLine = regex.Replace(line, m => $"{reverseOn}{m.Value}{reverseOff}");
+                    }
+                    else
+                    {
+                        // Contains（リテラル文字列）の場合
+                        displayLine = line.Replace(searchValue, $"{reverseOn}{searchValue}{reverseOff}");
+                    }
+                }
+
+                WriteObject($"{prefix}{currentLine,3}: {displayLine}");
+
+                // 範囲の最後の行に到達したら、次の範囲へ
+                if (currentLine == end)
+                {
+                    inRange = false;
+                    rangeIndex++;
+
+                    // 次の範囲があれば空行を挿入
+                    if (rangeIndex < ranges.Count)
+                    {
+                        WriteObject("");
+                    }
+                }
+            }
+
+            currentLine++;
         }
     }
 }

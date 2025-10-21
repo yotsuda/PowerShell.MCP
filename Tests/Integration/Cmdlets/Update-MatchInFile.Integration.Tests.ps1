@@ -234,5 +234,71 @@ Describe "Update-MatchInFile Integration Tests" {
                 Remove-Item $file2 -Force -ErrorAction SilentlyContinue
             }
         }
+
+    Context "空文字列による削除（Empty Replacement）" {
+        It "Contains + 空文字列でマッチしたテキストを削除できる" {
+            Set-Content -Path $script:testFile -Value "Server=localhost:8080" -Encoding UTF8
+            Update-MatchInFile -Path $script:testFile -Contains ":8080" -Replacement ""
+            $result = Get-Content $script:testFile -Raw
+            $result.Trim() | Should -Be "Server=localhost"
+        }
+
+        It "Pattern + 空文字列でマッチしたテキストを削除できる" {
+            Set-Content -Path $script:testFile -Value "Price: $99.99 (tax included)" -Encoding UTF8
+            Update-MatchInFile -Path $script:testFile -Pattern '\$[\d.]+\s*' -Replacement ""
+            $result = Get-Content $script:testFile -Raw
+            $result.Trim() | Should -Be "Price: (tax included)"
+        }
+
+        It "複数行から特定パターンを削除できる" {
+            $content = @(
+                "Error: Failed to connect"
+                "Warning: Timeout occurred"
+                "Info: Process completed"
+            )
+            Set-Content -Path $script:testFile -Value $content -Encoding UTF8
+            # "Error: " と "Warning: " を削除
+            Update-MatchInFile -Path $script:testFile -Pattern '^(Error|Warning): ' -Replacement ""
+            $result = Get-Content $script:testFile
+            $result[0] | Should -Be "Failed to connect"
+            $result[1] | Should -Be "Timeout occurred"
+            $result[2] | Should -Be "Info: Process completed"
+        }
+
+        It "URLからプロトコル部分を削除できる" {
+            Set-Content -Path $script:testFile -Value "https://example.com/path" -Encoding UTF8
+            Update-MatchInFile -Path $script:testFile -Pattern '^https?://' -Replacement ""
+            $result = Get-Content $script:testFile -Raw
+            $result.Trim() | Should -Be "example.com/path"
+        }
+
+        It "空文字列削除後もエンコーディングが保持される" {
+            $content = "日本語テキスト:削除対象"
+            Set-Content -Path $script:testFile -Value $content -Encoding UTF8
+            Update-MatchInFile -Path $script:testFile -Contains ":削除対象" -Replacement ""
+            $result = Get-Content $script:testFile -Raw -Encoding UTF8
+            $result.Trim() | Should -Be "日本語テキスト"
+        }
+    }
+
+    Context "Replacement パラメータの検証" {
+        It "Replacement を指定しない（null）場合、Contains でエラーになる" {
+            { Update-MatchInFile -Path $script:testFile -Contains "test" } | 
+                Should -Throw "*Both -Contains and -Replacement must be specified together*"
+        }
+
+        It "Replacement を指定しない（null）場合、Pattern でエラーになる" {
+            { Update-MatchInFile -Path $script:testFile -Pattern '\d+' } | 
+                Should -Throw "*Both -Pattern and -Replacement must be specified together*"
+        }
+
+        It "Replacement に空文字列を指定した場合はエラーにならない（削除として動作）" {
+            Set-Content -Path $script:testFile -Value "Test123" -Encoding UTF8
+            { Update-MatchInFile -Path $script:testFile -Contains "123" -Replacement "" } | 
+                Should -Not -Throw
+            $result = Get-Content $script:testFile -Raw
+            $result.Trim() | Should -Be "Test"
+        }
+    }
     }
 }

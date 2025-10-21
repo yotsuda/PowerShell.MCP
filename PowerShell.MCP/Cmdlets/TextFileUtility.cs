@@ -120,11 +120,11 @@ public static class TextFileUtility
     public static string[] ConvertToStringArray(object? content)
     {
         if (content == null)
-            return Array.Empty<string>();
+            return [];
 
         if (content is string str)
         {
-            return str.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            return str.Split(["\r\n", "\n"], StringSplitOptions.None);
         }
         else if (content is string[] arr)
         {
@@ -154,7 +154,7 @@ public static class TextFileUtility
         }
         else
         {
-            return [content.ToString()];
+            return [content.ToString() ?? ""];
         }
     }
 
@@ -168,6 +168,7 @@ public static class TextFileUtility
 
     /// <summary>
     /// LineRange パラメータから開始行と終了行を取得
+    /// 0以下の値は最終行を表す（例: -LineRange 100,-1 で100行目から最後まで）
     /// </summary>
     public static (int StartLine, int EndLine) ParseLineRange(int[]? lineRange)
     {
@@ -180,7 +181,18 @@ public static class TextFileUtility
         }
         
         int startLine = lineRange[0];
-        int endLine = lineRange.Length > 1 ? lineRange[1] : startLine;
+        int endLine;
+        
+        if (lineRange.Length > 1)
+        {
+            // 2つの値が指定された場合
+            endLine = lineRange[1] <= 0 ? int.MaxValue : lineRange[1];
+        }
+        else
+        {
+            // 1つの値のみ指定された場合は、その行のみ
+            endLine = startLine;
+        }
         
         return (startLine, endLine);
     }

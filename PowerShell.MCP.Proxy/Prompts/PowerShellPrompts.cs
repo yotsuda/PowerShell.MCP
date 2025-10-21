@@ -474,8 +474,8 @@ Start-OpenStreetMapTour Tokyo, Osaka, Kyoto -Duration 1.5 -PauseTime 2
 After Show-OpenStreetMap, check results:
 ```powershell
 # If result shows markers with vastly different coordinates:
-# Ageo area: lat ~35.95-36.00, lon ~139.54-139.64
-# Outlier: lat 35.03, lon 135.74 (different prefecture!)
+# Tokyo area: lat ~35.65-35.75, lon ~139.70-139.80
+# Outlier: lat 34.69, lon 135.50 (Osaka - different city!)
 # → Remove outlier and re-display
 ```
 
