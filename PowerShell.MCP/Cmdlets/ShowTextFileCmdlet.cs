@@ -6,7 +6,7 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// テキストファイルの内容を行番号付きで表示
-/// LLM最適化：行番号は常に4桁、パターンマッチは*でマーク、常にカレントディレクトリからの相対パスを表示
+/// LLM最適化：行番号は3桁、マッチ行は:でコンテキスト行は-で区別（grep標準）、常にカレントディレクトリからの相対パスを表示
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextFile")]
 public class ShowTextFileCmdlet : TextFileCmdletBase
@@ -115,7 +115,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
         foreach (var line in lines)
         {
-            WriteObject($"{currentLine,4}: {line}");
+            WriteObject($"{currentLine,3}: {line}");
             currentLine++;
             hasOutput = true;
         }
@@ -223,14 +223,14 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
         for (int i = 1; i < ranges.Count; i++)
         {
-            if (ranges[i].start <= current.end + 1)
+            if (ranges[i].start <= current.end + 4)
             {
-                // 範囲が重複または隣接 → マージ
+                // 範囲が重複、隣接、または小さなギャップ（3行以下）→ マージ
                 current = (current.start, Math.Max(current.end, ranges[i].end));
             }
             else
             {
-                // 範囲が離れている → 現在の範囲を確定し、次の範囲へ
+                // ギャップが大きい（4行以上）→ 現在の範囲を確定し、次の範囲へ
                 merged.Add(current);
                 current = ranges[i];
             }
@@ -276,7 +276,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     inRange = true;
                 }
 
-                var prefix = matchedSet.Contains(currentLine) ? "*" : " ";
+                var separator = matchedSet.Contains(currentLine) ? ":" : "-";
                 
                 // マッチ行の場合、マッチ部分を反転表示
                 string displayLine = line;
@@ -295,7 +295,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     }
                 }
 
-                WriteObject($"{prefix}{currentLine,3}: {displayLine}");
+                WriteObject($"{currentLine,3}{separator} {displayLine}");
 
                 // 範囲の最後の行に到達したら、次の範囲へ
                 if (currentLine == end)
