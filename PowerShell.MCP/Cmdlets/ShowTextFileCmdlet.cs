@@ -61,9 +61,6 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     WriteObject("");
                 }
                 
-                // 表示用パスを決定（PS Drive パスを保持）
-                var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                WriteObject($"==> {displayPath} <==");
                 
                 _totalFilesProcessed++;
 
@@ -101,6 +98,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     private void ShowWithLineRange(string filePath, System.Text.Encoding encoding)
     {
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
+        
+        // ヘッダー出力
+        var displayPath = GetDisplayPath(filePath, filePath);
+        WriteObject($"==> {displayPath} <==");
 
         // Skip/Take で必要な範囲だけを取得（LINQの遅延評価で効率的）
         int skipCount = startLine - 1;
@@ -141,7 +142,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// マッチ条件に基づいて行を検索し、前後の文脈と共に表示（1パス実装）
+    /// マッチ条件に基づいて行を検索し、前後の文脈と共に表示（真の1パス実装、rotate buffer使用）
     /// </summary>
     private void ShowWithMatch(
         string filePath, 
@@ -153,46 +154,40 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     {
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
         
-        // コンテキスト範囲を計算（前後2行を含む）
-        int contextStartLine = Math.Max(1, startLine - 2);
-        int contextEndLine = (endLine == int.MaxValue) ? int.MaxValue : endLine + 2;
-        
-        var matchedLines = new List<int>();
-        var contextBuffer = new Dictionary<int, string>();
-        
         // ANSIエスケープシーケンス（反転表示）
         string reverseOn = $"{(char)27}[7m";
         string reverseOff = $"{(char)27}[0m";
         
+        var displayPath = GetDisplayPath(filePath, filePath);
+        bool headerPrinted = false;
+        bool anyMatch = false;
+        
         using (var enumerator = File.ReadLines(filePath, encoding).GetEnumerator())
         {
-            // contextStartLine まで移動
-            int skipCount = 0;
-            while (skipCount < contextStartLine - 1 && enumerator.MoveNext())
-            {
-                skipCount++;
-            }
-            
             if (!enumerator.MoveNext())
             {
-                // ファイルが範囲外
-                WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
+                // 空ファイル
+                WriteWarning("File is empty. No output.");
                 return;
             }
             
-            int lineNumber = contextStartLine;
+            int lineNumber = 1;
             string currentLine = enumerator.Current;
             bool hasNext = enumerator.MoveNext();
             
-            // Rotate buffer: 前2行を保持
+            // Rotate buffer: 前2行 + ギャップ候補1行
             string? prevPrevLine = null;
             string? prevLine = null;
+            string? gapLine = null;
             
             // 後続コンテキストカウンタ
             int afterMatchCounter = 0;
             
-            // 最後にマッチした行番号
-            int lastMatchLine = 0;
+            // 最後に出力した行番号（ギャップ検出用）
+            int lastOutputLine = 0;
+            
+            // ギャップ検出: 空行出力フラグ（次のマッチが見つかったときに出力）
+            bool needsGapSeparator = false;
             
             while (true)
             {
@@ -201,16 +196,43 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 
                 if (matched)
                 {
-                    // 前2行をバッファに追加（マッチを含む場合は反転表示を適用）
-                    if (prevPrevLine != null && lineNumber - 2 >= 1)
+                    anyMatch = true;
+                    
+                    // ヘッダー出力（初回のみ）
+                    if (!headerPrinted)
                     {
-                        contextBuffer[lineNumber - 2] = ApplyHighlightingIfMatched(prevPrevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                        WriteObject($"==> {displayPath} <==");
+                        headerPrinted = true;
                     }
-                    if (prevLine != null && lineNumber - 1 >= 1)
+                    
+                    // ギャップがあれば空行を出力
+                    if (needsGapSeparator)
                     {
-                        contextBuffer[lineNumber - 1] = ApplyHighlightingIfMatched(prevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                        WriteObject("");
+                        needsGapSeparator = false;
                     }
-                    // 反転表示を構築
+                    
+                    // ギャップがあれば gapLine を出力（ギャップが1行だけなので結合）
+                    if (gapLine != null)
+                    {
+                        string gapDisplay = ApplyHighlightingIfMatched(gapLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                        WriteObject($"{lastOutputLine + 1,3}- {gapDisplay}");
+                        gapLine = null;
+                    }
+                    
+                    // 前2行を出力（rotate buffer から）
+                    if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)
+                    {
+                        string prevPrevDisplay = ApplyHighlightingIfMatched(prevPrevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                        WriteObject($"{lineNumber - 2,3}- {prevPrevDisplay}");
+                    }
+                    if (prevLine != null && lineNumber >= 2 && lineNumber - 1 > lastOutputLine)
+                    {
+                        string prevDisplay = ApplyHighlightingIfMatched(prevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                        WriteObject($"{lineNumber - 1,3}- {prevDisplay}");
+                    }
+                    
+                    // マッチ行を出力（反転表示）
                     string displayLine;
                     if (isRegex)
                     {
@@ -221,20 +243,37 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     {
                         displayLine = currentLine.Replace(matchValue, $"{reverseOn}{matchValue}{reverseOff}");
                     }
-                    
-                    contextBuffer[lineNumber] = displayLine;
-                    matchedLines.Add(lineNumber);
+                    WriteObject($"{lineNumber,3}: {displayLine}");
                     
                     afterMatchCounter = 2;
-                    lastMatchLine = lineNumber;
+                    lastOutputLine = lineNumber;
+                    gapLine = null; // ギャップリセット
                 }
                 else
                 {
-                    // 後続コンテキストの収集（マッチを含む場合は反転表示を適用）
+                    // 後続コンテキストの出力
                     if (afterMatchCounter > 0)
                     {
-                        contextBuffer[lineNumber] = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                        string display = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                        WriteObject($"{lineNumber,3}- {display}");
                         afterMatchCounter--;
+                        lastOutputLine = lineNumber;
+                    }
+                    else if (lastOutputLine > 0)
+                    {
+                        // ギャップ検出モード
+                        if (lineNumber == lastOutputLine + 1)
+                        {
+                            // 最後の出力行の次の1行目 → ギャップ候補として保持
+                            gapLine = currentLine;
+                        }
+                        else if (lineNumber == lastOutputLine + 2)
+                        {
+                            // 最後の出力行の次の2行目 → ギャップが2行以上 → 空行出力フラグ
+                            needsGapSeparator = true;
+                            gapLine = null;
+                            lastOutputLine = 0; // ギャップ検出終了
+                        }
                     }
                 }
                 
@@ -242,111 +281,30 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 prevPrevLine = prevLine;
                 prevLine = currentLine;
                 
-                // 終了条件：
-                // 1. 次の行がない
-                // 2. contextEndLine を超えた かつ 後続コンテキストの収集が完了した
-                if (!hasNext)
-                {
-                    break;
-                }
-                
-                if (lineNumber >= contextEndLine && afterMatchCounter == 0)
-                {
-                    break;
-                }
-                
                 // 次へ
-                lineNumber++;
-                currentLine = enumerator.Current;
-                hasNext = enumerator.MoveNext();
+                if (hasNext)
+                {
+                    lineNumber++;
+                    currentLine = enumerator.Current;
+                    hasNext = enumerator.MoveNext();
+                }
+                else
+                {
+                    break;
+                }
             }
         }
-
         
         // マッチが見つからない場合
-        if (matchedLines.Count == 0)
+        if (!anyMatch)
         {
             string message = matchTypeForWarning == "pattern" 
                 ? $"No lines matched pattern: {matchValue}"
                 : $"No lines contain: {matchValue}";
             WriteWarning(message);
-            return;
-        }
-        
-        // 範囲を計算してマージ
-        var sortedLineNumbers = contextBuffer.Keys.OrderBy(x => x).ToList();
-        var ranges = CalculateAndMergeRangesFromBuffer(sortedLineNumbers);
-        
-        // バッファから出力（ファイル再読込なし）
-        OutputFromBuffer(contextBuffer, matchedLines, ranges);
-    }
-
-    /// <summary>
-    /// バッファから範囲を計算してマージ
-    /// </summary>
-    private List<(int start, int end)> CalculateAndMergeRangesFromBuffer(List<int> lineNumbers)
-    {
-        var ranges = new List<(int start, int end)>();
-        if (lineNumbers.Count == 0) return ranges;
-
-        int currentStart = lineNumbers[0];
-        int currentEnd = lineNumbers[0];
-
-        for (int i = 1; i < lineNumbers.Count; i++)
-        {
-            int lineNumber = lineNumbers[i];
-            
-            // 現在の範囲と隣接または重複している場合、範囲を拡張
-            if (lineNumber <= currentEnd + 1)
-            {
-                currentEnd = lineNumber;
-            }
-            else
-            {
-                // 範囲を確定
-                ranges.Add((currentStart, currentEnd));
-                currentStart = lineNumber;
-                currentEnd = lineNumber;
-            }
-        }
-        
-        // 最後の範囲を追加
-        ranges.Add((currentStart, currentEnd));
-
-        return ranges;
-    }
-
-    /// <summary>
-    /// マッチした行とその前後のコンテキストを表示（バッファから、ファイル再読込なし）
-    /// </summary>
-    private void OutputFromBuffer(Dictionary<int, string> contextBuffer, List<int> matchedLines, List<(int start, int end)> ranges)
-    {
-        if (matchedLines.Count == 0) return;
-
-        var matchedSet = new HashSet<int>(matchedLines);
-        
-        // 範囲ごとに出力
-        for (int rangeIndex = 0; rangeIndex < ranges.Count; rangeIndex++)
-        {
-            var (start, end) = ranges[rangeIndex];
-            
-            for (int lineNumber = start; lineNumber <= end; lineNumber++)
-            {
-                if (contextBuffer.ContainsKey(lineNumber))
-                {
-                    string separator = matchedSet.Contains(lineNumber) ? ":" : "-";
-                    WriteObject($"{lineNumber,3}{separator} {contextBuffer[lineNumber]}");
-                }
-            }
-            
-            // 次の範囲との間に空行
-            if (rangeIndex < ranges.Count - 1)
-            {
-                WriteObject("");
-            }
         }
     }
-    
+
     /// <summary>
     /// 行にマッチが含まれる場合、反転表示を適用する
     /// </summary>

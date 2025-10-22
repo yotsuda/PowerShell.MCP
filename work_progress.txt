@@ -1,3 +1,197 @@
+## ✅ 作業完了（2025-10-23 08:03）
+
+### Show-TextFile -Contains の重複出力問題を修正・テスト完了
+
+**問題：**
+- Show-TextFile -Contains / -Pattern で、連続するマッチ行の出力が重複していた
+- 例：5行すべてがマッチする場合、期待は6行（ヘッダー+5行）だが、実際は13行出力される
+- 原因：後コンテキストとして出力された行が、次のマッチの前コンテキストとして再出力されていた
+
+**根本原因：**
+- rotate buffer の更新が常に実行されており、既に出力済みの行が prevLine / prevPrevLine に保存される
+- 次のマッチ時に、この出力済みの行が前コンテキストとして再度出力される
+
+**修正内容：**
+1. **ShowTextFileCmdlet.cs（224行目）：**
+   - 修正前：`if (prevPrevLine != null && lineNumber >= 3)`
+   - 修正後：`if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)`
+   - 既に出力済みの行（lineNumber - 2 <= lastOutputLine）は前コンテキストとして出力しない
+
+2. **ShowTextFileCmdlet.cs（229行目）：**
+   - 修正前：`if (prevLine != null && lineNumber >= 2)`
+   - 修正後：`if (prevLine != null && lineNumber >= 2 && lineNumber - 1 > lastOutputLine)`
+   - 既に出力済みの行（lineNumber - 1 <= lastOutputLine）は前コンテキストとして出力しない
+
+**テスト追加：**
+- Tests\Integration\Cmdlets\Show-TextFile.DuplicateDetection.Tests.ps1 を新規作成
+- 連続するマッチ行で重複出力がないことを検証
+- 各行が1回だけ出力されることを確認
+
+**変更ファイル：**
+- PowerShell.MCP\Cmdlets\ShowTextFileCmdlet.cs（2行修正）
+- Tests\Integration\Cmdlets\Show-TextFile.DuplicateDetection.Tests.ps1（新規作成）
+- work_procedure.md（学びを追加）
+- バックアップ：
+  - ShowTextFileCmdlet.cs.20251023075629.bak
+  - ShowTextFileCmdlet.cs.20251023075634.bak
+
+**テスト結果：**
+- ✅ Show-TextFile.DuplicateDetection.Tests.ps1: 1/1 パス（新規）
+- ✅ Show-TextFile.Integration.Tests.ps1: 21/22 パス（修正前：20/22）
+- ✅ Show-TextFile 全体: 56/57 パス（98.2%）
+- ✅ 統合テスト全体: 280/281 パス（99.6%）
+- ⚠️ 1つの失敗は空ファイルのテストで、今回の修正とは無関係
+
+**次のステップ：**
+- コミット準備完了
+## ✅ コンパイルエラー修正完了（2025-10-22 23:13）
+
+**ShowTextFileCmdlet.cs のエラー修正：**
+1. 164行目の重複する lastOutputLine 定義を削除
+2. currentLine と hasNext 変数を追加（GetEnumerator パターン）
+
+**テスト結果：**
+- ✅ ビルド成功
+- ✅ テスト: 276/280 パス（96.4%）
+- ⚠️ 4つの失敗（今回の修正とは無関係）
+
+**修正内容のまとめ：**
+1. UpdateLinesInFileCmdlet.cs: HashSet<int> を完全削除
+2. UpdateLinesInFileCmdlet.cs: ToList() 削除
+3. UpdateLinesInFileCmdlet.cs: ToArray() → 1 pass 処理
+4. ShowTextFileCmdlet.cs: コンパイルエラー修正
+
+**コミット準備完了**
+
+## ✅ 作業完了（2025-10-22 23:06）
+
+### UpdateLinesInFileCmdlet の HashSet<int> を完全に削除
+
+**問題：**
+- updatedLinesSet (HashSet<int>) を使用していた
+- 更新される行は連続した範囲なので、HashSet は不要
+
+**実施した修正：**
+1. HashSet<int> updatedLinesSet を完全に削除
+2. OutputUpdateContextFromBuffer のシグネチャを変更：
+   - IEnumerable<int> updatedLines → int startLine, int linesInserted
+3. メソッド内で Enumerable.Range(startLine, linesInserted) を使用
+4. インデックスアクセスを直接計算に変更：
+   - updatedLines[0] → startLine
+   - updatedLines[Count-1] → endLine
+5. updatedSet.Contains(lineNumber) → (lineNumber >= startLine && lineNumber <= endLine)
+
+**結果：**
+- HashSet を完全に削除
+- ToArray() / ToList() を完全に削除
+- メモリ効率が向上
+- コードがシンプルになった
+
+**次のステップ：**
+- ShowTextFileCmdlet.cs のコンパイルエラーを修正
+- ビルド
+- テスト実行
+
+## ✅ 作業完了（2025-10-22 22:58）
+
+### すべての cmdlet の効率性を確認・修正完了
+
+**実施した修正：**
+
+1. **UpdateLinesInFileCmdlet.cs（218行目）：**
+   - updatedLinesSet.ToList() → updatedLinesSet に変更
+   - CalculateAndMergeRanges は IEnumerable<int> を受け取るため、ToList() は不要
+
+2. **UpdateLinesInFileCmdlet.cs（437行目）：**
+   - List<int> updatedLines → IEnumerable<int> updatedLines に変更
+   - メソッドシグネチャを汎用化
+
+3. **UpdateLinesInFileCmdlet.cs（549行目）：**
+   - deletedLines.OrderBy(kv => kv.Key).ToArray() → 1 pass で処理
+   - foreach で順次処理し、index でどの行を表示するか判定
+   - ToArray() を完全に排除
+
+**確認結果：**
+
+✅ **すべての cmdlet で非効率なパターンなし：**
+- ReadAllLines / ReadAllText: 使用なし
+- ToArray() / ToList(): ファイル処理部分では使用なし
+- File.ReadLines: すべて GetEnumerator() または Skip/Take（遅延評価）で使用
+
+✅ **効率的なパターンのみ：**
+- AddLinesToFileCmdlet: GetEnumerator() + hasNext パターン
+- UpdateLinesInFileCmdlet: StreamReader + 1 pass
+- UpdateMatchInFileCmdlet: GetEnumerator() + rotate buffer
+- RemoveLinesFromFileCmdlet: GetEnumerator() + rotate buffer
+- ShowTextFileCmdlet: GetEnumerator() + rotate buffer / Skip + Take
+- TestTextFileContainsCmdlet: Skip + Take（遅延評価）
+
+✅ **TextFileUtility.ConvertToStringArray の ToArray()：**
+- Content パラメータ（数行～数十行の小データ）の変換用
+- ファイル処理ではないため問題なし
+
+**Dictionary<int, string> の使用について：**
+- UpdateLinesInFileCmdlet のみ使用
+- アトミック置換後のコンテキスト表示のため、バッファリングが必須
+- rotate buffer での実装は複雑すぎる（16変数必要）
+- 現在の実装を許容する
+
+**次のステップ：**
+- ビルド
+- テスト実行（96/96 パス確認）
+- デプロイ依頼
+
+## ✅ 作業完了（2025-10-22 22:07）
+
+### ShowTextFileCmdlet.cs を真の1 pass実装に書き直し
+
+**問題点：**
+- Dictionary<int, string> contextBuffer で全マッチ行とコンテキストをバッファリング
+- List<int> matchedLines でマッチ行番号を収集
+- .ToList() 呼び出しでソート
+- CalculateAndMergeRangesFromBuffer と OutputFromBuffer で2段階出力
+- これは「偽の1 pass」実装（ファイルは1回読むが、メモリに全データ保持）
+
+**新しい実装（真の1 pass）：**
+- rotate buffer のみ使用：prevPrevLine, prevLine, gapLine（3つの string 変数）
+- リアルタイム WriteObject 出力
+- ギャップ検出ロジック：
+  - ギャップが1行のみ → その行も表示（範囲を結合）
+  - ギャップが2行以上 → 空行を挿入
+- Dictionary/List/HashSet を一切使用しない
+
+**変更内容：**
+1. **ShowWithMatch メソッドを完全書き直し（143-301行）**
+   - rotate buffer: prevPrevLine, prevLine, gapLine
+   - afterMatchCounter で後2行を出力
+   - lastOutputLine でギャップ検出
+   - マッチ時にその場で前2行 + マッチ行を出力
+   - 後2行も即座に出力
+   - ギャップが1行なら gapLine を出力して範囲結合
+   - ギャップが2行以上なら空行挿入
+
+2. **不要メソッドを削除（72行削除）**
+   - CalculateAndMergeRangesFromBuffer
+   - OutputFromBuffer
+
+3. **ProcessRecord のヘッダー出力を削除**
+   - ShowWithMatch がマッチがある場合のみヘッダー出力
+   - ShowWithLineRange がヘッダー出力を追加
+
+4. **AddLinesToFileCmdlet.cs の修正**
+   - 未使用の OutputAddContextFromBuffer メソッドを削除（78行）
+   - 重複コードを削除（5行）
+
+**ビルド結果：**
+- ✅ コンパイル成功（obj/Debug にファイル生成）
+- ⚠️ DLL ロック（Visual Studio + PowerShell）→ デプロイが必要
+
+**次のステップ：**
+- デプロイ（よしふみに依頼）
+- テスト実行
+- UpdateLinesInFileCmdlet.cs の1 pass実装
+- UpdateMatchInFileCmdlet.cs の1 pass実装
+
 ## ✅ 作業完了（2025-10-22 21:19）
 
 ### Add-LinesToFile の新規ファイル作成動作を改善

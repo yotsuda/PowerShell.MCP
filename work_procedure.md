@@ -463,3 +463,205 @@ if (potentiallyUnexpectedBehavior)
 `
 
 ---
+
+## 📝 学んだこと（2025-10-22 22:08）
+
+### Show-TextFile の真の1 pass実装
+
+**問題：**
+- Dictionary + List でバッファリングする「偽の1 pass」実装だった
+- ファイルは1回しか読まないが、全マッチ行とコンテキストをメモリに保持
+- 後から CalculateAndMergeRanges と OutputFromBuffer で出力
+
+**解決策：真の1 pass実装**
+
+**rotate buffer の設計（3変数）：**
+`csharp
+string? prevPrevLine = null;  // 前々行
+string? prevLine = null;       // 前行
+string? gapLine = null;        // ギャップ候補（1行のみ）
+`
+
+**ギャップ検出ロジック：**
+- lastOutputLine で最後に出力した行番号を追跡
+- lastOutputLine + 1 行目 → gapLine に保持（ギャップ候補）
+- lastOutputLine + 2 行目で：
+  - マッチした場合 → gapLine を出力してから新しいマッチを出力（範囲結合）
+  - マッチしない場合 → 空行を挿入（ギャップが2行以上）
+
+**リアルタイム出力パターン：**
+`csharp
+if (matched)
+{
+    // ギャップがあれば出力（1行のギャップを結合）
+    if (gapLine != null)
+    {
+        WriteObject(\$"{lastOutputLine + 1,3}- {gapLine}");
+        gapLine = null;
+    }
+    
+    // 前2行を出力（rotate buffer から）
+    if (prevPrevLine != null) WriteObject(...);
+    if (prevLine != null) WriteObject(...);
+    
+    // マッチ行を出力
+    WriteObject(\$"{lineNumber,3}: {displayLine}");
+    
+    afterMatchCounter = 2;
+    lastOutputLine = lineNumber;
+}
+else if (afterMatchCounter > 0)
+{
+    // 後コンテキスト出力
+    WriteObject(\$"{lineNumber,3}- {currentLine}");
+    afterMatchCounter--;
+    lastOutputLine = lineNumber;
+}
+else if (lastOutputLine > 0)
+{
+    // ギャップ検出モード
+    if (lineNumber == lastOutputLine + 1)
+    {
+        gapLine = currentLine; // 保持
+    }
+    else if (lineNumber == lastOutputLine + 2)
+    {
+        WriteObject(\"\"); // 空行挿入
+        gapLine = null;
+        lastOutputLine = 0;
+    }
+}
+
+// rotate buffer 更新
+prevPrevLine = prevLine;
+prevLine = currentLine;
+`
+
+**メリット：**
+1. **真の1 pass**: Dictionary/List を使わない
+2. **メモリ効率**: 3つの string 変数のみ
+3. **リアルタイム出力**: バッファリング不要
+4. **ギャップ検出**: 1行ギャップは結合、2行以上は空行
+
+**重要なポイント：**
+- lastOutputLine は using ブロックの外で定義（スコープエラー回避）
+- ヘッダーは各メソッドで出力（ProcessRecord では出力しない）
+- ApplyHighlightingIfMatched で反転表示を適用
+
+## 📝 学んだこと（2025-10-22 22:52）
+
+### UpdateLinesInFileCmdlet の Dictionary 使用について
+
+**問題提起：**
+UpdateLinesInFileCmdlet は Dictionary<int, string> をコンテキスト表示用に使用している。
+rotate buffer パターン（string 変数のみ）で実装すべきでは？
+
+**分析：**
+UpdateLinesInFileCmdlet は他の cmdlet と異なり、以下の理由で Dictionary 使用が妥当：
+
+1. **アトミック置換**: ファイル書き込み → アトミック置換 → コンテキスト表示という順序
+2. **置換後の表示**: 置換が成功してからコンテキストを表示するため、バッファリングが必須
+3. **複雑な表示ロジック**: 削除/更新で異なる表示（5行以下は全表示、6行以上は先頭2+末尾2）
+
+**個別変数で実装する場合の変数数：**
+- 前2行: 4変数（値+行番号 x 2）
+- 範囲内: 8変数（先頭2+末尾2、値+行番号 x 4）
+- 後2行: 4変数（値+行番号 x 2）
+- 合計: 最大16変数
+
+**結論：**
+UpdateLinesInFileCmdlet では Dictionary<int, string> の使用を許容する。
+理由：
+- バッファリングが必須の設計
+- 個別変数での実装は複雑すぎる（16変数）
+- 保存するのは前後2行+範囲内の一部のみで、メモリ効率は十分
+
+**他の cmdlet との違い：**
+- ShowTextFile / UpdateMatchInFile: ファイル読み込みと同時にリアルタイム表示 → rotate buffer で OK
+- UpdateLinesInFile: ファイル置換後に表示 → Dictionary が妥当
+
+## 📝 学んだこと（2025-10-22 23:07）
+
+### HashSet/ToArray()/ToList() の不要な使用を排除
+
+**問題提起：**
+- ToArray() / ToList() は全要素をメモリに読み込むため、可能な限り避けるべき
+- HashSet も、単純な範囲チェックで済む場合は不要
+
+**UpdateLinesInFileCmdlet での削除：**
+1. **HashSet<int> updatedLinesSet の削除**
+   - 更新される行は startLine から endLine までの連続した範囲
+   - HashSet は不要、範囲チェック (lineNumber >= startLine && lineNumber <= endLine) で十分
+
+2. **ToList() の削除**
+   - CalculateAndMergeRanges は IEnumerable<int> を受け取る
+   - 呼び出し側で ToList() する必要なし
+
+3. **ToArray() の削除（549行目）**
+   - deletedLines.OrderBy().ToArray() → foreach で1 pass処理
+   - index カウンタで先頭2+末尾2を判定
+
+4. **インデックスアクセスの排除**
+   - updatedLines[0] → startLine
+   - updatedLines[Count-1] → endLine
+   - 直接計算で対応
+
+**許容される ToArray() / ToList() の使用：**
+- TextFileUtility.ConvertToStringArray: Content パラメータ（数行～数十行の小データ）の変換用
+- ファイル処理ではないため問題なし
+
+**原則：**
+- ファイル処理では ToArray() / ToList() を使わない
+- HashSet は重複チェックが必要な場合のみ使用
+- 範囲チェックは単純な比較で十分
+
+## 📝 学んだこと（2025-10-23 08:00）
+
+### rotate buffer での出力重複問題
+
+**問題パターン：**
+連続するマッチ行を処理する際、後コンテキストとして出力した行が、次のマッチの前コンテキストとして再出力される。
+
+**根本原因：**
+- rotate buffer（prevLine, prevPrevLine）の更新が常に実行される
+- 既に出力済みの行も rotate buffer に保存される
+- 次のマッチ時に、出力済みの行が前コンテキストとして再度出力される
+
+**症状例：**
+`
+期待：1: line1
+      2: line2
+      3: line3
+
+実際：1: line1
+      1- line1 （1行目の後コンテキスト）
+      2: line2
+      1- line1 （2行目の前コンテキスト）← 重複！
+      2- line2 （2行目の後コンテキスト）
+      3: line3
+`
+
+**解決策：**
+前コンテキストを出力する際、lastOutputLine と比較して既に出力済みの行を除外：
+`csharp
+// 修正前
+if (prevPrevLine != null && lineNumber >= 3)
+
+// 修正後
+if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)
+`
+
+**教訓：**
+- rotate buffer を使用する場合、出力済み行を追跡する lastOutputLine が必須
+- 前コンテキストの出力条件に「未出力であること」のチェックを追加
+- テストで連続マッチのケースを必ず含める（重複検出のため）
+
+**テストパターン：**
+`powershell
+# 連続マッチで重複を検出
+$result = Show-TextFile -Path $file -Pattern "line"
+# 期待：ヘッダー + N行 = N+1行
+$result.Count | Should -Be ($lineCount + 1)
+# 各行が1回だけ出力されることを確認
+($result | Where-Object { $_ -match "^\s+1:" }).Count | Should -Be 1
+`
