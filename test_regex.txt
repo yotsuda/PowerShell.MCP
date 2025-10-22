@@ -1,0 +1,5 @@
+Error: Connection failed
+Warning: Retry attempt 1
+Error: Timeout occurred
+Info: Processing complete
+Error: Invalid input

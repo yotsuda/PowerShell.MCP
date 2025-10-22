@@ -14,7 +14,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
             
             # ヘッダー + マッチ行のみ
             $result.Count | Should -Be 2
-            $result[1] | Should -Match ":.*Target"
+            $result[1] | Should -Match "\*.*Target"
         }
 
         It "2行ファイルの1行目マッチ" {
@@ -41,7 +41,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
             Set-Content -Path $script:testFile -Value "Test and Test and Test" -Encoding UTF8
             $result = Show-TextFile -Path $script:testFile -Contains "Test"
             
-            $matchLine = $result | Where-Object { $_ -match ":" }
+            $matchLine = $result | Where-Object { $_ -match "\*" }
             # 3箇所の "Test" がすべてハイライトされる
             $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[7m")).Count
             $highlightCount | Should -Be 3
@@ -51,7 +51,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
             Set-Content -Path $script:testFile -Value "abc123def456ghi789" -Encoding UTF8
             $result = Show-TextFile -Path $script:testFile -Pattern '\d+'
             
-            $matchLine = $result | Where-Object { $_ -match ":" }
+            $matchLine = $result | Where-Object { $_ -match "\*" }
             # 3箇所の数字がすべてハイライトされる
             $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[7m")).Count
             $highlightCount | Should -Be 3
@@ -129,7 +129,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
             $result = Show-TextFile -Path $script:testFile -Pattern '^$'
             
             # 空行がマッチとして表示される
-            $result | Where-Object { $_ -match ":.*2:" } | Should -Not -BeNullOrEmpty
+            $result | Where-Object { $_ -match "\*.*2:" } | Should -Not -BeNullOrEmpty
         }
 
         It "非常に長い行でもハイライトが正しく適用される" {
@@ -137,7 +137,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
             Set-Content -Path $script:testFile -Value $longLine -Encoding UTF8
             $result = Show-TextFile -Path $script:testFile -Contains "TARGET"
             
-            $matchLine = $result | Where-Object { $_ -match ":" }
+            $matchLine = $result | Where-Object { $_ -match "\*" }
             $matchLine | Should -Match "$([char]27)\[7mTARGET$([char]27)\[0m"
         }
     }
@@ -155,7 +155,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
                 
                 # 両方のファイルでヘッダーとコンテキストが表示される
                 ($result | Where-Object { $_ -match "^==>" }).Count | Should -Be 2
-                ($result | Where-Object { $_ -match ":" }).Count | Should -Be 2
+                ($result | Where-Object { $_ -match "\*" }).Count | Should -Be 2
             }
             finally {
                 Remove-Item $file1,$file2 -Force -ErrorAction SilentlyContinue

@@ -1,4 +1,4 @@
-﻿Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
+Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
     BeforeAll {
         $script:testFile = [System.IO.Path]::GetTempFileName()
     }
@@ -7,8 +7,8 @@
         Remove-Item $script:testFile -Force -ErrorAction SilentlyContinue
     }
 
-    Context "コンテキスト表示（前後2行）" {
-        It "マッチ行の前後2行が表示される" {
+    Context "コンテキスト表示（前後3行）" {
+        It "マッチ行の前後3行が表示される" {
             $content = @(
                 "Line 1"
                 "Line 2"
@@ -23,13 +23,13 @@
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             $result = Show-TextFile -Path $script:testFile -Contains "Target"
             
-            # ヘッダー行 + 前2行 + マッチ行 + 後2行 = 6行
-            $result.Count | Should -Be 6
+            # ヘッダー行 + 前3行 + マッチ行 + 後3行 = 8行
+            $result.Count | Should -Be 8
             # ヘッダー行をスキップして検証
             $contentLines = $result | Select-Object -Skip 1
-            $contentLines[0] | Should -Match "Line 3"
-            $contentLines[2] | Should -Match ":\s+.*5.*"  # マッチ行に:マーク
-            $contentLines[4] | Should -Match "Line 7"
+            $contentLines[0] | Should -Match "Line 2"
+            $contentLines[3] | Should -Match "\*.*5.*Target"  # マッチ行に*マーク
+            $contentLines[6] | Should -Match "Line 8"
         }
 
         It "ファイル先頭のマッチではコンテキストが先頭から始まる" {
@@ -45,8 +45,8 @@
             # ヘッダー行をスキップして検証
             $contentLines = $result | Select-Object -Skip 1
             # 先頭行なので、1行目から開始（前のコンテキストなし）
-            $contentLines[0] | Should -Match "^\s*1:"
-            $contentLines[-1] | Should -Match "Line 3"
+            $contentLines[0] | Should -Match "\*.*1.*Target"
+            $contentLines[-1] | Should -Match "Line 4"
         }
 
         It "ファイル末尾のマッチではコンテキストが末尾で終わる" {
@@ -62,8 +62,8 @@
             # ヘッダー行をスキップして検証
             $contentLines = $result | Select-Object -Skip 1
             # 末尾行なので、最後まで表示（後のコンテキストなし）
-            $contentLines[0] | Should -Match "Line 2"
-            $contentLines[-1] | Should -Match "^\s*4:"
+            $contentLines[0] | Should -Match "Line 1"
+            $contentLines[-1] | Should -Match "\*.*4.*Target"
         }
 
         It "複数マッチがある場合、近接する範囲がマージされる" {
@@ -112,7 +112,7 @@
             $result = Show-TextFile -Path $script:testFile -Contains "Target"
             
             # ANSI エスケープシーケンス \e[7m (反転ON) と \e[0m (リセット) が含まれる
-            $matchLine = $result | Where-Object { $_ -match "^\s*\d+:" }
+            $matchLine = $result | Where-Object { $_ -match "\*" }
             $matchLine | Should -Match "$([char]27)\[7m"  # 反転ON
             $matchLine | Should -Match "$([char]27)\[0m"  # リセット
         }
@@ -121,7 +121,7 @@
             Set-Content -Path $script:testFile -Value "Error: Something went wrong" -Encoding UTF8
             $result = Show-TextFile -Path $script:testFile -Pattern "Error:"
             
-            $matchLine = $result | Where-Object { $_ -match "^\s*\d+:" }
+            $matchLine = $result | Where-Object { $_ -match "\*" }
             $matchLine | Should -Match "$([char]27)\[7m"
             $matchLine | Should -Match "$([char]27)\[0m"
         }
@@ -137,7 +137,7 @@
             
             # コンテキスト行（*マークなし、ヘッダーでもない）には ANSI エスケープが含まれない
             $contextLines = $result | Where-Object { 
-                $_ -match "^\s*\d+-" -and $_ -ne "" -and $_ -notmatch "^==>"
+                $_ -notmatch "\*" -and $_ -ne "" -and $_ -notmatch "^==>"
             }
             foreach ($line in $contextLines) {
                 $line | Should -Not -Match "$([char]27)\["
@@ -160,7 +160,7 @@
             $result = Show-TextFile -Path $script:testFile -LineRange 3,6 -Contains "Target"
             
             # Line 5 のみがマッチ（Line 1 は範囲外）
-            $result | Where-Object { $_ -match "^\s*\d+:" } | Should -HaveCount 1
+            $result | Where-Object { $_ -match "\*" } | Should -HaveCount 1
             $result | Where-Object { $_ -match "Line 5" } | Should -Not -BeNullOrEmpty
         }
     }

@@ -1,0 +1,39 @@
+{
+  "PowerShellVersion": "7.5.3",
+  "Version": "baseline",
+  "Timestamp": "2025-10-13 12:40:20",
+  "Results": [
+    {
+      "Name": "Show-TextFile (range 1-100)",
+      "AvgMs": 13.47,
+      "FileSize": 11088895,
+      "MaxMs": 28.31,
+      "File": "medium_10mb.txt",
+      "MinMs": 6.02
+    },
+    {
+      "Name": "Test-TextFileContains",
+      "AvgMs": 12.56,
+      "FileSize": 11088895,
+      "MaxMs": 23.13,
+      "File": "medium_10mb.txt",
+      "MinMs": 6.68
+    },
+    {
+      "Name": "Show-TextFile (range 1-100) - Large",
+      "AvgMs": 43.69,
+      "FileSize": 111888899,
+      "MaxMs": 58.27,
+      "File": "large_100mb.txt",
+      "MinMs": 35.38
+    },
+    {
+      "Name": "Update-LinesInFile (range) - Large",
+      "AvgMs": 368.46,
+      "FileSize": 111888899,
+      "MaxMs": 514.94,
+      "File": "temp_update_test.txt",
+      "MinMs": 286.6
+    }
+  ]
+}

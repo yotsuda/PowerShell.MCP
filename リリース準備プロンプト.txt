@@ -1,0 +1,9 @@
+現在の PowerShell.MCP を次バージョンとしてリリースしたい。git で v1.2.8 タグから HEAD までの差分をレビューして。
+必要なら、包括的なテストを実施。変更されたコード部分のテストを重点的に。
+github のリリースノートをドラフトして。前バージョンのリリースノートと体裁を揃えて。
+"C:\MyProj\PowerShell.MCP\RELEASE_NOTES_v1.2.8.md"
+
+下記もレビューして。
+C:\Program Files\PowerShell\7\Modules\PowerShell.MCP
+
+mcp のリリースを社内の slack にも告知したい。前バージョンの告知はプロンプトで共有する。

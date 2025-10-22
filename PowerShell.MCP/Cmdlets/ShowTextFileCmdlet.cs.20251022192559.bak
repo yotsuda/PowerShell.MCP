@@ -155,7 +155,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         
         // コンテキスト範囲を計算（前後2行を含む）
         int contextStartLine = Math.Max(1, startLine - 2);
-        int contextEndLine = (endLine == int.MaxValue) ? int.MaxValue : endLine + 2;
+        int contextEndLine = endLine + 2;
         
         var matchedLines = new List<int>();
         var contextBuffer = new Dictionary<int, string>();
@@ -261,7 +261,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 hasNext = enumerator.MoveNext();
             }
         }
-
+        }
         
         // マッチが見つからない場合
         if (matchedLines.Count == 0)

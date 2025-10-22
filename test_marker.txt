@@ -1,0 +1,5 @@
+Line 1 with cat
+Line 2 with cat and more cat
+Line 3 with cat  
+Line 4 no match
+Line 5 with cat

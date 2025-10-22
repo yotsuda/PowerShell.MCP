@@ -153,10 +153,6 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     {
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
         
-        // コンテキスト範囲を計算（前後2行を含む）
-        int contextStartLine = Math.Max(1, startLine - 2);
-        int contextEndLine = (endLine == int.MaxValue) ? int.MaxValue : endLine + 2;
-        
         var matchedLines = new List<int>();
         var contextBuffer = new Dictionary<int, string>();
         
@@ -166,9 +162,9 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         
         using (var enumerator = File.ReadLines(filePath, encoding).GetEnumerator())
         {
-            // contextStartLine まで移動
+            // startLine まで移動
             int skipCount = 0;
-            while (skipCount < contextStartLine - 1 && enumerator.MoveNext())
+            while (skipCount < startLine - 1 && enumerator.MoveNext())
             {
                 skipCount++;
             }
@@ -180,7 +176,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 return;
             }
             
-            int lineNumber = contextStartLine;
+            int lineNumber = startLine;
             string currentLine = enumerator.Current;
             bool hasNext = enumerator.MoveNext();
             
@@ -191,22 +187,18 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             // 後続コンテキストカウンタ
             int afterMatchCounter = 0;
             
-            // 最後にマッチした行番号
-            int lastMatchLine = 0;
-            
-            while (true)
+            while (lineNumber <= endLine)
             {
-                // マッチ判定は元の LineRange 内のみで行う
-                bool matched = (lineNumber >= startLine && lineNumber <= endLine) && matchPredicate(currentLine);
+                bool matched = matchPredicate(currentLine);
                 
                 if (matched)
                 {
                     // 前2行をバッファに追加（マッチを含む場合は反転表示を適用）
-                    if (prevPrevLine != null && lineNumber - 2 >= 1)
+                    if (prevPrevLine != null)
                     {
                         contextBuffer[lineNumber - 2] = ApplyHighlightingIfMatched(prevPrevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
                     }
-                    if (prevLine != null && lineNumber - 1 >= 1)
+                    if (prevLine != null)
                     {
                         contextBuffer[lineNumber - 1] = ApplyHighlightingIfMatched(prevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
                     }
@@ -226,7 +218,6 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     matchedLines.Add(lineNumber);
                     
                     afterMatchCounter = 2;
-                    lastMatchLine = lineNumber;
                 }
                 else
                 {
@@ -242,26 +233,19 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 prevPrevLine = prevLine;
                 prevLine = currentLine;
                 
-                // 終了条件：
-                // 1. 次の行がない
-                // 2. contextEndLine を超えた かつ 後続コンテキストの収集が完了した
-                if (!hasNext)
-                {
-                    break;
-                }
-                
-                if (lineNumber >= contextEndLine && afterMatchCounter == 0)
-                {
-                    break;
-                }
-                
                 // 次へ
-                lineNumber++;
-                currentLine = enumerator.Current;
-                hasNext = enumerator.MoveNext();
+                if (hasNext && lineNumber < endLine)
+                {
+                    lineNumber++;
+                    currentLine = enumerator.Current;
+                    hasNext = enumerator.MoveNext();
+                }
+                else
+                {
+                    break;
+                }
             }
         }
-
         
         // マッチが見つからない場合
         if (matchedLines.Count == 0)

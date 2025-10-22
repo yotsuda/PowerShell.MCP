@@ -1,0 +1,9 @@
+Line 1: First line
+Line 2: Second line
+Updated Line 3-5
+Line 6: Sixth line
+Line 7: Seventh line
+Line 8: Eighth line
+Line 10: Last line
+New Line 11
+New Line 12

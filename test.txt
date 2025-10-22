@@ -1,0 +1,8 @@
+Line 1
+also MAIN in context 2
+also MAIN in context 3
+also MAIN in context 4
+PRIMARY MAIN MATCH Line 5
+also MAIN in context 6
+also MAIN in context 7
+Line 8

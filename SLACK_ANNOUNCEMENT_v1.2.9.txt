@@ -1,0 +1,6 @@
+1.2.9
+Text deletion via empty -Replacement parameter (Update-MatchInFile). 
+Add built-in prompt for interactive map generation (PowerShell.Map module integration).
+Improve built-in prompts with HTML report and chart generation guidelines (Analyze Content).
+Architecture refactoring: IModuleAssemblyInitializer (performance & compatibility).
+98 tests with 100% pass rate (87 C# unit + 11 PS integration).

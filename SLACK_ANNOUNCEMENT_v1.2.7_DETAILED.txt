@@ -1,0 +1,13 @@
+*PowerShell.MCP v1.2.7 Released* :rocket:
+
+*What's New:*
+* :arrows_counterclockwise: Automatic ASCII → UTF-8 encoding upgrade - Intelligently upgrades file encoding when you add non-ASCII characters (Japanese, Chinese, emoji, etc.). No more corrupted text!
+* :globe_with_meridians: Localized MCP custom prompts - 17 languages supported. Prompts now appear in your OS language (e.g., "Software Development" → "ソフトウェア開発" in Japanese).
+* :book: Enhanced tool documentation - `invoke_expression` tool description reorganized with clearer warnings about variable scope and file operations.
+
+*Languages supported:* English, Japanese, Spanish, French, German, Chinese (Simplified & Traditional), Korean, Portuguese, Russian, Italian, Dutch, Polish, Turkish, Arabic, Hindi, Swedish
+
+*No breaking changes* - Fully backward compatible with v1.2.6.
+
+:link: GitHub Release: https://github.com/yotsuda/PowerShell.MCP/releases/tag/v1.2.7
+:book: Documentation: https://github.com/yotsuda/PowerShell.MCP
