@@ -193,16 +193,15 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 
                 if (matched)
                 {
-                    // 前2行をバッファに追加
+                    // 前2行をバッファに追加（マッチを含む場合は反転表示を適用）
                     if (prevPrevLine != null)
                     {
-                        contextBuffer[lineNumber - 2] = prevPrevLine;
+                        contextBuffer[lineNumber - 2] = ApplyHighlightingIfMatched(prevPrevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
                     }
                     if (prevLine != null)
                     {
-                        contextBuffer[lineNumber - 1] = prevLine;
+                        contextBuffer[lineNumber - 1] = ApplyHighlightingIfMatched(prevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
                     }
-                    
                     // 反転表示を構築
                     string displayLine;
                     if (isRegex)
@@ -222,10 +221,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 }
                 else
                 {
-                    // 後続コンテキストの収集
+                    // 後続コンテキストの収集（マッチを含む場合は反転表示を適用）
                     if (afterMatchCounter > 0)
                     {
-                        contextBuffer[lineNumber] = currentLine;
+                        contextBuffer[lineNumber] = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
                         afterMatchCounter--;
                     }
                 }
@@ -329,6 +328,27 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             {
                 WriteObject("");
             }
+        }
+    }
+    
+    /// <summary>
+    /// 行にマッチが含まれる場合、反転表示を適用する
+    /// </summary>
+    private string ApplyHighlightingIfMatched(string line, Func<string, bool> matchPredicate, string matchValue, bool isRegex, string reverseOn, string reverseOff)
+    {
+        if (!matchPredicate(line))
+        {
+            return line;
+        }
+        
+        if (isRegex)
+        {
+            var regex = new Regex(matchValue, RegexOptions.Compiled);
+            return regex.Replace(line, m => $"{reverseOn}{m.Value}{reverseOff}");
+        }
+        else
+        {
+            return line.Replace(matchValue, $"{reverseOn}{matchValue}{reverseOff}");
         }
     }
 }

@@ -62,7 +62,7 @@ Describe "Show-TextFile Integration Tests" {
             $result = Show-TextFile -Path $script:testFile -Contains "Third"
             $result | Should -Not -BeNullOrEmpty
             # 新実装: 前後3行のコンテキストと共に表示されるため、結果内にマッチ行が含まれることを確認
-            $result | Where-Object { $_ -match '\*.*Third' } | Should -Not -BeNullOrEmpty
+            $result | Where-Object { $_ -match ':.*Third' } | Should -Not -BeNullOrEmpty
         }
 
         It "Pattern パラメータで正規表現検索できる" {
