@@ -329,12 +329,12 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     if (deletedLines != null)
                     {
                         deletedLines[currentLine] = line;
-                    }
-                    
-                    // コンテキスト範囲内の前後行も保存（削除前のコンテキスト）
-                    if (contextBuffer != null && currentLine >= contextStart && currentLine <= endLine)
-                    {
-                        contextBuffer[currentLine] = line;
+                        
+                        // 削除時のみ：コンテキスト範囲内の前後行も保存（削除前のコンテキスト）
+                        if (contextBuffer != null && currentLine >= contextStart && currentLine <= endLine)
+                        {
+                            contextBuffer[currentLine] = line;
+                        }
                     }
                     
                     currentLine++;
