@@ -192,4 +192,30 @@ Describe "Update-LinesInFile Integration Tests" {
             }
         }
     }
+
+    Context "メッセージ表示" {
+        It "-LineRange 1,-1 で全体置換時は簡潔なメッセージを表示" {
+            $output = Update-LinesInFile -Path $script:testFile -LineRange 1,-1 -Content "A","B","C"
+            
+            # メッセージが "Updated file: X line(s) written" 形式であることを確認
+            $message = $output | Out-String
+            $message | Should -Match "Updated file: \d+ line\(s\) written"
+            $message | Should -Not -Match "\d{4,}"  # 4桁以上の数字（int.MaxValueなど）が含まれていないこと
+        }
+
+        It "通常の LineRange では従来のメッセージを表示" {
+            $output = Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content "X","Y","Z"
+            
+            # メッセージが "Replaced X line(s)" 形式であることを確認
+            $message = $output | Out-String
+            $message | Should -Match "Replaced \d+ line\(s\)"
+        }
+        
+        It "削除時は Removed メッセージを表示" {
+            $output = Update-LinesInFile -Path $script:testFile -LineRange 2,4
+            
+            $message = $output | Out-String
+            $message | Should -Match "Removed \d+ line\(s\)"
+        }
+    }
 }
