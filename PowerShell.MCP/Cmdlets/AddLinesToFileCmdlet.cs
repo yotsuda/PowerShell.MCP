@@ -205,11 +205,6 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             }
 
             var tempFile = System.IO.Path.GetTempFileName();
-            
-            // コンテキスト表示用のバッファ（1 pass実装）
-            Dictionary<int, string>? contextBuffer = null;
-            List<int>? insertedLines = null;
-            int totalLines = 0;
             int actualInsertAt = insertAt;
 
             try
@@ -221,38 +216,25 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 }
                 else
                 {
-                    // 既存の非空ファイル：挿入処理 + コンテキスト収集（1 pass）
-                    contextBuffer = new Dictionary<int, string>();
-                    insertedLines = new List<int>();
-                    
+                    // 既存の非空ファイル：挿入処理（コンテキストはリアルタイム出力）
+                    int totalLines;
                     (totalLines, actualInsertAt) = InsertLinesWithContext(
                         resolvedPath, 
                         tempFile, 
                         contentLines, 
                         metadata, 
-                        insertAt,
-                        contextBuffer,
-                        insertedLines);
+                        insertAt);
                 }
 
                 // アトミックに置換（または新規作成）
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
-
-                // コンテキスト表示（バッファから表示、ファイル再読込なし）
-                if (contextBuffer != null && insertedLines != null && insertedLines.Count > 0)
-                {
-                    OutputAddContextFromBuffer(
-                        resolvedPath, 
-                        contextBuffer, 
-                        insertedLines, 
-                        totalLines);
-                }
 
                 string message = isNewFile 
                     ? $"Created {GetDisplayPath(originalPath, resolvedPath)}: Created {contentLines.Length} line(s)"
                     : $"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")}";
                 
                 WriteObject(message);
+
             }
             catch
             {
@@ -267,19 +249,17 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
 
     /// <summary>
-    /// 通常のファイルへの行挿入処理（コンテキストバッファ付き、1 pass）
+    /// 通常のファイルへの行挿入処理（コンテキストをリアルタイム出力、1 pass）
     /// </summary>
-    private static (int totalLines, int actualInsertAt) InsertLinesWithContext(
+    private (int totalLines, int actualInsertAt) InsertLinesWithContext(
         string inputPath, 
         string outputPath, 
         string[] contentLines, 
         TextFileUtility.FileMetadata metadata, 
-        int insertAt,
-        Dictionary<int, string> contextBuffer,
-        List<int> insertedLines)
+        int insertAt)
     {
-        // コンテキスト範囲を計算（暫定、insertAtが末尾の場合は後で調整）
-        int contextStart = Math.Max(1, insertAt == int.MaxValue ? 1 : insertAt - 2);
+        var displayPath = GetDisplayPath(inputPath, inputPath);
+        bool contextHeaderPrinted = false;
         
         using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
@@ -290,7 +270,14 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             if (!hasLines)
             {
                 // これは起こらないはず（空ファイルは別処理）
-                WriteContentLines(writer, contentLines, metadata.NewlineSequence, false);
+                for (int i = 0; i < contentLines.Length; i++)
+                {
+                    writer.Write(contentLines[i]);
+                    if (i < contentLines.Length - 1)
+                    {
+                        writer.Write(metadata.NewlineSequence);
+                    }
+                }
                 return (contentLines.Length, 1);
             }
 
@@ -300,10 +287,12 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             bool hasNext = enumerator.MoveNext();
             bool inserted = false;
             int actualInsertAt = insertAt;
+            int afterContextCounter = 0;
             
-            // ローテートバッファ：末尾追加時のコンテキスト表示用
+            // Rotate buffer: 末尾追加時のコンテキスト表示用
             string? prevPrevLine = null;
             string? prevLine = null;
+            
             while (true)
             {
                 // 挿入位置に到達したら、新しい内容を先に書き込む
@@ -311,42 +300,102 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 {
                     actualInsertAt = outputLineNumber;
                     
-                    // 挿入行を書き込み＆バッファに保存
-                    for (int i = 0; i < contentLines.Length; i++)
+                    // コンテキストヘッダー出力
+                    if (!contextHeaderPrinted)
                     {
-                        writer.Write(contentLines[i]);
-                        
-                        // コンテキストバッファに保存
-                        if (outputLineNumber >= contextStart)
+                        WriteObject($"==> {displayPath} <==");
+                        contextHeaderPrinted = true;
+                    }
+                    
+                    // 前2行を出力（rotate buffer から）
+                    if (prevPrevLine != null && outputLineNumber >= 3)
+                    {
+                        WriteObject($"{outputLineNumber-2,3}- {prevPrevLine}");
+                    }
+                    if (prevLine != null && outputLineNumber >= 2)
+                    {
+                        WriteObject($"{outputLineNumber-1,3}- {prevLine}");
+                    }
+                    
+                    // 挿入する行を出力
+                    if (contentLines.Length <= 5)
+                    {
+                        // 1-5行: 全て表示
+                        for (int i = 0; i < contentLines.Length; i++)
                         {
-                            contextBuffer[outputLineNumber] = contentLines[i];
-                            insertedLines.Add(outputLineNumber);
+                            writer.Write(contentLines[i]);
+                            WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                            
+                            if (i < contentLines.Length - 1)
+                            {
+                                writer.Write(metadata.NewlineSequence);
+                                outputLineNumber++;
+                            }
                         }
-                        
-                        if (i < contentLines.Length - 1)
+                    }
+                    else
+                    {
+                        // 6行以上: 先頭2行と末尾2行のみ表示
+                        // 先頭2行
+                        for (int i = 0; i < 2; i++)
                         {
+                            writer.Write(contentLines[i]);
+                            WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
                             writer.Write(metadata.NewlineSequence);
                             outputLineNumber++;
                         }
+                        
+                        // 省略マーカー出力
+                        int omittedCount = contentLines.Length - 4;
+                        WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
+                        
+                        // 中間行を書き込み（出力なし）
+                        for (int i = 2; i < contentLines.Length - 2; i++)
+                        {
+                            writer.Write(contentLines[i]);
+                            writer.Write(metadata.NewlineSequence);
+                            outputLineNumber++;
+                        }
+                        
+                        // 末尾2行
+                        for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
+                        {
+                            writer.Write(contentLines[i]);
+                            WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                            
+                            if (i < contentLines.Length - 1)
+                            {
+                                writer.Write(metadata.NewlineSequence);
+                                outputLineNumber++;
+                            }
+                        }
                     }
+                    
                     writer.Write(metadata.NewlineSequence);
                     outputLineNumber++;
                     inserted = true;
+                    afterContextCounter = 2; // 後2行を出力
                 }
 
                 // 現在の行を書き込む
                 writer.Write(currentLine);
                 
-                // コンテキストバッファに保存（範囲内のみ）
-                int contextEnd = actualInsertAt + contentLines.Length + 1;
-                if (outputLineNumber >= contextStart && outputLineNumber <= contextEnd)
+                // 後コンテキストの出力
+                if (afterContextCounter > 0)
                 {
-                    contextBuffer[outputLineNumber] = currentLine;
+                    WriteObject($"{outputLineNumber,3}- {currentLine}");
+                    afterContextCounter--;
+                    if (afterContextCounter == 0)
+                    {
+                        // コンテキスト出力完了、空行追加
+                        WriteObject("");
+                    }
                 }
                 
-                // ローテート：末尾追加時のコンテキスト表示用に最後の2行を保持
+                // Rotate buffer 更新: 末尾追加時のコンテキスト表示用に最後の2行を保持
                 prevPrevLine = prevLine;
                 prevLine = currentLine;
+                
                 if (hasNext)
                 {
                     writer.Write(metadata.NewlineSequence);
@@ -365,33 +414,81 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         outputLineNumber++;
                         actualInsertAt = outputLineNumber;
                         
-                        // 末尾追加の場合、コンテキスト範囲を再計算
-                        contextStart = Math.Max(1, actualInsertAt - 2);
+                        // コンテキストヘッダー出力
+                        if (!contextHeaderPrinted)
+                        {
+                            WriteObject($"==> {displayPath} <==");
+                            contextHeaderPrinted = true;
+                        }
                         
-                        // ローテートバッファから前の2行をコンテキストとして追加
-                        int prevLineNumber = outputLineNumber - 1;
-                        if (prevLine != null && prevLineNumber >= contextStart)
+                        // 前2行を出力（rotate buffer から）
+                        int prevLineNum = outputLineNumber - 1;
+                        if (prevPrevLine != null && prevLineNum >= 2)
                         {
-                            contextBuffer[prevLineNumber] = prevLine;
+                            WriteObject($"{prevLineNum-1,3}- {prevPrevLine}");
                         }
-                        if (prevPrevLine != null && prevLineNumber - 1 >= contextStart)
+                        if (prevLine != null)
                         {
-                            contextBuffer[prevLineNumber - 1] = prevPrevLine;
+                            WriteObject($"{prevLineNum,3}- {prevLine}");
                         }
-                        for (int i = 0; i < contentLines.Length; i++)
+                        
+                        // 挿入する行を出力
+                        if (contentLines.Length <= 5)
                         {
-                            writer.Write(contentLines[i]);
-                            
-                            // コンテキストバッファに保存
-                            contextBuffer[outputLineNumber] = contentLines[i];
-                            insertedLines.Add(outputLineNumber);
-                            
-                            if (i < contentLines.Length - 1)
+                            // 1-5行: 全て表示
+                            for (int i = 0; i < contentLines.Length; i++)
                             {
+                                writer.Write(contentLines[i]);
+                                WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                                
+                                if (i < contentLines.Length - 1)
+                                {
+                                    writer.Write(metadata.NewlineSequence);
+                                    outputLineNumber++;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // 6行以上: 先頭2行と末尾2行のみ表示
+                            // 先頭2行
+                            for (int i = 0; i < 2; i++)
+                            {
+                                writer.Write(contentLines[i]);
+                                WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
                                 writer.Write(metadata.NewlineSequence);
                                 outputLineNumber++;
                             }
+                            
+                            // 省略マーカー出力
+                            int omittedCount = contentLines.Length - 4;
+                            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
+                            
+                            // 中間行を書き込み（出力なし）
+                            for (int i = 2; i < contentLines.Length - 2; i++)
+                            {
+                                writer.Write(contentLines[i]);
+                                writer.Write(metadata.NewlineSequence);
+                                outputLineNumber++;
+                            }
+                            
+                            // 末尾2行
+                            for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
+                            {
+                                writer.Write(contentLines[i]);
+                                WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                                
+                                if (i < contentLines.Length - 1)
+                                {
+                                    writer.Write(metadata.NewlineSequence);
+                                    outputLineNumber++;
+                                }
+                            }
                         }
+                        
+                        // 末尾追加時は後コンテキストなし、空行のみ
+                        WriteObject("");
+                        
                         inserted = true;
                     }
                     else
@@ -410,84 +507,6 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         }
     }
 
-    /// <summary>
-    /// バッファから追加コンテキストを表示（ファイル再読込なし）
-    /// </summary>
-    private void OutputAddContextFromBuffer(
-        string filePath,
-        Dictionary<int, string> contextBuffer,
-        List<int> insertedLines,
-        int totalLines)
-    {
-        // 範囲を計算してマージ
-        var (ranges, gapLines) = CalculateAndMergeRanges(insertedLines, totalLines, contextLines: 2);
-        
-        // 表示用パスを決定
-        var displayPath = GetDisplayPath(filePath, filePath);
-        WriteObject($"==> {displayPath} <==");
-        
-        // 範囲ごとに出力
-        var insertedSet = new HashSet<int>(insertedLines);
-        int rangeIndex = 0;
-        
-        foreach (var (start, end) in ranges)
-        {
-            for (int lineNumber = start; lineNumber <= end; lineNumber++)
-            {
-                if (!contextBuffer.ContainsKey(lineNumber))
-                    continue;
-                    
-                var line = contextBuffer[lineNumber];
-                
-                if (insertedSet.Contains(lineNumber))
-                {
-                    // 挿入された行を表示
-                    if (insertedLines.Count <= 5)
-                    {
-                        // 1-5行: 全て反転表示
-                        WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
-                    }
-                    else
-                    {
-                        // 6行以上: 先頭2行と末尾2行のみ表示
-                        int firstLine = insertedLines[0];
-                        int secondLine = insertedLines[1];
-                        int secondLastLine = insertedLines[insertedLines.Count - 2];
-                        int lastLine = insertedLines[insertedLines.Count - 1];
-                        
-                        if (lineNumber == firstLine || lineNumber == secondLine)
-                        {
-                            // 先頭2行
-                            WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
-                        }
-                        else if (lineNumber == secondLine + 1)
-                        {
-                            // 省略マーカー（3行目で1回だけ）- 反転表示
-                            int omittedCount = insertedLines.Count - 4;
-                            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
-                        }
-                        else if (lineNumber == secondLastLine || lineNumber == lastLine)
-                        {
-                            // 末尾2行
-                            WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
-                        }
-                        // 中間行はスキップ
-                    }
-                }
-                else
-                {
-                    // コンテキスト行を表示
-                    WriteObject($"{lineNumber,3}- {line}");
-                }
-            }
-            
-            rangeIndex++;
-            if (rangeIndex < ranges.Count)
-            {
-                WriteObject("");
-            }
-        }
-    }
 
 
     /// <summary>
