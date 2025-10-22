@@ -1,4 +1,4 @@
-Describe "Show-TextFile - Additional Edge Cases" {
+﻿Describe "Show-TextFile - Additional Edge Cases" {
     BeforeAll {
         $script:testFile = [System.IO.Path]::GetTempFileName()
     }
@@ -129,7 +129,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
             $result = Show-TextFile -Path $script:testFile -Pattern '^$'
             
             # 空行がマッチとして表示される
-            $result | Where-Object { $_ -match ":.*2:" } | Should -Not -BeNullOrEmpty
+            $result | Where-Object { $_ -match "^\s+2:" } | Should -Not -BeNullOrEmpty
         }
 
         It "非常に長い行でもハイライトが正しく適用される" {
@@ -137,7 +137,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
             Set-Content -Path $script:testFile -Value $longLine -Encoding UTF8
             $result = Show-TextFile -Path $script:testFile -Contains "TARGET"
             
-            $matchLine = $result | Where-Object { $_ -match ":" }
+            $matchLine = $result | Where-Object { $_ -match "^\s+\d+:" }
             $matchLine | Should -Match "$([char]27)\[7mTARGET$([char]27)\[0m"
         }
     }
@@ -155,7 +155,7 @@ Describe "Show-TextFile - Additional Edge Cases" {
                 
                 # 両方のファイルでヘッダーとコンテキストが表示される
                 ($result | Where-Object { $_ -match "^==>" }).Count | Should -Be 2
-                ($result | Where-Object { $_ -match ":" }).Count | Should -Be 2
+                ($result | Where-Object { $_ -match "^\s+\d+:" }).Count | Should -Be 2
             }
             finally {
                 Remove-Item $file1,$file2 -Force -ErrorAction SilentlyContinue

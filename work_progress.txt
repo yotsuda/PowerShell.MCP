@@ -1,3 +1,43 @@
+## ✅ 作業完了（2025-10-22 20:57）
+
+### Show-TextFile.EdgeCases.Tests.ps1 のテスト不具合を修正
+
+**問題：**
+Show-TextFile.EdgeCases.Tests.ps1 で3つのテストが失敗していた：
+1. 空行マッチのテスト
+2. 非常に長い行のハイライトテスト
+3. 複数ファイルのテスト
+
+**根本原因：**
+テストの正規表現パターンがヘッダー行（ファイルパス内の C:\ にある :）もマッチしてしまっていた。
+- $_ -match ":" は、マッチ行だけでなくヘッダー行 ==> C:\path <== もマッチする
+- 空行マッチテストの :.*2: パターンが不適切
+
+**修正内容：**
+1. 132行目: :.*2: → ^\s+2: に変更（行番号2のマッチ行を正確に検出）
+2. 140行目: $_ -match ":" → $_ -match "^\s+\d+:" に変更（行頭の空白 + 数字 + コロンのパターンに限定）
+3. 158行目: 同様に $_ -match ":" → $_ -match "^\s+\d+:" に変更
+
+**変更ファイル：**
+- Tests\Integration\Cmdlets\Show-TextFile.EdgeCases.Tests.ps1（3箇所を修正）
+- バックアップ作成：Show-TextFile.EdgeCases.Tests.ps1.20251022205745.bak
+
+**テスト結果：**
+- ✅ Show-TextFile.EdgeCases.Tests.ps1: 14/14 パス（修正前：3つ失敗）
+- ✅ Show-TextFile 全統合テスト: 56/56 パス（100%）
+  - Show-TextFile.Advanced.Tests.ps1: 17/17
+  - Show-TextFile.EdgeCases.Tests.ps1: 14/14
+  - Show-TextFile.Integration.Tests.ps1: 22/22
+  - Show-TextFile.LineRangeContext.Tests.ps1: 3/3
+
+**学んだこと：**
+- ファイルパスを含む出力では、パス区切り文字（:）が意図しないマッチを引き起こす可能性がある
+- テストの正規表現は、期待する行のパターンを正確に指定する必要がある（例：^\s+\d+: で行番号付き行のみを選択）
+- ヘッダー行（==> path <==）とマッチ行（  N: content）を区別することが重要
+
+**次のステップ：**
+- コミットして完了
+
 ## ✅ 作業完了（2025-10-22 20:50）
 
 ### Show-TextFile の整数オーバーフロー不具合を修正完了
@@ -33,7 +73,11 @@ int contextEndLine = (endLine == int.MaxValue) ? int.MaxValue : endLine + 2;
 
 **統合テスト結果：** 53/56 パス（94.6%）
 
-**コミット準備完了** ✅
+**コミット情報：**
+- ✅ **ID**: 5025f3d
+- ✅ **メッセージ**: Fix integer overflow in Show-TextFile when LineRange is not specified
+- ✅ **変更**: 90ファイル、+11,865行、-36行
+- ✅ **日時**: 2025-10-22 20:52
 
 ## ✅ 作業完了（2025-10-22 18:50）
 
