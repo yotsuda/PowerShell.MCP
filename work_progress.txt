@@ -42,8 +42,14 @@
 - ✅ すべてのテストが成功！
 
 **次のステップ：**
+**次のステップ：**
 - ✅ テスト完了
-- コミット承認待ち
+- ✅ コミット完了
+
+**コミット情報：**
+- ✅ **ID**: 5d0777b
+- ✅ **メッセージ**: Add header output for empty files in Show-TextFile and clean up backup files
+- ✅ **日時**: 2025-10-23 08:33
 ## ✅ コンパイルエラー修正完了（2025-10-22 23:13）
 
 **ShowTextFileCmdlet.cs のエラー修正：**
