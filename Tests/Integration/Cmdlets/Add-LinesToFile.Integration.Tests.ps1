@@ -253,4 +253,80 @@ Describe "Add-LinesToFile Integration Tests" {
                 }
             }
         }
+
+    Context "コンテキスト表示" {
+        It "C01. 末尾追加時にコンテキストが表示される" {
+            $testFile = [System.IO.Path]::GetTempFileName()
+            try {
+                Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3", "Line 4", "Line 5") -Encoding UTF8
+                
+                $output = Add-LinesToFile -Path $testFile -Content "Line 6" 6>&1 | Out-String
+                
+                # コンテキストに挿入位置の前の2行が含まれることを確認
+                $output | Should -Match "Line 4"
+                $output | Should -Match "Line 5"
+                $output | Should -Match "Line 6"
+            }
+            finally {
+                Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "C02. 末尾追加時のコンテキストがgrep形式で表示される" {
+            $testFile = [System.IO.Path]::GetTempFileName()
+            try {
+                Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3") -Encoding UTF8
+                
+                $output = Add-LinesToFile -Path $testFile -Content "Line 4" 6>&1 | Out-String
+                
+                # grep形式のマーカーを確認
+                $output | Should -Match "3-"  # 前の行（コンテキスト）
+                $output | Should -Match "4:"  # 追加された行（反転表示）
+            }
+            finally {
+                Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "C03. 複数行を末尾に追加した場合のコンテキスト表示" {
+            $testFile = [System.IO.Path]::GetTempFileName()
+            try {
+                Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3") -Encoding UTF8
+                
+                $output = Add-LinesToFile -Path $testFile -Content @("Line 4", "Line 5") 6>&1 | Out-String
+                
+                # コンテキストに前の2行が含まれることを確認
+                $output | Should -Match "Line 2"
+                $output | Should -Match "Line 3"
+                # 追加された行が含まれることを確認
+                $output | Should -Match "Line 4"
+                $output | Should -Match "Line 5"
+            }
+            finally {
+                Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "C04. ファイルが2行未満の場合でも末尾追加できる" {
+            $testFile = [System.IO.Path]::GetTempFileName()
+            try {
+                Set-Content -Path $testFile -Value "Line 1" -Encoding UTF8
+                
+                $output = Add-LinesToFile -Path $testFile -Content "Line 2" 6>&1 | Out-String
+                
+                # コンテキストに1行目が含まれることを確認
+                $output | Should -Match "Line 1"
+                $output | Should -Match "Line 2"
+                
+                # ファイル内容を確認
+                $result = Get-Content $testFile
+                $result.Count | Should -Be 2
+                $result[-1] | Should -Be "Line 2"
+            }
+            finally {
+                Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+    }
     }

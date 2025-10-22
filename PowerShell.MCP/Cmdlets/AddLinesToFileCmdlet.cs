@@ -305,7 +305,10 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             bool hasNext = enumerator.MoveNext();
             bool inserted = false;
             int actualInsertAt = insertAt;
-
+            
+            // ローテートバッファ：末尾追加時のコンテキスト表示用
+            string? prevPrevLine = null;
+            string? prevLine = null;
             while (true)
             {
                 // 挿入位置に到達したら、新しい内容を先に書き込む
@@ -345,7 +348,10 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 {
                     contextBuffer[outputLineNumber] = currentLine;
                 }
-
+                
+                // ローテート：末尾追加時のコンテキスト表示用に最後の2行を保持
+                prevPrevLine = prevLine;
+                prevLine = currentLine;
                 if (hasNext)
                 {
                     writer.Write(metadata.NewlineSequence);
@@ -367,6 +373,16 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         // 末尾追加の場合、コンテキスト範囲を再計算
                         contextStart = Math.Max(1, actualInsertAt - 2);
                         
+                        // ローテートバッファから前の2行をコンテキストとして追加
+                        int prevLineNumber = outputLineNumber - 1;
+                        if (prevLine != null && prevLineNumber >= contextStart)
+                        {
+                            contextBuffer[prevLineNumber] = prevLine;
+                        }
+                        if (prevPrevLine != null && prevLineNumber - 1 >= contextStart)
+                        {
+                            contextBuffer[prevLineNumber - 1] = prevPrevLine;
+                        }
                         for (int i = 0; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
