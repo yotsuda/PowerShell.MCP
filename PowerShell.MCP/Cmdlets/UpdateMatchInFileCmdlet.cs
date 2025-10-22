@@ -103,7 +103,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// 文字列リテラル置換または正規表現置換を処理（2パス）
+    /// 文字列リテラル置換または正規表現置換を処理（1パス実装）
     /// </summary>
     private void ProcessStringReplacement(string originalPath, string resolvedPath)
     {
@@ -143,12 +143,11 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
             }
 
-            // 1st pass: 置換実行 + メタデータ収集
+            // 1 pass: 置換実行 + コンテキスト収集
             var tempFile = System.IO.Path.GetTempFileName();
             var matchedLines = new List<int>();
-            var displayData = new Dictionary<int, string>();
+            var contextBuffer = new Dictionary<int, string>();
             int replacementCount = 0;
-            int totalLines = 0;
 
             // ANSIエスケープシーケンス（反転表示）
             string reverseOn = $"{(char)27}[7m";
@@ -156,79 +155,146 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
             try
             {
-                using (var reader = new StreamReader(resolvedPath, metadata.Encoding))
+                using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
                 using (var writer = new StreamWriter(tempFile, false, metadata.Encoding))
                 {
                     // 改行コードを保持
                     writer.NewLine = metadata.NewlineSequence;
                     
-                    int lineNumber = 1;
-                    string? line;
-                    
-                    while ((line = reader.ReadLine()) != null)
+                    bool hasLines = enumerator.MoveNext();
+                    if (!hasLines)
                     {
+                        // 空ファイル（通常は起こらない）
+                        File.Delete(tempFile);
+                        WriteObject($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made");
+                        return;
+                    }
+                    
+                    int lineNumber = 1;
+                    string currentLine = enumerator.Current;
+                    bool hasNext = enumerator.MoveNext();
+                    
+                    // Rotate buffer: 前2行を保持（コンテキスト表示用）
+                    string? prevPrevLine = null;
+                    string? prevLine = null;
+                    
+                    // 後続コンテキストカウンタ: マッチ後の2行を収集
+                    int afterMatchCounter = 0;
+                    
+                    while (true)
+                    {
+                        bool matched = false;
+                        string? newLine = null;
+                        
                         if (lineNumber >= startLine && lineNumber <= endLine)
                         {
                             if (isLiteral)
                             {
-                                if (line.Contains(Contains!))
+                                if (currentLine.Contains(Contains!))
                                 {
-                                    matchedLines.Add(lineNumber);
+                                    matched = true;
                                     
                                     // 置換回数カウント
-                                    int count = (line.Length - line.Replace(Contains!, "").Length) / 
+                                    int count = (currentLine.Length - currentLine.Replace(Contains!, "").Length) / 
                                                 Math.Max(1, Contains!.Length);
                                     replacementCount += count;
                                     
                                     // 置換実行
-                                    var newLine = line.Replace(Contains, Replacement);
-                                    
-                                    // 反転表示データを構築（置換後の文字列に反転表示を適用）
-                                    // 空文字列置換（削除）の場合は反転表示する対象がないので、置換後の行をそのまま使用
-                                    string displayLine;
-                                    if (!string.IsNullOrEmpty(Replacement))
-                                    {
-                                        displayLine = newLine.Replace(Replacement, $"{reverseOn}{Replacement}{reverseOff}");
-                                    }
-                                    else
-                                    {
-                                        displayLine = newLine;
-                                    }
-                                    displayData[lineNumber] = displayLine;
-                                    
-                                    writer.WriteLine(newLine);
-                                    lineNumber++;
-                                    continue;
+                                    newLine = currentLine.Replace(Contains, Replacement);
                                 }
                             }
                             else
                             {
-                                var matches = regex!.Matches(line);
+                                var matches = regex!.Matches(currentLine);
                                 if (matches.Count > 0)
                                 {
-                                    matchedLines.Add(lineNumber);
+                                    matched = true;
                                     replacementCount += matches.Count;
                                     
                                     // 置換実行
-                                    var newLine = regex.Replace(line, Replacement!);
-                                    
-                                    // 反転表示データを構築
-                                    // 正規表現の場合、置換後の各マッチ位置を計算して反転表示を適用
-                                    var displayLine = BuildRegexDisplayLine(line, regex, Replacement!, reverseOn, reverseOff);
-                                    displayData[lineNumber] = displayLine;
-                                    
-                                    writer.WriteLine(newLine);
-                                    lineNumber++;
-                                    continue;
+                                    newLine = regex.Replace(currentLine, Replacement!);
                                 }
                             }
                         }
                         
-                        writer.WriteLine(line);
-                        lineNumber++;
+                        if (matched)
+                        {
+                            // 前2行をコンテキストバッファに追加（rotate bufferから）
+                            if (prevPrevLine != null)
+                            {
+                                contextBuffer[lineNumber - 2] = prevPrevLine;
+                            }
+                            if (prevLine != null)
+                            {
+                                contextBuffer[lineNumber - 1] = prevLine;
+                            }
+                            
+                            // 反転表示データを構築
+                            string displayLine;
+                            if (isLiteral)
+                            {
+                                // 空文字列置換（削除）の場合は反転表示する対象がないので、置換後の行をそのまま使用
+                                if (!string.IsNullOrEmpty(Replacement))
+                                {
+                                    displayLine = newLine!.Replace(Replacement, $"{reverseOn}{Replacement}{reverseOff}");
+                                }
+                                else
+                                {
+                                    displayLine = newLine!;
+                                }
+                            }
+                            else
+                            {
+                                displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, reverseOn, reverseOff);
+                            }
+                            
+                            // マッチ行をコンテキストバッファに追加
+                            contextBuffer[lineNumber] = displayLine;
+                            matchedLines.Add(lineNumber);
+                            
+                            // 後続2行のカウンタをセット
+                            afterMatchCounter = 2;
+                            
+                            // 置換後の行を書き込み
+                            writer.Write(newLine);
+                        }
+                        else
+                        {
+                            // 後続コンテキストの収集
+                            if (afterMatchCounter > 0)
+                            {
+                                contextBuffer[lineNumber] = currentLine;
+                                afterMatchCounter--;
+                            }
+                            
+                            // 元の行を書き込み
+                            writer.Write(currentLine);
+                        }
+                        
+                        // Rotate buffer更新（置換前の元の行を保存）
+                        prevPrevLine = prevLine;
+                        prevLine = currentLine;
+                        
+                        // 次の行があるかチェック
+                        if (hasNext)
+                        {
+                            writer.Write(metadata.NewlineSequence);
+                            lineNumber++;
+                            currentLine = enumerator.Current;
+                            hasNext = enumerator.MoveNext();
+                        }
+                        else
+                        {
+                            // 最終行に到達
+                            break;
+                        }
                     }
                     
-                    totalLines = lineNumber - 1;  // 総行数を記録
+                    // 元のファイルに末尾改行があれば保持
+                    if (metadata.HasTrailingNewline)
+                    {
+                        writer.Write(metadata.NewlineSequence);
+                    }
                 }
 
                 if (matchedLines.Count == 0)
@@ -241,8 +307,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 // アトミックに置換
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-                // 2nd pass: コンテキスト表示
-                OutputReplacementContext(resolvedPath, metadata.Encoding, matchedLines, displayData, totalLines);
+                // コンテキスト表示（バッファから、ファイル再読込なし）
+                OutputReplacementContextFromBuffer(originalPath, resolvedPath, contextBuffer, matchedLines);
 
                 WriteObject($"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made");
             }
@@ -278,64 +344,80 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// マッチした行とその前後のコンテキストを表示
+    /// マッチした行とその前後のコンテキストを表示（バッファから、ファイル再読込なし）
     /// </summary>
-    private void OutputReplacementContext(string filePath, System.Text.Encoding encoding, List<int> matchedLines, Dictionary<int, string> displayData, int totalLines)
+    private void OutputReplacementContextFromBuffer(string originalPath, string resolvedPath, Dictionary<int, string> contextBuffer, List<int> matchedLines)
     {
         if (matchedLines.Count == 0) return;
 
         var matchedSet = new HashSet<int>(matchedLines);
         
+        // contextBufferのキーをソート
+        var sortedLineNumbers = contextBuffer.Keys.OrderBy(x => x).ToList();
         
         // 範囲を計算してマージ（前後2行の文脈）
-        var (ranges, gapLines) = CalculateAndMergeRanges(matchedLines, totalLines, contextLines: 2);
+        var ranges = CalculateAndMergeRangesFromBuffer(sortedLineNumbers, contextLines: 2);
         
         // 表示用パスを決定
-        var displayPath = GetDisplayPath(filePath, filePath);
+        var displayPath = GetDisplayPath(originalPath, resolvedPath);
         WriteObject($"==> {displayPath} <==");
         
         // 範囲ごとに出力
-        int rangeIndex = 0;
-        int currentLine = 1;
-        
-        foreach (var line in File.ReadLines(filePath, encoding))
+        for (int rangeIndex = 0; rangeIndex < ranges.Count; rangeIndex++)
         {
-            if (rangeIndex >= ranges.Count)
-                break;
-                
             var (start, end) = ranges[rangeIndex];
             
-            if (currentLine >= start && currentLine <= end)
+            for (int lineNumber = start; lineNumber <= end; lineNumber++)
             {
-                string separator = matchedSet.Contains(currentLine) ? ":" : "-";
-                
-                string displayLine;
-                if (displayData.ContainsKey(currentLine))
+                if (contextBuffer.ContainsKey(lineNumber))
                 {
-                    // 置換行は反転表示データを使用
-                    displayLine = displayData[currentLine];
-                }
-                else
-                {
-                    // コンテキスト行はそのまま
-                    displayLine = line;
-                }
-                
-                WriteObject($"{currentLine,3}{separator} {displayLine}");
-                
-                if (currentLine == end)
-                {
-                    rangeIndex++;
-                    if (rangeIndex < ranges.Count)
-                    {
-                        // 次の範囲との間に空行
-                        WriteObject("");
-                    }
+                    string separator = matchedSet.Contains(lineNumber) ? ":" : "-";
+                    WriteObject($"{lineNumber,3}{separator} {contextBuffer[lineNumber]}");
                 }
             }
             
-            currentLine++;
+            // 次の範囲との間に空行
+            if (rangeIndex < ranges.Count - 1)
+            {
+                WriteObject("");
+            }
         }
     }
+
+    /// <summary>
+    /// バッファから範囲を計算してマージ
+    /// </summary>
+    private List<(int start, int end)> CalculateAndMergeRangesFromBuffer(List<int> lineNumbers, int contextLines)
+    {
+        var ranges = new List<(int start, int end)>();
+        if (lineNumbers.Count == 0) return ranges;
+
+        int currentStart = lineNumbers[0];
+        int currentEnd = lineNumbers[0];
+
+        for (int i = 1; i < lineNumbers.Count; i++)
+        {
+            int lineNumber = lineNumbers[i];
+            
+            // 現在の範囲と隣接または重複している場合、範囲を拡張
+            if (lineNumber <= currentEnd + 1)
+            {
+                currentEnd = lineNumber;
+            }
+            else
+            {
+                // 範囲を確定
+                ranges.Add((currentStart, currentEnd));
+                currentStart = lineNumber;
+                currentEnd = lineNumber;
+            }
+        }
+        
+        // 最後の範囲を追加
+        ranges.Add((currentStart, currentEnd));
+
+        return ranges;
+    }
+
 
 }
