@@ -168,19 +168,14 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         
         if (isNewFile)
         {
-            // 新規ファイル作成時のバリデーション
+            // 新規ファイル作成時: LineNumber > 1 の場合は警告を出す
             if (LineNumber > 1)
             {
-                WriteError(new ErrorRecord(
-                    new ArgumentException($"For new file creation, -LineNumber must be 1 or omitted. Specified: {LineNumber}"),
-                    "InvalidLineNumberForNewFile",
-                    ErrorCategory.InvalidArgument,
-                    resolvedPath));
-                return;
+                WriteWarning($"File does not exist. Creating new file. LineNumber {LineNumber} will be treated as line 1.");
             }
             
-            // 新規ファイル: LineNumber 未指定なら末尾追加
-            insertAt = LineNumber > 0 ? LineNumber : int.MaxValue;
+            // 新規ファイル: LineNumber 未指定なら末尾追加、LineNumber > 1 なら 1 として扱う
+            insertAt = (LineNumber > 1) ? 1 : (LineNumber > 0 ? LineNumber : int.MaxValue);
             effectiveAtEnd = LineNumber == 0;
         }
         else

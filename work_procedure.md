@@ -426,3 +426,40 @@ $result | Where-Object { $_ -match "^\s+\d+:" }
 - マッチ行カウント: ( | Where-Object {  -match "^\s+\d+:" }).Count
 
 ---
+
+## 📝 学んだこと（2025-10-22 21:19）
+
+### Cmdlet 設計：エラー vs 警告の選択
+
+**原則：**
+ユーザーの意図が明確で、安全に続行できる場合は**警告**を使い、完全に無効な操作の場合のみ**エラー**を使う。
+
+**Add-LinesToFile の事例：**
+
+**エラーを出すべきケース：**
+- 完全に無効な操作（例：LineNumber が 0 や負の数）
+- データ損失のリスク（例：既存ファイルの上書き without confirmation）
+- 意図が不明確（例：ワイルドカードで新規ファイル作成）
+
+**警告で済むケース：**
+- ユーザーの意図は明確だが、予期しない結果になる可能性がある
+- 例：存在しないファイルに LineNumber 5 を指定
+  - 意図：5行目に追加したい
+  - 実際：新規ファイルの1行目になる
+  - 対応：警告を出して続行（ユーザーが -WarningAction で制御可能）
+
+**PowerShell の慣習：**
+- Add-Content, Set-Content は存在しないファイルを作成する
+- Update-*, Remove-* cmdlet は存在チェックでエラーを出す
+- 「Add」は増やす操作なので、空からの開始（新規ファイル）も自然
+
+**実装パターン：**
+`csharp
+if (potentiallyUnexpectedBehavior)
+{
+    WriteWarning("What will actually happen instead of what you might expect");
+}
+// Continue with the operation
+`
+
+---

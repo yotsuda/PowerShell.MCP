@@ -1,4 +1,4 @@
-Describe "Add-LinesToFile - Additional Edge Cases" {
+﻿Describe "Add-LinesToFile - Additional Edge Cases" {
     BeforeAll {
         $script:testDir = Join-Path ([System.IO.Path]::GetTempPath()) "PSMCPTests_$(Get-Random)"
         New-Item -Path $script:testDir -ItemType Directory -Force | Out-Null
@@ -70,13 +70,42 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
         }
     }
 
-    Context "エラーハンドリング" {
-        It "存在しないファイルへの追加でエラー" {
-            $nonExistentFile = Join-Path $script:testDir "nonexistent.txt"
+    Context "新規ファイル作成の動作" {
+        It "存在しないファイルへの追加（LineNumber なし）で新規ファイル作成（警告なし）" {
+            $nonExistentFile = Join-Path $script:testDir "newfile1.txt"
             
-            # Add-LinesToFile は存在しないファイルに対してエラーを出す
-            { Add-LinesToFile -Path $nonExistentFile -Content "Line 1" -ErrorAction Stop } |
-                Should -Throw "*File not found*"
+            # 警告が出ないことを確認
+            $warnings = @()
+            Add-LinesToFile -Path $nonExistentFile -Content "Line 1" -WarningVariable warnings
+            
+            $warnings.Count | Should -Be 0
+            $nonExistentFile | Should -Exist
+            Get-Content $nonExistentFile | Should -Be "Line 1"
+        }
+        
+        It "存在しないファイルへの追加（LineNumber 1）で新規ファイル作成（警告なし）" {
+            $nonExistentFile = Join-Path $script:testDir "newfile2.txt"
+            
+            # 警告が出ないことを確認
+            $warnings = @()
+            Add-LinesToFile -Path $nonExistentFile -LineNumber 1 -Content "Line 1" -WarningVariable warnings
+            
+            $warnings.Count | Should -Be 0
+            $nonExistentFile | Should -Exist
+            Get-Content $nonExistentFile | Should -Be "Line 1"
+        }
+        
+        It "存在しないファイルへの追加（LineNumber > 1）で警告を出して新規ファイル作成" {
+            $nonExistentFile = Join-Path $script:testDir "newfile3.txt"
+            
+            # 警告が出ることを確認
+            $warnings = @()
+            Add-LinesToFile -Path $nonExistentFile -LineNumber 5 -Content "Line 1" -WarningVariable warnings
+            
+            $warnings.Count | Should -Be 1
+            $warnings[0] | Should -Match "File does not exist.*LineNumber 5 will be treated as line 1"
+            $nonExistentFile | Should -Exist
+            Get-Content $nonExistentFile | Should -Be "Line 1"
         }
     }
 }
