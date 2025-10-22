@@ -242,7 +242,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             throw;
         }
     }
-
     private static string GenerateResultMessage(bool fileExists, int linesRemoved, int linesInserted)
     {
         if (!fileExists)
@@ -250,21 +249,32 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             return $"Created {linesInserted} line(s)";
         }
 
+        // int.MaxValue は「ファイル末尾まで」を意味するため、正確な行数は不明
+        bool removedCountUnknown = (linesRemoved == int.MaxValue || linesRemoved == 0);
+        
         if (linesInserted == 0)
         {
-            return $"Removed {linesRemoved} line(s)";
+            return removedCountUnknown 
+                ? "Removed line(s)" 
+                : $"Removed {linesRemoved} line(s)";
         }
 
-        if (linesInserted == linesRemoved)
+        if (!removedCountUnknown && linesInserted == linesRemoved)
         {
             return $"Replaced {linesRemoved} line(s)";
         }
 
-        // 行数が変わる置換
+        // 行数が変わる置換、または削除行数が不明な場合
+        if (removedCountUnknown)
+        {
+            return $"Updated file: {linesInserted} line(s) written";
+        }
+        
         int netChange = linesInserted - linesRemoved;
         string netStr = netChange > 0 ? $"+{netChange}" : netChange.ToString();
         return $"Replaced {linesRemoved} line(s) with {linesInserted} line(s) (net: {netStr})";
     }
+
     /// <summary>
     /// 行範囲を置換しながらコンテキストバッファを構築（1 pass）
     /// </summary>
