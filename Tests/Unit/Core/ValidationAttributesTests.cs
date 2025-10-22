@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 using System.Reflection;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
@@ -73,7 +73,7 @@ public class ValidationAttributesTests
             InvokeValidate(invalidRange));
         
         Assert.IsType<ValidationMetadataException>(exception.InnerException);
-        Assert.Contains("Line numbers must be 1 or greater", exception.InnerException!.Message);
+        Assert.Contains("Start line must be", exception.InnerException!.Message);
         Assert.Contains("Invalid value: 0", exception.InnerException.Message);
     }
 
@@ -89,7 +89,7 @@ public class ValidationAttributesTests
             InvokeValidate(invalidRange));
         
         Assert.IsType<ValidationMetadataException>(exception.InnerException);
-        Assert.Contains("Line numbers must be 1 or greater", exception.InnerException!.Message);
+        Assert.Contains("Start line must be", exception.InnerException!.Message);
         Assert.Contains("Invalid value: -1", exception.InnerException.Message);
     }
 
