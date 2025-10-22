@@ -70,6 +70,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
                 if (fileInfoObj.Length == 0)
                 {
+                    var displayPath = GetDisplayPath(fileInfo.ResolvedPath, fileInfo.ResolvedPath);
+                    WriteObject($"==> {displayPath} <==");
                     WriteWarning("File is empty");
                     continue;
                 }

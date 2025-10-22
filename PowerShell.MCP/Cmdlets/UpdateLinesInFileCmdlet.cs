@@ -163,7 +163,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         
         // コンテキスト表示用のバッファ（1 pass実装）
         Dictionary<int, string>? contextBuffer = null;
-        HashSet<int>? updatedLinesSet = null;
         Dictionary<int, string>? deletedLines = null;
         int totalLines = 0;
 
@@ -185,7 +184,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 {
                     // コンテキスト表示のためバッファを常に有効化（削除時も）
                     contextBuffer = new Dictionary<int, string>();
-                    updatedLinesSet = new HashSet<int>();
                 }
                 
                 string? warningMessage;
@@ -196,8 +194,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     startLine,
                     endLine,
                     contentLines,
-                    contextBuffer,
-                    updatedLinesSet);
+                    contextBuffer);
                 
                 // 警告があれば出力
                 if (!string.IsNullOrEmpty(warningMessage))
@@ -210,12 +207,13 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
             // コンテキスト表示（バッファから表示、ファイル再読込なし）
-            if (contextBuffer != null && updatedLinesSet != null && updatedLinesSet.Count > 0)
+            if (contextBuffer != null && linesInserted > 0)
             {
                 OutputUpdateContextFromBuffer(
                     resolvedPath, 
                     contextBuffer, 
-                    updatedLinesSet.ToList(), 
+                    startLine,
+                    linesInserted,
                     totalLines);
             }
             else if (contextBuffer != null && deletedLines != null && deletedLines.Count > 0)
@@ -285,8 +283,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         int startLine,
         int endLine,
         string[] contentLines,
-        Dictionary<int, string>? contextBuffer,
-        HashSet<int>? updatedLinesSet)
+        Dictionary<int, string>? contextBuffer)
     {
         // コンテキスト範囲を計算（前後2行）
         int contextStart = Math.Max(1, startLine - 2);
@@ -320,7 +317,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                         if (contextBuffer != null && outputLine >= contextStart)
                         {
                             contextBuffer[outputLine] = contentLines[i];
-                            updatedLinesSet?.Add(outputLine);
                         }
                         
                         if (i < contentLines.Length - 1 || currentLine < endLine || reader.Peek() != -1)
@@ -412,7 +408,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     if (contextBuffer != null)
                     {
                         contextBuffer[outputLine] = contentLines[i];
-                        updatedLinesSet?.Add(outputLine);
                     }
                     
                     if (i < contentLines.Length - 1)
@@ -434,18 +429,21 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     private void OutputUpdateContextFromBuffer(
         string filePath,
         Dictionary<int, string> contextBuffer,
-        List<int> updatedLines,
+        int startLine,
+        int linesInserted,
         int totalLines)
     {
+        // 更新された行番号を生成（連続した範囲）
+        int endLine = startLine + linesInserted - 1;
+        var updatedLines = Enumerable.Range(startLine, linesInserted);
+        
         // 範囲を計算してマージ
         var (ranges, gapLines) = CalculateAndMergeRanges(updatedLines, totalLines, contextLines: 2);
-        
         // 表示用パスを決定
         var displayPath = GetDisplayPath(filePath, filePath);
         WriteObject($"==> {displayPath} <==");
         
         // 範囲ごとに出力
-        var updatedSet = new HashSet<int>(updatedLines);
         int rangeIndex = 0;
         
         foreach (var (start, end) in ranges)
@@ -457,10 +455,10 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     
                 var line = contextBuffer[lineNumber];
                 
-                if (updatedSet.Contains(lineNumber))
+                if ((lineNumber >= startLine && lineNumber <= endLine))
                 {
                     // 更新された行を表示
-                    if (updatedLines.Count <= 5)
+                    if (linesInserted <= 5)
                     {
                         // 1-5行: 全て反転表示
                         WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
@@ -468,10 +466,10 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     else
                     {
                         // 6行以上: 先頭2行と末尾2行のみ表示
-                        int firstLine = updatedLines[0];
-                        int secondLine = updatedLines[1];
-                        int secondLastLine = updatedLines[updatedLines.Count - 2];
-                        int lastLine = updatedLines[updatedLines.Count - 1];
+                        int firstLine = startLine;
+                        int secondLine = startLine + 1;
+                        int secondLastLine = endLine - 1;
+                        int lastLine = endLine;
                         
                         if (lineNumber == firstLine || lineNumber == secondLine)
                         {
@@ -481,7 +479,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                         else if (lineNumber == secondLine + 1)
                         {
                             // 省略マーカー（3行目で1回だけ）- 反転表示
-                            int omittedCount = updatedLines.Count - 4;
+                            int omittedCount = linesInserted - 4;
                             WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
                         }
                         else if (lineNumber == secondLastLine || lineNumber == lastLine)
@@ -545,20 +543,32 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         }
         else
         {
-            // 6行以上: 先頭2行と末尾2行のみ表示
-            var orderedLines = deletedLines.OrderBy(kv => kv.Key).ToList();
+            // 6行以上: 先頭2行と末尾2行のみ表示（1 pass）
+            var sortedKeys = deletedLines.Keys.OrderBy(k => k);
+            int index = 0;
+            int count = deletedLines.Count;
             
-            // 先頭2行
-            WriteObject($"{orderedLines[0].Key,3}: \x1b[7m{orderedLines[0].Value}\x1b[0m");
-            WriteObject($"{orderedLines[1].Key,3}: \x1b[7m{orderedLines[1].Value}\x1b[0m");
-            
-            // 省略マーカー
-            int omittedCount = deletedLines.Count - 4;
-            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
-            
-            // 末尾2行
-            WriteObject($"{orderedLines[orderedLines.Count - 2].Key,3}: \x1b[7m{orderedLines[orderedLines.Count - 2].Value}\x1b[0m");
-            WriteObject($"{orderedLines[orderedLines.Count - 1].Key,3}: \x1b[7m{orderedLines[orderedLines.Count - 1].Value}\x1b[0m");
+            foreach (var key in sortedKeys)
+            {
+                if (index < 2)
+                {
+                    // 先頭2行
+                    WriteObject($"{key,3}: \x1b[7m{deletedLines[key]}\x1b[0m");
+                }
+                else if (index == 2)
+                {
+                    // 省略マーカー
+                    int omittedCount = count - 4;
+                    WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
+                }
+                
+                if (index >= count - 2)
+                {
+                    // 末尾2行
+                    WriteObject($"{key,3}: \x1b[7m{deletedLines[key]}\x1b[0m");
+                }
+                index++;
+            }
         }
         
         // 後のコンテキスト行を表示（endLine+1 ～ endLine+2）

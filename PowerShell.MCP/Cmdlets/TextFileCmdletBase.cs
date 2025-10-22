@@ -279,7 +279,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
     /// </summary>
     /// <returns>範囲リストとギャップ行のセット</returns>
     protected (List<(int start, int end)> ranges, HashSet<int> gapLines) CalculateAndMergeRanges(
-        List<int> matchedLines, int maxLine, int contextLines = 2)
+        IEnumerable<int> matchedLines, int maxLine, int contextLines = 2)
     {
         var ranges = new List<(int start, int end)>();
         var gapLines = new HashSet<int>();
