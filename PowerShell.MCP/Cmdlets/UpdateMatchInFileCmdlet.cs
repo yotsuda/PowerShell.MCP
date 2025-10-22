@@ -176,7 +176,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                     matchedLines.Add(lineNumber);
                                     
                                     // 置換回数カウント
-                                    int count = (line.Length - line.Replace(Contains, "").Length) / 
+                                    int count = (line.Length - line.Replace(Contains!, "").Length) / 
                                                 Math.Max(1, Contains!.Length);
                                     replacementCount += count;
                                     
@@ -184,7 +184,16 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                     var newLine = line.Replace(Contains, Replacement);
                                     
                                     // 反転表示データを構築（置換後の文字列に反転表示を適用）
-                                    var displayLine = newLine.Replace(Replacement!, $"{reverseOn}{Replacement}{reverseOff}");
+                                    // 空文字列置換（削除）の場合は反転表示する対象がないので、置換後の行をそのまま使用
+                                    string displayLine;
+                                    if (!string.IsNullOrEmpty(Replacement))
+                                    {
+                                        displayLine = newLine.Replace(Replacement, $"{reverseOn}{Replacement}{reverseOff}");
+                                    }
+                                    else
+                                    {
+                                        displayLine = newLine;
+                                    }
                                     displayData[lineNumber] = displayLine;
                                     
                                     writer.WriteLine(newLine);
@@ -259,7 +268,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         // 各マッチの置換結果に反転表示を適用
         // 簡易実装: Replacementが単純な文字列の場合のみ反転表示
         // キャプチャグループを含む場合は複雑なので、置換結果全体を反転表示しない
-        if (!replacement.Contains("$"))
+        // 空文字列置換（削除）の場合は反転表示する対象がないので、そのまま返す
+        if (!string.IsNullOrEmpty(replacement) && !replacement.Contains("$"))
         {
             result = result.Replace(replacement, $"{reverseOn}{replacement}{reverseOff}");
         }
@@ -277,8 +287,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         var matchedSet = new HashSet<int>(matchedLines);
         
         
-        // 範囲を計算してマージ（前後3行の文脈）
-        var ranges = CalculateAndMergeRanges(matchedLines, totalLines, contextLines: 3);
+        // 範囲を計算してマージ（前後2行の文脈）
+        var (ranges, gapLines) = CalculateAndMergeRanges(matchedLines, totalLines, contextLines: 2);
         
         // 表示用パスを決定
         var displayPath = GetDisplayPath(filePath, filePath);
@@ -297,7 +307,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             
             if (currentLine >= start && currentLine <= end)
             {
-                var separator = matchedSet.Contains(currentLine) ? ":" : "-";
+                string separator = matchedSet.Contains(currentLine) ? ":" : "-";
                 
                 string displayLine;
                 if (displayData.ContainsKey(currentLine))
@@ -328,45 +338,4 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
     }
 
-    /// <summary>
-    /// マッチした行番号から前後の文脈を含む範囲を計算し、重複する範囲をマージ
-    /// </summary>
-    private List<(int start, int end)> CalculateAndMergeRanges(
-        List<int> matchedLines, int maxLine, int contextLines)
-    {
-        var ranges = new List<(int start, int end)>();
-
-        // 各マッチの前後N行の範囲を計算
-        foreach (var lineNum in matchedLines)
-        {
-            int start = Math.Max(1, lineNum - contextLines);
-            int end = Math.Min(maxLine, lineNum + contextLines);
-            ranges.Add((start, end));
-        }
-
-        // 範囲をソート
-        ranges.Sort();
-
-        // 重複または隣接する範囲をマージ（ギャップ3行以下もマージ）
-        var merged = new List<(int start, int end)>();
-        var current = ranges[0];
-
-        for (int i = 1; i < ranges.Count; i++)
-        {
-            if (ranges[i].start <= current.end + 4)
-            {
-                // 範囲が重複、隣接、または小さなギャップ（3行以下）→ マージ
-                current = (current.start, Math.Max(current.end, ranges[i].end));
-            }
-            else
-            {
-                // ギャップが大きい（4行以上）→ 現在の範囲を確定し、次の範囲へ
-                merged.Add(current);
-                current = ranges[i];
-            }
-        }
-        merged.Add(current);
-
-        return merged;
-    }
 }

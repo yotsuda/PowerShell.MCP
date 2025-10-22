@@ -136,8 +136,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     private void ShowWithContains(string filePath, System.Text.Encoding encoding)
     {
         ShowWithMatch(filePath, encoding, 
-            line => line.Contains(Contains, StringComparison.Ordinal), 
-            "contain", Contains, false);
+            line => line.Contains(Contains!, StringComparison.Ordinal), 
+            "contain", Contains!, false);
     }
 
     /// <summary>
@@ -191,54 +191,13 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             return;
         }
 
-        // 範囲を計算してマージ（前後3行の文脈）
-        var ranges = CalculateAndMergeRanges(matchedLines, endLine, contextLines: 3);
+        // 範囲を計算してマージ（前後2行の文脈）
+        var (ranges, gapLines) = CalculateAndMergeRanges(matchedLines, endLine, contextLines: 2);
 
         // 2nd pass: 範囲ごとに出力（反転表示付き）
-        OutputRangesWithContext(filePath, encoding, ranges, matchedLines, matchValue, isRegex);
+        OutputRangesWithContext(filePath, encoding, ranges, gapLines, matchedLines, matchValue, isRegex);
     }
 
-    /// <summary>
-    /// マッチした行番号から前後の文脈を含む範囲を計算し、重複する範囲をマージ
-    /// </summary>
-    private List<(int start, int end)> CalculateAndMergeRanges(
-        List<int> matchedLines, int maxLine, int contextLines)
-    {
-        var ranges = new List<(int start, int end)>();
-
-        // 各マッチの前後N行の範囲を計算
-        foreach (var lineNum in matchedLines)
-        {
-            int start = Math.Max(1, lineNum - contextLines);
-            int end = Math.Min(maxLine, lineNum + contextLines);
-            ranges.Add((start, end));
-        }
-
-        // 範囲をソート
-        ranges.Sort();
-
-        // 重複または隣接する範囲をマージ
-        var merged = new List<(int start, int end)>();
-        var current = ranges[0];
-
-        for (int i = 1; i < ranges.Count; i++)
-        {
-            if (ranges[i].start <= current.end + 4)
-            {
-                // 範囲が重複、隣接、または小さなギャップ（3行以下）→ マージ
-                current = (current.start, Math.Max(current.end, ranges[i].end));
-            }
-            else
-            {
-                // ギャップが大きい（4行以上）→ 現在の範囲を確定し、次の範囲へ
-                merged.Add(current);
-                current = ranges[i];
-            }
-        }
-        merged.Add(current);
-
-        return merged;
-    }
     /// <summary>
     /// 指定された範囲を効率的に出力（ファイルを1回だけ読み込み、マッチ部分を反転表示）
     /// </summary>
@@ -246,6 +205,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         string filePath, 
         System.Text.Encoding encoding, 
         List<(int start, int end)> ranges,
+        HashSet<int> gapLines,
         List<int> matchedLines,
         string searchValue,
         bool isRegex)
@@ -276,7 +236,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     inRange = true;
                 }
 
-                var separator = matchedSet.Contains(currentLine) ? ":" : "-";
+                string separator = matchedSet.Contains(currentLine) ? ":" : "-";
                 
                 // マッチ行の場合、マッチ部分を反転表示
                 string displayLine = line;
