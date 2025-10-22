@@ -82,6 +82,24 @@ Install-Module -Name Pester -Force -SkipPublisherCheck -MinimumVersion 5.0.0
 
 # 統合テスト実行
 Invoke-Pester -Path .\Tests\Integration
+
+### 簡潔なエラー出力でテスト実行
+```powershell
+# エラーメッセージをフィルタリングして読みやすく表示
+.\Tests\Invoke-PesterConcise.ps1
+
+# 特定のテストのみ実行
+.\Tests\Invoke-PesterConcise.ps1 -Path Integration/Cmdlets/Show-TextFile.Tests.ps1
+
+# ヘルプを表示
+Get-Help .\Tests\Invoke-PesterConcise.ps1 -Examples
+```
+
+**フィルタリング内容:**
+- 内部例外スタックトレース（`--->`, `--- End of`）
+- `System.Management.Automation.*Exception` の詳細行
+- 重複する例外メッセージ
+- 詳細なスタックトレース行
 ```
 
 ### カバレッジ付きで実行
