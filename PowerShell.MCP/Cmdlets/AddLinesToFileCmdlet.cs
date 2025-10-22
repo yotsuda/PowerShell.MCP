@@ -210,6 +210,12 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             }
 
             var tempFile = System.IO.Path.GetTempFileName();
+            
+            // コンテキスト表示用のバッファ（1 pass実装）
+            Dictionary<int, string>? contextBuffer = null;
+            List<int>? insertedLines = null;
+            int totalLines = 0;
+            int actualInsertAt = insertAt;
 
             try
             {
@@ -220,12 +226,32 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 }
                 else
                 {
-                    // 既存の非空ファイル：挿入処理
-                    InsertLines(resolvedPath, tempFile, contentLines, metadata, insertAt);
+                    // 既存の非空ファイル：挿入処理 + コンテキスト収集（1 pass）
+                    contextBuffer = new Dictionary<int, string>();
+                    insertedLines = new List<int>();
+                    
+                    (totalLines, actualInsertAt) = InsertLinesWithContext(
+                        resolvedPath, 
+                        tempFile, 
+                        contentLines, 
+                        metadata, 
+                        insertAt,
+                        contextBuffer,
+                        insertedLines);
                 }
 
                 // アトミックに置換（または新規作成）
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
+
+                // コンテキスト表示（バッファから表示、ファイル再読込なし）
+                if (contextBuffer != null && insertedLines != null && insertedLines.Count > 0)
+                {
+                    OutputAddContextFromBuffer(
+                        resolvedPath, 
+                        contextBuffer, 
+                        insertedLines, 
+                        totalLines);
+                }
 
                 string message = isNewFile 
                     ? $"Created {GetDisplayPath(originalPath, resolvedPath)}: Created {contentLines.Length} line(s)"
@@ -246,47 +272,85 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
 
     /// <summary>
-    /// 通常のファイルへの行挿入処理
+    /// 通常のファイルへの行挿入処理（コンテキストバッファ付き、1 pass）
     /// </summary>
-    private static void InsertLines(
+    private static (int totalLines, int actualInsertAt) InsertLinesWithContext(
         string inputPath, 
         string outputPath, 
         string[] contentLines, 
         TextFileUtility.FileMetadata metadata, 
-        int insertAt)
+        int insertAt,
+        Dictionary<int, string> contextBuffer,
+        List<int> insertedLines)
     {
+        // コンテキスト範囲を計算（暫定、insertAtが末尾の場合は後で調整）
+        int contextStart = Math.Max(1, insertAt == int.MaxValue ? 1 : insertAt - 2);
+        
         using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
+            writer.NewLine = metadata.NewlineSequence;
+            
             bool hasLines = enumerator.MoveNext();
             if (!hasLines)
             {
                 // これは起こらないはず（空ファイルは別処理）
                 WriteContentLines(writer, contentLines, metadata.NewlineSequence, false);
-                return;
+                return (contentLines.Length, 1);
             }
 
-            int lineNumber = 1;
+            int inputLineNumber = 1;
+            int outputLineNumber = 1;
             string currentLine = enumerator.Current;
             bool hasNext = enumerator.MoveNext();
             bool inserted = false;
+            int actualInsertAt = insertAt;
 
             while (true)
             {
                 // 挿入位置に到達したら、新しい内容を先に書き込む
-                if (!inserted && lineNumber == insertAt)
+                if (!inserted && inputLineNumber == insertAt)
                 {
-                    WriteContentLines(writer, contentLines, metadata.NewlineSequence, true);
+                    actualInsertAt = outputLineNumber;
+                    
+                    // 挿入行を書き込み＆バッファに保存
+                    for (int i = 0; i < contentLines.Length; i++)
+                    {
+                        writer.Write(contentLines[i]);
+                        
+                        // コンテキストバッファに保存
+                        if (outputLineNumber >= contextStart)
+                        {
+                            contextBuffer[outputLineNumber] = contentLines[i];
+                            insertedLines.Add(outputLineNumber);
+                        }
+                        
+                        if (i < contentLines.Length - 1)
+                        {
+                            writer.Write(metadata.NewlineSequence);
+                            outputLineNumber++;
+                        }
+                    }
+                    writer.Write(metadata.NewlineSequence);
+                    outputLineNumber++;
                     inserted = true;
                 }
 
                 // 現在の行を書き込む
                 writer.Write(currentLine);
+                
+                // コンテキストバッファに保存（範囲内のみ）
+                int contextEnd = actualInsertAt + contentLines.Length + 1;
+                if (outputLineNumber >= contextStart && outputLineNumber <= contextEnd)
+                {
+                    contextBuffer[outputLineNumber] = currentLine;
+                }
 
                 if (hasNext)
                 {
                     writer.Write(metadata.NewlineSequence);
-                    lineNumber++;
+                    inputLineNumber++;
+                    outputLineNumber++;
                     currentLine = enumerator.Current;
                     hasNext = enumerator.MoveNext();
                 }
@@ -297,7 +361,26 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     {
                         // 末尾追加（デフォルト）
                         writer.Write(metadata.NewlineSequence);
-                        WriteContentLines(writer, contentLines, metadata.NewlineSequence, false);
+                        outputLineNumber++;
+                        actualInsertAt = outputLineNumber;
+                        
+                        // 末尾追加の場合、コンテキスト範囲を再計算
+                        contextStart = Math.Max(1, actualInsertAt - 2);
+                        
+                        for (int i = 0; i < contentLines.Length; i++)
+                        {
+                            writer.Write(contentLines[i]);
+                            
+                            // コンテキストバッファに保存
+                            contextBuffer[outputLineNumber] = contentLines[i];
+                            insertedLines.Add(outputLineNumber);
+                            
+                            if (i < contentLines.Length - 1)
+                            {
+                                writer.Write(metadata.NewlineSequence);
+                                outputLineNumber++;
+                            }
+                        }
                         inserted = true;
                     }
                     else
@@ -311,8 +394,90 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     break;
                 }
             }
+            
+            return (outputLineNumber, actualInsertAt);
         }
     }
+
+    /// <summary>
+    /// バッファから追加コンテキストを表示（ファイル再読込なし）
+    /// </summary>
+    private void OutputAddContextFromBuffer(
+        string filePath,
+        Dictionary<int, string> contextBuffer,
+        List<int> insertedLines,
+        int totalLines)
+    {
+        // 範囲を計算してマージ
+        var (ranges, gapLines) = CalculateAndMergeRanges(insertedLines, totalLines, contextLines: 2);
+        
+        // 表示用パスを決定
+        var displayPath = GetDisplayPath(filePath, filePath);
+        WriteObject($"==> {displayPath} <==");
+        
+        // 範囲ごとに出力
+        var insertedSet = new HashSet<int>(insertedLines);
+        int rangeIndex = 0;
+        
+        foreach (var (start, end) in ranges)
+        {
+            for (int lineNumber = start; lineNumber <= end; lineNumber++)
+            {
+                if (!contextBuffer.ContainsKey(lineNumber))
+                    continue;
+                    
+                var line = contextBuffer[lineNumber];
+                
+                if (insertedSet.Contains(lineNumber))
+                {
+                    // 挿入された行を表示
+                    if (insertedLines.Count <= 5)
+                    {
+                        // 1-5行: 全て反転表示
+                        WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
+                    }
+                    else
+                    {
+                        // 6行以上: 先頭2行と末尾2行のみ表示
+                        int firstLine = insertedLines[0];
+                        int secondLine = insertedLines[1];
+                        int secondLastLine = insertedLines[insertedLines.Count - 2];
+                        int lastLine = insertedLines[insertedLines.Count - 1];
+                        
+                        if (lineNumber == firstLine || lineNumber == secondLine)
+                        {
+                            // 先頭2行
+                            WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
+                        }
+                        else if (lineNumber == secondLine + 1)
+                        {
+                            // 省略マーカー（3行目で1回だけ）- 反転表示
+                            int omittedCount = insertedLines.Count - 4;
+                            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
+                        }
+                        else if (lineNumber == secondLastLine || lineNumber == lastLine)
+                        {
+                            // 末尾2行
+                            WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
+                        }
+                        // 中間行はスキップ
+                    }
+                }
+                else
+                {
+                    // コンテキスト行を表示
+                    WriteObject($"{lineNumber,3}- {line}");
+                }
+            }
+            
+            rangeIndex++;
+            if (rangeIndex < ranges.Count)
+            {
+                WriteObject("");
+            }
+        }
+    }
+
 
     /// <summary>
     /// 複数行の内容を書き込む
@@ -334,6 +499,5 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             }
         }
     }
+
 }
-
-

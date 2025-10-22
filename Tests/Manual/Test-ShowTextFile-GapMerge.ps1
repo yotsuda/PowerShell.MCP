@@ -1,134 +1,108 @@
-# Show-TextFile ギャップマージ機能の手動テスト
+﻿# Show-TextFile ギャップマージ機能の手動テスト
 # このスクリプトを実行して、出力を目視確認してください
 
-Write-Host "=== Show-TextFile ギャップマージ機能テスト ===" -ForegroundColor Cyan
+Write-Host "=== Show-TextFile ギャップマージ機能テスト (前後2行) ===" -ForegroundColor Cyan
 
-# テスト1: ギャップ1行（マージされるべき）
-Write-Host "`n【テスト1】ギャップ1行 - マージされる（8行目が表示される）" -ForegroundColor Yellow
+# テスト1: ギャップ0行（マージされるべき）
+Write-Host "`n【テスト1】ギャップ0行 - マージされる" -ForegroundColor Yellow
 $content1 = @"
 Line 1: xxx
 Line 2: xxx
-Line 3: xxx
-Line 4: MATCH
+Line 3: MATCH
+Line 4: xxx
 Line 5: xxx
 Line 6: xxx
-Line 7: xxx
-Line 8: xxx (この行が表示されるべき)
+Line 7: MATCH
+Line 8: xxx
 Line 9: xxx
-Line 10: xxx
-Line 11: xxx
-Line 12: MATCH
-Line 13: xxx
-Line 14: xxx
-Line 15: xxx
 "@
-$testFile1 = "test-gap1.txt"
+$testFile1 = "test-gap0.txt"
 Set-Content -Path $testFile1 -Value $content1
 Show-TextFile -Path $testFile1 -Contains "MATCH"
 Remove-Item $testFile1
 
-# テスト2: ギャップ2行（マージされるべき）
-Write-Host "`n【テスト2】ギャップ2行 - マージされる（8-9行目が表示される）" -ForegroundColor Yellow
+# テスト2: ギャップ1行（マージされるべき）
+Write-Host "`n【テスト2】ギャップ1行 - マージされる（7行目が表示される）" -ForegroundColor Yellow
 $content2 = @"
 Line 1: xxx
 Line 2: xxx
-Line 3: xxx
-Line 4: MATCH
+Line 3: MATCH
+Line 4: xxx
 Line 5: xxx
 Line 6: xxx
-Line 7: xxx
-Line 8: xxx (この行が表示されるべき)
-Line 9: xxx (この行が表示されるべき)
+Line 7: xxx (この行が表示されるべき)
+Line 8: xxx
+Line 9: MATCH
 Line 10: xxx
 Line 11: xxx
-Line 12: xxx
-Line 13: MATCH
-Line 14: xxx
-Line 15: xxx
-Line 16: xxx
 "@
-$testFile2 = "test-gap2.txt"
+$testFile2 = "test-gap1.txt"
 Set-Content -Path $testFile2 -Value $content2
 Show-TextFile -Path $testFile2 -Contains "MATCH"
 Remove-Item $testFile2
 
-# テスト3: ギャップ3行（マージされるべき）
-Write-Host "`n【テスト3】ギャップ3行 - マージされる（8-10行目が表示される）" -ForegroundColor Yellow
+# テスト3: ギャップ2行（マージされるべき）
+Write-Host "`n【テスト3】ギャップ2行 - マージされる（7-8行目がギャップ行として表示される）" -ForegroundColor Yellow
 $content3 = @"
 Line 1: xxx
 Line 2: xxx
-Line 3: xxx
-Line 4: MATCH
+Line 3: MATCH
+Line 4: xxx
 Line 5: xxx
 Line 6: xxx
-Line 7: xxx
+Line 7: xxx (この行が表示されるべき)
 Line 8: xxx (この行が表示されるべき)
-Line 9: xxx (この行が表示されるべき)
-Line 10: xxx (この行が表示されるべき)
+Line 9: xxx
+Line 10: MATCH
 Line 11: xxx
 Line 12: xxx
-Line 13: xxx
-Line 14: MATCH
-Line 15: xxx
-Line 16: xxx
-Line 17: xxx
 "@
-$testFile3 = "test-gap3.txt"
+$testFile3 = "test-gap2.txt"
 Set-Content -Path $testFile3 -Value $content3
 Show-TextFile -Path $testFile3 -Contains "MATCH"
 Remove-Item $testFile3
 
-# テスト4: ギャップ4行（分離されるべき）
-Write-Host "`n【テスト4】ギャップ4行 - 分離される（8-11行目が非表示）" -ForegroundColor Yellow
+# テスト4: ギャップ3行（分離されるべき）
+Write-Host "`n【テスト4】ギャップ3行 - 分離される（7-9行目は表示されない）" -ForegroundColor Yellow
 $content4 = @"
 Line 1: xxx
 Line 2: xxx
-Line 3: xxx
-Line 4: MATCH
+Line 3: MATCH
+Line 4: xxx
 Line 5: xxx
 Line 6: xxx
-Line 7: xxx
+Line 7: xxx (この行は表示されないべき)
 Line 8: xxx (この行は表示されないべき)
-Line 9: xxx (この行は表示されないべき)
-Line 10: xxx (この行は表示されないべき)
-Line 11: xxx (この行は表示されないべき)
+Line 9: xxx (この行は表示されるべき)
+Line 10: xxx
+Line 11: MATCH
 Line 12: xxx
 Line 13: xxx
-Line 14: xxx
-Line 15: MATCH
-Line 16: xxx
-Line 17: xxx
-Line 18: xxx
 "@
-$testFile4 = "test-gap4.txt"
+$testFile4 = "test-gap3.txt"
 Set-Content -Path $testFile4 -Value $content4
 Show-TextFile -Path $testFile4 -Contains "MATCH"
 Remove-Item $testFile4
 
-# テスト5: ギャップ5行（分離されるべき）
-Write-Host "`n【テスト5】ギャップ5行 - 分離される（8-12行目が非表示）" -ForegroundColor Yellow
+# テスト5: ギャップ4行（分離されるべき）
+Write-Host "`n【テスト5】ギャップ4行 - 分離される（7-10行目が非表示）" -ForegroundColor Yellow
 $content5 = @"
 Line 1: xxx
 Line 2: xxx
-Line 3: xxx
-Line 4: MATCH
+Line 3: MATCH
+Line 4: xxx
 Line 5: xxx
 Line 6: xxx
-Line 7: xxx
+Line 7: xxx (この行は表示されないべき)
 Line 8: xxx (この行は表示されないべき)
-Line 9: xxx (この行は表示されないべき)
+Line 9: xxx (この行は表示されるべき)
 Line 10: xxx (この行は表示されないべき)
-Line 11: xxx (この行は表示されないべき)
-Line 12: xxx (この行は表示されないべき)
+Line 11: xxx
+Line 12: MATCH
 Line 13: xxx
 Line 14: xxx
-Line 15: xxx
-Line 16: MATCH
-Line 17: xxx
-Line 18: xxx
-Line 19: xxx
 "@
-$testFile5 = "test-gap5.txt"
+$testFile5 = "test-gap4.txt"
 Set-Content -Path $testFile5 -Value $content5
 Show-TextFile -Path $testFile5 -Contains "MATCH"
 Remove-Item $testFile5

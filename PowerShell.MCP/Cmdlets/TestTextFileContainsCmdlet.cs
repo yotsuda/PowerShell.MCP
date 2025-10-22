@@ -101,7 +101,7 @@ public class TestTextFileContainsCmdlet : TextFileCmdletBase
     /// </summary>
     private bool TestWithPattern(string filePath, System.Text.Encoding encoding)
     {
-        var regex = new Regex(Pattern, RegexOptions.Compiled);
+        var regex = new Regex(Pattern!, RegexOptions.Compiled);
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
         int skipCount = startLine - 1;
@@ -140,7 +140,7 @@ public class TestTextFileContainsCmdlet : TextFileCmdletBase
         // 1-pass: return true immediately on first match
         foreach (var line in linesToSearch)
         {
-            if (line.Contains(Contains, StringComparison.Ordinal))
+            if (line.Contains(Contains!, StringComparison.Ordinal))
             {
                 return true; // Early exit on first match
             }

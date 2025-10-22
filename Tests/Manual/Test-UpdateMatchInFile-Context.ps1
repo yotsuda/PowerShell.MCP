@@ -1,4 +1,4 @@
-# Update-MatchInFile コンテキスト表示機能のテスト
+﻿# Update-MatchInFile コンテキスト表示機能のテスト
 Write-Host "=== Update-MatchInFile コンテキスト表示テスト ===" -ForegroundColor Cyan
 
 # テスト1: Contains モード
@@ -37,8 +37,8 @@ Set-Content -Path "test-replace2.txt" -Value $content2
 Update-MatchInFile -Path "test-replace2.txt" -Pattern "\bvar\b" -Replacement "let"
 Remove-Item "test-replace2.txt"
 
-# テスト3: ギャップマージ確認（ギャップ1行）
-Write-Host "`n【テスト3】ギャップ1行 - マージされる" -ForegroundColor Yellow
+# テスト3: ギャップマージ確認（ギャップ2行）
+Write-Host "`n【テスト3】ギャップ2行 - マージされる" -ForegroundColor Yellow
 $content3 = @"
 Line 1
 Line 2
@@ -46,21 +46,19 @@ Line 3
 Line 4: match
 Line 5
 Line 6
-Line 7
-Line 8 (この行が表示されるべき)
+Line 7 (gap)
+Line 8 (gap)
 Line 9
-Line 10
+Line 10: match
 Line 11
-Line 12: match
-Line 13
-Line 14
+Line 12
 "@
 Set-Content -Path "test-replace3.txt" -Value $content3
 Update-MatchInFile -Path "test-replace3.txt" -Contains "match" -Replacement "REPLACED"
 Remove-Item "test-replace3.txt"
 
-# テスト4: ギャップ4行（分離）
-Write-Host "`n【テスト4】ギャップ4行 - 分離される" -ForegroundColor Yellow
+# テスト4: ギャップ3行（マージ）
+Write-Host "`n【テスト4】ギャップ3行 - マージされる" -ForegroundColor Yellow
 $content4 = @"
 Line 1
 Line 2
@@ -68,22 +66,18 @@ Line 3
 Line 4: match
 Line 5
 Line 6
-Line 7
-Line 8 (この行は表示されないべき)
-Line 9 (この行は表示されないべき)
-Line 10 (この行は表示されないべき)
-Line 11 (この行は表示されないべき)
-Line 12
+Line 7 (この行は表示されるべき)
+Line 8 (この行は表示されるべき)
+Line 9 (この行は表示されるべき)
+Line 10
+Line 11
+Line 12: match
 Line 13
 Line 14
-Line 15: match
-Line 16
-Line 17
 "@
 Set-Content -Path "test-replace4.txt" -Value $content4
 Update-MatchInFile -Path "test-replace4.txt" -Contains "match" -Replacement "REPLACED"
 Remove-Item "test-replace4.txt"
-
 # テスト5: LineRange指定
 Write-Host "`n【テスト5】LineRange指定 - 5-10行目のみ置換" -ForegroundColor Yellow
 $content5 = @"
