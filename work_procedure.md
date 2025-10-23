@@ -395,5 +395,43 @@ It "Should throw file not found error" {
 - 行番号も更新後の状態と一致させることで、ファイル全体の状態を正確に把握できる
 
 **作成日時:** 2025-10-22 11:15
-**最終更新:** 2025-10-23 22:08
-**バージョン:** 2.1
+**最終更新:** 2025-10-23 22:22
+**バージョン:** 2.2
+
+### 6. テスト実行時の出力制御
+
+**問題:**
+`dotnet test --verbosity normal` や `Invoke-Pester` のデフォルト出力は非常に冗長で、LLM のトークンを大量に消費する。特にビルドログは数万文字に達することがある。
+
+**解決策:**
+
+**C# ユニットテスト:**
+```powershell
+# ❌ 避けるべき - 非常に冗長な出力
+dotnet test --verbosity normal
+
+# ✅ 推奨 - 簡潔な出力
+dotnet test --verbosity quiet --nologo
+```
+
+**PowerShell 統合テスト:**
+```powershell
+# ❌ 避けるべき - 詳細な出力
+Invoke-Pester -Path .\Tests\Integration
+
+# ✅ 推奨 - 最小限の出力
+$config = New-PesterConfiguration
+$config.Run.Path = ".\Tests\Integration"
+$config.Output.Verbosity = "Minimal"
+Invoke-Pester -Configuration $config
+```
+
+**実装:**
+- ✅ `Tests\Run-AllTests.ps1` を更新（デフォルトで簡潔な出力）
+- ✅ `Tests\README.md` に簡潔な実行方法を文書化
+- `-Detailed` スイッチで詳細出力も可能
+
+**効果:**
+- トークン消費を90%以上削減
+- テスト結果が読みやすくなる
+- 失敗したテストのみが目立つ

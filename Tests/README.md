@@ -71,18 +71,31 @@ Tests/
 .\Tests\Run-AllTests.ps1
 ```
 
-### C# ユニットテストのみ実行
+### C# ユニットテストのみ実行（簡潔な出力）
 ```powershell
 cd Tests
+dotnet test --verbosity quiet --nologo
+```
+
+**詳細な出力が必要な場合:**
+```powershell
 dotnet test --verbosity normal
 ```
 
-### PowerShell 統合テストのみ実行
+### PowerShell 統合テストのみ実行（簡潔な出力）
 ```powershell
 # Pester 5.0+ が必要
 Install-Module -Name Pester -Force -SkipPublisherCheck -MinimumVersion 5.0.0
 
-# 統合テスト実行
+# 統合テスト実行（最小限の出力）
+$config = New-PesterConfiguration
+$config.Run.Path = ".\Tests\Integration"
+$config.Output.Verbosity = "Minimal"
+Invoke-Pester -Configuration $config
+```
+
+**詳細な出力が必要な場合:**
+```powershell
 Invoke-Pester -Path .\Tests\Integration
 
 ### 簡潔なエラー出力でテスト実行

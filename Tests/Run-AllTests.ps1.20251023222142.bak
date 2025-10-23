@@ -1,4 +1,4 @@
-﻿# Run-AllTests.ps1
+# Run-AllTests.ps1
 # すべてのテストを実行するヘルパースクリプト
 
 [CmdletBinding()]
@@ -35,13 +35,13 @@ Write-Host "✓ Pester バージョン: $($pesterModule.Version)" -ForegroundCol
 # C# ユニットテストの実行
 if ($TestType -in @("Unit", "All")) {
     Write-Host "`n--- C# Unit Tests ---" -ForegroundColor Cyan
-    $testProjectPath = $scriptRoot
+    $unitTestPath = Join-Path $scriptRoot "Unit"
     
-    if (Test-Path (Join-Path $testProjectPath "PowerShell.MCP.Tests.csproj")) {
-        Push-Location $testProjectPath
+    if (Test-Path $unitTestPath) {
+        Push-Location $unitTestPath
         try {
             Write-Host "dotnet test を実行中..." -ForegroundColor Yellow
-            dotnet test --verbosity quiet --nologo
+            dotnet test --verbosity normal
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "❌ C# ユニットテストが失敗しました。" -ForegroundColor Red
             } else {
@@ -52,7 +52,7 @@ if ($TestType -in @("Unit", "All")) {
             Pop-Location
         }
     } else {
-        Write-Host "⚠ Test project not found: PowerShell.MCP.Tests.csproj" -ForegroundColor Yellow
+        Write-Host "⚠ Unit test path not found: $unitTestPath" -ForegroundColor Yellow
     }
 }
 
@@ -62,7 +62,7 @@ if ($TestType -in @("Integration", "All")) {
     $integrationTestPath = Join-Path $scriptRoot "Integration"
     
     if (Test-Path $integrationTestPath) {
-        $testFiles = Get-ChildItem -Path $integrationTestPath -Filter "*.Tests.ps1"
+        $testFiles = Get-ChildItem -Path $integrationTestPath -Filter "Test-*.ps1"
         
         if ($testFiles.Count -eq 0) {
             Write-Host "⚠ 統合テストファイルが見つかりません。" -ForegroundColor Yellow
@@ -72,15 +72,9 @@ if ($TestType -in @("Integration", "All")) {
             $pesterConfig = @{
                 Run = @{
                     Path = $integrationTestPath
-                    PassThru = $true
                 }
                 Output = @{
-                    Verbosity = if ($Detailed) { "Detailed" } else { "None" }
-                    StackTraceVerbosity = "None"
-                    CIFormat = "None"
-                }
-                Should = @{
-                    ErrorAction = 'SilentlyContinue'
+                    Verbosity = if ($Detailed) { "Detailed" } else { "Normal" }
                 }
             }
             
@@ -90,10 +84,9 @@ if ($TestType -in @("Integration", "All")) {
                 }
             }
             
-            # *.Tests.ps1 ファイルを探すようにPesterに指示
+            # Test-*.ps1 ファイルを探すようにPesterに指示
             $config = New-PesterConfiguration -Hashtable $pesterConfig
-            $config.Run.Path = Get-ChildItem -Path $integrationTestPath -Filter "*.Tests.ps1" | Select-Object -ExpandProperty FullName
-            # テスト実行（Output.Verbosity = "None" で出力を最小限に）
+            $config.Run.Path = Get-ChildItem -Path $integrationTestPath -Filter "Test-*.ps1" | Select-Object -ExpandProperty FullName
             $result = Invoke-Pester -Configuration $config
             
             Write-Host "`n--- Test Results ---" -ForegroundColor Cyan
