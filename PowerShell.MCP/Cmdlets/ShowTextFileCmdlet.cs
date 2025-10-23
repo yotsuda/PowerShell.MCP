@@ -208,9 +208,26 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     }
                     
                     // ギャップがあれば空行を出力
-                    if (needsGapSeparator)
+                    // ただし、gapLineがある場合や、前置コンテキストがlastOutputLineの直後から続く場合は不要
+                    bool needsEmptyLine = needsGapSeparator && gapLine == null;
+                    if (needsEmptyLine)
                     {
-                        WriteObject("");
+                        // 前置コンテキストがあっても、lastOutputLineとの間にギャップがあれば空行が必要
+                        int preContextStart = lineNumber;
+                        if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)
+                        {
+                            preContextStart = lineNumber - 2;
+                        }
+                        else if (prevLine != null && lineNumber >= 2 && lineNumber - 1 > lastOutputLine)
+                        {
+                            preContextStart = lineNumber - 1;
+                        }
+                        
+                        // preContextStart が lastOutputLine の直後でない場合のみ空行を出力
+                        if (preContextStart > lastOutputLine + 2)
+                        {
+                            WriteObject("");
+                        }
                         needsGapSeparator = false;
                     }
                     
@@ -250,6 +267,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     afterMatchCounter = 2;
                     lastOutputLine = lineNumber;
                     gapLine = null; // ギャップリセット
+                    needsGapSeparator = false; // フラグもリセット
                 }
                 else
                 {
@@ -274,7 +292,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                             // 最後の出力行の次の2行目 → ギャップが2行以上 → 空行出力フラグ
                             needsGapSeparator = true;
                             gapLine = null;
-                            lastOutputLine = 0; // ギャップ検出終了
+                            // lastOutputLine はリセットしない（次のマッチの前置コンテキスト判定に必要）
                         }
                     }
                 }

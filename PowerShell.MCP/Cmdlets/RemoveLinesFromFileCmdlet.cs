@@ -203,7 +203,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 if (wasRemoving && !shouldRemove)
                                 {
                                     // 削除マーカーを出力
-                                    WriteObject($"   : \x1b[7m...(Removed {currentRemovalCount} line(s))...\x1b[0m");
+                                    WriteObject("   :");
                                     afterRemovalCounter = 2; // 次の2行を出力
                                 }
 
@@ -257,7 +257,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     // ファイル末尾で削除が終わった場合
                                     if (wasRemoving)
                                     {
-                                        WriteObject($"   : \x1b[7m...(Removed {currentRemovalCount} line(s))...\x1b[0m");
+                                        WriteObject("   :");
                                     }
                                     break;
                                 }

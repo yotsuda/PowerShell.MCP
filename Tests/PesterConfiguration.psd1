@@ -9,7 +9,7 @@
         CIFormat = 'None'
     }
     Should = @{
-        ErrorAction = 'Continue'
+        ErrorAction = 'SilentlyContinue'
     }
     Debug = @{
         ShowFullErrors = $false

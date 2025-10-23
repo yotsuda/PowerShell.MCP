@@ -223,7 +223,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $output | Should -Match '4- Line 3: Third line'
             
             # 削除マーカー（':'で表示、行番号なし）
-            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            $output | Should -Match '   :'
             
             # 後2行のコンテキスト（'-'で表示、削除後の行番号）
             $output | Should -Match '5- error: invalid input'
@@ -236,7 +236,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             # 1つ目の削除範囲（大文字ERROR、5行目を削除）
             $output | Should -Match '3- Line 2: Second line'
             $output | Should -Match '4- Line 3: Third line'
-            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            $output | Should -Match '   :'
             $output | Should -Match '5- error: invalid input'
             $output | Should -Match '6- Line 4: Fourth line'
             
@@ -250,7 +250,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             
             # 前2行は存在しない（先頭なので）
             # 削除マーカー
-            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            $output | Should -Match '   :'
             
             # 後2行（'-'で表示、削除後の行番号）
             $output | Should -Match '1- Line 1: First line'
@@ -265,7 +265,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $output | Should -Match '8- WARNING: This is a warning'
             
             # 削除マーカー
-            $output | Should -Match '   : .\[7m\.\.\.\(Removed 2 line\(s\)\)\.\.\..\[0m'
+            $output | Should -Match '   :'
             
             # 後2行は存在しない（末尾なので）
             $output | Should -Not -Match '9:'
@@ -278,7 +278,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $output | Should -Match '1- # Header'
             
             # 削除マーカーに正しい削除行数
-            $output | Should -Match '   : .\[7m\.\.\.\(Removed 3 line\(s\)\)\.\.\..\[0m'
+            $output | Should -Match '   :'
             
             # 後2行（'-'で表示、削除後の行番号）
             $output | Should -Match '2- ERROR: Connection timeout'
@@ -290,10 +290,10 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $output = Remove-LinesFromFile -Path $script:testFile -Contains "error" | Out-String
             
             # 1つの削除範囲のみ（1行）
-            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            $output | Should -Match '   :'
             
             # マーカーは1つのみ
-            $markerCount = ([regex]::Matches($output, '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m')).Count
+            $markerCount = ([regex]::Matches($output, '   :')).Count
             $markerCount | Should -Be 1
         }
 
