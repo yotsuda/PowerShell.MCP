@@ -1,5 +1,20 @@
 # 作業進捗
 
+### 2025-10-24 02:00 - Update-LinesInFile の -LineRange -1 バグを修正
+- **問題**: -LineRange 5,-1 指定時に Replaced 2147483647 line(s) と不正な表示
+- **原因**: linesRemoved = endLine - startLine + 1 で int.MaxValue を使って計算
+- **修正内容**:
+  1. linesRemoved を 0 で初期化し、実際に処理した行数をカウント
+  2. 置換範囲内の行を処理するたびに linesRemoved++ でカウント
+  3. GenerateResultMessage のコメントと不要なチェックを削除
+  4. テストの期待値を修正（-LineRange 1,-1 は全体置換ではなく行範囲置換）
+- **修正ファイル**:
+  - PowerShell.MCP\Cmdlets\UpdateLinesInFileCmdlet.cs (3箇所)
+  - Tests\Integration\Cmdlets\Update-LinesInFile.Integration.Tests.ps1 (テスト修正)
+- **テスト結果**: Update-LinesInFile 全テスト 20/20 パス ✅
+- **動作確認**: -LineRange 5,-1 で正しく Replaced 6 line(s) と表示
+
+
 ### 2025-10-24 - すべてのテストを実行して確認
 - **C# ユニットテスト**: 96/96 パス (100%) - 実行時間: 765ms
 - **PowerShell 統合テスト**: 39/43 パス (4スキップ、実行されたものは100%)

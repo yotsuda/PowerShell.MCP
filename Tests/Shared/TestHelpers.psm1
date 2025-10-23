@@ -61,8 +61,8 @@ function Test-ThrowsQuietly {
     $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
     
     try {
-        # 出力を完全に抑制（2>&1 は使わない - $Error を保持するため）
-        $null = & $ScriptBlock *>&1
+        # 出力を完全に抑制（例外は catch でキャプチャ）
+        $null = & $ScriptBlock 2>&1 3>&1 4>&1 5>&1 6>&1
     }
     catch {
         $caught = $true

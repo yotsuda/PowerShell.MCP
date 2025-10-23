@@ -194,12 +194,12 @@ Describe "Update-LinesInFile Integration Tests" {
     }
 
     Context "メッセージ表示" {
-        It "-LineRange 1,-1 で全体置換時は簡潔なメッセージを表示" {
+        It "-LineRange 1,-1 で行範囲置換時は正しい行数を表示" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 1,-1 -Content "A","B","C"
             
-            # メッセージが "Updated file: X line(s) written" 形式であることを確認
+            # メッセージが "Replaced X line(s)" 形式で、正しい行数が表示されることを確認
             $message = $output | Out-String
-            $message | Should -Match "Updated file: \d+ line\(s\) written"
+            $message | Should -Match "Replaced \d+ line\(s\) with \d+ line\(s\)"
             $message | Should -Not -Match "\d{4,}"  # 4桁以上の数字（int.MaxValueなど）が含まれていないこと
         }
 

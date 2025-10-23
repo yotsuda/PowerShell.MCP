@@ -474,3 +474,36 @@ return @{
 
 **教訓:**
 実装した処理が実際に使用されているか、最終的な出力まで確認する。特に return 文では、計算結果が正しく返されているか注意深く確認する。
+
+### 8. -LineRange で -1 を使用する場合の行数計算
+
+**問題:**
+`-LineRange 5,-1` のように2番目の値に `-1` を指定すると、`int.MaxValue` （2147483647）が使用され、不正な行数が表示される。
+
+**原因:**
+`TextFileUtility.ParseLineRange()` が `-1` を `int.MaxValue` に変換するが、`linesRemoved = endLine - startLine + 1` の計算で `int.MaxValue` を使っていた。
+
+**解決策:**
+実際に処理した行数をカウントする方式に変更：
+
+```csharp
+// ❌ 避けるべき - endLine が int.MaxValue の場合に巨大な値になる
+int linesRemoved = endLine - startLine + 1;
+
+// ✅ 推奨 - 実際に処理した行数をカウント
+int linesRemoved = 0;
+// ...
+if (currentLine >= startLine && currentLine <= endLine)
+{
+    linesRemoved++;  // 実際に削除/置換された行をカウント
+    // ...
+}
+```
+
+**重要なポイント:**
+- `-1` や `0` は「ファイル末尾まで」を意味するため、事前計算できない
+- 実際にループで処理した行数をカウントすることで正確な値を取得
+- `int.MaxValue` を使った算術演算は避ける
+
+**教訓:**
+特殊な値（`int.MaxValue`, `-1` など）を使う場合は、算術演算ではなくカウンタやフラグで処理する。事前計算が困難な場合は、実際の処理中にカウントする方式を採用する。

@@ -261,14 +261,11 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             return $"{linesInserted} line(s) (net: +{linesInserted})";
         }
 
-        // int.MaxValue は「ファイル末尾まで」を意味するため、正確な行数は不明
-        bool removedCountUnknown = (linesRemoved == int.MaxValue || linesRemoved == 0);
+        // linesRemoved は実際に処理された行数
         
         if (linesInserted == 0)
         {
-            return removedCountUnknown 
-                ? "Removed line(s)" 
-                : $"Removed {linesRemoved} line(s) (net: -{linesRemoved})";
+            return $"Removed {linesRemoved} line(s) (net: -{linesRemoved})";
         }
 
         // 行数に応じたメッセージを生成（常にnetを表示）
@@ -296,7 +293,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         
         int currentLine = 1;
         int outputLine = 1;
-        int linesRemoved = endLine - startLine + 1;
+        int linesRemoved = 0;  // 実際に処理した行数をカウント
         int linesInserted = contentLines.Length;
         string? warningMessage = null;
         bool insertedContent = false;
@@ -370,7 +367,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                         context.DeletedSecondLast = context.DeletedLast;
                         context.DeletedLast = line;
                     }
-                    
+                    linesRemoved++;  // 実際に削除/置換された行をカウント
                     currentLine++;
                     continue;
                 }
