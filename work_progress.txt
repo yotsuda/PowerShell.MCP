@@ -14,7 +14,7 @@
   5. $PSDefaultParameterValues['*:ErrorAction'] = 'Stop' で全コマンドに適用
   6. $Error の追加チェックで catch できなかったエラーも検出
 - **効果**: トークン消費を90%以上削減、テスト結果が読みやすくなる
-- **文書化完了**: 開発者が簡単に Test-ThrowsQuietly を使用できるように
+- **コミット**: 29cb1c5
 ### 2025-10-23 17:00 - Test-ThrowsQuietly の有効性を確認
 - **背景**: Pester テストでエラーケースを検証する際、大量のエラーメッセージとスタックトレースが出力され、トークンを消費していた
 - **既存実装**: TestHelpers.psm1 に Test-ThrowsQuietly 関数が実装済み
