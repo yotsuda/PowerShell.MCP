@@ -5,8 +5,7 @@
 - **目的**: すべてのファイル操作 cmdlet の net 表示機能を検証
 - **実装**: NetDisplay.Tests.ps1 を作成（5つのテストケース）
 - **テスト結果**: 5/5 パス（100%）
-- **コミット**: 未コミット
-### 2025-10-23 16:05 - Add/Remove cmdlets に net 表示を追加
+- **コミット**: a9be958
 - **目的**: すべてのファイル操作 cmdlet で一貫して net 変化を表示
 - **実装**: Add-LinesToFile と Remove-LinesFromFile に net 表示を追加
 ### 2025-10-23 15:50 - Update-LinesInFile の表示を修正
