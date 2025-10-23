@@ -107,6 +107,15 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                     var tempFile = System.IO.Path.GetTempFileName();
                     int linesRemoved = 0;
+                    int currentRemovalCount = 0; // 現在の削除範囲でのカウント
+                    
+                    // コンテキスト表示用（rotate buffer のみ、Dictionary/HashSet/List不使用）
+                    string? prevPrevLine = null;
+                    string? prevLine = null;
+                    int afterRemovalCounter = 0;
+                    int outputLineNumber = 0; // 新ファイルでの行番号
+                    int lastOutputLine = 0; // 最後に出力した行番号（重複回避用）
+                    bool headerPrinted = false;
 
                     try
                     {
@@ -132,6 +141,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                             string currentLine = enumerator.Current;
                             bool hasNext = enumerator.MoveNext();
                             bool isFirstOutputLine = true;
+                            bool wasRemoving = false;
 
                             while (true)
                             {
@@ -163,6 +173,40 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     shouldRemove = regex!.IsMatch(currentLine);
                                 }
 
+                                // 削除範囲の開始検出
+                                if (!wasRemoving && shouldRemove)
+                                {
+                                    // ヘッダー出力（初回のみ）
+                                    if (!headerPrinted)
+                                    {
+                                        var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
+                                        WriteObject($"==> {displayPath} <==");
+                                        headerPrinted = true;
+                                    }
+                                    
+                                    currentRemovalCount = 0; // 新しい削除範囲開始
+                                    
+                                    // 前2行をコンテキストとして出力（重複チェック）
+                                    if (prevPrevLine != null && lineNumber >= 3 && outputLineNumber - 1 > lastOutputLine)
+                                    {
+                                        WriteObject($"{outputLineNumber - 1,3}- {prevPrevLine}");
+                                        lastOutputLine = outputLineNumber - 1;
+                                    }
+                                    if (prevLine != null && lineNumber >= 2 && outputLineNumber > lastOutputLine)
+                                    {
+                                        WriteObject($"{outputLineNumber,3}- {prevLine}");
+                                        lastOutputLine = outputLineNumber;
+                                    }
+                                }
+
+                                // 削除範囲の終了検出
+                                if (wasRemoving && !shouldRemove)
+                                {
+                                    // 削除マーカーを出力
+                                    WriteObject($"   : \x1b[7m...(Removed {currentRemovalCount} line(s))...\x1b[0m");
+                                    afterRemovalCounter = 2; // 次の2行を出力
+                                }
+
                                 if (!shouldRemove)
                                 {
                                     // 削除しない行：書き込む
@@ -173,11 +217,27 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     
                                     writer.Write(currentLine);
                                     isFirstOutputLine = false;
+                                    outputLineNumber++;
+                                    
+                                    // 削除後の2行をコンテキストとして出力
+                                    if (afterRemovalCounter > 0)
+                                    {
+                                        WriteObject($"{outputLineNumber,3}- {currentLine}");
+                                        lastOutputLine = outputLineNumber;
+                                        afterRemovalCounter--;
+                                    }
                                 }
                                 else
                                 {
                                     linesRemoved++;
+                                    currentRemovalCount++;
                                 }
+
+                                wasRemoving = shouldRemove;
+                                
+                                // Rotate buffer更新（常に実行、条件分岐なし）
+                                prevPrevLine = prevLine;
+                                prevLine = currentLine;
 
                                 if (hasNext)
                                 {
@@ -192,6 +252,12 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     if (!shouldRemove && metadata.HasTrailingNewline)
                                     {
                                         writer.Write(metadata.NewlineSequence);
+                                    }
+                                    
+                                    // ファイル末尾で削除が終わった場合
+                                    if (wasRemoving)
+                                    {
+                                        WriteObject($"   : \x1b[7m...(Removed {currentRemovalCount} line(s))...\x1b[0m");
                                     }
                                     break;
                                 }
@@ -208,6 +274,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         // アトミックに置換
                         TextFileUtility.ReplaceFileAtomic(fileInfo.ResolvedPath, tempFile);
 
+                        // サマリー出力
                         WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)}");
                     }
                     catch

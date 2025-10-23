@@ -217,4 +217,118 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             }
         }
     }
+
+    Context "コンテキスト表示" {
+        It "単一行削除時に前2行と後2行のコンテキストを表示する" {
+            $output = Remove-LinesFromFile -Path $script:testFile -LineRange 5,5 | Out-String
+            
+            # 前2行のコンテキスト（'-'で表示、削除後の行番号）
+            $output | Should -Match '3- Line 2: Second line'
+            $output | Should -Match '4- Line 3: Third line'
+            
+            # 削除マーカー（':'で表示、行番号なし）
+            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            
+            # 後2行のコンテキスト（'-'で表示、削除後の行番号）
+            $output | Should -Match '5- error: invalid input'
+            $output | Should -Match '6- Line 4: Fourth line'
+        }
+
+        It "飛び飛びで削除する場合に重複なくコンテキストを表示する" {
+            $output = Remove-LinesFromFile -Path $script:testFile -Contains "ERROR" | Out-String
+            
+            # 1つ目の削除範囲（大文字ERROR、5行目を削除）
+            $output | Should -Match '3- Line 2: Second line'
+            $output | Should -Match '4- Line 3: Third line'
+            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            $output | Should -Match '5- error: invalid input'
+            $output | Should -Match '6- Line 4: Fourth line'
+            
+            # コンテキスト行が重複していないことを確認
+            $contextLineCount = ([regex]::Matches($output, '6- Line 4: Fourth line')).Count
+            $contextLineCount | Should -Be 1
+        }
+
+        It "先頭行削除時にコンテキストが正しく表示される" {
+            $output = Remove-LinesFromFile -Path $script:testFile -LineRange 1,1 | Out-String
+            
+            # 前2行は存在しない（先頭なので）
+            # 削除マーカー
+            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            
+            # 後2行（'-'で表示、削除後の行番号）
+            $output | Should -Match '1- Line 1: First line'
+            $output | Should -Match '2- Line 2: Second line'
+        }
+
+        It "末尾行削除時にコンテキストが正しく表示される" {
+            $output = Remove-LinesFromFile -Path $script:testFile -LineRange 9,10 | Out-String
+            
+            # 前2行
+            $output | Should -Match '7- Line 4: Fourth line'
+            $output | Should -Match '8- WARNING: This is a warning'
+            
+            # 削除マーカー
+            $output | Should -Match '   : .\[7m\.\.\.\(Removed 2 line\(s\)\)\.\.\..\[0m'
+            
+            # 後2行は存在しない（末尾なので）
+            $output | Should -Not -Match '9:'
+        }
+
+        It "連続する複数行削除時に削除行数が正しく表示される" {
+            $output = Remove-LinesFromFile -Path $script:testFile -LineRange 2,4 | Out-String
+            
+            # 前2行（1行目しかない）
+            $output | Should -Match '1- # Header'
+            
+            # 削除マーカーに正しい削除行数
+            $output | Should -Match '   : .\[7m\.\.\.\(Removed 3 line\(s\)\)\.\.\..\[0m'
+            
+            # 後2行（'-'で表示、削除後の行番号）
+            $output | Should -Match '2- ERROR: Connection timeout'
+            $output | Should -Match '3- error: invalid input'
+        }
+
+        It "複数の削除範囲がある場合に各範囲の削除行数が正しく表示される" {
+            # "error" (小文字) で検索すると error: invalid input のみマッチ
+            $output = Remove-LinesFromFile -Path $script:testFile -Contains "error" | Out-String
+            
+            # 1つの削除範囲のみ（1行）
+            $output | Should -Match '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m'
+            
+            # マーカーは1つのみ
+            $markerCount = ([regex]::Matches($output, '   : .\[7m\.\.\.\(Removed 1 line\(s\)\)\.\.\..\[0m')).Count
+            $markerCount | Should -Be 1
+        }
+
+        It "削除後の行番号が連続して正しく表示される" {
+            Remove-LinesFromFile -Path $script:testFile -LineRange 3,5
+            $result = Get-Content $script:testFile
+            
+            # ファイルが正しく削除されている
+            $result.Count | Should -Be 7
+            $result[0] | Should -Be "# Header"
+            $result[1] | Should -Be "Line 1: First line"
+            $result[2] | Should -Be "error: invalid input"
+            $result[3] | Should -Be "Line 4: Fourth line"
+        }
+
+        It "前2行のコンテキストでoutputLineNumberを使って重複を回避する" {
+            # より複雑なケース：複数の削除範囲が近接している場合
+            Set-Content -Path $script:testFile -Value @(
+                "Keep 1"
+                "Delete 1"
+                "Keep 2"
+                "Delete 2"
+                "Delete 3"
+                "Keep 3"
+            ) -Encoding UTF8
+            
+            $output = Remove-LinesFromFile -Path $script:testFile -Contains "Delete" | Out-String
+            
+            # "Keep 2" は1回だけ表示されるべき
+            $keep2Count = ([regex]::Matches($output, 'Keep 2')).Count
+            $keep2Count | Should -Be 1
+        }
+    }
 }
