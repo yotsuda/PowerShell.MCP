@@ -1,4 +1,4 @@
-﻿Describe "Show-TextFile - Additional Edge Cases" {
+Describe "Show-TextFile - Additional Edge Cases" {
     BeforeAll {
         $script:testFile = [System.IO.Path]::GetTempFileName()
     }
@@ -108,17 +108,19 @@
         }
     }
 
-    Context "バリデーションエラー" {
-        It "第1引数が負の値の場合はバリデーションエラーになる" {
+    Context "バリデーションエラー" $err = $null
+            It "第1引数が負の値の場合はバリデーションエラーになる" {
             Set-Content -Path $script:testFile -Value "Test" -Encoding UTF8
-            { Show-TextFile -Path $script:testFile -LineRange -1,5 } | 
-                Should -Throw "*Start line must be 1 or greater*"
+            { Show-TextFile -Path $script:testFile -LineRange -1,5 -ErrorVariable err -ErrorAction SilentlyContinue
+            $err.Count | Should -BeGreaterThan 0
+            $err[0].Exception.Message | Should -BeLike "*Start line must be 1 or greater*"
         }
 
-        It "第1引数が0の場合もバリデーションエラーになる" {
+        It "第1引数が0の場合もバリデーションエラーになる" $err = $null
             Set-Content -Path $script:testFile -Value "Test" -Encoding UTF8
-            { Show-TextFile -Path $script:testFile -LineRange 0,5 } | 
-                Should -Throw "*Start line must be 1 or greater*"
+            { Show-TextFile -Path $script:testFile -LineRange 0,5 -ErrorVariable err -ErrorAction SilentlyContinue
+            $err.Count | Should -BeGreaterThan 0
+            $err[0].Exception.Message | Should -BeLike "*Start line must be 1 or greater*"
         }
     }
 

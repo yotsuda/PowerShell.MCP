@@ -227,6 +227,9 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 // アトミックに置換
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
+                // 空行でコンテキストとサマリを分離
+                WriteObject("");
+                
                 WriteObject($"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made");
             }
             catch

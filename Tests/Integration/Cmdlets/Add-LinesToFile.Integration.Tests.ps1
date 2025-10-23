@@ -154,16 +154,14 @@ Describe "Add-LinesToFile Integration Tests" {
 
         It "読み取り専用ファイルでエラーになる" {
             Set-ItemProperty -Path $script:testFile -Name IsReadOnly -Value $true
-            { Add-LinesToFile -Path $script:testFile -Content "Test" -ErrorAction Stop } | 
-                Should -Throw
+            Test-ThrowsQuietly { Add-LinesToFile -Path $script:testFile -Content "Test" }
             Set-ItemProperty -Path $script:testFile -Name IsReadOnly -Value $false
         }
     }
 
         It "H13. LineNumber = 0 ではパラメータ検証エラーになる" {
             # 実装はLineNumber=0を拒否する
-            { Add-LinesToFile -Path $script:testFile -LineNumber 0 -Content "Test" -ErrorAction Stop } | 
-                Should -Throw
+            Test-ParameterValidationError { Add-LinesToFile -Path $script:testFile -LineNumber 0 -Content "Test" }
         }
         It "H14. LineNumber > ファイル行数 で警告を出すが処理は続行" {
             Add-LinesToFile -Path $script:testFile -LineNumber 1000 -Content "Test" -WarningAction SilentlyContinue
@@ -174,8 +172,7 @@ Describe "Add-LinesToFile Integration Tests" {
 
         It "H15. Content が空配列の場合はバインディングエラーになる" {
             # 実装は空配列を拒否する
-            { Add-LinesToFile -Path $script:testFile -Content @() -ErrorAction Stop } | 
-                Should -Throw
+            Test-ParameterValidationError { Add-LinesToFile -Path $script:testFile -Content @() }
         }
 
         It "H16. Content が null または空文字列で処理できる" {
@@ -229,8 +226,7 @@ Describe "Add-LinesToFile Integration Tests" {
             Set-ItemProperty -Path $readOnlyFile -Name IsReadOnly -Value $true
             
             try {
-                { Add-LinesToFile -Path $readOnlyFile -Content "Test" -ErrorAction Stop } | 
-                    Should -Throw
+                Test-ThrowsQuietly { Add-LinesToFile -Path $readOnlyFile -Content "Test" }
             }
             finally {
                 Set-ItemProperty -Path $readOnlyFile -Name IsReadOnly -Value $false

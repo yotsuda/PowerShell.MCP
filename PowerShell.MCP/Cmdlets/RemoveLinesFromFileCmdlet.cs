@@ -274,6 +274,9 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         // アトミックに置換
                         TextFileUtility.ReplaceFileAtomic(fileInfo.ResolvedPath, tempFile);
 
+                        // 空行でコンテキストとサマリを分離
+                        WriteObject("");
+                        
                         // サマリー出力
                         WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)}");
                     }

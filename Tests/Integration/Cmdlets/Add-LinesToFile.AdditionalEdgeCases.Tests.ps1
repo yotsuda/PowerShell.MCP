@@ -1,5 +1,6 @@
 ﻿Describe "Add-LinesToFile - Additional Edge Cases" {
-    BeforeAll {
+        BeforeAll {
+        Import-Module "$PSScriptRoot\..\..\TestHelpers.psm1" -Force
         $script:testDir = Join-Path ([System.IO.Path]::GetTempPath()) "PSMCPTests_$(Get-Random)"
         New-Item -Path $script:testDir -ItemType Directory -Force | Out-Null
     }
@@ -65,8 +66,7 @@
             Set-Content -Path $testFile -Value "Original"
             
             # 空配列はContentパラメータに渡せない
-            { Add-LinesToFile -Path $testFile -Content @() -ErrorAction Stop } |
-                Should -Throw
+            Test-ParameterValidationError { Add-LinesToFile -Path $testFile -Content @() }
         }
     }
 

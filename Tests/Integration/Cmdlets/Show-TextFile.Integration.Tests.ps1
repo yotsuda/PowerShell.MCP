@@ -86,8 +86,7 @@ Describe "Show-TextFile Integration Tests" {
 
     Context "エラーハンドリング" {
         It "存在しないファイルでエラーになる" {
-            { Show-TextFile -Path "C:\NonExistent\File.txt" -ErrorAction Stop } | 
-                Should -Throw
+            Test-ThrowsQuietly { Show-TextFile -Path "C:\NonExistent\File.txt" }
         }
 
         It "無効な行範囲で警告を出すが続行する" {
@@ -145,8 +144,7 @@ Describe "Show-TextFile Integration Tests" {
 
         It "H5. LineRange が逆順 [5,1] の場合はエラーになる" {
             # 実装は逆順を拒否する
-            { Show-TextFile -Path $script:testFile -LineRange 5,1 -ErrorAction Stop } | 
-                Should -Throw
+            Test-ThrowsQuietly { Show-TextFile -Path $script:testFile -LineRange 5,1 }
         }
 
         It "H6. LineRange = [0,0] の場合はパラメータ検証エラーになる" {

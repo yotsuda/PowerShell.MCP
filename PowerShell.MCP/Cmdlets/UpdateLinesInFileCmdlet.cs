@@ -522,6 +522,9 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         {
             WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
         }
+        
+        // 空行でコンテキストとサマリを分離
+        WriteObject("");
     }
 
     /// <summary>
@@ -606,5 +609,8 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         {
             WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
         }
+        
+        // 空行でコンテキストとサマリを分離
+        WriteObject("");
     }
 }
