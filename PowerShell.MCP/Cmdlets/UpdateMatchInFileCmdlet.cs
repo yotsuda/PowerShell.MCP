@@ -302,13 +302,15 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                     // 前2行を出力（rotate bufferから、未出力の場合のみ）
                     if (prevPrevLine != null && !outputLines.Contains(lineNumber - 2))
                     {
-                        WriteObject($"{lineNumber - 2,3}- {prevPrevLine}");
+                        var displayPrevPrevLine = BuildContextDisplayLine(prevPrevLine, isLiteral, regex, reverseOn, reverseOff);
+                        WriteObject($"{lineNumber - 2,3}- {displayPrevPrevLine}");
                         outputLines.Add(lineNumber - 2);
                         lastOutputLine = lineNumber - 2;
                     }
                     if (prevLine != null && !outputLines.Contains(lineNumber - 1))
                     {
-                        WriteObject($"{lineNumber - 1,3}- {prevLine}");
+                        var displayPrevLine = BuildContextDisplayLine(prevLine, isLiteral, regex, reverseOn, reverseOff);
+                        WriteObject($"{lineNumber - 1,3}- {displayPrevLine}");
                         outputLines.Add(lineNumber - 1);
                         lastOutputLine = lineNumber - 1;
                     }
@@ -356,7 +358,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                     // 後続コンテキストの出力
                     if (afterMatchCounter > 0 && !outputLines.Contains(lineNumber))
                     {
-                        WriteObject($"{lineNumber,3}- {currentLine}");
+                        var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex, reverseOn, reverseOff);
+                        WriteObject($"{lineNumber,3}- {displayContextLine}");
                         outputLines.Add(lineNumber);
                         lastOutputLine = lineNumber;
                         afterMatchCounter--;
@@ -416,6 +419,34 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         
         return result;
     }
+    /// <summary>
+    /// コンテキスト行の表示を構築（マッチがあれば元の文字列を反転表示）
+    /// </summary>
+    private string BuildContextDisplayLine(string line, bool isLiteral, Regex? regex, string reverseOn, string reverseOff)
+    {
+        bool hasMatch = false;
+        
+        if (isLiteral)
+        {
+            hasMatch = line.Contains(Contains!);
+            if (hasMatch)
+            {
+                return line.Replace(Contains!, $"{reverseOn}{Contains}{reverseOff}");
+            }
+        }
+        else
+        {
+            hasMatch = regex!.IsMatch(line);
+            if (hasMatch)
+            {
+                // 正規表現のマッチ部分を反転表示（元の文字列のまま）
+                return regex.Replace(line, match => $"{reverseOn}{match.Value}{reverseOff}");
+            }
+        }
+        
+        return line;
+    }
+
 
 
 

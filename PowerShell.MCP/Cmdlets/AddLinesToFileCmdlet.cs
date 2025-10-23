@@ -218,8 +218,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 {
                     // 既存の非空ファイル：挿入処理（コンテキストはリアルタイム出力）
                     int totalLines;
-                    (totalLines, actualInsertAt) = InsertLinesWithContext(
-                        resolvedPath, 
+                    (totalLines, actualInsertAt) = InsertLinesWithContext(originalPath, resolvedPath, 
                         tempFile, 
                         contentLines, 
                         metadata, 
@@ -251,14 +250,13 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// 通常のファイルへの行挿入処理（コンテキストをリアルタイム出力、1 pass）
     /// </summary>
-    private (int totalLines, int actualInsertAt) InsertLinesWithContext(
-        string inputPath, 
+    private (int totalLines, int actualInsertAt) InsertLinesWithContext(string originalPath, string inputPath, 
         string outputPath, 
         string[] contentLines, 
         TextFileUtility.FileMetadata metadata, 
         int insertAt)
     {
-        var displayPath = GetDisplayPath(inputPath, inputPath);
+        var displayPath = GetDisplayPath(originalPath, inputPath);
         bool contextHeaderPrinted = false;
         
         using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())

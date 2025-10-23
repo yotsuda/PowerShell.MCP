@@ -70,7 +70,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
                 if (fileInfoObj.Length == 0)
                 {
-                    var displayPath = GetDisplayPath(fileInfo.ResolvedPath, fileInfo.ResolvedPath);
+                    var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
                     WriteObject($"==> {displayPath} <==");
                     WriteWarning("File is empty");
                     continue;
@@ -78,15 +78,15 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
                 if (!string.IsNullOrEmpty(Pattern))
                 {
-                    ShowWithPattern(fileInfo.ResolvedPath, encoding);
+                    ShowWithPattern(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
                 }
                 else if (!string.IsNullOrEmpty(Contains))
                 {
-                    ShowWithContains(fileInfo.ResolvedPath, encoding);
+                    ShowWithContains(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
                 }
                 else
                 {
-                    ShowWithLineRange(fileInfo.ResolvedPath, encoding);
+                    ShowWithLineRange(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
                 }
             }
             catch (Exception ex)
@@ -97,12 +97,12 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     }
 
 
-    private void ShowWithLineRange(string filePath, System.Text.Encoding encoding)
+    private void ShowWithLineRange(string inputPath, string filePath, System.Text.Encoding encoding)
     {
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
         
         // ヘッダー出力
-        var displayPath = GetDisplayPath(filePath, filePath);
+        var displayPath = GetDisplayPath(inputPath, filePath);
         WriteObject($"==> {displayPath} <==");
 
         // Skip/Take で必要な範囲だけを取得（LINQの遅延評価で効率的）
@@ -130,24 +130,21 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         }
     }
 
-    private void ShowWithPattern(string filePath, System.Text.Encoding encoding)
+    private void ShowWithPattern(string inputPath, string filePath, System.Text.Encoding encoding)
     {
         var regex = new Regex(Pattern, RegexOptions.Compiled);
-        ShowWithMatch(filePath, encoding, line => regex.IsMatch(line), "pattern", Pattern, true);
+        ShowWithMatch(inputPath, filePath, encoding, line => regex.IsMatch(line), "pattern", Pattern, true);
     }
 
-    private void ShowWithContains(string filePath, System.Text.Encoding encoding)
+    private void ShowWithContains(string inputPath, string filePath, System.Text.Encoding encoding)
     {
-        ShowWithMatch(filePath, encoding, 
-            line => line.Contains(Contains!, StringComparison.Ordinal), 
-            "contain", Contains!, false);
+        ShowWithMatch(inputPath, filePath, encoding, line => line.Contains(Contains!, StringComparison.Ordinal), "contain", Contains!, false);
     }
 
     /// <summary>
     /// マッチ条件に基づいて行を検索し、前後の文脈と共に表示（真の1パス実装、rotate buffer使用）
     /// </summary>
-    private void ShowWithMatch(
-        string filePath, 
+    private void ShowWithMatch(string inputPath, string filePath, 
         System.Text.Encoding encoding, 
         Func<string, bool> matchPredicate,
         string matchTypeForWarning,
@@ -160,7 +157,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         string reverseOn = $"{(char)27}[7m";
         string reverseOff = $"{(char)27}[0m";
         
-        var displayPath = GetDisplayPath(filePath, filePath);
+        var displayPath = GetDisplayPath(inputPath, filePath);
         bool headerPrinted = false;
         bool anyMatch = false;
         

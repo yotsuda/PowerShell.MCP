@@ -231,8 +231,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             // コンテキスト表示（rotate buffer から表示、ファイル再読込なし）
             if (context != null)
             {
-                OutputUpdateContext(
-                    resolvedPath, 
+                OutputUpdateContext(originalPath, resolvedPath, 
                     context, 
                     startLine,
                     linesInserted,
@@ -445,16 +444,14 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// 更新コンテキストを表示（rotate buffer から、ファイル再読込なし）
     /// </summary>
-    private void OutputUpdateContext(
-        string filePath,
+    private void OutputUpdateContext(string originalPath, string filePath,
         ContextData context,
         int startLine,
         int linesInserted,
         int totalLines,
         string[] contentLines)
     {
-        var displayPath = GetDisplayPath(filePath, filePath);
-        WriteObject($"==> {displayPath} <==");
+        var displayPath = GetDisplayPath(originalPath, filePath);
         
         int endLine = startLine + linesInserted - 1;
         
