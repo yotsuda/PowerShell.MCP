@@ -10,6 +10,33 @@ namespace PowerShell.MCP.Cmdlets;
 [Cmdlet(VerbsData.Update, "LinesInFile", SupportsShouldProcess = true)]
 public class UpdateLinesInFileCmdlet : TextFileCmdletBase
 {
+    /// <summary>
+    /// rotate buffer で収集したコンテキスト情報
+    /// </summary>
+    private class ContextData
+    {
+        // 前2行コンテキスト
+        public string? ContextBefore2 { get; set; }
+        public string? ContextBefore1 { get; set; }
+        public int ContextBefore2Line { get; set; }
+        public int ContextBefore1Line { get; set; }
+        
+        // 削除時のみ使用
+        public string? DeletedFirst { get; set; }
+        public string? DeletedSecond { get; set; }
+        public string? DeletedThirdLast { get; set; }  // リングバッファ（末尾3行）
+        public string? DeletedSecondLast { get; set; }  // リングバッファ（末尾2行）
+        public string? DeletedLast { get; set; }
+        public int DeletedCount { get; set; }
+        public int DeletedStartLine { get; set; }
+        
+        // 後2行コンテキスト
+        public string? ContextAfter1 { get; set; }
+        public string? ContextAfter2 { get; set; }
+        public int ContextAfter1Line { get; set; }
+        public int ContextAfter2Line { get; set; }
+    }
+
     private const string ErrorMessageLineRangeWithoutFile = 
         "File not found: {0}. Cannot use -LineRange with non-existent file.";
 
@@ -161,9 +188,8 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         int linesRemoved;
         int linesInserted;
         
-        // コンテキスト表示用のバッファ（1 pass実装）
-        Dictionary<int, string>? contextBuffer = null;
-        Dictionary<int, string>? deletedLines = null;
+        // コンテキスト情報（rotate buffer で収集）
+        ContextData? context = null;
         int totalLines = 0;
 
         try
@@ -179,22 +205,18 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             }
             else
             {
-                // 行範囲を置換 + コンテキスト収集（1 pass）
-                if (fileExists && LineRange != null)
-                {
-                    // コンテキスト表示のためバッファを常に有効化（削除時も）
-                    contextBuffer = new Dictionary<int, string>();
-                }
+                // 行範囲を置換 + コンテキスト収集（rotate buffer パターン）
+                bool collectContext = fileExists && LineRange != null;
                 
                 string? warningMessage;
-                (linesRemoved, linesInserted, totalLines, warningMessage, deletedLines) = ReplaceLineRangeWithContext(
+                (linesRemoved, linesInserted, totalLines, warningMessage, context) = ReplaceLineRangeWithContext(
                     resolvedPath,
                     tempFile,
                     metadata,
                     startLine,
                     endLine,
                     contentLines,
-                    contextBuffer);
+                    collectContext);
                 
                 // 警告があれば出力
                 if (!string.IsNullOrEmpty(warningMessage))
@@ -206,24 +228,23 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             // アトミックに置換
             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-            // コンテキスト表示（バッファから表示、ファイル再読込なし）
-            if (contextBuffer != null && linesInserted > 0)
+            // コンテキスト表示（rotate buffer から表示、ファイル再読込なし）
+            if (context != null && linesInserted > 0)
             {
-                OutputUpdateContextFromBuffer(
+                OutputUpdateContext(
                     resolvedPath, 
-                    contextBuffer, 
+                    context, 
                     startLine,
                     linesInserted,
-                    totalLines);
+                    totalLines,
+                    contentLines);
             }
-            else if (contextBuffer != null && deletedLines != null && deletedLines.Count > 0)
+            else if (context != null && context.DeletedCount > 0)
             {
-                // 削除時のコンテキスト表示（バッファから表示、ファイル再読込なし）
-                OutputDeleteContextFromBuffer(
+                // 削除時のコンテキスト表示（rotate buffer から表示、ファイル再読込なし）
+                OutputDeleteContext(
                     resolvedPath, 
-                    contextBuffer, 
-                    deletedLines,
-                    LineRange![0]);
+                    context);
             }
 
             // 結果メッセージ
@@ -276,26 +297,32 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// 行範囲を置換しながらコンテキストバッファを構築（1 pass）
     /// </summary>
-    private (int linesRemoved, int linesInserted, int totalLines, string? warningMessage, Dictionary<int, string>? deletedLines) ReplaceLineRangeWithContext(
+    private (int linesRemoved, int linesInserted, int totalLines, string? warningMessage, ContextData? context) ReplaceLineRangeWithContext(
         string inputPath,
         string outputPath,
         TextFileUtility.FileMetadata metadata,
         int startLine,
         int endLine,
         string[] contentLines,
-        Dictionary<int, string>? contextBuffer)
+        bool collectContext)
     {
-        // コンテキスト範囲を計算（前後2行）
-        int contextStart = Math.Max(1, startLine - 2);
-        int contextEnd = endLine + 2; // 暫定値、totalLinesで後で調整
-
+        // Context 収集用の変数を初期化
+        ContextData? context = collectContext ? new ContextData() : null;
+        bool isDelete = contentLines.Length == 0;
+        
         int currentLine = 1;
         int outputLine = 1;
         int linesRemoved = endLine - startLine + 1;
         int linesInserted = contentLines.Length;
         string? warningMessage = null;
         bool insertedContent = false;
-        Dictionary<int, string>? deletedLines = contentLines.Length == 0 && contextBuffer != null ? new Dictionary<int, string>() : null;
+        
+        
+        // 削除時の情報収集用
+        int deletedCount = 0;
+        
+        // 後コンテキストカウンタ
+        int afterCounter = 0;
 
         using (var reader = new StreamReader(inputPath, metadata.Encoding))
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
@@ -305,19 +332,27 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
 
             while ((line = reader.ReadLine()) != null)
             {
-                // 置換範囲の開始
+                // 前2行のコンテキスト収集（範囲の直前）
+                if (context != null)
+                {
+                    if (currentLine == startLine - 2)
+                    {
+                        context.ContextBefore2 = line;
+                        context.ContextBefore2Line = currentLine;
+                    }
+                    else if (currentLine == startLine - 1)
+                    {
+                        context.ContextBefore1 = line;
+                        context.ContextBefore1Line = currentLine;
+                    }
+                }
+
+                // 置換範囲の開始時に新しい内容を挿入
                 if (currentLine == startLine && !insertedContent)
                 {
-                    // 新しい内容を挿入
                     for (int i = 0; i < contentLines.Length; i++)
                     {
                         writer.Write(contentLines[i]);
-                        
-                        // コンテキストバッファに保存
-                        if (contextBuffer != null && outputLine >= contextStart)
-                        {
-                            contextBuffer[outputLine] = contentLines[i];
-                        }
                         
                         if (i < contentLines.Length - 1 || currentLine < endLine || reader.Peek() != -1)
                         {
@@ -332,15 +367,24 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 if (currentLine >= startLine && currentLine <= endLine)
                 {
                     // 削除時：削除される行を保存
-                    if (deletedLines != null)
+                    if (isDelete && context != null)
                     {
-                        deletedLines[currentLine] = line;
+                        deletedCount++;
                         
-                        // 削除時のみ：コンテキスト範囲内の前後行も保存（削除前のコンテキスト）
-                        if (contextBuffer != null && currentLine >= contextStart && currentLine <= endLine)
+                        // 先頭2行を保存
+                        if (deletedCount == 1)
                         {
-                            contextBuffer[currentLine] = line;
+                            context.DeletedFirst = line;
                         }
+                        else if (deletedCount == 2)
+                        {
+                            context.DeletedSecond = line;
+                        }
+                        
+                        // リングバッファで末尾3行を更新
+                        context.DeletedThirdLast = context.DeletedSecondLast;
+                        context.DeletedSecondLast = context.DeletedLast;
+                        context.DeletedLast = line;
                     }
                     
                     currentLine++;
@@ -350,26 +394,20 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 // 置換範囲外の行をコピー
                 writer.Write(line);
                 
-                // コンテキストバッファに保存
-                if (contextBuffer != null)
+                // 後コンテキスト収集（範囲の直後の2行）
+                if (context != null && currentLine > endLine && afterCounter < 2)
                 {
-                    if (deletedLines != null)
+                    if (afterCounter == 0)
                     {
-                        // 削除時：元のファイルの行番号で、削除範囲の前後2行を保存
-                        if ((currentLine >= contextStart && currentLine < startLine) || 
-                            (currentLine > endLine && currentLine <= endLine + 2))
-                        {
-                            contextBuffer[currentLine] = line;
-                        }
+                        context.ContextAfter1 = line;
+                        context.ContextAfter1Line = isDelete ? currentLine : outputLine;
                     }
-                    else
+                    else if (afterCounter == 1)
                     {
-                        // 更新時：出力ファイルの行番号で保存
-                        if (outputLine >= contextStart && outputLine <= contextEnd + linesInserted - linesRemoved)
-                        {
-                            contextBuffer[outputLine] = line;
-                        }
+                        context.ContextAfter2 = line;
+                        context.ContextAfter2Line = isDelete ? currentLine : outputLine;
                     }
+                    afterCounter++;
                 }
                 
                 if (reader.Peek() != -1 || (currentLine == endLine && !insertedContent))
@@ -386,7 +424,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             {
                 int actualLineCount = currentLine - 1;
                 
-                // startLine が範囲外の場合は例外をスロー
                 if (startLine > actualLineCount)
                 {
                     throw new ArgumentException(
@@ -394,7 +431,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                         nameof(startLine));
                 }
                 
-                // endLine が範囲外の場合は警告
                 if (endLine > actualLineCount)
                 {
                     warningMessage = $"End line {endLine} exceeds file length ({actualLineCount} lines). Will process up to line {actualLineCount}.";
@@ -405,11 +441,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 {
                     writer.Write(contentLines[i]);
                     
-                    if (contextBuffer != null)
-                    {
-                        contextBuffer[outputLine] = contentLines[i];
-                    }
-                    
                     if (i < contentLines.Length - 1)
                     {
                         writer.Write(metadata.NewlineSequence);
@@ -419,165 +450,161 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             }
         }
 
+        // Context 情報を設定
+        if (context != null && isDelete)
+        {
+            context.DeletedCount = deletedCount;
+            context.DeletedStartLine = startLine;
+        }
+
         int totalLines = outputLine - 1;
-        return (linesRemoved, linesInserted, totalLines, warningMessage, deletedLines);
+        return (linesRemoved, linesInserted, totalLines, warningMessage, context);
     }
 
     /// <summary>
-    /// バッファから更新コンテキストを表示（ファイル再読込なし）
+    /// 更新コンテキストを表示（rotate buffer から、ファイル再読込なし）
     /// </summary>
-    private void OutputUpdateContextFromBuffer(
+    private void OutputUpdateContext(
         string filePath,
-        Dictionary<int, string> contextBuffer,
+        ContextData context,
         int startLine,
         int linesInserted,
-        int totalLines)
+        int totalLines,
+        string[] contentLines)
     {
-        // 更新された行番号を生成（連続した範囲）
+        var displayPath = GetDisplayPath(filePath, filePath);
+        WriteObject($"==> {displayPath} <==");
+        
         int endLine = startLine + linesInserted - 1;
-        var updatedLines = Enumerable.Range(startLine, linesInserted);
         
-        // 範囲を計算してマージ
-        var (ranges, gapLines) = CalculateAndMergeRanges(updatedLines, totalLines, contextLines: 2);
-        // 表示用パスを決定
-        var displayPath = GetDisplayPath(filePath, filePath);
-        WriteObject($"==> {displayPath} <==");
-        
-        // 範囲ごとに出力
-        int rangeIndex = 0;
-        
-        foreach (var (start, end) in ranges)
+        // 前2行のコンテキスト
+        if (context.ContextBefore2Line > 0)
         {
-            for (int lineNumber = start; lineNumber <= end; lineNumber++)
-            {
-                if (!contextBuffer.ContainsKey(lineNumber))
-                    continue;
-                    
-                var line = contextBuffer[lineNumber];
-                
-                if ((lineNumber >= startLine && lineNumber <= endLine))
-                {
-                    // 更新された行を表示
-                    if (linesInserted <= 5)
-                    {
-                        // 1-5行: 全て反転表示
-                        WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
-                    }
-                    else
-                    {
-                        // 6行以上: 先頭2行と末尾2行のみ表示
-                        int firstLine = startLine;
-                        int secondLine = startLine + 1;
-                        int secondLastLine = endLine - 1;
-                        int lastLine = endLine;
-                        
-                        if (lineNumber == firstLine || lineNumber == secondLine)
-                        {
-                            // 先頭2行
-                            WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
-                        }
-                        else if (lineNumber == secondLine + 1)
-                        {
-                            // 省略マーカー（3行目で1回だけ）- 反転表示
-                            int omittedCount = linesInserted - 4;
-                            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
-                        }
-                        else if (lineNumber == secondLastLine || lineNumber == lastLine)
-                        {
-                            // 末尾2行
-                            WriteObject($"{lineNumber,3}: \x1b[7m{line}\x1b[0m");
-                        }
-                        // 中間行はスキップ
-                    }
-                }
-                else
-                {
-                    // コンテキスト行を表示
-                    WriteObject($"{lineNumber,3}- {line}");
-                }
-            }
-            
-            rangeIndex++;
-            if (rangeIndex < ranges.Count)
-            {
-                WriteObject("");
-            }
+            WriteObject($"{context.ContextBefore2Line,3}- {context.ContextBefore2}");
         }
-    }
-
-
-
-    /// <summary>
-    /// バッファから削除コンテキストを表示（ファイル再読込なし、1 pass）
-    /// </summary>
-    private void OutputDeleteContextFromBuffer(
-        string filePath,
-        Dictionary<int, string> contextBuffer,
-        Dictionary<int, string> deletedLines,
-        int startLine)
-    {
-        // 表示用パスを決定
-        var displayPath = GetDisplayPath(filePath, filePath);
-        WriteObject($"==> {displayPath} <==");
-        
-        // 削除範囲の終了行を計算
-        int endLine = startLine + deletedLines.Count - 1;
-        
-        // 前のコンテキスト行を表示（startLine-2 ～ startLine-1）
-        for (int lineNumber = Math.Max(1, startLine - 2); lineNumber < startLine; lineNumber++)
+        if (context.ContextBefore1Line > 0)
         {
-            if (contextBuffer.ContainsKey(lineNumber))
-            {
-                WriteObject($"{lineNumber,3}- {contextBuffer[lineNumber]}");
-            }
+            WriteObject($"{context.ContextBefore1Line,3}- {context.ContextBefore1}");
         }
         
-        // 削除された行を表示（反転表示）
-        if (deletedLines.Count <= 5)
+        // 更新された行を表示
+        if (linesInserted <= 5)
         {
-            // 1-5行: すべて表示
-            foreach (var kvp in deletedLines.OrderBy(kv => kv.Key))
+            // 1-5行: すべて反転表示
+            for (int i = 0; i < linesInserted; i++)
             {
-                WriteObject($"{kvp.Key,3}: \x1b[7m{kvp.Value}\x1b[0m");
+                int lineNum = startLine + i;
+                WriteObject($"{lineNum,3}: \x1b[7m{contentLines[i]}\x1b[0m");
             }
         }
         else
         {
-            // 6行以上: 先頭2行と末尾2行のみ表示（1 pass）
-            var sortedKeys = deletedLines.Keys.OrderBy(k => k);
-            int index = 0;
-            int count = deletedLines.Count;
+            // 6行以上: 先頭2行 + 省略マーカー + 末尾2行
+            // 先頭2行
+            WriteObject($"{startLine,3}: \x1b[7m{contentLines[0]}\x1b[0m");
+            WriteObject($"{startLine + 1,3}: \x1b[7m{contentLines[1]}\x1b[0m");
             
-            foreach (var key in sortedKeys)
-            {
-                if (index < 2)
-                {
-                    // 先頭2行
-                    WriteObject($"{key,3}: \x1b[7m{deletedLines[key]}\x1b[0m");
-                }
-                else if (index == 2)
-                {
-                    // 省略マーカー
-                    int omittedCount = count - 4;
-                    WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
-                }
-                
-                if (index >= count - 2)
-                {
-                    // 末尾2行
-                    WriteObject($"{key,3}: \x1b[7m{deletedLines[key]}\x1b[0m");
-                }
-                index++;
-            }
+            // 省略マーカー
+            int omittedCount = linesInserted - 4;
+            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
+            
+            // 末尾2行
+            WriteObject($"{endLine - 1,3}: \x1b[7m{contentLines[linesInserted - 2]}\x1b[0m");
+            WriteObject($"{endLine,3}: \x1b[7m{contentLines[linesInserted - 1]}\x1b[0m");
         }
         
-        // 後のコンテキスト行を表示（endLine+1 ～ endLine+2）
-        for (int lineNumber = endLine + 1; lineNumber <= endLine + 2; lineNumber++)
+        // 後2行のコンテキスト
+        if (context.ContextAfter1Line > 0)
         {
-            if (contextBuffer.ContainsKey(lineNumber))
+            WriteObject($"{context.ContextAfter1Line,3}- {context.ContextAfter1}");
+        }
+        if (context.ContextAfter2Line > 0)
+        {
+            WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
+        }
+    }
+
+    /// <summary>
+    /// 削除コンテキストを表示（rotate buffer から、ファイル再読込なし）
+    /// </summary>
+    private void OutputDeleteContext(
+        string filePath,
+        ContextData context)
+    {
+        var displayPath = GetDisplayPath(filePath, filePath);
+        WriteObject($"==> {displayPath} <==");
+        
+        int startLine = context.DeletedStartLine;
+        int endLine = startLine + context.DeletedCount - 1;
+        
+        // 前2行のコンテキスト
+        if (context.ContextBefore2Line > 0)
+        {
+            WriteObject($"{context.ContextBefore2Line,3}- {context.ContextBefore2}");
+        }
+        if (context.ContextBefore1Line > 0)
+        {
+            WriteObject($"{context.ContextBefore1Line,3}- {context.ContextBefore1}");
+        }
+        
+        // 削除された行を表示
+        if (context.DeletedCount <= 5)
+        {
+            // 1-5行: すべて反転表示（rotate buffer 3行で対応可能）
+            if (context.DeletedFirst != null)
+                WriteObject($"{startLine,3}: \x1b[7m{context.DeletedFirst}\x1b[0m");
+            if (context.DeletedCount >= 2 && context.DeletedSecond != null)
+                WriteObject($"{startLine + 1,3}: \x1b[7m{context.DeletedSecond}\x1b[0m");
+            
+            // 3-5行目（リングバッファから）
+            if (context.DeletedCount == 3 && context.DeletedLast != null)
             {
-                WriteObject($"{lineNumber,3}- {contextBuffer[lineNumber]}");
+                WriteObject($"{startLine + 2,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
             }
+            else if (context.DeletedCount == 4)
+            {
+                if (context.DeletedSecondLast != null)
+                    WriteObject($"{startLine + 2,3}: \x1b[7m{context.DeletedSecondLast}\x1b[0m");
+                if (context.DeletedLast != null)
+                    WriteObject($"{startLine + 3,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
+            }
+            else if (context.DeletedCount == 5)
+            {
+                if (context.DeletedThirdLast != null)
+                    WriteObject($"{startLine + 2,3}: \x1b[7m{context.DeletedThirdLast}\x1b[0m");
+                if (context.DeletedSecondLast != null)
+                    WriteObject($"{startLine + 3,3}: \x1b[7m{context.DeletedSecondLast}\x1b[0m");
+                if (context.DeletedLast != null)
+                    WriteObject($"{startLine + 4,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
+            }
+        }
+        else
+        {
+            // 6行以上: 先頭2行 + 省略マーカー + 末尾2行
+            if (context.DeletedFirst != null)
+                WriteObject($"{startLine,3}: \x1b[7m{context.DeletedFirst}\x1b[0m");
+            if (context.DeletedSecond != null)
+                WriteObject($"{startLine + 1,3}: \x1b[7m{context.DeletedSecond}\x1b[0m");
+            
+            // 省略マーカー
+            int omittedCount = context.DeletedCount - 4;
+            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
+            
+            // 末尾2行
+            if (context.DeletedSecondLast != null)
+                WriteObject($"{endLine - 1,3}: \x1b[7m{context.DeletedSecondLast}\x1b[0m");
+            if (context.DeletedLast != null)
+                WriteObject($"{endLine,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
+        }
+        
+        // 後2行のコンテキスト
+        if (context.ContextAfter1Line > 0)
+        {
+            WriteObject($"{context.ContextAfter1Line,3}- {context.ContextAfter1}");
+        }
+        if (context.ContextAfter2Line > 0)
+        {
+            WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
         }
     }
 }
