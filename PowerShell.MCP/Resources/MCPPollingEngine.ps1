@@ -30,9 +30,26 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         -WarningVariable warningVar `
                         -InformationVariable informationVar
 
+                    # Deduplicate errors (PowerShell ErrorVariable can record the same error multiple times)
+                    $uniqueErrors = @()
+                    $seenErrors = @{}
+                    foreach ($err in $errorVar) {
+                        # Create a unique key based on message, error ID, and category
+                        $key = if ($err -is [System.Management.Automation.ErrorRecord]) {
+                            "$($err.Exception.Message)|$($err.FullyQualifiedErrorId)|$($err.CategoryInfo.Category)"
+                        } else {
+                            $err.ToString()
+                        }
+                        
+                        if (-not $seenErrors.ContainsKey($key)) {
+                            $uniqueErrors += $err
+                            $seenErrors[$key] = $true
+                        }
+                    }
+
                     return @{
                         Success = $outVar
-                        Error = $errorVar
+                        Error = $uniqueErrors
                         Exception = @()
                         Warning = $warningVar
                         Information = $informationVar

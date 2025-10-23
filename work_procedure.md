@@ -435,3 +435,42 @@ Invoke-Pester -Configuration $config
 - トークン消費を90%以上削減
 - テスト結果が読みやすくなる
 - 失敗したテストのみが目立つ
+
+### 7. ErrorVariable のユニーク化とバグの教訓
+
+**問題:**
+PowerShell の ErrorVariable は同一のエラーを複数回記録することがある。MCPPollingEngine.ps1 では、エラーのユニーク化処理を実装していたが、**return 文で空配列を返していた**ため、機能していなかった。
+
+**解決策:**
+```powershell
+# Deduplicate errors
+$uniqueErrors = @()
+$seenErrors = @{}
+foreach ($err in $errorVar) {
+    # Create a unique key based on message, error ID, and category
+    $key = if ($err -is [System.Management.Automation.ErrorRecord]) {
+        "$($err.Exception.Message)|$($err.FullyQualifiedErrorId)|$($err.CategoryInfo.Category)"
+    } else {
+        $err.ToString()
+    }
+    
+    if (-not $seenErrors.ContainsKey($key)) {
+        $uniqueErrors += $err
+        $seenErrors[$key] = $true
+    }
+}
+
+return @{
+    Success = $outVar
+    Error = $uniqueErrors  # ← 重要: ユニーク化した配列を返す
+    # ...
+}
+```
+
+**重要なポイント:**
+- **メッセージのみでユニーク化しない**: Message + FullyQualifiedErrorId + Category の3要素を使用
+- **return 文を忘れない**: 処理したデータを必ず返す（空配列を返さない）
+- **コードレビューの重要性**: 処理は正しくても、return で使われていないケースを見逃さない
+
+**教訓:**
+実装した処理が実際に使用されているか、最終的な出力まで確認する。特に return 文では、計算結果が正しく返されているか注意深く確認する。
