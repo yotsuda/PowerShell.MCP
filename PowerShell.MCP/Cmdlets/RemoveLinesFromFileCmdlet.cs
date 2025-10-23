@@ -278,7 +278,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         WriteObject("");
                         
                         // サマリー出力
-                        WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)}");
+                        WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)} (net: -{linesRemoved})");
                     }
                     catch
                     {

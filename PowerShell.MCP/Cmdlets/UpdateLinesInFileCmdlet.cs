@@ -258,7 +258,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     {
         if (!fileExists)
         {
-            return $"Created {linesInserted} line(s)";
+            return $"{linesInserted} line(s) (net: +{linesInserted})";
         }
 
         // int.MaxValue は「ファイル末尾まで」を意味するため、正確な行数は不明
@@ -268,7 +268,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         {
             return removedCountUnknown 
                 ? "Removed line(s)" 
-                : $"Removed {linesRemoved} line(s)";
+                : $"Removed {linesRemoved} line(s) (net: -{linesRemoved})";
         }
 
         // 行数に応じたメッセージを生成（常にnetを表示）

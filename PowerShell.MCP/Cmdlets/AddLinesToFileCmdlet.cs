@@ -230,8 +230,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                 string message = isNewFile 
-                    ? $"Created {GetDisplayPath(originalPath, resolvedPath)}: Created {contentLines.Length} line(s)"
-                    : $"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")}";
+                    ? $"Created {GetDisplayPath(originalPath, resolvedPath)}: {contentLines.Length} line(s) (net: +{contentLines.Length})"
+                    : $"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")} (net: +{contentLines.Length})";
                 
                 WriteObject(message);
 
