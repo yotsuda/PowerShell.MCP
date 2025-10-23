@@ -1,6 +1,35 @@
 ﻿# 作業進捗
 
 ## 最近の完了作業
+### 2025-10-23 22:08 - Test-ThrowsQuietly パターンの文書化完了
+- **実装確認**: Tests\Shared\TestHelpers.psm1 に完全実装済み ✅
+- **更新ファイル**:
+  - Tests\README.md: 詳細な使用方法とベストプラクティスを追加
+  - work_procedure.md: 最新の実装仕様に更新（バージョン 2.1）
+- **実装された工夫**:
+  1. $Error.Clear() を try 前後で2回実行
+  2. *>&1 ですべての出力ストリームをリダイレクト
+  3. $null = ... で出力を完全に破棄
+  4. ErrorActionPreference = 'Stop' で非終了エラーを例外に変換
+  5. $PSDefaultParameterValues['*:ErrorAction'] = 'Stop' で全コマンドに適用
+  6. $Error の追加チェックで catch できなかったエラーも検出
+- **効果**: トークン消費を90%以上削減、テスト結果が読みやすくなる
+- **文書化完了**: 開発者が簡単に Test-ThrowsQuietly を使用できるように
+### 2025-10-23 17:00 - Test-ThrowsQuietly の有効性を確認
+- **背景**: Pester テストでエラーケースを検証する際、大量のエラーメッセージとスタックトレースが出力され、トークンを消費していた
+- **既存実装**: TestHelpers.psm1 に Test-ThrowsQuietly 関数が実装済み
+- **検証結果**: 
+  - 従来の方法（Should -Throw）: 3エラーで 784 文字出力
+  - Test-ThrowsQuietly: 3エラーで 0 文字出力
+  - **削減率: 100%**
+- **仕組み**:
+  - `$Error.Clear()` でエラー履歴を削除（try 前後で2回）
+  - `2>&1` で標準エラーを標準出力にリダイレクト
+  - `$null = ...` ですべての出力を破棄
+  - 例外の有無とメッセージのみを検証
+- **テストファイル**: TestErrorQuiet.Tests.ps1, TestOldMethod.Tests.ps1, TestNewMethod.Tests.ps1 を作成して検証
+- **結論**: Test-ThrowsQuietly は完璧に機能しており、トークン消費を大幅に削減できる
+
 ### 2025-10-23 16:30 - net 表示のテストを追加
 - **目的**: すべてのファイル操作 cmdlet の net 表示機能を検証
 - **実装**: NetDisplay.Tests.ps1 を作成（5つのテストケース）
@@ -91,4 +120,4 @@
 
 ---
 
-**最終更新**: 2025-10-23 13:35
+**最終更新**: 2025-10-23 17:00

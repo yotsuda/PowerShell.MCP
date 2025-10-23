@@ -268,9 +268,11 @@ context.DeletedLast = line;
 ### 4. テストでの例外出力の完全抑制
 
 **問題：**
-Pester テストで意図通り例外がスローされるケースで、大量のエラーメッセージとスタックトレースが表示される。
+Pester テストで意図通り例外がスローされるケースで、大量のエラーメッセージとスタックトレースが表示され、トークンを大量に消費する。
 
-**解決策：Test-ThrowsQuietly パターン**
+**解決策：Test-ThrowsQuietly パターン（実装済み ✅）**
+
+**場所**: `Tests/Shared/TestHelpers.psm1`
 
 ```powershell
 function Test-ThrowsQuietly {
@@ -288,20 +290,42 @@ function Test-ThrowsQuietly {
     # エラーレコードをクリア
     $Error.Clear()
     
+    # ErrorActionPreference を Stop に設定
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Stop'
+    
+    # すべてのコマンドに -ErrorAction Stop を適用
+    $previousDefaultParameters = $PSDefaultParameterValues.Clone()
+    $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
+    
     try {
-        # 出力を完全に抑制（標準エラーもリダイレクト）
-        $null = & $ScriptBlock -ErrorAction Stop 2>&1
+        # 出力を完全に抑制（すべてのストリームをリダイレクト）
+        $null = & $ScriptBlock *>&1
     }
     catch {
         $caught = $true
         $exceptionMessage = $_.Exception.Message
+    }
+    finally {
+        # 設定を元に戻す
+        $ErrorActionPreference = $previousErrorActionPreference
+        $PSDefaultParameterValues.Clear()
+        foreach ($key in $previousDefaultParameters.Keys) {
+            $PSDefaultParameterValues[$key] = $previousDefaultParameters[$key]
+        }
+    }
+    
+    # catch されなかったが $Error にエラーが追加された場合もチェック
+    if (-not $caught -and $Error.Count -gt 0) {
+        $caught = $true
+        $exceptionMessage = $Error[0].Exception.Message
     }
     
     # エラーレコードを再度クリア
     $Error.Clear()
     
     # 例外がスローされたことを検証
-    $caught | Should -BeTrue
+    $caught | Should -BeTrue -Because "Expected an exception to be thrown"
     
     # 期待されるメッセージの検証（オプション）
     if ($ExpectedMessage) {
@@ -311,12 +335,50 @@ function Test-ThrowsQuietly {
 ```
 
 **重要なポイント：**
-- `2>&1`：標準エラーを標準出力にリダイレクト
+- `*>&1`：すべての出力ストリーム（標準出力、エラー、警告、デバッグなど）をリダイレクト
 - `$null = ...`：すべての出力を破棄
 - `$Error.Clear()`：エラー履歴を完全削除（try 前後で2回）
+- `ErrorActionPreference = 'Stop'`：非終了エラーを例外に変換
+- `$PSDefaultParameterValues['*:ErrorAction'] = 'Stop'`：すべてのコマンドに自動適用
+- `$Error` の追加チェック：catch できなかったエラーも検出
 
----
+**使用例：**
+```powershell
+# 基本的な使用
+It "Should throw on missing file" {
+    Test-ThrowsQuietly { Show-TextFile -Path "missing.txt" }
+}
 
+# メッセージ検証付き
+It "Should throw file not found error" {
+    Test-ThrowsQuietly { 
+        Show-TextFile -Path "C:\NonExistent\file.txt" 
+    } -ExpectedMessage "File not found"
+}
+```
+
+**効果：**
+- トークン消費を90%以上削減
+- テスト出力が読みやすくなる
+- エラーの有無とメッセージのみを簡潔に検証
+
+**適用範囲：**
+- ✅ 終了エラー（ThrowTerminatingError）
+- ✅ パラメータ検証エラー（ValidateRange など）
+- ⚠️ 非終了エラー（WriteError）- PowerShell と C# cmdlet の制限により部分的にサポート
+
+**実装状況：**
+- ✅ Tests\Shared\TestHelpers.psm1 に実装済み
+- ✅ Export-ModuleMember で公開済み
+- ✅ Tests\README.md に使用方法を文書化
+- ✅ 実用例テストを作成（QuietErrorHandling.Tests.ps1）
+- ✅ 比較テストを作成（ErrorOutputComparison.Tests.ps1）
+
+**検証結果（2025-10-23）：**
+- 従来の方法（Should -Throw）: 各エラーで数百〜数千文字のスタックトレース出力
+- Test-ThrowsQuietly: エラー出力を完全に抑制（0文字）
+- **削減率: 90%以上** → トークン消費を大幅に削減
+- テスト結果が読みやすくなり、重要なエラーのみが表示される
 ### 5. Update-LinesInFile のコンテキスト表示設計
 
 **原則：**
@@ -333,5 +395,5 @@ function Test-ThrowsQuietly {
 - 行番号も更新後の状態と一致させることで、ファイル全体の状態を正確に把握できる
 
 **作成日時:** 2025-10-22 11:15
-**最終更新:** 2025-10-23 13:30
-**バージョン:** 2.0
+**最終更新:** 2025-10-23 22:08
+**バージョン:** 2.1
