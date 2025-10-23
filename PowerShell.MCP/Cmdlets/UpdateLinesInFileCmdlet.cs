@@ -229,7 +229,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
             // コンテキスト表示（rotate buffer から表示、ファイル再読込なし）
-            if (context != null && linesInserted > 0)
+            if (context != null)
             {
                 OutputUpdateContext(
                     resolvedPath, 
@@ -238,13 +238,6 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     linesInserted,
                     totalLines,
                     contentLines);
-            }
-            else if (context != null && context.DeletedCount > 0)
-            {
-                // 削除時のコンテキスト表示（rotate buffer から表示、ファイル再読込なし）
-                OutputDeleteContext(
-                    resolvedPath, 
-                    context);
             }
 
             // 結果メッセージ
@@ -278,21 +271,12 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 : $"Removed {linesRemoved} line(s)";
         }
 
-        if (!removedCountUnknown && linesInserted == linesRemoved)
-        {
-            return $"Replaced {linesRemoved} line(s)";
-        }
-
-        // 行数が変わる置換、または削除行数が不明な場合
-        if (removedCountUnknown)
-        {
-            return $"Updated file: {linesInserted} line(s) written";
-        }
-        
+        // 行数に応じたメッセージを生成（常にnetを表示）
         int netChange = linesInserted - linesRemoved;
         string netStr = netChange > 0 ? $"+{netChange}" : netChange.ToString();
         return $"Replaced {linesRemoved} line(s) with {linesInserted} line(s) (net: {netStr})";
     }
+
 
     /// <summary>
     /// 行範囲を置換しながらコンテキストバッファを構築（1 pass）
@@ -400,12 +384,12 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     if (afterCounter == 0)
                     {
                         context.ContextAfter1 = line;
-                        context.ContextAfter1Line = isDelete ? currentLine : outputLine;
+                        context.ContextAfter1Line = outputLine;
                     }
                     else if (afterCounter == 1)
                     {
                         context.ContextAfter2 = line;
-                        context.ContextAfter2Line = isDelete ? currentLine : outputLine;
+                        context.ContextAfter2Line = outputLine;
                     }
                     afterCounter++;
                 }
@@ -488,7 +472,12 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         }
         
         // 更新された行を表示
-        if (linesInserted <= 5)
+        if (linesInserted == 0)
+        {
+            // 空配列: : のみを表示
+            WriteObject($"   :");
+        }
+        else if (linesInserted <= 5)
         {
             // 1-5行: すべて反転表示
             for (int i = 0; i < linesInserted; i++)
