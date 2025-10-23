@@ -1,4 +1,63 @@
 
+## ✅ 作業完了（2025-10-23 13:17）
+
+### Test-ThrowsQuietly 関数を改善して例外出力を完全に抑制
+
+**ユーザー要望：**
+- .ps1 テストで意図通り例外がスローされたときの画面出力が多すぎる
+- 簡潔なメッセージだけが出るようにしてほしい
+
+**実施した変更：**
+
+**Tests\TestHelpers.psm1 の Test-ThrowsQuietly 関数を改善（36-49行目）：**
+1. **エラーレコードのクリア**：$Error.Clear() を追加
+2. **出力の完全な抑制**：$null = &  -ErrorAction Stop 2>&1 に変更
+   - 標準エラーストリーム（2）を標準出力（1）にリダイレクト
+   - すべての出力を $null に代入して破棄
+3. **後処理でもクリア**：例外キャッチ後にも $Error.Clear() を実行
+
+**変更前の動作：**
+```
+Cannot validate argument on parameter 'LineRange'. Start line must be 1...
+System.Management.Automation.ParameterBindingValidationException: Cannot validate...
+ ---> System.Management.Automation.ValidationMetadataException: Start line...
+   at PowerShell.MCP.Cmdlets.ValidateLineRangeAttribute.Validate...
+   at System.Management.Automation.ParameterBinderBase.BindParameter...
+   --- End of inner exception stack trace ---
+... （さらに多数の行）
+```
+
+**変更後の動作：**
+```
+（エラー出力なし - 例外は Test-ThrowsQuietly 内で静かにキャッチされる）
+✓ テストが成功
+```
+
+**技術的詳細：**
+- 2>&1：PowerShell のリダイレクト演算子で、標準エラー（2）を標準出力（1）にリダイレクト
+- $null = ...：すべての出力を破棄
+- $Error.Clear()：PowerShell のエラーレコード配列をクリアして、後続の処理に影響しないようにする
+
+**テスト結果：**
+- ✅ 従来の Should -Throw: 大量のエラーメッセージとスタックトレースが表示
+- ✅ 新しい Test-ThrowsQuietly: エラー出力なし、簡潔に成功メッセージのみ
+- ✅ Pester テスト: 8/8 パス（Add-LinesToFile.AdditionalEdgeCases.Tests.ps1）
+
+**メリット：**
+1. **可読性向上**：テスト出力が大幅に簡潔になり、重要な情報に集中できる
+2. **デバッグ効率向上**：意図的な例外テストと実際のエラーを区別しやすい
+3. **CI/CD の改善**：ログが簡潔になり、実際の問題を見つけやすい
+
+**変更ファイル：**
+- Tests\TestHelpers.psm1（+6行）
+- バックアップ：Tests\TestHelpers.psm1.20251023131757.bak
+
+**次のステップ：**
+- work_procedure.md に学びを追加
+- コミット承認
+
+**作業完了日時：** 2025-10-23 13:17:57
+
 ## 📊 パフォーマンス計測結果（2025-10-23 09:39）
 
 ### ベンチマーク実行条件

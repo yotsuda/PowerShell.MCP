@@ -841,3 +841,108 @@ rotate_buffer_size = max_display_lines - fixed_head_lines
 - コードの一貫性・保守性も最適化の評価軸
 
 **更新日時:** 2025-10-23 09:39
+
+## 📝 学んだこと（2025-10-23 13:18）
+
+### テストでの例外出力の完全抑制
+
+**問題：**
+- Pester テストで意図通り例外がスローされるケースで、大量のエラーメッセージとスタックトレースが表示される
+- 内部例外とラッパー例外の両方が表示される（例：ArgumentNullException + MethodInvocationException）
+- テスト出力が冗長で、実際のエラーと区別しにくい
+
+**解決策：Test-ThrowsQuietly のパターン**
+
+```powershell
+function Test-ThrowsQuietly {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ScriptBlock]$ScriptBlock,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$ExpectedMessage
+    )
+    
+    $caught = $false
+    $exceptionMessage = $null
+    
+    # エラーレコードをクリア
+    $Error.Clear()
+    
+    try {
+        # 出力を完全に抑制して実行（標準エラーもリダイレクト）
+        $null = & $ScriptBlock -ErrorAction Stop 2>&1
+    }
+    catch {
+        $caught = $true
+        $exceptionMessage = $_.Exception.Message
+    }
+    
+    # エラーレコードを再度クリア
+    $Error.Clear()
+    
+    # 例外がスローされたことを検証
+    $caught | Should -BeTrue -Because "An exception should have been thrown"
+    
+    # 期待されるメッセージが指定されている場合、メッセージを検証
+    if ($ExpectedMessage) {
+        $exceptionMessage | Should -Match $ExpectedMessage
+    }
+}
+```
+
+**重要なポイント：**
+
+1. **2>&1 リダイレクト**
+   - 標準エラーストリーム（2）を標準出力（1）にリダイレクト
+   - PowerShell がエラーを画面に出力する前にキャッチ
+
+2. ** = ... による破棄**
+   - すべての出力を $null に代入して完全に破棄
+   - 画面には何も表示されない
+
+3. **Cannot validate argument on parameter 'LineRange'. Start line must be 1 or greater (1-based indexing). Invalid value: 0 Cannot validate argument on parameter 'LineRange'. Start line must be 1 or greater (1-based indexing). Invalid value: 0 The specified module '.\PowerShell.MCP\bin\Debug\netstandard2.0\PowerShell.MCP.dll' was not loaded because no valid module file was found in any module directory. File not found: Tests\Integration\Cmdlets\Show-TextFile.AdditionalEdgeCases.Tests.ps1 Cannot bind argument to parameter 'TestFiles' because it is null. Cannot find path 'C:\home\claude\Convert-ShouldThrowTests.ps1' because it does not exist. Cannot bind argument to parameter 'Path' because it is null. Cannot find path 'C:\MyProj\PowerShell.MCP\Tests\Tests\' because it does not exist. Cannot find path 'C:\MyProj\PowerShell.MCP\Tests\Tests\' because it does not exist. The specified module 'Tests\TestHelpers.psm1' was not loaded because no valid module file was found in any module directory. Cannot find path 'C:\home\claude\TestHelpers.ps1' because it does not exist. Cannot bind argument to parameter 'Content' because it is an empty array..Clear()**
+   - PowerShell のエラーレコード配列をクリア
+   - try 前後で2回実行することで、エラー履歴を完全に削除
+
+4. **-ErrorAction Stop**
+   - 例外を terminating error にして catch でキャッチ可能にする
+   - 2>&1 と組み合わせることで、エラーメッセージも抑制
+
+**使用例：**
+
+```powershell
+# ❌ 従来の方法（出力が多い）
+{ Show-TextFile -Path $file -LineRange @(0, 10) } | Should -Throw
+
+# ✅ 新しい方法（簡潔）
+Test-ThrowsQuietly { Show-TextFile -Path $file -LineRange @(0, 10) }
+
+# メッセージも検証する場合
+Test-ThrowsQuietly { Add-LinesToFile -Path $file -Content @() } -ExpectedMessage "empty array"
+```
+
+**Pester 設定との併用：**
+
+PesterConfiguration.psd1 と併用することで、さらに簡潔な出力を実現：
+
+```powershell
+@{
+    Output = @{
+        Verbosity = 'Minimal'              # 最小限の出力
+        StackTraceVerbosity = 'None'       # スタックトレースを非表示
+    }
+    Debug = @{
+        ShowFullErrors = $false            # 完全なエラーを非表示
+    }
+}
+```
+
+**教訓：**
+1. **意図的な例外テストは Test-ThrowsQuietly を使用**：Should -Throw は避ける
+2. **2>&1 と  = ... のパターン**：PowerShell でのエラー抑制の基本
+3. **Cannot validate argument on parameter 'LineRange'. Start line must be 1 or greater (1-based indexing). Invalid value: 0 Cannot validate argument on parameter 'LineRange'. Start line must be 1 or greater (1-based indexing). Invalid value: 0 The specified module '.\PowerShell.MCP\bin\Debug\netstandard2.0\PowerShell.MCP.dll' was not loaded because no valid module file was found in any module directory. File not found: Tests\Integration\Cmdlets\Show-TextFile.AdditionalEdgeCases.Tests.ps1 Cannot bind argument to parameter 'TestFiles' because it is null. Cannot find path 'C:\home\claude\Convert-ShouldThrowTests.ps1' because it does not exist. Cannot bind argument to parameter 'Path' because it is null. Cannot find path 'C:\MyProj\PowerShell.MCP\Tests\Tests\' because it does not exist. Cannot find path 'C:\MyProj\PowerShell.MCP\Tests\Tests\' because it does not exist. The specified module 'Tests\TestHelpers.psm1' was not loaded because no valid module file was found in any module directory. Cannot find path 'C:\home\claude\TestHelpers.ps1' because it does not exist. Cannot bind argument to parameter 'Content' because it is an empty array..Clear() の重要性**：エラー履歴を残さないために必須
+4. **Test-ParameterValidationError は別途用意**：パラメータバインディングエラー専用
+
+**更新日時：** 2025-10-23 13:18:22
