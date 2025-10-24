@@ -303,15 +303,21 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         
         // 後コンテキストカウンタ
         int afterCounter = 0;
+        
+        // 置換範囲の後に行があるかどうかを記録
+        bool hasLinesAfterRange = false;
 
         using (var reader = new StreamReader(inputPath, metadata.Encoding))
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
             writer.NewLine = metadata.NewlineSequence;
             string? line;
+            bool hasNextLine;
 
             while ((line = reader.ReadLine()) != null)
             {
+                hasNextLine = reader.Peek() != -1;
+                
                 // 前2行のコンテキスト収集（範囲の直前）
                 if (context != null)
                 {
@@ -334,10 +340,12 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     {
                         writer.Write(contentLines[i]);
                         
-                        if (i < contentLines.Length - 1 || currentLine < endLine || reader.Peek() != -1)
+                        // 各行の後に改行を追加（最終行は別処理）
+                        if (i < contentLines.Length - 1)
                         {
                             writer.Write(metadata.NewlineSequence);
                         }
+                        // 最終行の処理は置換範囲の終わりで判定
                         outputLine++;
                     }
                     insertedContent = true;
@@ -367,6 +375,28 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                         context.DeletedLast = line;
                     }
                     linesRemoved++;  // 実際に削除/置換された行をカウント
+                    
+                    // 置換範囲の最終行に達したら、後続行があるかチェック
+                    if (currentLine == endLine)
+                    {
+                        hasLinesAfterRange = hasNextLine;
+                        
+                        // 新しい内容の最終行の改行を書き込む
+                        if (contentLines.Length > 0)
+                        {
+                            if (hasLinesAfterRange)
+                            {
+                                // 後続行がある場合は必ず改行
+                                writer.Write(metadata.NewlineSequence);
+                            }
+                            else if (metadata.HasTrailingNewline)
+                            {
+                                // ファイル末尾で、元のファイルに末尾改行があった場合のみ改行
+                                writer.Write(metadata.NewlineSequence);
+                            }
+                        }
+                    }
+                    
                     currentLine++;
                     continue;
                 }
@@ -390,8 +420,15 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     afterCounter++;
                 }
                 
-                if (reader.Peek() != -1 || (currentLine == endLine && !insertedContent))
+                // 改行の追加判定
+                if (hasNextLine)
                 {
+                    // 後続行がある場合は必ず改行
+                    writer.Write(metadata.NewlineSequence);
+                }
+                else if (metadata.HasTrailingNewline)
+                {
+                    // 最終行で元のファイルに末尾改行があった場合のみ改行
                     writer.Write(metadata.NewlineSequence);
                 }
 
@@ -425,6 +462,11 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     {
                         writer.Write(metadata.NewlineSequence);
                     }
+                    // 最終行の処理：元のファイルに末尾改行があった場合のみ改行
+                    else if (metadata.HasTrailingNewline)
+                    {
+                        writer.Write(metadata.NewlineSequence);
+                    }
                     outputLine++;
                 }
             }
@@ -440,6 +482,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         int totalLines = outputLine - 1;
         return (linesRemoved, linesInserted, totalLines, warningMessage, context);
     }
+
 
     /// <summary>
     /// 更新コンテキストを表示（rotate buffer から、ファイル再読込なし）

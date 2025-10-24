@@ -60,6 +60,8 @@ internal static class FileOperationHelper
         // Write new content directly
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
+            writer.NewLine = metadata.NewlineSequence;
+            
             if (contentLines.Length > 0)
             {
                 for (int i = 0; i < contentLines.Length; i++)

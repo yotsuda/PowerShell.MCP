@@ -444,6 +444,12 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                                     writer.Write(metadata.NewlineSequence);
                                     outputLineNumber++;
                                 }
+                                
+                                // 元のファイルの末尾改行を保持
+                                if (metadata.HasTrailingNewline)
+                                {
+                                    writer.Write(metadata.NewlineSequence);
+                                }
                             }
                         }
                         else
@@ -481,6 +487,12 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                                     writer.Write(metadata.NewlineSequence);
                                     outputLineNumber++;
                                 }
+                            }
+                            
+                            // 元のファイルの末尾改行を保持
+                            if (metadata.HasTrailingNewline)
+                            {
+                                writer.Write(metadata.NewlineSequence);
                             }
                         }
                         

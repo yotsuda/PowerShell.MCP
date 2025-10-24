@@ -131,6 +131,8 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         using (var enumerator = File.ReadLines(fileInfo.ResolvedPath, metadata.Encoding).GetEnumerator())
                         using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                         {
+                            writer.NewLine = metadata.NewlineSequence;
+                            
                             // 空ファイルは上でチェック済み
                             if (!enumerator.MoveNext())
                             {
