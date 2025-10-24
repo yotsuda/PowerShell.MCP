@@ -531,99 +531,11 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             WriteObject($"{startLine + 1,3}: \x1b[7m{contentLines[1]}\x1b[0m");
             
             // 省略マーカー
-            int omittedCount = linesInserted - 4;
-            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
+            WriteObject("   :");
             
             // 末尾2行
             WriteObject($"{endLine - 1,3}: \x1b[7m{contentLines[linesInserted - 2]}\x1b[0m");
             WriteObject($"{endLine,3}: \x1b[7m{contentLines[linesInserted - 1]}\x1b[0m");
-        }
-        
-        // 後2行のコンテキスト
-        if (context.ContextAfter1Line > 0)
-        {
-            WriteObject($"{context.ContextAfter1Line,3}- {context.ContextAfter1}");
-        }
-        if (context.ContextAfter2Line > 0)
-        {
-            WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
-        }
-        
-        // 空行でコンテキストとサマリを分離
-        WriteObject("");
-    }
-
-    /// <summary>
-    /// 削除コンテキストを表示（rotate buffer から、ファイル再読込なし）
-    /// </summary>
-    private void OutputDeleteContext(
-        string filePath,
-        ContextData context)
-    {
-        var displayPath = GetDisplayPath(filePath, filePath);
-        WriteObject($"==> {displayPath} <==");
-        
-        int startLine = context.DeletedStartLine;
-        int endLine = startLine + context.DeletedCount - 1;
-        
-        // 前2行のコンテキスト
-        if (context.ContextBefore2Line > 0)
-        {
-            WriteObject($"{context.ContextBefore2Line,3}- {context.ContextBefore2}");
-        }
-        if (context.ContextBefore1Line > 0)
-        {
-            WriteObject($"{context.ContextBefore1Line,3}- {context.ContextBefore1}");
-        }
-        
-        // 削除された行を表示
-        if (context.DeletedCount <= 5)
-        {
-            // 1-5行: すべて反転表示（rotate buffer 3行で対応可能）
-            if (context.DeletedFirst != null)
-                WriteObject($"{startLine,3}: \x1b[7m{context.DeletedFirst}\x1b[0m");
-            if (context.DeletedCount >= 2 && context.DeletedSecond != null)
-                WriteObject($"{startLine + 1,3}: \x1b[7m{context.DeletedSecond}\x1b[0m");
-            
-            // 3-5行目（リングバッファから）
-            if (context.DeletedCount == 3 && context.DeletedLast != null)
-            {
-                WriteObject($"{startLine + 2,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
-            }
-            else if (context.DeletedCount == 4)
-            {
-                if (context.DeletedSecondLast != null)
-                    WriteObject($"{startLine + 2,3}: \x1b[7m{context.DeletedSecondLast}\x1b[0m");
-                if (context.DeletedLast != null)
-                    WriteObject($"{startLine + 3,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
-            }
-            else if (context.DeletedCount == 5)
-            {
-                if (context.DeletedThirdLast != null)
-                    WriteObject($"{startLine + 2,3}: \x1b[7m{context.DeletedThirdLast}\x1b[0m");
-                if (context.DeletedSecondLast != null)
-                    WriteObject($"{startLine + 3,3}: \x1b[7m{context.DeletedSecondLast}\x1b[0m");
-                if (context.DeletedLast != null)
-                    WriteObject($"{startLine + 4,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
-            }
-        }
-        else
-        {
-            // 6行以上: 先頭2行 + 省略マーカー + 末尾2行
-            if (context.DeletedFirst != null)
-                WriteObject($"{startLine,3}: \x1b[7m{context.DeletedFirst}\x1b[0m");
-            if (context.DeletedSecond != null)
-                WriteObject($"{startLine + 1,3}: \x1b[7m{context.DeletedSecond}\x1b[0m");
-            
-            // 省略マーカー
-            int omittedCount = context.DeletedCount - 4;
-            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
-            
-            // 末尾2行
-            if (context.DeletedSecondLast != null)
-                WriteObject($"{endLine - 1,3}: \x1b[7m{context.DeletedSecondLast}\x1b[0m");
-            if (context.DeletedLast != null)
-                WriteObject($"{endLine,3}: \x1b[7m{context.DeletedLast}\x1b[0m");
         }
         
         // 後2行のコンテキスト

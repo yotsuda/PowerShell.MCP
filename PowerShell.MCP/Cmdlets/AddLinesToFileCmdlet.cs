@@ -344,9 +344,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         }
                         
                         // 省略マーカー出力
-                        int omittedCount = contentLines.Length - 4;
-                        WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
-                        
+                        WriteObject("   :");
+
                         // 中間行を書き込み（出力なし）
                         for (int i = 2; i < contentLines.Length - 2; i++)
                         {
@@ -444,12 +443,12 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                                     writer.Write(metadata.NewlineSequence);
                                     outputLineNumber++;
                                 }
-                                
-                                // 元のファイルの末尾改行を保持
-                                if (metadata.HasTrailingNewline)
-                                {
-                                    writer.Write(metadata.NewlineSequence);
-                                }
+                            }
+                            
+                            // 元のファイルの末尾改行を保持
+                            if (metadata.HasTrailingNewline)
+                            {
+                                writer.Write(metadata.NewlineSequence);
                             }
                         }
                         else
@@ -465,9 +464,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             }
                             
                             // 省略マーカー出力
-                            int omittedCount = contentLines.Length - 4;
-                            WriteObject($"   : \x1b[7m... ({omittedCount} lines omitted) ...\x1b[0m");
-                            
+                            WriteObject("   :");
+
                             // 中間行を書き込み（出力なし）
                             for (int i = 2; i < contentLines.Length - 2; i++)
                             {
