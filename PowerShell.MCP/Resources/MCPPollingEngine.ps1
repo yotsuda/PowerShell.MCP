@@ -1,4 +1,27 @@
-function Invoke-WithStreamCapture($Command) { $captured = @(); & { Invoke-Expression $Command } *>&1 | Tee-Object -Variable captured | Out-Default; return $captured }
+﻿function Invoke-WithStreamCapture($Command) {
+    $captured = [System.Collections.ArrayList]::new()
+    $errorOccurred = $false
+    $errorMessage = $null
+    
+    try {
+        & { Invoke-Expression $Command } *>&1 | ForEach-Object {
+            [void]$captured.Add($_)
+            $_ | Out-Default
+        }
+    }
+    catch {
+        $errorOccurred = $true
+        $errorMessage = $_.Exception.Message
+        [void]$captured.Add($_)
+        $_ | Out-Default
+    }
+    
+    return @{
+        Output = $captured.ToArray()
+        HadTerminatingError = $errorOccurred
+        ErrorMessage = $errorMessage
+    }
+}
 
 # ===== Main Timer Setup =====
 
@@ -52,15 +75,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
 
                     # Execute using Invoke-Expression with stream capture
-                    # Use *>&1 to merge all streams, then Tee-Object to display and capture
-                    $output = @()
+                    # Improved: Captures all output even before terminating errors
+                    $result = $null
                     $errorsBefore = $Error.Count
                     
                     $duration = Measure-Command {
-                        $output = Invoke-WithStreamCapture $cmd
+                        $result = Invoke-WithStreamCapture $cmd
                     }
                     
-                    $hadErrors = ($Error.Count -gt $errorsBefore)
+                    # Check for both terminating errors and error stream
+                    $hadErrors = $result.HadTerminatingError -or ($Error.Count -gt $errorsBefore)
+                    $output = $result.Output
 
                     # Get current location info
                     $currentLocation = @{
@@ -86,6 +111,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $mcpOutput = ($outputParts -join "`n")
                 }
                 catch {
+                    # This catch block should rarely be reached now
+                    # Invoke-WithStreamCapture handles most errors internally
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
                     Write-Host $errorMessage -ForegroundColor Red
                     $mcpOutput = $errorMessage
