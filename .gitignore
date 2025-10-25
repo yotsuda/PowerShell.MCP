@@ -421,3 +421,6 @@ RELEASE_DECISION.txt
 
 # Design and investigation documents
 *_Design_*.txt
+
+# Benchmark results and test files
+/Benchmark/
