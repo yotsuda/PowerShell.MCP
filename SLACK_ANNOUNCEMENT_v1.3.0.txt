@@ -1,5 +1,0 @@
-1.3.0
-Context-aware search: Show-TextFile now displays 3 lines of context before/after matches (-Contains/-Pattern).
-Visual highlighting: Matched text highlighted with ANSI reverse video for instant visibility.
-Flexible ranges: Negative LineRange values (e.g., -LineRange 100,-1) for "to end of file".
-Testing: 445+ new test lines (280 advanced + 165 edge cases) with expanded integration coverage.

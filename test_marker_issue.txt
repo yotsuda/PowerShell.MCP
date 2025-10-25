@@ -1,5 +1,0 @@
-Line 1 cat
-Line 2 cat
-Line 3 TARGET
-Line 4 cat
-Line 5 cat

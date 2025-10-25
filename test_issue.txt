@@ -1,7 +1,0 @@
-Line 1 cat
-Line 2 no match
-Line 3 cat
-Line 4 no match  
-Line 5 cat
-Line 6 no match
-Line 7 cat

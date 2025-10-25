@@ -1,5 +1,0 @@
-The cat sat on the mat.
-The cat was a fat cat.
-Multiple cat cat cat words.
-No match here.
-Another cat line.

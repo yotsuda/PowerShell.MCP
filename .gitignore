@@ -372,3 +372,52 @@ TestFiles/
 Tests/Temp/
 test.txt
 test_new.txt
+# Development and temporary files (added 2025-10-25)
+work_*.md
+work_*.txt
+*.bak
+
+# Test files (root level only)
+/test.txt
+/detail-test.txt
+/Tests/concise-test.txt
+
+# Keep test data
+!/Tests/TestData/test.txt
+
+# Slack announcements
+SLACK_ANNOUNCEMENT_*.txt
+
+# Development documentation
+PowerShell.MCP_*.md
+
+# Release notes
+RELEASE_NOTES_*.md
+
+# Development reports and analysis documents (added 2025-10-25)
+*Report_*.md
+*Report_*.txt
+*_Analysis_*.md
+
+# Bug investigation and fix documents
+BUGFIX_*.txt
+ERROR_*.md
+FIX_*.md
+*Findings.txt
+USER_FEEDBACK_*.txt
+*_Review.txt
+*_Issue_Report.txt
+RELEASE_DECISION.txt
+*_analysis.md
+
+# Root level test files
+/test[0-9]*.txt
+/test_*.txt
+/comparison_*.txt
+
+# Test evaluation and edge case files
+/test-edge*/
+/TestEval/
+
+# Design and investigation documents
+*_Design_*.txt

@@ -1,3 +1,0 @@
-1.2.7
-* Automatic ASCII → UTF-8 encoding upgrade when adding non-ASCII characters (prevents data loss).
-* Localized MCP custom prompts for 17 languages (en-US, ja-JP, es-ES, fr-FR, de-DE, zh-CN, zh-TW, ko-KR, pt-BR, ru-RU, it-IT, nl-NL, pl-PL, tr-TR, ar-SA, hi-IN, sv-SE).

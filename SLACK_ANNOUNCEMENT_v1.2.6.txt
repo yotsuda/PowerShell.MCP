@@ -1,6 +1,0 @@
-1.2.6
-* Renamed cmdlets for clarity: `Update-TextFile` → `Update-MatchInFile`, `Set-LinesToFile` → `Update-LinesInFile`
-* Automatic encoding detection - UTF-8, UTF-16, Shift-JIS preserved automatically.
-* Fixed UTF-8 BOM preservation issue - No unwanted BOM additions.
-* Improved positional parameters - `Update-LinesInFile file.txt 5,7 -Content ...` cleaner syntax.
-* Added Ude.NetStandard 1.2.0 for robust charset detection (MPL-2.0).
