@@ -16,85 +16,28 @@ function Remove-TestFile {
     }
 }
 
-function Test-ThrowsQuietly {
+function Test-ParameterValidationError {
     <#
     .SYNOPSIS
-    例外がスローされることを検証するが、エラー出力を完全に抑制する
+    パラメータ検証エラーが発生することを検証する
     
     .DESCRIPTION
-    Pester テストで Should -Throw の代わりに使用することで、
-    大量のエラーメッセージとスタックトレースの出力を抑制し、
-    トークン消費を大幅に削減する
+    PowerShellのパラメータ検証（ValidateRange、ValidateNotNullなど）が
+    エラーをスローすることを検証する
     
     .PARAMETER ScriptBlock
     実行するスクリプトブロック
     
-    .PARAMETER ExpectedMessage
-    期待されるエラーメッセージ（オプション）。指定した場合、メッセージの一致を検証する
-    
     .EXAMPLE
-    Test-ThrowsQuietly { Add-LinesToFile -Path "invalid" -LineNumber -1 -Content "test" }
-    
-    .EXAMPLE
-    Test-ThrowsQuietly { Show-TextFile -Path "missing.txt" } -ExpectedMessage "File not found"
+    Test-ParameterValidationError { Add-LinesToFile -Path "file.txt" -LineNumber -1 -Content "test" }
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ScriptBlock]$ScriptBlock,
-        [Parameter(Mandatory = $false)]
-        [string]$ExpectedMessage
+        [ScriptBlock]$ScriptBlock
     )
     
-    $caught = $false
-    $exceptionMessage = $null
-    
-    # エラーレコードをクリア
-    $Error.Clear()
-    
-    # ErrorActionPreference を Stop に設定して非終了エラーも例外にする
-    $previousErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Stop'
-    
-    # すべてのコマンドに -ErrorAction Stop を適用
-    $previousDefaultParameters = $PSDefaultParameterValues.Clone()
-    $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
-    
-    try {
-        # 出力を完全に抑制（例外は catch でキャプチャ）
-        $null = & $ScriptBlock 2>&1 3>&1 4>&1 5>&1 6>&1
-    }
-    catch {
-        $caught = $true
-        $exceptionMessage = $_.Exception.Message
-    }
-    finally {
-        # ErrorActionPreference を元に戻す
-        $ErrorActionPreference = $previousErrorActionPreference
-        
-        # PSDefaultParameterValues を元に戻す
-        $PSDefaultParameterValues.Clear()
-        foreach ($key in $previousDefaultParameters.Keys) {
-            $PSDefaultParameterValues[$key] = $previousDefaultParameters[$key]
-        }
-    }
-    
-    # catch されなかったが $Error にエラーが追加された場合もチェック
-    if (-not $caught -and $Error.Count -gt 0) {
-        $caught = $true
-        $exceptionMessage = $Error[0].Exception.Message
-    }
-    
-    # エラーレコードを再度クリア
-    $Error.Clear()
-    
-    # 例外がスローされたことを検証
-    $caught | Should -BeTrue -Because "Expected an exception to be thrown"
-    
-    # 期待されるメッセージの検証（オプション）
-    if ($ExpectedMessage) {
-        $exceptionMessage | Should -Match $ExpectedMessage
-    }
+    { & $ScriptBlock } | Should -Throw
 }
 
-Export-ModuleMember -Function @("New-TestFile", "Remove-TestFile", "Test-ThrowsQuietly")
+Export-ModuleMember -Function @("New-TestFile", "Remove-TestFile", "Test-ParameterValidationError")

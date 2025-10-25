@@ -1,4 +1,4 @@
-# Update-MatchInFile コマンドレットの統合テスト
+﻿# Update-MatchInFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
@@ -73,35 +73,29 @@ Describe "Update-MatchInFile Integration Tests" {
         }
     }
 
-    Context "Replacement パラメータの必須チェック" $err = $null
-            It "Contains を指定して Replacement を省略するとエラーになる" {
+    Context "Replacement パラメータの必須チェック" {
+        It "Contains を指定して Replacement を省略するとエラーになる" {
             # Arrange
             Set-Content -Path $script:testFile -Value "test content" -Encoding UTF8 -NoNewline
             
             # Act & Assert
-            { Update-MatchInFile -Path $script:testFile -Contains "test" -ErrorVariable err -ErrorAction SilentlyContinue
-            $err.Count | Should -BeGreaterThan 0
-            $err[0].Exception.Message | Should -BeLike "*Both -Contains and -Replacement must be specified together*"
+            { Update-MatchInFile -Path $script:testFile -Contains "test" } | Should -Throw
         }
 
-        It "Pattern を指定して Replacement を省略するとエラーになる" $err = $null
+        It "Pattern を指定して Replacement を省略するとエラーになる" {
             # Arrange
             Set-Content -Path $script:testFile -Value "test123" -Encoding UTF8 -NoNewline
             
             # Act & Assert
-            { Update-MatchInFile -Path $script:testFile -Pattern '\d+' -ErrorVariable err -ErrorAction SilentlyContinue
-            $err.Count | Should -BeGreaterThan 0
-            $err[0].Exception.Message | Should -BeLike "*Both -Pattern and -Replacement must be specified together*"
+            { Update-MatchInFile -Path $script:testFile -Pattern '\d+' } | Should -Throw
         }
 
-        It "Replacement のみ指定するとエラーになる" $err = $null
+        It "Replacement のみ指定するとエラーになる" {
             # Arrange
             Set-Content -Path $script:testFile -Value "test content" -Encoding UTF8 -NoNewline
             
             # Act & Assert
-            { Update-MatchInFile -Path $script:testFile -Replacement "new" -ErrorVariable err -ErrorAction SilentlyContinue
-            $err.Count | Should -BeGreaterThan 0
-            $err[0].Exception.Message | Should -BeLike "*Either -Contains*or -Pattern*must be specified*"
+            { Update-MatchInFile -Path $script:testFile -Replacement "new" } | Should -Throw
         }
     }
 

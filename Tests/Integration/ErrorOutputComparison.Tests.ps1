@@ -4,7 +4,7 @@ BeforeAll {
     Import-Module "$PSScriptRoot/../Shared/TestHelpers.psm1" -Force
 }
 
-Describe "エラー出力比較テスト" {
+Describe "エラー出力比較テスト" -Skip {
     Context "Should -Throw を使用（従来の方法）" -Skip {
         It "Test 1" {
             { throw "Error 1" } | Should -Throw

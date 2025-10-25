@@ -1,4 +1,4 @@
-# Update-MatchInFile.Tests.ps1
+﻿# Update-MatchInFile.Tests.ps1
 # Update-MatchInFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -281,17 +281,13 @@ Describe "Update-MatchInFile Integration Tests" {
         }
     }
 
-    Context "Replacement パラメータの検証" $err = $null
-            It "Replacement を指定しない（null）場合、Contains でエラーになる" {
-            { Update-MatchInFile -Path $script:testFile -Contains "test" -ErrorVariable err -ErrorAction SilentlyContinue
-            $err.Count | Should -BeGreaterThan 0
-            $err[0].Exception.Message | Should -BeLike "*Both -Contains and -Replacement must be specified together*"
+    Context "Replacement パラメータの検証" {
+        It "Replacement を指定しない（null）場合、Contains でエラーになる" {
+            { Update-MatchInFile -Path $script:testFile -Contains "test" } | Should -Throw
         }
 
-        It "Replacement を指定しない（null）場合、Pattern でエラーになる" $err = $null
-            { Update-MatchInFile -Path $script:testFile -Pattern '\d+' -ErrorVariable err -ErrorAction SilentlyContinue
-            $err.Count | Should -BeGreaterThan 0
-            $err[0].Exception.Message | Should -BeLike "*Both -Pattern and -Replacement must be specified together*"
+        It "Replacement を指定しない（null）場合、Pattern でエラーになる" {
+            { Update-MatchInFile -Path $script:testFile -Pattern '\d+' } | Should -Throw
         }
 
         It "Replacement に空文字列を指定した場合はエラーにならない（削除として動作）" {

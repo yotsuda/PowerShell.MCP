@@ -56,7 +56,7 @@
         It "存在しないファイルからの削除でエラー" {
             $nonExistentFile = Join-Path $script:testDir "nonexistent.txt"
             
-            Test-ThrowsQuietly { Remove-LinesFromFile -Path $nonExistentFile -Contains "test" }
+            { Remove-LinesFromFile -Path $nonExistentFile -Contains "test" -ErrorAction Stop } | Should -Throw
         }
     }
 }

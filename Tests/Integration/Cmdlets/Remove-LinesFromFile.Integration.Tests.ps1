@@ -175,7 +175,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
 
     Context "エラーハンドリング" {
         It "存在しないファイルでエラーになる" {
-            Test-ThrowsQuietly { Remove-LinesFromFile -Path "C:\NonExistent\file.txt" -LineRange 1 }
+            { Remove-LinesFromFile -Path "C:\NonExistent\file.txt" -LineRange 1 -ErrorAction Stop } | Should -Throw
         }
 
         It "範囲外の行番号で警告を出すが続行する" {
@@ -184,15 +184,15 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
         }
 
         It "無効な範囲指定でエラーになる" {
-            Test-ThrowsQuietly { Remove-LinesFromFile -Path $script:testFile -LineRange 9,2 }
+            { Remove-LinesFromFile -Path $script:testFile -LineRange 9,2 } | Should -Throw
         }
 
         It "無効な正規表現でエラーになる" {
-            Test-ThrowsQuietly { Remove-LinesFromFile -Path $script:testFile -Pattern "[invalid(" }
+            { Remove-LinesFromFile -Path $script:testFile -Pattern "[invalid(" -ErrorAction Stop } | Should -Throw
         }
 
         It "LineRange、Contains、Pattern のいずれも指定しない場合エラーになる" {
-            Test-ParameterValidationError { Remove-LinesFromFile -Path $script:testFile }
+            { Remove-LinesFromFile -Path $script:testFile } | Should -Throw
         }
     }
 

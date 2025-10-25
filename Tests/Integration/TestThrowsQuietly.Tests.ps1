@@ -4,7 +4,7 @@ BeforeAll {
     Import-Module "$PSScriptRoot/../Shared/TestHelpers.psm1" -Force
 }
 
-Describe "Test-ThrowsQuietly Function Tests" {
+Describe "Test-ThrowsQuietly Function Tests" -Skip {
     It "正常に例外をキャッチする" {
         Test-ThrowsQuietly { throw "Test error" }
     }
