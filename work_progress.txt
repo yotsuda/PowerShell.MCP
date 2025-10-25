@@ -1,21 +1,23 @@
 # MCPPollingEngine.ps1 C#移植プロジェクト - 作業進捗
 
-最終更新: 2025-10-25 08:48
+最終更新: 2025-10-25 09:17
 
 ---
 
 ## 📊 進捗サマリー
 
-**全体進捗:** 15% (調査フェーズ完了)
+**全体進捗:** 30% (調査・設計フェーズ完了)
 
-**現在フェーズ:** ✅ 調査フェーズ完了 → 🎨 設計フェーズ
+**現在フェーズ:** ✅ 設計フェーズ完了 → 🔨 実装フェーズ
 
-**次のアクション:** CommandExecutor.cs アーキテクチャ設計
+**次のアクション:** CommandExecutor.cs 実装開始（Phase 1: 基本実装）
 
 **重要な成果:** 
 - ✅ MergeMyResults + Pipeline.Output.DataReady でリアルタイムストリーミング＋統合キャプチャを実現
 - ✅ 実装方針確定: Pipeline API採用
 - ✅ カスタムPSHost不要、公式API使用で最高の信頼性
+- ✅ CommandExecutor.cs 詳細設計完了（ExecutionResult再設計含む）
+- ✅ MCPPollingEngine.ps1との統合インターフェース確定
 
 ---
 
@@ -38,9 +40,9 @@
 #### [設計] アーキテクチャ設計
 | 項目 | ステータス | 優先度 | 残作業 | 備考 |
 |------|-----------|--------|--------|------|
-| ストリーム統合パターン選択 | ⏳ | 高 | 3h | パターンA/B/C から選択 |
-| CommandExecutor.cs 設計 | ⏳ | 高 | 2h | public API, クラス構造 |
-| MCPPollingEngine.ps1 簡略化設計 | ⏳ | 中 | 1h | C# 呼び出しインターフェース |
+| ストリーム統合パターン選択 | ✅ | 高 | 0h | Pipeline API + MergeMyResults + DataReady 採用 |
+| CommandExecutor.cs 設計 | ✅ | 高 | 0h | 詳細設計完了（ExecutionResult再設計含む） |
+| MCPPollingEngine.ps1 簡略化設計 | ✅ | 中 | 0h | C# static method呼び出しインターフェース確定 |
 
 **設計フェーズ合計:** 6h
 
@@ -195,6 +197,42 @@
 - 最大の課題だった「コンソール出力順の統合」が公式APIで解決
 - リアルタイムストリーミングとキャプチャの両立も実現
 - 実装の複雑性が大幅に低減
+
+### 2025-10-25 (08:48-09:17) - 設計フェーズ完了 ✅
+
+**設計の主要決定:**
+1. **ExecutionResult クラス再設計**
+   - ストリーム別リスト（Output, Errors, Warnings等）を廃止
+   - `UnifiedOutput` 統合リストに変更 - コンソール出力順を保持
+   - 各アイテムに型情報 + タイムスタンプを含める
+   - `OutputItem` クラス導入: Type, Content, Timestamp
+
+2. **Execute メソッド設計**
+   - Pipeline API使用
+   - DataReadyイベントで2つの処理:
+     - リアルタイムコンソール表示（色付き）
+     - UnifiedOutputにキャプチャ
+   - Runspaceパラメータ必須（MCPPollingEngineから受け取る）
+
+3. **DisplayToConsole メソッド**
+   - StreamType別に色分け:
+     - Error: 赤
+     - Warning: 黄色
+     - Verbose: シアン
+     - Debug: グレー
+     - Information/Output: デフォルト
+
+4. **MCPPollingEngine.ps1 統合設計**
+   - C# static method呼び出し: `[CommandExecutor]::Execute($command, [runspace]::DefaultRunspace)`
+   - MCP responseフォーマット: UnifiedOutputを変換
+
+**設計ドキュメント:**
+- `CommandExecutor_Design.md` 作成完了（詳細設計の全て）
+
+**技術的意義:**
+- ExecutionResultの構造がコンソール出力順を完全に反映
+- MCPクライアントは正確な実行順序を取得可能
+- 実装がシンプルで保守性が高い
 ---
 
 ## 📈 工数サマリー
@@ -202,11 +240,11 @@
 | フェーズ | 見積工数 | 実績工数 | 残工数 | 備考 |
 |---------|---------|---------|--------|------|
 | 調査 | 9h | 0.3h | 0h | ✅ 完了（見積より大幅に短縮） |
-| 設計 | 6h | 0h | 6h | 次フェーズ |
+| 設計 | 6h | 0.5h | 0h | ✅ 完了（見積より大幅に短縮） |
 | 実装（既存） | 16h | 0h | 16h | CommandExecutor.cs全面書き直し |
 | 実装（新規） | 14h | 0h | 0h | ✅ 新規ファイル作成不要と判明 |
 | テスト | 4h | 0h | 4h |  |
-| **合計** | **49h** | **0.3h** | **26h** | **見積から23h削減!** |
+| **合計** | **49h** | **0.8h** | **20h** | **見積から29h削減!** |
 
 **見積工数削減の理由:**
 - MergeMyResults発見により、カスタム実装が不要

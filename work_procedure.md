@@ -337,6 +337,100 @@ myScriptBlock.InvokeUsingCmdlet(
 
 ---
 
+### 📊 設計結果（2025-10-25完了）
+
+#### CommandExecutor.cs 詳細設計
+
+**完了した設計:**
+- ExecutionResult クラス再設計
+- Execute / ExecuteSilent メソッド設計
+- DisplayToConsole メソッド設計
+- MCPPollingEngine.ps1 統合インターフェース
+
+**主要設計決定:**
+
+**1. ExecutionResult構造**
+```csharp
+public class ExecutionResult
+{
+    public List<OutputItem> UnifiedOutput { get; set; }  // 統合出力（順序保持）
+    public double DurationSeconds { get; set; }
+    public bool HadErrors { get; set; }
+    public int ErrorCount { get; set; }
+    public int WarningCount { get; set; }
+}
+
+public class OutputItem
+{
+    public StreamType Type { get; set; }      // Output, Error, Warning, etc.
+    public object Content { get; set; }        // ErrorRecord, WarningRecord, etc.
+    public DateTime Timestamp { get; set; }
+}
+```
+
+**設計の利点:**
+- コンソール出力順が完全に保持される
+- 型情報により各ストリームを識別可能
+- MCPクライアントは正確な実行順序を取得可能
+
+**2. Execute メソッド**
+```csharp
+public static ExecutionResult Execute(
+    string command, 
+    Runspace runspace, 
+    bool displayToConsole = true)
+```
+
+**実装パターン:**
+```csharp
+Pipeline pipeline = runspace.CreatePipeline();
+
+pipeline.Output.DataReady += (sender, eventArgs) => {
+    // 1. リアルタイムコンソール表示（色付き）
+    // 2. UnifiedOutputにキャプチャ
+};
+
+pipeline.Commands.AddScript(command);
+pipeline.Commands[pipeline.Commands.Count-1]
+    .MergeMyResults(PipelineResultTypes.All, PipelineResultTypes.Output);
+
+pipeline.Invoke();
+```
+
+**3. DisplayToConsole 設計**
+- Error: 赤色
+- Warning: 黄色
+- Verbose: シアン
+- Debug: グレー
+- Information/Output: デフォルト
+
+**4. MCPPollingEngine.ps1 統合**
+```powershell
+$result = [CommandExecutor]::Execute($command, [runspace]::DefaultRunspace)
+
+# MCP responseフォーマットに変換
+$outputParts = @()
+foreach ($item in $result.UnifiedOutput) {
+    $outputParts += @{
+        type = $item.Type.ToString().ToLower()
+        content = $item.Content.ToString()
+    }
+}
+```
+
+**設計ドキュメント:**
+- 詳細: `/home/claude/CommandExecutor_Design.md`
+
+**実装優先順位:**
+1. Phase 1: 基本Execute実装（Pipeline + MergeMyResults + DataReady）
+2. Phase 2: ExecutionResult完成（OutputItem構造）
+3. Phase 3: DisplayToConsole完成（色付き出力）
+4. Phase 4: ExecuteSilent実装
+5. Phase 5: エラーハンドリング
+
+
+---
+
 ## 🔨 実装フェーズ
 
 ### 実装順序
