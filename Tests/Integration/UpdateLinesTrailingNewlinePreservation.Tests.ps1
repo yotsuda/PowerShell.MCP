@@ -1,4 +1,4 @@
-# Trailing Newline Preservation Tests for Update-LinesInFile
+﻿# Trailing Newline Preservation Tests for Update-LinesInFile
 # Update-LinesInFile が元のファイルの末尾改行を保持することを確認する統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -67,7 +67,7 @@ Describe "Update-LinesInFile Trailing Newline Preservation" {
         It "Should preserve no trailing newline when replacing single line" {
             # Arrange
             $testFile = Join-Path $script:testDir "test4.txt"
-            "Line1``r``nLine2``r``nLine3" | Out-File -FilePath $testFile -Encoding utf8 -NoNewline
+            [System.IO.File]::WriteAllText($testFile, "Line1`r`nLine2`r`nLine3", [System.Text.Encoding]::UTF8)
             
             $bytesBeforeUpdate = [System.IO.File]::ReadAllBytes($testFile)
             $bytesBeforeUpdate[-1] | Should -Not -Be 0x0A -Because "元のファイルは末尾改行なし"
@@ -83,7 +83,7 @@ Describe "Update-LinesInFile Trailing Newline Preservation" {
         It "Should preserve no trailing newline when replacing multiple lines" {
             # Arrange
             $testFile = Join-Path $script:testDir "test5.txt"
-            "Line1``r``nLine2``r``nLine3" | Out-File -FilePath $testFile -Encoding utf8 -NoNewline
+            [System.IO.File]::WriteAllText($testFile, "Line1`r`nLine2`r`nLine3", [System.Text.Encoding]::UTF8)
             
             # Act
             Update-LinesInFile -Path $testFile -LineRange 1,2 -Content @("New1", "New2")
