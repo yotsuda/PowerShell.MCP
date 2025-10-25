@@ -349,29 +349,30 @@ myScriptBlock.InvokeUsingCmdlet(
 
 **主要設計決定:**
 
-**1. ExecutionResult構造**
+**主要設計決定:**
+
+**1. ExecutionResult構造（シンプル設計）**
 ```csharp
 public class ExecutionResult
 {
-    public List<OutputItem> UnifiedOutput { get; set; }  // 統合出力（順序保持）
+    // コンソール出力順のテキスト（シンプル）
+    public List<string> Output { get; set; } = new List<string>();
+    
+    // メタ情報
     public double DurationSeconds { get; set; }
     public bool HadErrors { get; set; }
-    public int ErrorCount { get; set; }
-    public int WarningCount { get; set; }
-}
-
-public class OutputItem
-{
-    public StreamType Type { get; set; }      // Output, Error, Warning, etc.
-    public object Content { get; set; }        // ErrorRecord, WarningRecord, etc.
-    public DateTime Timestamp { get; set; }
 }
 ```
 
 **設計の利点:**
-- コンソール出力順が完全に保持される
-- 型情報により各ストリームを識別可能
-- MCPクライアントは正確な実行順序を取得可能
+- **シンプル** - 型情報やタイムスタンプなし（AIにとってノイズを排除）
+- コンソール出力順が完全に保持される（string配列として）
+- MCPクライアントは純粋なテキスト出力を取得
+- 内部処理（色分け表示）では型判別を行うが、結果には含めない
+
+**設計方針の変更:**
+- ❌ OutputItemクラス削除 - 型情報とタイムスタンプは不要
+- ✅ シンプルなstring配列 - AIが読みやすい
 
 **2. Execute メソッド**
 ```csharp
@@ -380,14 +381,23 @@ public static ExecutionResult Execute(
     Runspace runspace, 
     bool displayToConsole = true)
 ```
-
 **実装パターン:**
 ```csharp
 Pipeline pipeline = runspace.CreatePipeline();
 
 pipeline.Output.DataReady += (sender, eventArgs) => {
-    // 1. リアルタイムコンソール表示（色付き）
-    // 2. UnifiedOutputにキャプチャ
+    var reader = (PipelineReader<PSObject>)sender;
+    while (reader.Count > 0)
+    {
+        PSObject obj = reader.Read();
+        
+        // 1. 即座にコンソール表示（色付き）- 型判別
+        if (displayToConsole)
+            DisplayToConsole(obj);
+        
+        // 2. プレーンテキストをキャプチャ
+        result.Output.Add(obj.ToString());
+    }
 };
 
 pipeline.Commands.AddScript(command);
@@ -397,6 +407,7 @@ pipeline.Commands[pipeline.Commands.Count-1]
 pipeline.Invoke();
 ```
 
+
 **3. DisplayToConsole 設計**
 - Error: 赤色
 - Warning: 黄色
@@ -404,19 +415,23 @@ pipeline.Invoke();
 - Debug: グレー
 - Information/Output: デフォルト
 
-**4. MCPPollingEngine.ps1 統合**
+**4. MCPPollingEngine.ps1 統合（シンプル）**
 ```powershell
 $result = [CommandExecutor]::Execute($command, [runspace]::DefaultRunspace)
 
-# MCP responseフォーマットに変換
-$outputParts = @()
-foreach ($item in $result.UnifiedOutput) {
-    $outputParts += @{
-        type = $item.Type.ToString().ToLower()
-        content = $item.Content.ToString()
-    }
+# MCP response - 非常にシンプル
+$response = @{
+    output = $result.Output           # string配列（プレーンテキスト）
+    duration = $result.DurationSeconds
+    hadErrors = $result.HadErrors
 }
 ```
+
+**設計の利点:**
+- プレーンテキストのみ - AIが読みやすい
+- 型情報・タイムスタンプなし - ノイズを排除
+- コンソール出力順が完全に保持される
+- DisplayToConsole内部でのみ型判別（色付き表示用）
 
 **設計ドキュメント:**
 - 詳細: `/home/claude/CommandExecutor_Design.md`

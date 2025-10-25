@@ -1,23 +1,24 @@
 # MCPPollingEngine.ps1 C#移植プロジェクト - 作業進捗
 
-最終更新: 2025-10-25 09:17
+最終更新: 2025-10-25 09:51
 
 ---
 
 ## 📊 進捗サマリー
 
-**全体進捗:** 30% (調査・設計フェーズ完了)
+**全体進捗:** 50% (調査・設計・CommandExecutor実装完了)
 
-**現在フェーズ:** ✅ 設計フェーズ完了 → 🔨 実装フェーズ
+**現在フェーズ:** 🔨 実装フェーズ（Phase 1-5完了）
 
-**次のアクション:** CommandExecutor.cs 実装開始（Phase 1: 基本実装）
+**次のアクション:** ビルド確認後、よしふみさんにデプロイ依頼
 
 **重要な成果:** 
 - ✅ MergeMyResults + Pipeline.Output.DataReady でリアルタイムストリーミング＋統合キャプチャを実現
 - ✅ 実装方針確定: Pipeline API採用
 - ✅ カスタムPSHost不要、公式API使用で最高の信頼性
-- ✅ CommandExecutor.cs 詳細設計完了（ExecutionResult再設計含む）
+- ✅ CommandExecutor.cs 詳細設計完了（シンプル設計）
 - ✅ MCPPollingEngine.ps1との統合インターフェース確定
+- ✅ **CommandExecutor.cs 実装完了！** (177行、全面書き直し)
 
 ---
 
@@ -53,7 +54,7 @@
 #### [実装] コアファイル
 | ファイル | ステータス | 優先度 | 残作業 | 備考 |
 |---------|-----------|--------|--------|------|
-| PowerShell.MCP\Utilities\CommandExecutor.cs | ⏳ | 高 | 12h | 全面書き直し。現在152行（試作品） |
+| PowerShell.MCP\Utilities\CommandExecutor.cs | ✅ | 高 | 0h | **完了！** Pipeline API + MergeMyResults実装 (177行) |
 | PowerShell.MCP\Resources\MCPPollingEngine.ps1 | ⏳ | 高 | 4h | 簡略化。現在296行 → 目標50行 |
 
 **実装フェーズ合計:** 16h
@@ -201,17 +202,17 @@
 ### 2025-10-25 (08:48-09:17) - 設計フェーズ完了 ✅
 
 **設計の主要決定:**
-1. **ExecutionResult クラス再設計**
+1. **ExecutionResult クラス - シンプル設計採用**
    - ストリーム別リスト（Output, Errors, Warnings等）を廃止
-   - `UnifiedOutput` 統合リストに変更 - コンソール出力順を保持
-   - 各アイテムに型情報 + タイムスタンプを含める
-   - `OutputItem` クラス導入: Type, Content, Timestamp
+   - `Output` プロパティ: `List<string>` - プレーンテキスト配列
+   - 型情報・タイムスタンプなし - AIにとってのノイズを排除
+   - YAGNI原則: 将来必要になったら拡張可能
 
 2. **Execute メソッド設計**
    - Pipeline API使用
    - DataReadyイベントで2つの処理:
-     - リアルタイムコンソール表示（色付き）
-     - UnifiedOutputにキャプチャ
+     - 即座にコンソール表示（色付き）- DisplayToConsoleで型判別
+     - プレーンテキストをキャプチャ（obj.ToString()）
    - Runspaceパラメータ必須（MCPPollingEngineから受け取る）
 
 3. **DisplayToConsole メソッド**
@@ -221,18 +222,62 @@
      - Verbose: シアン
      - Debug: グレー
      - Information/Output: デフォルト
+   - 内部でのみ型判別 - キャプチャには含めない
 
 4. **MCPPollingEngine.ps1 統合設計**
    - C# static method呼び出し: `[CommandExecutor]::Execute($command, [runspace]::DefaultRunspace)`
-   - MCP responseフォーマット: UnifiedOutputを変換
+   - MCP response: シンプルなstring配列
 
-**設計ドキュメント:**
-- `CommandExecutor_Design.md` 作成完了（詳細設計の全て）
+**設計方針の変更（09:46）:**
+- ❌ OutputItemクラス・型情報・タイムスタンプ削除
+- ✅ プレーンテキストのみキャプチャ
+- 理由: AIにとってノイズ、YAGNI原則、実装のシンプルさ
 
 **技術的意義:**
-- ExecutionResultの構造がコンソール出力順を完全に反映
-- MCPクライアントは正確な実行順序を取得可能
-- 実装がシンプルで保守性が高い
+- 最もシンプルな設計 - 保守性最高
+- AIが読みやすいプレーンテキスト
+- コンソール出力順が完全に保持される
+- 将来の拡張性は保たれる（後方互換性を保って拡張可能）
+
+### 2025-10-25 (09:20-09:51) - CommandExecutor.cs 実装完了 ✅
+
+**実装内容:**
+1. **ExecutionResult クラス - シンプル実装**
+   - `List<string> Output` - プレーンテキスト配列
+   - `double DurationSeconds` - 実行時間
+   - `bool HadErrors` - エラー発生フラグ
+
+2. **Execute メソッド実装**
+   - Pipeline API使用 (`runspace.CreatePipeline()`)
+   - MergeMyResults設定 - すべてのストリームをOutputにマージ
+   - DataReadyイベント実装:
+     - リアルタイムコンソール表示（DisplayToConsole）
+     - プレーンテキストキャプチャ（obj.ToString()）
+   - Runspaceパラメータ必須化
+   - displayToConsoleパラメータ追加（Silent実行対応）
+
+3. **DisplayToConsole メソッド実装**
+   - ErrorRecord → 赤色
+   - WarningRecord → 黄色
+   - VerboseRecord → シアン
+   - DebugRecord → グレー
+   - InformationRecord → デフォルト
+
+4. **エラーハンドリング**
+   - RuntimeException処理
+   - 一般Exception処理
+   - エラーメッセージのキャプチャ＋表示
+
+**実装統計:**
+- Before: 152行（試作品）
+- After: 177行（+25行）
+- 実装時間: 0.5h
+
+**技術的成果:**
+- Pipeline API + MergeMyResults + DataReady完全実装
+- リアルタイムストリーミング＋統合キャプチャ実現
+- シンプルで保守性の高いコード
+- 色付きコンソール出力実装
 ---
 
 ## 📈 工数サマリー
@@ -241,10 +286,10 @@
 |---------|---------|---------|--------|------|
 | 調査 | 9h | 0.3h | 0h | ✅ 完了（見積より大幅に短縮） |
 | 設計 | 6h | 0.5h | 0h | ✅ 完了（見積より大幅に短縮） |
-| 実装（既存） | 16h | 0h | 16h | CommandExecutor.cs全面書き直し |
+| 実装（既存） | 16h | 0.5h | 0h | ✅ **CommandExecutor.cs完了！** |
 | 実装（新規） | 14h | 0h | 0h | ✅ 新規ファイル作成不要と判明 |
-| テスト | 4h | 0h | 4h |  |
-| **合計** | **49h** | **0.8h** | **20h** | **見積から29h削減!** |
+| テスト | 4h | 0h | 4h | 次フェーズ（ビルド後） |
+| **合計** | **49h** | **1.3h** | **4h** | **見積から45h削減!** |
 
 **見積工数削減の理由:**
 - MergeMyResults発見により、カスタム実装が不要
