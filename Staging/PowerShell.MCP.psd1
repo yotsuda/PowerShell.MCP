@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.3.0'
+ModuleVersion = '1.3.1'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -116,7 +116,7 @@ PrivateData = @{
         Platforms = @('Windows')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.3.0 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.3.1 - Enterprise-Ready MCP Server
 
 === Key Features ===
 • 🤝 Shared Console Experience
@@ -146,7 +146,7 @@ PrivateData = @{
 • "Review code files and generate development documentation"
 
 === Quick Setup ===
-1. Install PowerShell 7.2.15 or later (if not installed)
+1. Install PowerShell 7.2 or later (if not installed)
    Refer: https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows
 2. Install-Module PowerShell.MCP
 3. Import-Module PowerShell.MCP
@@ -159,7 +159,7 @@ PrivateData = @{
    {
      "mcpServers": {
        "PowerShell": {
-         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.0\\bin\\PowerShell.MCP.Proxy.exe"
+         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.1\\bin\\PowerShell.MCP.Proxy.exe"
        }
      }
    }
@@ -169,7 +169,7 @@ PrivateData = @{
 6. Restart Claude Desktop to activate
 
 === Requirements ===
-Windows 10/11, PowerShell 7.2.15+, PSReadLine 2.3.4+ (auto-loaded)
+Windows 10/11, PowerShell 7.2+, PSReadLine 2.3.4+ (auto-loaded)
 
 === Documentation ===
 Full examples & setup guide: https://github.com/yotsuda/PowerShell.MCP#examples
