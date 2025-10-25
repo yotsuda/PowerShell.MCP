@@ -1,4 +1,4 @@
-﻿function Invoke-WithStreamCapture($Command) { $captured = @(); & { Invoke-Expression $Command } *>&1 | Tee-Object -Variable captured | Out-Default; return $captured }
+function Invoke-WithStreamCapture($Command) { $captured = @(); & { Invoke-Expression $Command } *>&1 | Tee-Object -Variable captured | Out-Default; return $captured }
 
 # ===== Main Timer Setup =====
 
@@ -29,8 +29,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
 
                 try {
-                    # Display prompt and command
                     [Console]::WriteLine()
+
                     try {
                         $promptText = & { prompt }
                         $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
@@ -43,9 +43,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $isMultiLine = $cmd.Contains("`n") -or $cmd.Contains("`r")
                     if ($isMultiLine) {
                         [Console]::WriteLine()
+                        Write-Host $cmd
+                        [Console]::WriteLine()
                     }
-
-                    Write-Host $cmd
+                    else
+                    {
+                        Write-Host $cmd
+                    }
 
                     # Execute using Invoke-Expression with stream capture
                     # Use *>&1 to merge all streams, then Tee-Object to display and capture
@@ -70,7 +74,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $statusText = if ($hadErrors) { "executed with errors" } else { "executed successfully" }
                     $durationText = "{0:F2}s" -f $duration.TotalSeconds
                     
-                    $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Location [$($currentLocation.provider)]: $($currentLocation.currentPath)"
                     $statusLine = "$statusIcon Pipeline $statusText | Duration: $durationText | $locationInfo"
 
                     # Build MCP output
@@ -79,7 +83,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Add captured output
                     $outputParts += $output
 
-                    $mcpOutput = ($outputParts -join "`n").Trim()
+                    $mcpOutput = ($outputParts -join "`n")
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
