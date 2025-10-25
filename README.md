@@ -45,10 +45,10 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Real-time streaming of output as commands run
 - Complex multi-step operations flow naturally
 
-**🔍 Comprehensive Output Stream Capture**
-- Command output is captured and returned to the AI assistant, with PowerShell's critical streams (error, warning, success, information) completely separated
-- Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
-- Clear execution statistics for every command: duration, error count, warning count, and info count
+**🔍 Complete Output Stream Capture**
+- All six PowerShell output streams (Success, Error, Warning, Information, Verbose, Debug) are completely captured and returned to the AI assistant
+- Every stream is integrated in chronological order and properly formatted for AI analysis
+- Execution duration is tracked for every command
 
 **📝 LLM-Optimized Text File Operations**
 - Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
@@ -136,7 +136,7 @@ Import-Module PowerShell.MCP
 ### 3. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
-# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.2.9
+# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.3.1
 ```
 
 ### 4. Configure Claude Desktop
@@ -145,7 +145,7 @@ Add to your Claude Desktop configuration:
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.2.9\\bin\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.1\\bin\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
