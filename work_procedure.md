@@ -1,509 +1,499 @@
-# 作業手順書：1 pass 実装の原則と手法
+# MCPPollingEngine.ps1 C#移植プロジェクト - 作業手順書
 
-## 📌 概要
+## 📋 概要
 
-**目的：** すべてのファイル処理を 1 pass（ファイル1回読み込み）で完了させる
+**目的:** MCPPollingEngine.ps1 の全機能を C# で実装し直し、ファイルIOなしで全ストリームをコンソール出力順で正確にキャプチャする
 
-**ディレクトリ：** C:\MyProj\PowerShell.MCP
+**対象ディレクトリ:** C:\MyProj\PowerShell.MCP
 
-**品質基準：**
-- ✅ すべての処理が 1 pass で完了すること
-- ✅ File.ReadAllLines() や ReadLines().ToArray() を使用しないこと
-- ✅ ファイル再読込を行わないこと
-- ✅ すべての統合テストがパスすること
-
-## 🔍 1 pass 実装の原則
-
-### 1. ファイル全体を読み込まない
-
-**❌ 避けるべきパターン：**
-```csharp
-// ファイル全体をメモリに読み込む
-var lines = File.ReadAllLines(filePath);  
-var lines = File.ReadLines(filePath).ToArray();
-```
-
-**✅ 推奨パターン：**
-```csharp
-// ストリーミング処理
-var enumerator = File.ReadLines(filePath, encoding).GetEnumerator();
-// または
-using var reader = new StreamReader(filePath, encoding);
-```
-
-### 2. 必要なデータのみバッファリング
-
-**コンテキスト表示用バッファ：**
-- マッチ行の前後2行 + マッチ行自体のみ保持
-- Dictionary<int, string> または rotate buffer で管理
-
-### 3. rotate buffer パターン
-
-**目的：** 前N行を常時保持し、マッチ時に即座にコンテキストとして使用
-
-**実装例（前2行保持）：**
-```csharp
-string? prevPrevLine = null;
-string? prevLine = null;
-
-while (hasNext)
-{
-    // 現在の行を処理
-    if (matched)
-    {
-        // 前2行をバッファに追加
-        if (prevPrevLine != null)
-            contextBuffer[lineNumber - 2] = prevPrevLine;
-        if (prevLine != null)
-            contextBuffer[lineNumber - 1] = prevLine;
-    }
-    
-    // rotate buffer 更新（元の行を保存）
-    prevPrevLine = prevLine;
-    prevLine = currentLine;
-    
-    lineNumber++;
-    currentLine = enumerator.Current;
-    hasNext = enumerator.MoveNext();
-}
-```
-
-### 4. 後続コンテキストカウンタ
-
-**目的：** マッチ後のN行を効率的に収集
-
-**実装例（後2行収集）：**
-```csharp
-int afterMatchCounter = 0;
-
-while (hasNext)
-{
-    if (matched)
-    {
-        // カウンタをセット
-        afterMatchCounter = 2;
-    }
-    else if (afterMatchCounter > 0)
-    {
-        // 後続コンテキストの収集
-        contextBuffer[lineNumber] = currentLine;
-        afterMatchCounter--;
-    }
-}
-```
-
-### 5. GetEnumerator() + hasNext パターン（推奨）
-
-```csharp
-var enumerator = File.ReadLines(filePath, encoding).GetEnumerator();
-bool hasLines = enumerator.MoveNext();
-
-if (!hasLines)
-{
-    // 空ファイル処理
-    return;
-}
-
-string currentLine = enumerator.Current;
-bool hasNext = enumerator.MoveNext();
-
-while (true)
-{
-    // 現在の行を処理
-    writer.Write(currentLine);
-    
-    // 次の行がある場合のみ改行を追加
-    if (hasNext)
-    {
-        writer.Write(newlineSequence);
-        currentLine = enumerator.Current;
-        hasNext = enumerator.MoveNext();
-    }
-    else
-    {
-        break;
-    }
-}
-
-// 元のファイルに末尾改行があれば保持
-if (metadata.HasTrailingNewline)
-{
-    writer.Write(newlineSequence);
-}
-```
-
-**メリット：**
-- ✅ 次の行の有無を hasNext フラグで高速判定
-- ✅ reader.Peek() よりもオーバーヘッドが少ない
-- ✅ 最終行の改行を正確に制御
-
-### 6. 改行コードと末尾改行の保持
-
-```csharp
-// メタデータ検出（エンコーディング、改行コード、末尾改行）
-var metadata = TextFileUtility.DetectFileMetadata(filePath);
-
-// StreamWriter に改行コードを設定
-writer.NewLine = metadata.NewlineSequence;
-
-// 処理完了後、末尾改行を保持
-if (metadata.HasTrailingNewline)
-{
-    writer.Write(metadata.NewlineSequence);
-}
-```
-
-## 🔧 実装済み cmdlet
-
-### Add-LinesToFile
-- rotate buffer で末尾追加時のコンテキスト表示
-- GetEnumerator() + hasNext パターン
-
-### Update-LinesInFile
-- ContextData クラス（rotate buffer パターン）で 1 pass 化
-- 削除時の末尾N行をリングバッファで保持
-
-### Update-MatchInFile
-- HashSet<int> で行番号のみ記録（1st pass）
-- rotate buffer + 後続コンテキストカウンタ（2nd pass）
-- 真の2 pass実装（メモリ効率重視）
-
-### Show-TextFile
-- rotate buffer + gapLine でリアルタイム出力
-- 真の1 pass実装（Dictionary/List 不使用）
-
-## 💡 重要な注意点
-
-### rotate buffer の保存内容
-- **置換前の元の行** を保存（置換後ではない）
-- マッチ行のコンテキストバッファには **反転表示付きの置換後の行** を保存
-
-### 出力重複の防止
-- lastOutputLine で最後に出力した行番号を追跡
-- 前コンテキスト出力時に `lineNumber - N > lastOutputLine` をチェック
-- 既に出力済みの行は再出力しない
-
-### パフォーマンス
-- rotate buffer を常に動作させる（条件分岐なし）
-- 参照の代入（ポインタコピー）は文字列のコピーではないため、パフォーマンス影響なし
-- Dictionary vs rotate buffer: 実行速度はほぼ同等、メモリ使用量は50-99%削減
+**対象範囲:** 全ファイル
 
 ---
 
-## 📝 重要な学び
+## 🎯 プロジェクト目標
 
-### 1. Cmdlet 設計：エラー vs 警告の選択
+### 主要目標
+1. **ファイルIO完全削除** - Start-Transcript のようなファイル操作を一切行わない
+2. **統合ストリームキャプチャ** - すべてのストリーム（Success/Error/Warning/Info/Verbose/Debug）をコンソール出力順で統合してキャプチャ
+3. **ユーザー視点の一致** - ユーザーがコンソールで見る内容と MCP response が完全に一致
+4. **最高のパフォーマンス** - C# ネイティブ実装による最適化
 
-**原則：**
-ユーザーの意図が明確で、安全に続行できる場合は**警告**を使い、完全に無効な操作の場合のみ**エラー**を使う。
+### 品質基準
+- ✅ 全ストリームの完全キャプチャ（漏れなし）
+- ✅ コンソール出力順の正確な再現
+- ✅ エラーの適切な表示（赤色表示含む）
+- ✅ パフォーマンス: Start-Transcript 版より高速
+- ✅ コード品質: 保守性・可読性の高さ
+- ✅ 既存機能の完全互換性
 
-**エラーを出すべきケース：**
-- 完全に無効な操作（例：LineNumber が 0 や負の数）
-- データ損失のリスク
-- 意図が不明確
+---
 
-**警告で済むケース：**
-- ユーザーの意図は明確だが、予期しない結果になる可能性がある
-- 例：存在しないファイルに LineNumber 5 を指定 → 警告を出して新規ファイル作成
+## ビルドポリシー
 
-**PowerShell の慣習：**
-- Add-Content, Set-Content は存在しないファイルを作成する
-- Update-*, Remove-* cmdlet は存在チェックでエラーを出す
+- AI（あなた）は、PowerShell.MCP をデプロイできない
+- ビルドが通ったら、ユーザー（よしふみ）にデプロイを依頼する
+- よしふみが test ready といったら、すぐにテストする（ビルド・デプロイ不要）
 
-### 2. rotate buffer の出力重複問題
+## 📦 Git ポリシー
 
-**問題：**
-連続するマッチ行を処理する際、後コンテキストとして出力した行が、次のマッチの前コンテキストとして再出力される。
+**使用:** ✅ はい
 
-**解決策：**
-前コンテキストを出力する際、lastOutputLine と比較して既に出力済みの行を除外：
+**コミット方針:**
+- 各フェーズ完了時にコミット
+- ユーザー承認後のみコミット実行
+- コミットメッセージは英語一文
 
+---
+
+## 🔄 作業フロー
+
+### このファイル（work_procedure.md）の更新タイミング
+1. 新しい実装方針が判明したとき
+2. 技術的な発見があったとき
+3. 設計の大幅な変更が必要になったとき
+
+### work_progress.txt の更新タイミング
+**即時更新:** 以下の変化が発生したら即座に更新
+- ファイルの status 変更（⏳→🟡→✅など）
+- effort_remaining の更新
+- 新規ファイルの発見・追加
+- ファイルの削除・統合
+
+---
+
+## 📚 実装調査フェーズ
+
+### 目的
+PowerShell と .NET の内部実装を理解し、最適な実装方針を決定する
+
+### 調査項目
+
+#### 1. PowerShell Invoke-Expression 実装調査
+**調査対象:**
+- PowerShell GitHub リポジトリ
+- `Microsoft.PowerShell.Commands.Utility` アセンブリ
+- Invoke-Expression cmdlet のソースコード
+
+**調査内容:**
+- コマンド実行の内部メカニズム
+- ストリーム処理の実装
+- エラーハンドリングの方法
+- パフォーマンス最適化のポイント
+- Runspace の構築方法（このモジュールでは、PS console と同一の runspace を使えるようにしたい）
+
+**成果物:**
+- 実装方針ドキュメント
+- 参考コードスニペット
+
+#### 2. ストリーム統合キャプチャ実装方法調査
+**技術的課題:**
+PowerShell の各ストリームは独立している：
+- Success (Output)
+- Error
+- Warning
+- Information
+- Verbose
+- Debug
+
+これらを「コンソール出力順」で統合する方法を見つける必要がある。
+
+**調査方針:**
+1. **PSHost UI レイヤー調査**
+   - `PSHost` インターフェース
+   - `PSHostUserInterface` クラス
+   - カスタム PSHost 実装の可能性
+
+2. **Runspace ストリーム処理調査**
+   - `PSDataCollection<T>` の動作
+   - DataAdded イベントのタイミング
+   - タイムスタンプベースの統合可能性
+
+3. **代替アプローチ調査**
+   - カスタム PSHostUserInterface 実装
+   - ストリームマルチプレクサーの実装
+   - メモリベースのトランスクリプト実装
+
+**成果物:**
+- 実装可能性評価レポート
+- プロトタイプコード
+
+#### 3. PowerShell コンソールホスト実装調査
+**調査対象:**
+- ConsoleHost.cs の実装
+- PSReadLine の統合方法
+- コンソール出力のバッファリング
+
+**成果物:**
+- アーキテクチャ理解ドキュメント
+
+### 📊 調査結果（2025-10-25完了）
+
+#### 重要な発見1: MergeMyResults + リアルタイムストリーミング
+
+PowerShell SDKには、すべてのストリームを統合し、**かつリアルタイムでコンソール出力する**公式機能が存在する:
+
+**最終実装方法（Pipeline API + DataReady）:**
 ```csharp
-// 修正前
-if (prevPrevLine != null && lineNumber >= 3)
+// 既存のRunspaceを使用
+Pipeline pipeline = runspace.CreatePipeline();
 
-// 修正後
-if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)
+// キャプチャ用リスト
+List<PSObject> capturedOutput = new List<PSObject>();
+
+// リアルタイム出力＋キャプチャ
+pipeline.Output.DataReady += (sender, eventArgs) => {
+    PSObject obj = ((PipelineReader<PSObject>)sender).Read();
+    
+    // 1. リアルタイムでコンソール表示（色付き）
+    switch (obj.ImmediateBaseObject)
+    {
+        case ErrorRecord er:
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine(er);
+            Console.ResetColor();
+            break;
+        case WarningRecord wr:
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"WARNING: {wr.Message}");
+            Console.ResetColor();
+            break;
+        case VerboseRecord vr:
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"VERBOSE: {vr.Message}");
+            Console.ResetColor();
+            break;
+        case InformationRecord ir:
+            Console.WriteLine(ir.MessageData);
+            break;
+        case DebugRecord dr:
+            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine($"DEBUG: {dr.Message}");
+            Console.ResetColor();
+            break;
+        default:
+            Console.WriteLine(obj);
+            break;
+    }
+    
+    // 2. 同時にキャプチャ（MCP response用）
+    capturedOutput.Add(obj);
+};
+
+// コマンド追加
+pipeline.Commands.AddScript(command);
+
+// すべてのストリームをOutputにマージ（重要！）
+pipeline.Commands[pipeline.Commands.Count-1]
+    .MergeMyResults(PipelineResultTypes.All, PipelineResultTypes.Output);
+
+// 実行 - DataReadyイベントがリアルタイムで発火
+pipeline.Invoke();
+
+// 実行完了後、capturedOutputに全結果が格納されている
+return capturedOutput;
 ```
 
-### 3. UpdateLinesInFileCmdlet の ContextData パターン
-
-**Dictionary<int, string> を使わない実装：**
-
+**代替実装（PowerShell class + PSDataCollection）:**
 ```csharp
-private class ContextData
-{
-    // 前2行コンテキスト
-    public string? ContextBefore2 { get; set; }
-    public string? ContextBefore1 { get; set; }
+var outputCollection = new PSDataCollection<PSObject>();
+outputCollection.DataAdded += (sender, e) => {
+    var item = ((PSDataCollection<PSObject>)sender)[e.Index];
     
-    // 削除時の先頭2行
-    public string? DeletedFirst { get; set; }
-    public string? DeletedSecond { get; set; }
+    // リアルタイム表示
+    Console.WriteLine(item);
     
-    // 削除時の末尾N行（リングバッファ）
-    public string? DeletedThirdLast { get; set; }
-    public string? DeletedSecondLast { get; set; }
-    public string? DeletedLast { get; set; }
-    
-    // 後2行コンテキスト
-    public string? ContextAfter1 { get; set; }
-    public string? ContextAfter2 { get; set; }
-}
+    // キャプチャは自動（outputCollectionに格納される）
+};
+
+using var powerShell = System.Management.Automation.PowerShell.Create();
+powerShell.Runspace = runspace;
+powerShell.AddScript(command);
+powerShell.Commands.Commands[0].MergeMyResults(
+    PipelineResultTypes.All, 
+    PipelineResultTypes.Output
+);
+
+// outputCollectionに出力しながら実行
+powerShell.Invoke(null, outputCollection);
+
+return outputCollection.ToList();
 ```
 
-**リングバッファパターン（削除時の末尾N行）：**
+**採用方針:**
+- **Pipeline API（第1案）を採用** - より明確で制御しやすい
+- DataReadyイベントで即座にコンソール表示
+- 同時にキャプチャしてMCP responseに含める
+- 色付きコンソール出力でユーザー体験向上
+
+**利点:**
+- ✅ リアルタイムでコンソール出力（ストリーミング）
+- ✅ すべてのストリームをコンソール出力順で統合
+- ✅ 同時に完全なキャプチャ
+- ✅ 型情報で各ストリームを識別・色分け可能
+- ✅ PowerShell SDK標準機能（公式API）
+- ✅ PSReadLineとの統合問題なし
+- ✅ カスタムPSHost実装不要
+
+**参考資料:**
+- Stack Overflow: "Capturing all streams in correct sequence with PowerShell SDK"
+- Stack Overflow: "Capturing Powershell output in C# after Pipeline.Invoke throws" (MergeMyResults + DataReady)
+- PowerShell GitHub Issue #7477: ストリーム順序の課題
+
+#### Invoke-Expression実装調査結果
+
+**ファイル:** `C:\MyProj\PowerShell\src\Microsoft.PowerShell.Commands.Utility\commands\utility\InvokeExpressionCommand.cs`
+
+**重要なコード:**
 ```csharp
-// 範囲内の各行で更新
-context.DeletedThirdLast = context.DeletedSecondLast;
-context.DeletedSecondLast = context.DeletedLast;
-context.DeletedLast = line;
+ScriptBlock myScriptBlock = InvokeCommand.NewScriptBlock(Command);
+myScriptBlock.InvokeUsingCmdlet(
+    contextCmdlet: this,
+    useLocalScope: false,  // グローバルスコープで実行
+    errorHandlingBehavior: ScriptBlock.ErrorHandlingBehavior.WriteToCurrentErrorPipe,
+    dollarUnder: AutomationNull.Value,
+    input: emptyArray,
+    scriptThis: AutomationNull.Value,
+    args: emptyArray
+);
 ```
 
-**メモリ効率：**
-- Dictionary<int, string>: 約1-100KB（エントリ数に依存）
-- ContextData: 約400-800バイト（固定）
-- **削減率: 50-99%**
+**学習ポイント:**
+- `InvokeCommand.NewScriptBlock()` でScriptBlockを作成
+- `InvokeUsingCmdlet()` でcmdletコンテキストで実行
+- `useLocalScope: false` により、呼び出し元と同じスコープで実行
+- エラーは自動的に現在のエラーパイプに書き込まれる
 
-### 4. テストでの例外出力の完全抑制
 
-**問題：**
-Pester テストで意図通り例外がスローされるケースで、大量のエラーメッセージとスタックトレースが表示され、トークンを大量に消費する。
+---
 
-**解決策：Test-ThrowsQuietly パターン（実装済み ✅）**
+## 🏗️ 設計フェーズ
 
-**場所**: `Tests/Shared/TestHelpers.psm1`
+### 目的
+調査結果を基に、実装アーキテクチャを確定する
 
+### 設計項目
+
+#### 1. CommandExecutor.cs アーキテクチャ設計
+**設計決定項目:**
+- クラス構造
+- public API 設計
+- 内部実装方式
+- エラーハンドリング戦略
+- パフォーマンス最適化ポイント
+
+#### 2. ストリーム統合戦略
+**実装パターン選択:**
+以下のいずれかを選択：
+
+**パターンA: カスタム PSHost**
+```
+利点: 完全なコンソール出力制御
+欠点: 実装が複雑、PSReadLine との統合が困難
+```
+
+**パターンB: タイムスタンプベース統合**
+```
+利点: 実装が比較的シンプル
+欠点: 精度の問題、同時発生イベントの順序が不定
+```
+
+**パターンC: メモリベーストランスクリプト**
+```
+利点: Start-Transcript の動作を模倣、信頼性高い
+欠点: 内部 API 使用の可能性、将来の互換性リスク
+```
+```
+
+**パターンD: MergeMyResults パターン（推奨）** ✅
+```
+利点: PowerShell SDK標準機能、実装がシンプル、順序保証あり
+方法: command.MergeMyResults(PipelineResultTypes.All, PipelineResultTypes.Output)
+型情報: ErrorRecord, WarningRecord等で各ストリームを識別可能
+信頼性: 公式API、将来の互換性リスクなし
+```
+
+**決定: パターンDを採用**
+理由:
+- PowerShell SDK標準機能であり、最も信頼性が高い
+- 実装が最もシンプル
+- すべてのストリームがコンソール出力順で統合される
+- 型情報により各ストリームを正確に識別可能
+- カスタムPSHostの複雑な実装が不要
+- PSReadLineとの統合問題なし
+#### 3. MCPPollingEngine.ps1 簡略化設計
+**残す処理:**
+- タイマーベースのポーリング（100ms）
+- insertCommand ハンドラ（PSReadLine 操作）
+- c# に新規作成した c# method 呼び出し
+
+**削除する処理:**
+- executeCommand ハンドラ → C# static method 側で実装
+- executeCommandSilent ハンドラ → C# static 側で実装
+
+- Invoke-CommandWithStreaming 関数
+- すべてのストリームキャプチャ処理
+- プロンプト表示処理
+- 結果フォーマット処理
+
+---
+
+## 🔨 実装フェーズ
+
+### 実装順序
+
+#### Phase 1: コアストリームキャプチャ実装
+1. 基本的な CommandExecutor クラス実装
+2. 単純なストリームキャプチャ（分離状態でも可）
+3. 動作確認
+
+#### Phase 2: ストリーム統合実装
+1. 選択したパターンの実装
+2. コンソール出力順の統合
+3. 詳細な動作テスト
+
+#### Phase 3: MCPPollingEngine.ps1 簡略化
+1. C# static method の呼び出しコード実装
+2. 既存処理の削除
+3. 動作確認
+
+#### Phase 4: 統合とテスト
+1. 全機能の統合テスト
+2. パフォーマンス測定
+3. バグ修正
+
+---
+
+## ✅ 検証フェーズ
+
+### 検証項目
+
+#### 1. 機能検証
+**テストケース:**
+
+**TC1: 基本的なコマンド実行**
 ```powershell
-function Test-ThrowsQuietly {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [ScriptBlock]$ScriptBlock,
-        [Parameter(Mandatory = $false)]
-        [string]$ExpectedMessage
-    )
-    
-    $caught = $false
-    $exceptionMessage = $null
-    
-    # エラーレコードをクリア
-    $Error.Clear()
-    
-    # ErrorActionPreference を Stop に設定
-    $previousErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Stop'
-    
-    # すべてのコマンドに -ErrorAction Stop を適用
-    $previousDefaultParameters = $PSDefaultParameterValues.Clone()
-    $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
-    
-    try {
-        # 出力を完全に抑制（すべてのストリームをリダイレクト）
-        $null = & $ScriptBlock *>&1
-    }
-    catch {
-        $caught = $true
-        $exceptionMessage = $_.Exception.Message
-    }
-    finally {
-        # 設定を元に戻す
-        $ErrorActionPreference = $previousErrorActionPreference
-        $PSDefaultParameterValues.Clear()
-        foreach ($key in $previousDefaultParameters.Keys) {
-            $PSDefaultParameterValues[$key] = $previousDefaultParameters[$key]
-        }
-    }
-    
-    # catch されなかったが $Error にエラーが追加された場合もチェック
-    if (-not $caught -and $Error.Count -gt 0) {
-        $caught = $true
-        $exceptionMessage = $Error[0].Exception.Message
-    }
-    
-    # エラーレコードを再度クリア
-    $Error.Clear()
-    
-    # 例外がスローされたことを検証
-    $caught | Should -BeTrue -Because "Expected an exception to be thrown"
-    
-    # 期待されるメッセージの検証（オプション）
-    if ($ExpectedMessage) {
-        $exceptionMessage | Should -Match $ExpectedMessage
-    }
-}
+Get-Process | Select-Object -First 5
 ```
+期待: Success ストリームの正確なキャプチャ
 
-**重要なポイント：**
-- `*>&1`：すべての出力ストリーム（標準出力、エラー、警告、デバッグなど）をリダイレクト
-- `$null = ...`：すべての出力を破棄
-- `$Error.Clear()`：エラー履歴を完全削除（try 前後で2回）
-- `ErrorActionPreference = 'Stop'`：非終了エラーを例外に変換
-- `$PSDefaultParameterValues['*:ErrorAction'] = 'Stop'`：すべてのコマンドに自動適用
-- `$Error` の追加チェック：catch できなかったエラーも検出
-
-**使用例：**
+**TC2: エラーキャプチャ**
 ```powershell
-# 基本的な使用
-It "Should throw on missing file" {
-    Test-ThrowsQuietly { Show-TextFile -Path "missing.txt" }
-}
-
-# メッセージ検証付き
-It "Should throw file not found error" {
-    Test-ThrowsQuietly { 
-        Show-TextFile -Path "C:\NonExistent\file.txt" 
-    } -ExpectedMessage "File not found"
-}
+Get-Item C:\NonExistent.txt
 ```
+期待: 
+- コンソールに赤色でエラー表示
+- MCP response にエラー情報
 
-**効果：**
-- トークン消費を90%以上削減
-- テスト出力が読みやすくなる
-- エラーの有無とメッセージのみを簡潔に検証
-
-**適用範囲：**
-- ✅ 終了エラー（ThrowTerminatingError）
-- ✅ パラメータ検証エラー（ValidateRange など）
-- ⚠️ 非終了エラー（WriteError）- PowerShell と C# cmdlet の制限により部分的にサポート
-
-**実装状況：**
-- ✅ Tests\Shared\TestHelpers.psm1 に実装済み
-- ✅ Export-ModuleMember で公開済み
-- ✅ Tests\README.md に使用方法を文書化
-- ✅ 実用例テストを作成（QuietErrorHandling.Tests.ps1）
-- ✅ 比較テストを作成（ErrorOutputComparison.Tests.ps1）
-
-**検証結果（2025-10-23）：**
-- 従来の方法（Should -Throw）: 各エラーで数百〜数千文字のスタックトレース出力
-- Test-ThrowsQuietly: エラー出力を完全に抑制（0文字）
-- **削減率: 90%以上** → トークン消費を大幅に削減
-- テスト結果が読みやすくなり、重要なエラーのみが表示される
-### 5. Update-LinesInFile のコンテキスト表示設計
-
-**原則：**
-常に「更新後の状態」を表示する。削除時も例外ではない。
-
-**実装：**
-- 削除時（-Content @()）: : のみを表示（何もない状態を表現）
-- 後続コンテキストの行番号: 常に outputLine（更新後の行番号）を使用
-- OutputUpdateContext を常に使用（OutputDeleteContext は不使用）
-
-**理由：**
-- ユーザーは「更新後のファイルがどうなったか」を知りたい
-- 削除前の内容を見せることは、混乱を招く可能性がある
-- 行番号も更新後の状態と一致させることで、ファイル全体の状態を正確に把握できる
-
-**作成日時:** 2025-10-22 11:15
-**最終更新:** 2025-10-23 22:22
-**バージョン:** 2.2
-
-### 6. テスト実行時の出力制御
-
-**問題:**
-`dotnet test --verbosity normal` や `Invoke-Pester` のデフォルト出力は非常に冗長で、LLM のトークンを大量に消費する。特にビルドログは数万文字に達することがある。
-
-**解決策:**
-
-**C# ユニットテスト:**
+**TC3: 複数ストリーム混在**
 ```powershell
-# ❌ 避けるべき - 非常に冗長な出力
-dotnet test --verbosity normal
-
-# ✅ 推奨 - 簡潔な出力
-dotnet test --verbosity quiet --nologo
+Write-Host "Output"
+Write-Warning "Warning"
+Write-Verbose "Verbose" -Verbose
+Write-Debug "Debug" -Debug
+Write-Error "Error"
 ```
+期待: すべてのストリームがコンソール出力順で記録される
 
-**PowerShell 統合テスト:**
+**TC4: 長時間実行**
 ```powershell
-# ❌ 避けるべき - 詳細な出力
-Invoke-Pester -Path .\Tests\Integration
-
-# ✅ 推奨 - 最小限の出力
-$config = New-PesterConfiguration
-$config.Run.Path = ".\Tests\Integration"
-$config.Output.Verbosity = "Minimal"
-Invoke-Pester -Configuration $config
+1..10 | ForEach-Object { 
+    Write-Host "Item $_"
+    Start-Sleep -Milliseconds 100
+}
 ```
+期待: リアルタイムでコンソール表示、最後に統合結果
 
-**実装:**
-- ✅ `Tests\Run-AllTests.ps1` を更新（デフォルトで簡潔な出力）
-- ✅ `Tests\README.md` に簡潔な実行方法を文書化
-- `-Detailed` スイッチで詳細出力も可能
-
-**効果:**
-- トークン消費を90%以上削減
-- テスト結果が読みやすくなる
-- 失敗したテストのみが目立つ
-
-### 7. ErrorVariable のユニーク化とバグの教訓
-
-**問題:**
-PowerShell の ErrorVariable は同一のエラーを複数回記録することがある。MCPPollingEngine.ps1 では、エラーのユニーク化処理を実装していたが、**return 文で空配列を返していた**ため、機能していなかった。
-
-**解決策:**
+**TC5: Pester テスト実行**
 ```powershell
-# Deduplicate errors
-$uniqueErrors = @()
-$seenErrors = @{}
-foreach ($err in $errorVar) {
-    # Create a unique key based on message, error ID, and category
-    $key = if ($err -is [System.Management.Automation.ErrorRecord]) {
-        "$($err.Exception.Message)|$($err.FullyQualifiedErrorId)|$($err.CategoryInfo.Category)"
-    } else {
-        $err.ToString()
-    }
-    
-    if (-not $seenErrors.ContainsKey($key)) {
-        $uniqueErrors += $err
-        $seenErrors[$key] = $true
-    }
-}
-
-return @{
-    Success = $outVar
-    Error = $uniqueErrors  # ← 重要: ユニーク化した配列を返す
-    # ...
-}
+Invoke-Pester .\Tests -Output Detailed
 ```
+期待: テスト結果の完全なキャプチャ
 
-**重要なポイント:**
-- **メッセージのみでユニーク化しない**: Message + FullyQualifiedErrorId + Category の3要素を使用
-- **return 文を忘れない**: 処理したデータを必ず返す（空配列を返さない）
-- **コードレビューの重要性**: 処理は正しくても、return で使われていないケースを見逃さない
+#### 2. パフォーマンス検証
+**測定項目:**
+- コマンド実行オーバーヘッド
+- メモリ使用量
+- Start-Transcript 版との比較
 
-**教訓:**
-実装した処理が実際に使用されているか、最終的な出力まで確認する。特に return 文では、計算結果が正しく返されているか注意深く確認する。
+**目標:**
+- Start-Transcript 版より 20% 以上高速
+- メモリ使用量: 合理的な範囲内
 
-### 8. -LineRange で -1 を使用する場合の行数計算
+#### 3. 互換性検証
+**確認項目:**
+- 既存の MCP クライアントとの互換性
+- 既存のツール呼び出しとの互換性
+- PowerShell バージョン互換性（5.1, 7.x）
 
-**問題:**
-`-LineRange 5,-1` のように2番目の値に `-1` を指定すると、`int.MaxValue` （2147483647）が使用され、不正な行数が表示される。
+---
 
-**原因:**
-`TextFileUtility.ParseLineRange()` が `-1` を `int.MaxValue` に変換するが、`linesRemoved = endLine - startLine + 1` の計算で `int.MaxValue` を使っていた。
+## 🚨 リスクと対策
 
-**解決策:**
-実際に処理した行数をカウントする方式に変更：
+### 技術的リスク
 
-```csharp
-// ❌ 避けるべき - endLine が int.MaxValue の場合に巨大な値になる
-int linesRemoved = endLine - startLine + 1;
+#### リスク1: ストリーム統合が技術的に不可能
+**可能性:** 中
+**影響:** 高
+**対策:** 
+- 早期にプロトタイプ実装で検証
+- 不可能な場合は「次善の策」を検討
+  - タイムスタンプベースの近似的統合
+  - ストリーム分離を許容（セクション分け）
 
-// ✅ 推奨 - 実際に処理した行数をカウント
-int linesRemoved = 0;
-// ...
-if (currentLine >= startLine && currentLine <= endLine)
-{
-    linesRemoved++;  // 実際に削除/置換された行をカウント
-    // ...
-}
-```
+#### リスク2: パフォーマンス目標未達
+**可能性:** 低
+**影響:** 中
+**対策:**
+- プロファイリングツールで bottleneck 特定
+- 段階的な最適化
+- 目標を再設定（正確性を優先）
 
-**重要なポイント:**
-- `-1` や `0` は「ファイル末尾まで」を意味するため、事前計算できない
-- 実際にループで処理した行数をカウントすることで正確な値を取得
-- `int.MaxValue` を使った算術演算は避ける
+#### リスク3: PSReadLine との干渉
+**可能性:** 中
+**影響:** 高
+**対策:**
+- カスタム PSHost 実装時は慎重に設計
+- 既存の PSReadLine 動作を壊さない
+- 代替案の準備
 
-**教訓:**
-特殊な値（`int.MaxValue`, `-1` など）を使う場合は、算術演算ではなくカウンタやフラグで処理する。事前計算が困難な場合は、実際の処理中にカウントする方式を採用する。
+#### リスク4: 内部 API への依存
+**可能性:** 低
+**影響:** 中
+**対策:**
+- 可能な限り公開 API のみ使用
+- 内部 API 使用時は将来の互換性を考慮
+- 代替実装の準備
+
+---
+
+## 📝 参考資料
+
+### PowerShell リポジトリ
+- GitHub: https://github.com/PowerShell/PowerShell
+    -> 下記に fork 済み。ただしほかの PR 作業中であるため更新してはいけない。
+       C:\MyProj\PowerShell
+- Invoke-Expression: "C:\MyProj\PowerShell\src\Microsoft.PowerShell.Commands.Utility\commands\utility\InvokeExpressionCommand.cs"
+- ConsoleHost: "C:\MyProj\PowerShell\src\Microsoft.PowerShell.ConsoleHost\host\msh\ConsoleHost.cs"
+
+### ドキュメント
+- PowerShell SDK Documentation
+- System.Management.Automation namespace
+- Runspace API
+
+---
+
+## 📊 成功の定義
+
+プロジェクトは以下の条件を満たした時に成功とする：
+
+1. ✅ ファイルIOなしで実装完了
+2. ✅ 全ストリームをコンソール出力順でキャプチャ
+3. ✅ 既存機能との完全互換性
+4. ✅ Start-Transcript 版より高速
+5. ✅ すべてのテストケースが合格
+6. ✅ コードレビュー完了
+
+---
+
+最終更新: 2025-10-25
+作成者: Claude (Anthropic) with よしふみ

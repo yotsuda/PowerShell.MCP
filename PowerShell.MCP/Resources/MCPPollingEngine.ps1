@@ -1,4 +1,4 @@
-# MCPPollingEngine.ps1
+﻿# MCPPollingEngine.ps1
 
 # ===== Main Timer Setup =====
 
@@ -260,27 +260,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Display results in console
                     $streamResults.Success | Out-Default
 
-                    # Display exceptions in console
-                    if ($streamResults.Exception -and $streamResults.Exception.Count -gt 0) {
-                        foreach ($ex in $streamResults.Exception) {
-                            if ($ex -is [System.Management.Automation.ErrorRecord]) {
-                                Write-Host $ex.Exception.Message -ForegroundColor Red
-                            } else {
-                                Write-Host $ex.ToString() -ForegroundColor Red
-                            }
-                        }
-                    }
-
-                    # Display errors in console
-                    if ($streamResults.Error -and $streamResults.Error.Count -gt 0 -and (-not $streamResults.Exception -or $streamResults.Exception.Count -eq 0)) {
-                        foreach ($err in $streamResults.Error) {
-                            if ($err -is [System.Management.Automation.ErrorRecord]) {
-                                Write-Host $err.Exception.Message -ForegroundColor Red
-                            } else {
-                                Write-Host $err.ToString() -ForegroundColor Red
-                            }
-                        }
-                    }
 
                     # Get current location info
                     $currentLocation = @{
