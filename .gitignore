@@ -424,3 +424,15 @@ RELEASE_DECISION.txt
 
 # Benchmark results and test files
 /Benchmark/
+
+# Build and deployment scripts (added 2025-10-25)
+deploy*.bat
+run_pester_test.ps1
+test_blank_line.ps1
+Convert-ShouldThrowTests.ps1
+
+# HTML reports
+*Report_*.html
+
+# Release preparation documents
+*リリース準備*.txt
