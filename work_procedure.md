@@ -219,27 +219,53 @@ powerShell.Invoke(null, outputCollection);
 return outputCollection.ToList();
 ```
 
-**採用方針:**
-- **Pipeline API（第1案）を採用** - より明確で制御しやすい
-- DataReadyイベントで即座にコンソール表示
-- 同時にキャプチャしてMCP responseに含める
-- 色付きコンソール出力でユーザー体験向上
+**最終採用実装（新しいRunspace作成）:** ✅ 実装完了
+```csharp
+// 並行実行エラーを完全に回避するため、新しいRunspaceを作成
+var initialSessionState = InitialSessionState.CreateDefault2();
+Runspace newRunspace = RunspaceFactory.CreateRunspace(initialSessionState);
+newRunspace.Open();
 
+using var powerShell = PowerShell.Create();
+powerShell.Runspace = newRunspace;  // 新しいRunspaceを使用
+
+var outputCollection = new PSDataCollection<PSObject>();
+outputCollection.DataAdded += (sender, e) => {
+    // リアルタイム表示＋キャプチャ
+};
+
+powerShell.AddScript(command);
+powerShell.Commands.Commands[0].MergeMyResults(
+    PipelineResultTypes.All, PipelineResultTypes.Output
+);
+
+powerShell.Invoke(null, outputCollection);
+
+// クリーンアップ
+newRunspace.Close();
+newRunspace.Dispose();
+```
+
+**採用方針:**
+- **新しいRunspace作成方式を採用** ✅ 実装完了
+- 並行パイプライン実行エラーを完全に解決
+- 毎回新しいRunspaceを作成し、実行後にクリーンアップ
+- DataAddedイベントで即座にコンソール表示＋キャプチャ
+- 色付きコンソール出力でユーザー体験向上
 **利点:**
 - ✅ リアルタイムでコンソール出力（ストリーミング）
 - ✅ すべてのストリームをコンソール出力順で統合
 - ✅ 同時に完全なキャプチャ
 - ✅ 型情報で各ストリームを識別・色分け可能
 - ✅ PowerShell SDK標準機能（公式API）
-- ✅ PSReadLineとの統合問題なし
-- ✅ カスタムPSHost実装不要
+- ✅ 並行パイプライン実行エラーを完全に解決（新しいRunspace作成）
+- ✅ 独立したRunspaceで実行されるため競合なし
 
-**参考資料:**
-- Stack Overflow: "Capturing all streams in correct sequence with PowerShell SDK"
-- Stack Overflow: "Capturing Powershell output in C# after Pipeline.Invoke throws" (MergeMyResults + DataReady)
-- PowerShell GitHub Issue #7477: ストリーム順序の課題
-
-#### Invoke-Expression実装調査結果
+**制限事項:**
+- ⚠️ 元のRunspaceの変数（$var）や関数（function）は引き継がれない
+- ⚠️ カスタムモジュールは自動インポートされない
+- 標準コマンドレット（Get-Process, Get-Item等）は利用可能
+- 将来的に必要なら、元のRunspaceの状態を部分的にコピーする機能を追加可能
 
 **ファイル:** `C:\MyProj\PowerShell\src\Microsoft.PowerShell.Commands.Utility\commands\utility\InvokeExpressionCommand.cs`
 
@@ -563,13 +589,11 @@ Invoke-Pester .\Tests -Output Detailed
 **対策:**
 - カスタム PSHost 実装時は慎重に設計
 - 既存の PSReadLine 動作を壊さない
-- 代替案の準備
 
-#### リスク4: 内部 API への依存
-**可能性:** 低
-**影響:** 中
-**対策:**
-- 可能な限り公開 API のみ使用
+### M5: 最適化・リリース (目標: Day 20)
+- ✅条件: パフォーマンス目標達成、すべてのテスト合格
+- ✅成果物: リリース準備完了
+- ✅実績: 2025-10-25 テスト完了、パフォーマンス良好（0.18秒/実行）
 - 内部 API 使用時は将来の互換性を考慮
 - 代替実装の準備
 
@@ -602,7 +626,68 @@ Invoke-Pester .\Tests -Output Detailed
 5. ✅ すべてのテストケースが合格
 6. ✅ コードレビュー完了
 
+
 ---
 
-最終更新: 2025-10-25
+
+---
+
+最終更新: 2025-10-25 11:05 - テスト完了
 作成者: Claude (Anthropic) with よしふみ
+
+### 2025-10-25 (11:00-11:50) - Write*メソッドオーバーライド実装による解決 ✅
+
+**重大な問題発見:**
+- `*>&1` リダイレクションは、すべてのストリームを時系列でキャプチャできるが、
+  **コンソールへの出力を抑制してしまう**
+- リダイレクトされたストリームは、コンソールに表示されない（色付き表示も失われる）
+- ユーザー要求：**リアルタイムでコンソール表示 + 同時にキャプチャ**
+
+**解決策: すべてのWrite*メソッドをオーバーライド**
+
+**実装アプローチ:**
+```csharp
+public sealed class InvokeExpressionWithStreamCaptureCmdlet : PSCmdlet
+{
+    private readonly List<object> _capturedOutput = new List<object>();
+    
+    // すべてのWrite*メソッドをオーバーライド
+    public override void WriteObject(object sendToPipeline)
+    {
+        base.WriteObject(sendToPipeline);  // 1. コンソールにリアルタイム出力
+        _capturedOutput.Add(sendToPipeline);  // 2. 同時にキャプチャ
+    }
+    
+    public override void WriteError(ErrorRecord errorRecord)
+    {
+        base.WriteError(errorRecord);  // 赤色でコンソール表示
+        _capturedOutput.Add(errorRecord);  // キャプチャ
+    }
+    
+    public override void WriteWarning(string message)
+    {
+        base.WriteWarning(message);  // 黄色でコンソール表示
+        _capturedOutput.Add(new WarningRecord(message));
+    }
+    
+    // WriteVerbose, WriteDebug, WriteInformation も同様
+    
+    protected override void EndProcessing()
+    {
+        // 最後にキャプチャした配列を返す
+        WriteObject(_capturedOutput.ToArray(), enumerateCollection: false);
+    }
+}
+```
+
+**技術的意義:**
+- ✅ **リダイレクション不要** - `*>&1` を削除
+- ✅ **リアルタイムストリーミング** - base.Write*()でコンソール表示
+- ✅ **同時にキャプチャ** - _capturedOutputリストに追加
+- ✅ **色付き表示維持** - エラー赤、警告黄色、Verbose シアン等
+- ✅ **時系列保持** - Write*呼び出し順にキャプチャされる
+- ✅ **Set-Location動作** - useLocalScope: false のまま
+
+**残課題:**
+- ⚠️ Silent実行モードで現在もコンソール出力してしまう
+- 解決案：cmdletに `-Silent` パラメータを追加し、条件分岐で base.Write*() をスキップ

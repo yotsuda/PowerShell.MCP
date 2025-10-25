@@ -364,3 +364,11 @@ FodyWeavers.xsd
 
 # Test files
 TestFiles/
+
+# PowerShell.MCP specific ignores
+*.backup
+*.bak
+*Investigation*.txt
+Tests/Temp/
+test.txt
+test_new.txt
