@@ -46,7 +46,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
 
                     Write-Host $cmd
-                    [Console]::WriteLine()
 
                     # Execute using Invoke-Expression with stream capture
                     # Use *>&1 to merge all streams, then Tee-Object to display and capture
@@ -78,10 +77,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $outputParts = @($statusLine, "")
                     
                     # Add captured output
-                    if ($output -and $output.Count -gt 0) {
-                        $outputParts += "=== OUTPUT ==="
-                        $outputParts += $output
-                    }
+                    $outputParts += $output
 
                     $mcpOutput = ($outputParts -join "`n").Trim()
                 }
