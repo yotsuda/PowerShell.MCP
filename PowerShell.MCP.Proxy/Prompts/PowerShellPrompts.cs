@@ -432,36 +432,31 @@ Create interactive map for ""{map_theme}"" using PowerShell.Map module.
 
 **IMPORTANT: If both theme and target area are provided in parameters, skip user confirmation and immediately start map creation.**
 
-MODULE PREPARATION:
-Before starting, ensure PowerShell.Map module is up-to-date:
-```powershell
-Update-Module PowerShell.Map -Force
-Import-Module PowerShell.Map -Force
-```
-
 WORKFLOW:
-1. If theme/area incomplete, confirm with user first
-2. Research locations thoroughly (use web search for detailed practical information)
-3. **CRITICAL - Variable Scope**: Store location data in `$global:` scope for reuse across multiple invoke_expression calls
+1. Run start_powershell_console
+2. Briefly mention to user: ""Run 'Update-Module PowerShell.Map -Force' if you haven't recently"" (then proceed immediately without waiting)
+3. If theme/area incomplete, confirm with user first
+4. Research locations thoroughly (use web search for detailed practical information)
+5. **CRITICAL - Variable Scope**: Store location data in `$global:` scope for reuse across multiple invoke_expression calls
    ```powershell
    $global:mapLocations = @(
        @{{ Location = "".....""; Label = "".....""; Color = "".....""; Description = ""....."" }}
    )
    ```
    Create rich location data with Labels, Colors, and **detailed Descriptions**
-4. Display map using Show-OpenStreetMap with **3D enabled by default** (unless flat terrain)
+6. Display map using Show-OpenStreetMap with **3D enabled by default** (unless flat terrain)
    ```powershell
    Show-OpenStreetMap -Locations $global:mapLocations -Enable3D -Zoom 12 -Pitch 60
    ```
-5. **CRITICAL - Validate coordinates after display:**
+7. **CRITICAL - Validate coordinates after display:**
    - Check latitude/longitude in results
    - If outliers exist (distance > 0.5° from median): inform user, remove from `$global:mapLocations`, re-display
-6. Start automated tour → **After tour completes, re-display all spots with camera reset (Pitch 0, Bearing 0)**
+8. Start automated tour (-Enable3D -Zoom 16 -Pitch 60 -Duration 8 -PauseTime 7) → **After tour completes, re-display all spots with camera reset (Pitch 0, Bearing 0)**
    ```powershell
    Show-OpenStreetMap -Locations $global:mapLocations -Pitch 0 -Bearing 0
    ```
 
-## PowerShell.Map Commands (v1.0+)
+## PowerShell.Map Commands
 
 ### Basic Usage:
 ```powershell
@@ -498,7 +493,7 @@ $tourStops = @(
     @{{ Location = ""Mount Fuji""; Description = ""🗻 Mt. Fuji`nElevation: 3,776m`nUNESCO World Heritage`nBest: Early morning"" }}
     @{{ Location = ""Kyoto""; Description = ""⛩️ Kyoto`n2000+ temples`nFormer capital 794-1868"" }}
 )
-Start-OpenStreetMapTour -Locations $tourStops -Duration 1.5 -PauseTime 6 -Enable3D -Pitch 60
+Start-OpenStreetMapTour -Locations $tourStops -Enable3D -Zoom 16 -Pitch 60 -Duration 8 -PauseTime 7
 ```
 
 ### Colors:
