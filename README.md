@@ -45,10 +45,10 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Real-time streaming of output as commands run
 - Complex multi-step operations flow naturally
 
-**🔍 Complete Output Stream Capture**
-- All six PowerShell output streams (Success, Error, Warning, Information, Verbose, Debug) are completely captured and returned to the AI assistant
-- Every stream is integrated in chronological order and properly formatted for AI analysis
-- Execution duration is tracked for every command
+**🔍 Comprehensive Output Stream Capture**
+- Command output is captured and returned to the AI assistant, with PowerShell's critical streams (error, warning, success, information) completely separated
+- Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
+- Clear execution statistics for every command: duration, error count, warning count, and info count
 
 **📝 LLM-Optimized Text File Operations**
 - Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
