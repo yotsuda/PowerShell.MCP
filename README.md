@@ -31,7 +31,7 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - AI-executed commands are saved to history, allowing you to recall and modify parameters for re-execution
 - Complete transparency - see exactly what's happening
 
-**🔄 Living Workspace That Remembers Everything**
+**🔄 Persistent Session State**
 - Current directory persists across all commands and interactions
 - Imported modules and authenticated sessions remain active throughout the entire session
 - Variables, functions, and mounted drives stay available throughout the session
