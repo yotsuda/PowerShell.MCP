@@ -136,7 +136,7 @@ Import-Module PowerShell.MCP
 ### 3. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
-# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.3.1
+# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.3.2
 ```
 
 ### 4. Configure Claude Desktop
@@ -145,7 +145,7 @@ Add to your Claude Desktop configuration:
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.1\\bin\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.2\\bin\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
