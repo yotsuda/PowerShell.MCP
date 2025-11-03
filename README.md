@@ -23,7 +23,7 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 ### What Makes It Powerful
 
 **🤝 Shared Console Experience**
-- You and AI work together in the same PowerShell session
+- You and AI collaborate in the same PowerShell session
 - Every command the AI executes appears in your console in real-time
 - PowerShell cmdlets display colorful output
 - You can respond to input requests from AI-executed commands directly in the console
@@ -50,13 +50,12 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
 - Clear execution statistics for every command: duration, error count, warning count, and info count
 
-**📝 LLM-Optimized Text File Operations**
-- Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
-- To address this, PowerShell.MCP includes 6 specialized cmdlets designed specifically for AI assistants to handle text file operations reliably
-- Single-pass processing architecture enables up to 100x faster performance than Get/Set-Content on large files
-- 1-based line numbering eliminates array index confusion and matches compiler error messages
-- Automatic encoding detection and preservation (UTF-8/16/32, Shift-JIS, line endings)
-- Pattern matching with regex support and capture groups
+**🌐 Universal Modules & CLI Integration**
+- PowerShell.MCP acts as a universal bridge, instantly making any PowerShell modules or CLI tools available as fully functional MCP servers
+- Access the vast ecosystem of PowerShell Gallery with over 3,000 pre-built modules, instantly integrating with everything from cloud services like [Azure](https://www.powershellgallery.com/packages/Az), [AWS](https://www.powershellgallery.com/packages/AWSPowerShell.NetCore), [Google Cloud](https://www.powershellgallery.com/packages/GoogleCloud) or [UiPath Orchestrator](https://www.powershellgallery.com/packages/UiPathOrch) to enterprise tools like [Active Directory](https://learn.microsoft.com/powershell/module/activedirectory/), [Exchange](https://www.powershellgallery.com/packages/ExchangeOnlineManagement) or [SQL Server](https://www.powershellgallery.com/packages/SqlServer)
+- Uses `Get-Help` to automatically learn each cmdlet's syntax, parameters, and usage patterns for immediate productive use
+- AI effectively leverages well-known command-line tools like [Git](https://git-scm.com/) or [Docker](https://www.docker.com/)
+- PowerShell.MCP fundamentally transforms the MCP ecosystem by making virtually any command-line tool AI-accessible without custom development
 
 **🔗 PowerShell Pipeline Composability**
 - PowerShell naturally chains commands together, passing rich data between them
@@ -66,12 +65,13 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - You describe what you want in natural language - AI constructs the optimal pipeline automatically
 - No need to understand pipeline syntax yourself - just tell AI what you need
 
-**🌐 Universal Modules & CLI Tools Integration**
-- PowerShell.MCP acts as a universal bridge, instantly making any PowerShell modules or CLI tools available as fully functional MCP servers
-- Access the vast ecosystem of PowerShell Gallery with over 3,000 pre-built modules, instantly integrating with everything from cloud services like [Azure](https://www.powershellgallery.com/packages/Az), [AWS](https://www.powershellgallery.com/packages/AWSPowerShell.NetCore), [Google Cloud](https://www.powershellgallery.com/packages/GoogleCloud) or [UiPath Orchestrator](https://www.powershellgallery.com/packages/UiPathOrch) to enterprise tools like [Active Directory](https://learn.microsoft.com/powershell/module/activedirectory/), [Exchange](https://www.powershellgallery.com/packages/ExchangeOnlineManagement) or [SQL Server](https://www.powershellgallery.com/packages/SqlServer)
-- Uses `Get-Help` to automatically learn each cmdlet's syntax, parameters, and usage patterns for immediate productive use
-- AI effectively leverages well-known command-line tools like [Git](https://git-scm.com/) or [Docker](https://www.docker.com/)
-- PowerShell.MCP fundamentally transforms the MCP ecosystem by making virtually any command-line tool AI-accessible without custom development
+**📝 LLM-Optimized Text File Operations**
+- Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
+- To address this, PowerShell.MCP includes 6 specialized cmdlets designed specifically for AI assistants to handle text file operations reliably
+- Single-pass processing architecture enables up to 100x faster performance than Get/Set-Content on large files
+- 1-based line numbering eliminates array index confusion and matches compiler error messages
+- Automatic encoding detection and preservation (UTF-8/16/32, Shift-JIS, line endings)
+- Pattern matching with regex support and capture groups
 
 **📚 No RAG or Context Grounding Required**
 - Simply gather necessary documents and files in a folder
