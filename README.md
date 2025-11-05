@@ -43,7 +43,6 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Eliminates the typical 1-5 second startup delay per cmdlet
 - Fast initial feedback to users with instant acknowledgment before full results
 - Real-time streaming of output as commands run
-- Complex multi-step operations flow naturally
 
 **🔍 Comprehensive Output Stream Capture**
 - Command output is captured and returned to the AI assistant, with PowerShell's critical streams (error, warning, success, information) completely separated
