@@ -160,10 +160,8 @@ Add to your Claude Desktop configuration:
 - **Verbose/Debug Streams**: Verbose and Debug output streams are not captured. Users can share this information with AI assistants via clipboard if needed
 - **External Command Colors**: Color output from external commands (e.g., git.exe) is lost and displayed without colors in the PowerShell console
 
-## Examples
-
-### 🎨 First-Time Demo
-Experience PowerShell.MCP's capabilities with these engaging demonstrations:
+## First-Time Demo
+🎨 Experience PowerShell.MCP's capabilities with these engaging demonstrations:
 
 - "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
 - "Try out different styles of notifications using the BurntToast module"
@@ -171,63 +169,79 @@ Experience PowerShell.MCP's capabilities with these engaging demonstrations:
 - "Tell me how to use Git in PowerShell"
 - "How does it feel now that you have a tool like PowerShell.MCP?"
 
-After trying these demos, explore the 9 built-in prompts in your MCP client's prompts list, or ask AI to explain any command - learning by doing is the best approach.
+After trying these demos, explore the 9 built-in prompts below or ask AI to explain any command - learning by doing is the best approach.
 
-### 🔧 Basic System Information
-- "Tell me the current date and time"
-- "Check the PowerShell version"
-- "Display system environment variables"
-- "Show me disk usage"
+## Built-in Prompts
 
-### 📊 System Monitoring and Analysis
-- "Show me all processes consuming more than 100MB of memory"
-- "Display top 5 processes by CPU usage"
-- "Show me running Windows services"
-- "List recently modified files in current directory"
+PowerShell.MCP includes 9 specialized prompts accessible from your MCP client's prompts menu. Each prompt is designed for specific tasks and guides AI to provide optimal results.
 
-### 🧮 Practical Calculations and Data Processing
-- "Calculate the date 30 days from today"
-- "Generate a 12-character random password"
-- "Calculate total size of all PDF files"
+---
 
-### 📁 File and Folder Operations
-- "Compare two folders and show differences"
-- "Find duplicate files in a directory"
-- "Create a backup of configuration files"
+### 📋 Create Work Procedure + ⚙️ Execute Work Procedure
+**Best for:** Complex, multi-step tasks you'll perform repeatedly
 
-### 🌐 Network and Connectivity
-- "Check if port 443 is open on a server"
-- "Display network adapter information"
-- "Test connectivity to multiple servers"
+Work together as a powerful workflow system with automatic file management:
 
-### 🚀 Advanced Integration and Reporting
-- "Generate an HTML system report and open in browser"
-- "Create a dashboard of system performance metrics"
-- "Export event log errors to CSV"
-- "Visualize disk usage as an interactive chart"
+1. **Create Work Procedure** - AI analyzes your task and generates a reusable procedure saved to `work_procedure.md`
+2. **Execute Work Procedure** - AI follows the procedure, tracks progress in `work_progress.txt`, and updates the procedure based on execution experience
 
-### 👨‍💻 Developer Features
-- "Review git changes and suggest a commit message"
-- "Analyze code metrics in the current project"
-- "Find and fix TODOs in my code automatically"
-- "Check for outdated npm packages"
+**Key benefits:** Consistent results, automatic progress tracking, continuous improvement, easy team sharing
 
-### ⚡ PowerShell Learning
-- "Explain Get-Process cmdlet with examples"
-- "Show me how to use the pipeline effectively"
-- "Demonstrate advanced filtering with Where-Object"
-- "Create a custom PowerShell function"
+**Example:** "Create a procedure for deploying my web application" → "Execute the deployment procedure"
 
-### 🎭 Interactive Experience
-PowerShell.MCP transforms your AI assistant into a powerful system administrator. Simply describe what you want to accomplish in natural language:
+---
 
-**Example Conversation:**
-```
-You: "I need to see which processes are using the most memory"
-Assistant: I'll show you the top memory-consuming processes...
-[Executes: Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 10]
-[Results appear in real-time with explanation]
-```
+### 📊 Analyze Content
+**Best for:** Deep analysis of files, folders, or datasets
+
+Generates comprehensive reports with insights and recommendations. Combine with **HTML Generation Guidelines for AI** for visual reports with charts.
+
+**Examples:** "Analyze my project's log files" • "Create a report on this CSV dataset" • "Analyze this HAR file"
+
+---
+
+### 🎨 HTML Generation Guidelines for AI
+**Best for:** Professional HTML reports with charts and styling
+
+Companion prompt that ensures AI generates high-quality HTML with Chart.js visualization, responsive design, and proper styling. Works with any prompt or task that needs HTML output.
+
+**Examples:** Analyze Content + this = visual reports • Your custom prompt + this = professional HTML • Any data task + this = interactive output
+
+---
+
+### 🗣️ Foreign Language Dictation Training
+**Best for:** Improving listening skills in foreign languages
+
+Creates dictation exercises with automatic checking.
+
+**Examples:** "Practice English dictation" • "Japanese listening practice at intermediate level"
+
+---
+
+### 🗺️ Create Interactive Map
+**Best for:** Visualizing geographic data or locations
+
+Generates interactive HTML maps with markers, descriptions, and optional 3D display.
+
+**Examples:** "Create a map of Tokyo's major landmarks" • "Map all office locations in Japan" • "3D map of hiking trails"
+
+---
+
+## Quick Tips
+
+**Combining Prompts:**
+- Analyze Content + HTML Generation Guidelines = Beautiful visual reports
+- Create Work Procedure → Execute Work Procedure = Automated workflows
+
+**When to use prompts vs. natural language:**
+- Use prompts for structured, repeatable tasks
+- Use natural language for quick, one-off operations
+- Ask AI "which prompt should I use?" if unsure
+
+**Learning by doing:**
+- Start with First-Time Demo to see capabilities
+- Try each built-in prompt to understand its strengths
+- Ask AI to explain commands as you go
 
 ## Disclaimer
 This software is provided "AS IS" without warranty of any kind, either expressed or implied.  
