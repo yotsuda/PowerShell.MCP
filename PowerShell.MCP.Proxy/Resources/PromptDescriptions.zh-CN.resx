@@ -76,15 +76,6 @@
   <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
     <value>要分析的内容路径</value>
   </data>
-  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
-    <value>系统管理</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
-    <value>系统管理任务类型</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
-    <value>任务所需的 PowerShell 模块（可选）</value>
-  </data>
   <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
     <value>学习编程语言</value>
   </data>
@@ -144,9 +135,6 @@
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>分析内容并提供可行的建议和见解</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
-    <value>使用 PowerShell 执行和自动化系统管理任务</value>
   </data>
   <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
     <value>创建学习环境，通过实践逐步指导编程语言学习</value>

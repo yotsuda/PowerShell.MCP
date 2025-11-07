@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -76,15 +76,6 @@
   <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
     <value>Jalur ke konten yang akan dianalisis</value>
   </data>
-  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
-    <value>Administrasi sistem</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
-    <value>Jenis tugas administrasi sistem</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
-    <value>Modul PowerShell untuk tugas (opsional)</value>
-  </data>
   <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
     <value>Belajar bahasa pemrograman</value>
   </data>
@@ -144,9 +135,6 @@
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Menganalisis konten dan memberikan wawasan dengan rekomendasi yang dapat ditindaklanjuti</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
-    <value>Menjalankan dan mengotomatiskan tugas administrasi sistem dengan PowerShell</value>
   </data>
   <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
     <value>Buat lingkungan pembelajaran dan pandu pembelajaran bahasa pemrograman langkah demi langkah dengan praktik</value>

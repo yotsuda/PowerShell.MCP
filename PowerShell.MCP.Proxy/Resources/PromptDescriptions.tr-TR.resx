@@ -76,15 +76,6 @@
   <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
     <value>Analiz edilecek içerik yolu</value>
   </data>
-  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
-    <value>Sistem yönetimi</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
-    <value>Sistem yönetimi görevi türü</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
-    <value>Görev için PowerShell modülü (isteğe bağlı)</value>
-  </data>
   <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
     <value>Programlama dili öğren</value>
   </data>
@@ -144,9 +135,6 @@
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>İçeriği analiz et ve uygulanabilir önerilerle içgörüler sağla</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
-    <value>PowerShell ile sistem yönetimi görevlerini yürüt ve otomatikleştir</value>
   </data>
   <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
     <value>Öğrenme ortamı oluştur ve pratik ile adım adım programlama dili öğrenimini yönlendir</value>

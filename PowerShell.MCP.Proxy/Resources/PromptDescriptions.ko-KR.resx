@@ -76,15 +76,6 @@
   <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
     <value>분석할 콘텐츠 경로</value>
   </data>
-  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
-    <value>시스템 관리</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
-    <value>시스템 관리 작업 유형</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
-    <value>작업에 필요한 PowerShell 모듈(선택 사항)</value>
-  </data>
   <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
     <value>프로그래밍 언어 배우기</value>
   </data>
@@ -144,9 +135,6 @@
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>콘텐츠를 분석하고 실행 가능한 권장 사항과 함께 통찰력 제공</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
-    <value>PowerShell을 사용하여 시스템 관리 작업 실행 및 자동화</value>
   </data>
   <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
     <value>학습 환경을 만들고 실습을 통해 프로그래밍 언어를 단계별로 학습</value>

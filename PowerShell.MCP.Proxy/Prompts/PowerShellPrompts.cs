@@ -149,42 +149,6 @@ Start-Process $reportPath
     }
 
     [McpServerPrompt]
-    [LocalizedName("Prompt_SystemAdministration_Name")]
-    [ResourceDescription("Prompt_SystemAdministration_Description")]
-    public static ChatMessage SystemAdministration(
-        [ResourceDescription("Prompt_SystemAdministration_Param_TaskType")]
-        string task_type,
-        [ResourceDescription("Prompt_SystemAdministration_Param_RequiredModule")]
-        string? required_module = null)
-    {
-        var moduleSection = !string.IsNullOrEmpty(required_module)
-            ? $"\nRequired PowerShell module: {required_module} - will be installed and imported if needed."
-            : "";
-
-        var prompt = $@"LANGUAGE:
-Communicate with users in the user's native language
-
-Execute and automate {task_type} tasks using PowerShell.MCP.{moduleSection}
-
-First, confirm specific requirements with the user and create a work procedure document before starting.
-
-Execute operations according to the following requirements:
-- Verify required permissions and execute setup
-- If a specific PowerShell module is required, ensure it is installed and imported before proceeding
-- Safe execution with error handling and logging
-- Operations following security best practices
-- Verification and confirmation of operation results
-- Automatic troubleshooting when problems occur
-
-When executing cmdlets, use -WhatIf and proceed with user confirmation. For critical operations, only send commands to the console and have the user execute them manually.
-If module installation fails, provide manual installation instructions to the user.
-
-After completing the work, create a work report and show it to the user. Confirm the work report format with the user. Generally, HTML or Markdown format should be preferred.";
-
-        return new ChatMessage(ChatRole.User, prompt);
-    }
-
-    [McpServerPrompt]
     [LocalizedName("Prompt_LearnProgrammingLanguage_Name")]
     [ResourceDescription("Prompt_LearnProgrammingLanguage_Description")]
     public static ChatMessage LearnProgrammingLanguage(

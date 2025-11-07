@@ -135,15 +135,6 @@
   <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
     <value>分析対象コンテンツのパス</value>
   </data>
-  <data name="Prompt_SystemAdministration_Name" xml:space="preserve">
-    <value>システム管理</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_TaskType" xml:space="preserve">
-    <value>システム管理タスクの種類</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Param_RequiredModule" xml:space="preserve">
-    <value>タスク実行用 PowerShell モジュール（任意）</value>
-  </data>
   <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
     <value>プログラミング言語を学ぶ</value>
   </data>
@@ -209,9 +200,6 @@
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>コンテンツを分析し、実行可能な推奨事項とともに洞察を提供します</value>
-  </data>
-  <data name="Prompt_SystemAdministration_Description" xml:space="preserve">
-    <value>PowerShell を使用してシステム管理タスクを実行および自動化します</value>
   </data>
   <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
     <value>学習環境を作成し、ハンズオン実践を通じてプログラミング言語を段階的に学習します</value>
