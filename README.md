@@ -92,27 +92,6 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Every executed command is visible and auditable
 - Compatible with strict corporate security policies
 
-### See It In Action
-```text
-# AI navigates to your project
-PS C:\> cd C:\MyProject\WebApp
-
-# All subsequent commands inherit this context automatically
-PS C:\MyProject\WebApp> dir *.js               # Lists JS files
-PS C:\MyProject\WebApp> git status             # Shows git status  
-PS C:\MyProject\WebApp> dotnet build           # Builds the project
-PS C:\MyProject\WebApp> $env:NODE_ENV = "dev"  # Sets variable
-PS C:\MyProject\WebApp> ./scripts/deploy.ps1   # Runs scripts with env vars intact
-
-# PowerShell pipeline example - objects flow through each stage
-PS C:\MyProject\WebApp> Get-ChildItem *.log | 
-    where Length -gt 1MB | 
-    sort LastWriteTime -Descending | 
-    select Name, Length, LastWriteTime
-```
-
-Transform natural language requests into PowerShell automation - from simple file operations to complex system administration tasks, all while maintaining complete visibility and control.
-
 ## Quick Start
 
 ### Prerequisites
