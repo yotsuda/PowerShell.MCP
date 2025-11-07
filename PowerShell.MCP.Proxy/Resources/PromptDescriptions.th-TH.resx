@@ -59,18 +59,6 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <!-- Software Development Prompt -->
-  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
-    <value>การพัฒนาซอฟต์แวร์</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
-    <value>ภาษาโปรแกรมหรือเทคโนโลยี</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
-    <value>ประเภทงานพัฒนา</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
-    <value>เส้นทางไปยังโฟลเดอร์โครงการ</value>
-  </data>
   <!-- Analyze Content Prompt -->
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>วิเคราะห์เนื้อหา</value>
@@ -101,16 +89,16 @@
     <value>ไดเรกทอรีการทำงานที่จะดำเนินการ</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
-    <value>Learn Programming &amp; CLI</value>
+    <value>เรียนรู้การเขียนโปรแกรมและ CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Interactive learning for programming languages and CLI tools with hands-on practice</value>
+    <value>การเรียนรู้แบบโต้ตอบสำหรับภาษาโปรแกรมหรือเครื่องมือ CLI พร้อมการฝึกปฏิบัติ</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Programming language or CLI tool (e.g., Python, Git, Docker, C#)</value>
+    <value>Python, Git, Docker, C#</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>Specific topic to focus on (optional, e.g., 'async/await', 'branching', 'multithreading')</value>
+    <value>'async/await', 'branching', 'multithreading'</value>
   </data>
   <!-- Learn CLI Tools Prompt -->
   <!-- Foreign Language Dictation Training Prompt -->
@@ -131,9 +119,6 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
     <value>แสดงคำแปลควบคู่กับภาษาเป้าหมาย (เปิด/ปิด)</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
-    <value>การสนับสนุนการพัฒนาซอฟต์แวร์อย่างครอบคลุมด้วยการช่วยเหลือในการเขียนโค้ด การทดสอบ และการติดตั้ง</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>วิเคราะห์เนื้อหาและให้ข้อมูลเชิงลึกพร้อมคำแนะนำที่ปฏิบัติได้</value>

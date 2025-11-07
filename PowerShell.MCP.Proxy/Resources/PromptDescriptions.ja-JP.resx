@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -117,18 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
-    <value>ソフトウェア開発</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
-    <value>プログラミング言語または技術</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
-    <value>開発タスクの種類</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
-    <value>プロジェクトフォルダへのパス</value>
-  </data>
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>コンテンツ分析</value>
   </data>
@@ -157,13 +145,13 @@
     <value>プログラミング＆CLIツール学習</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>プログラミング言語とCLIツールをハンズオン実践で学習</value>
+    <value>プログラミング言語またはCLIツールをハンズオン実践で学習</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>プログラミング言語またはCLIツール（例: Python, Git, Docker, C#）</value>
+    <value>Python, Git, Docker, C#</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>学習したい具体的なトピック（オプション、例: 'async/await', 'ブランチ', 'マルチスレッド'）</value>
+    <value>'async/await', 'ブランチ', 'マルチスレッド'</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>外国語ディクテーショントレーニング</value>
@@ -182,9 +170,6 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
     <value>対象言語と一緒に翻訳を表示（オン/オフ）</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
-    <value>コーディング、テスト、デプロイメントを含む包括的なソフトウェア開発支援</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>コンテンツを分析し、実行可能な推奨事項とともに洞察を提供します</value>

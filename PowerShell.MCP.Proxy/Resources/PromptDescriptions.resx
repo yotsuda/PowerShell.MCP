@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -117,18 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
-    <value>Software Development</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
-    <value>Programming language or technology</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
-    <value>Development task type</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
-    <value>Path to the project folder</value>
-  </data>
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>Analyze Content</value>
   </data>
@@ -157,13 +145,13 @@
     <value>Learn Programming &amp; CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Interactive learning for programming languages and CLI tools with hands-on practice</value>
+    <value>Interactive learning for programming languages or CLI tools with hands-on practice</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Programming language or CLI tool (e.g., Python, Git, Docker, C#)</value>
+    <value>Python, Git, Docker, C#</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>Specific topic to focus on (optional, e.g., 'async/await', 'branching', 'multithreading')</value>
+    <value>'async/await', 'branching', 'multithreading'</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Foreign Language Dictation Training</value>
@@ -182,9 +170,6 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
     <value>Show translation alongside target language (on/off)</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
-    <value>Comprehensive software development support with coding, testing, and deployment assistance</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Analyze content and provide insights with actionable recommendations</value>

@@ -58,18 +58,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
-    <value>Sviluppo software</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
-    <value>Linguaggio di programmazione o tecnologia</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
-    <value>Tipo di attività di sviluppo</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
-    <value>Percorso della cartella del progetto</value>
-  </data>
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>Analisi contenuto</value>
   </data>
@@ -95,16 +83,16 @@
     <value>Directory di lavoro dove verrà eseguito il lavoro</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
-    <value>Learn Programming &amp; CLI</value>
+    <value>Imparare Programmazione e CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Interactive learning for programming languages and CLI tools with hands-on practice</value>
+    <value>Apprendimento interattivo per linguaggi di programmazione o strumenti CLI con pratica</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Programming language or CLI tool (e.g., Python, Git, Docker, C#)</value>
+    <value>Python, Git, Docker, C#</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>Specific topic to focus on (optional, e.g., 'async/await', 'branching', 'multithreading')</value>
+    <value>'async/await', 'branching', 'multithreading'</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Allenamento di dettatura in lingua straniera</value>
@@ -123,9 +111,6 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
     <value>Mostra traduzione accanto alla lingua di destinazione (attivo/disattivo)</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
-    <value>Supporto completo allo sviluppo software con assistenza per codifica, test e distribuzione</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Analizza contenuto e fornisce approfondimenti con raccomandazioni attuabili</value>

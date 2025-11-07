@@ -58,18 +58,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Prompt_SoftwareDevelopment_Name" xml:space="preserve">
-    <value>소프트웨어 개발</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_Technology" xml:space="preserve">
-    <value>프로그래밍 언어 또는 기술</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_TaskType" xml:space="preserve">
-    <value>개발 작업 유형</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Param_ProjectPath" xml:space="preserve">
-    <value>프로젝트 폴더 경로</value>
-  </data>
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>콘텐츠 분석</value>
   </data>
@@ -95,16 +83,16 @@
     <value>작업을 수행할 작업 디렉터리</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
-    <value>Learn Programming &amp; CLI</value>
+    <value>프로그래밍 및 CLI 학습</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Interactive learning for programming languages and CLI tools with hands-on practice</value>
+    <value>프로그래밍 언어 또는 CLI 도구의 실습 기반 대화형 학습</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Programming language or CLI tool (e.g., Python, Git, Docker, C#)</value>
+    <value>Python, Git, Docker, C#</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>Specific topic to focus on (optional, e.g., 'async/await', 'branching', 'multithreading')</value>
+    <value>'async/await', 'branching', 'multithreading'</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>외국어 받아쓰기 훈련</value>
@@ -123,9 +111,6 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
     <value>대상 언어와 함께 번역 표시(켜기/끄기)</value>
-  </data>
-  <data name="Prompt_SoftwareDevelopment_Description" xml:space="preserve">
-    <value>코딩, 테스트 및 배포 지원을 포함한 포괄적인 소프트웨어 개발 지원</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>콘텐츠를 분석하고 실행 가능한 권장 사항과 함께 통찰력 제공</value>
