@@ -194,6 +194,7 @@ Companion prompt that ensures AI generates high-quality HTML with Chart.js visua
 Creates dictation exercises with automatic checking.
 
 **Examples:** "English dictation at beginner level" • "Japanese conversation at the zoo"
+
 ---
 
 ### 🗺️ Create Interactive Map
