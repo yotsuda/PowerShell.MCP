@@ -149,52 +149,63 @@ Start-Process $reportPath
     }
 
     [McpServerPrompt]
-    [LocalizedName("Prompt_LearnProgrammingLanguage_Name")]
-    [ResourceDescription("Prompt_LearnProgrammingLanguage_Description")]
-    public static ChatMessage LearnProgrammingLanguage(
-        [ResourceDescription("Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage")]
-        string programming_language)
+    [LocalizedName("Prompt_LearnProgrammingAndCli_Name")]
+    [ResourceDescription("Prompt_LearnProgrammingAndCli_Description")]
+    public static ChatMessage LearnProgrammingAndCli(
+        [ResourceDescription("Prompt_LearnProgrammingAndCli_Param_Technology")]
+        string technology,
+        [ResourceDescription("Prompt_LearnProgrammingAndCli_Param_LearningFocus")]
+        string? learning_focus = null)
     {
+        var focusSection = string.IsNullOrEmpty(learning_focus)
+            ? "Start from fundamentals and progress systematically through core concepts."
+            : $"Focus specifically on: {learning_focus}\nProvide targeted learning and practical exercises for this topic.";
+
         var prompt = $@"LANGUAGE:
 Communicate with users in the user's native language
 
-Create a complete learning environment for {programming_language} programming and guide step-by-step learning with emphasis on hands-on practice.
+Create a complete hands-on learning environment for {technology} and guide step-by-step learning with emphasis on practical experience.
 
-First, confirm the user's experience level and learning goals before starting.
+LEARNING APPROACH:
+{focusSection}
 
-Set up the learning environment:
-- Create a dedicated work folder for the project
-- Initialize a minimal starter project with the smallest possible program file
-- Check if Git is installed, suggest installation if needed
-- Create a Git repository and make initial commit
+SETUP PHASE:
+1. Confirm user's current knowledge and learning goals
+2. Create a dedicated practice folder
+3. Verify {technology} installation (guide installation if needed)
+4. For programming languages: Check Git availability and initialize repository
+5. Initialize with the simplest possible working example
 
-Guide learning progression:
-- Start with the simplest possible working program (Hello World)
-- Create files using PowerShell.MCP and show their contents to the user
-- **CRITICAL: After creating each file, open it in an editor (notepad/code) for the user to practice hands-on editing**
-- Encourage the user to modify the code themselves before proceeding
-- Wait for user confirmation that they have completed the editing exercise
-- Run the modified program and explain the results
-- Add features incrementally, step by step
-- Explain each addition and its purpose before and after user practice
-- Commit changes at each meaningful step with clear commit messages
-- Provide exercises and variations for practice
+LEARNING METHODOLOGY:
+Follow this cycle for each concept:
+- **Explain**: Introduce the concept clearly and concisely
+- **Demonstrate**: Create example files using PowerShell.MCP
+- **Practice**: Open files in editor (notepad/code) for hands-on user editing
+- **Verify**: Run and explain results together
+- **Commit** (for programming): Save progress with clear commit messages
 
-Learning methodology:
-- Always create → open in editor → let user edit → run → explain → commit
+Key principles:
+- Always create → open in editor → let user edit → run → explain → commit (for code)
 - Make the user an active participant, not a passive observer
 - Provide clear, specific editing instructions
+- Wait for user confirmation after each practice step
 - Encourage experimentation and learning from mistakes
-- Use the native language if user preference is indicated
+- Start with the simplest examples and add complexity incrementally
+- Focus on real-world practical workflows
+- Use PowerShell.MCP for all setup and demonstrations
+- Create and maintain a progress tracking artifact
 
-Use PowerShell.MCP to execute all setup commands and file operations.
-If development tools are not installed, guide the user through installation process.
-Maintain a learning progress report artifact tracking completed topics and next steps.
+PROGRESSION:
+- Build knowledge step by step
+- Provide exercises and variations for practice
+- Connect concepts to practical applications
+- Adapt pace to user feedback
 
-Remember: The goal is hands-on learning, not just demonstration. Each step should involve user interaction and practice.";
+Remember: The goal is hands-on learning through active practice, not passive observation.";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
+
 
     [McpServerPrompt]
     [LocalizedName("Prompt_CreateWorkProcedure_Name")]
@@ -293,40 +304,6 @@ Start by reading documents, then execute next priority tasks while improving pro
         return new ChatMessage(ChatRole.User, prompt);
     }
 
-    [McpServerPrompt]
-    [LocalizedName("Prompt_LearnCliTools_Name")]
-    [ResourceDescription("Prompt_LearnCliTools_Description")]
-    public static ChatMessage LearnCliTools(
-        [LocalizedParameterName("Param_LearnCliTools_CliTool_Name")]
-        [ResourceDescription("Prompt_LearnCliTools_Param_CliTool")]
-        string cli_tool,
-        [LocalizedParameterName("Param_LearnCliTools_ExperienceLevel_Name")]
-        [ResourceDescription("Prompt_LearnCliTools_Param_ExperienceLevel")]
-        string experience_level = "Beginner")
-    {
-        var prompt = $@"LANGUAGE:
-Communicate with users in the user's native language
-
-Create hands-on {cli_tool} learning environment for {experience_level} level.
-
-Steps:
-1. Confirm user experience level and goals
-2. Verify {cli_tool} installation and setup practice folder
-3. Follow: Explain → Demonstrate → User Practice → Verify → Next
-
-Key principles:
-- Start with simplest commands
-- Always open files/terminals for user to practice
-- Wait for user confirmation before proceeding
-- Use PowerShell.MCP for all demonstrations
-- Create progress tracking artifact
-- Focus on real-world workflows, not just commands
-
-If {cli_tool} is not installed, guide the user through installation process.
-Make the user actively practice each step.";
-
-        return new ChatMessage(ChatRole.User, prompt);
-    }
 
     [McpServerPrompt]
     [LocalizedName("Prompt_ForeignLanguageDictationTraining_Name")]

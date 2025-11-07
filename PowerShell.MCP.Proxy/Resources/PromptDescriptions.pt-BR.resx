@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -76,12 +76,6 @@
   <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
     <value>Caminho do conteúdo a ser analisado</value>
   </data>
-  <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
-    <value>Aprender linguagem de programação</value>
-  </data>
-  <data name="Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage" xml:space="preserve">
-    <value>Python, C#, JavaScript, Java, Go, Rust, etc.</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>Criar documento de procedimento de trabalho</value>
   </data>
@@ -100,17 +94,17 @@
   <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
     <value>Diretório de trabalho onde o trabalho será executado</value>
   </data>
-  <data name="Prompt_LearnCliTools_Name" xml:space="preserve">
-    <value>Aprender ferramentas CLI</value>
+  <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
+    <value>Learn Programming &amp; CLI</value>
   </data>
-  <data name="Prompt_LearnCliTools_Description" xml:space="preserve">
-    <value>Criar ambiente de aprendizagem prática para ferramentas de desenvolvimento</value>
+  <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
+    <value>Interactive learning for programming languages and CLI tools with hands-on practice</value>
   </data>
-  <data name="Prompt_LearnCliTools_Param_CliTool" xml:space="preserve">
-    <value>PowerShell, Git, Docker, kubectl, etc.</value>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
+    <value>Programming language or CLI tool (e.g., Python, Git, Docker, C#)</value>
   </data>
-  <data name="Prompt_LearnCliTools_Param_ExperienceLevel" xml:space="preserve">
-    <value>Iniciante, Intermediário, Avançado</value>
+  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
+    <value>Specific topic to focus on (optional, e.g., 'async/await', 'branching', 'multithreading')</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Treinamento de ditado em língua estrangeira</value>
@@ -136,9 +130,6 @@
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Analisar conteúdo e fornecer insights com recomendações acionáveis</value>
   </data>
-  <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
-    <value>Criar ambiente de aprendizagem e guiar o aprendizado passo a passo da linguagem de programação com prática</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
     <value>Criar documento de procedimento de trabalho e arquivos de acompanhamento do progresso.</value>
   </data>
@@ -147,12 +138,6 @@
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Iniciar treinamento rápido de ditado em língua estrangeira com áudio PowerShell e avaliação de IA</value>
-  </data>
-  <data name="Param_LearnCliTools_CliTool_Name" xml:space="preserve">
-    <value>Ferramenta CLI</value>
-  </data>
-  <data name="Param_LearnCliTools_ExperienceLevel_Name" xml:space="preserve">
-    <value>Nível de experiência</value>
   </data>
   <data name="Prompt_CreateInteractiveMap_Name" xml:space="preserve">
     <value>Criar mapa interativo</value>

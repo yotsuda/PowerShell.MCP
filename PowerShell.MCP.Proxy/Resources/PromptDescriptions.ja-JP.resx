@@ -135,12 +135,6 @@
   <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
     <value>分析対象コンテンツのパス</value>
   </data>
-  <data name="Prompt_LearnProgrammingLanguage_Name" xml:space="preserve">
-    <value>プログラミング言語を学ぶ</value>
-  </data>
-  <data name="Prompt_LearnProgrammingLanguage_Param_ProgrammingLanguage" xml:space="preserve">
-    <value>Python, C#, JavaScript, Java, Go, Rust など</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>作業手順書を作成</value>
   </data>
@@ -159,23 +153,17 @@
   <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
     <value>作業を実行するディレクトリ</value>
   </data>
-  <data name="Prompt_LearnCliTools_Name" xml:space="preserve">
-    <value>CLI ツールを学ぶ</value>
+  <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
+    <value>プログラミング＆CLIツール学習</value>
   </data>
-  <data name="Prompt_LearnCliTools_Description" xml:space="preserve">
-    <value>開発ツールの実践的な学習環境を作成</value>
+  <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
+    <value>プログラミング言語とCLIツールをハンズオン実践で学習</value>
   </data>
-  <data name="Prompt_LearnCliTools_Param_CliTool" xml:space="preserve">
-    <value>PowerShell, Git, Docker, kubectl など</value>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
+    <value>プログラミング言語またはCLIツール（例: Python, Git, Docker, C#）</value>
   </data>
-  <data name="Prompt_LearnCliTools_Param_ExperienceLevel" xml:space="preserve">
-    <value>初心者、中級者、上級者</value>
-  </data>
-  <data name="Param_LearnCliTools_CliTool_Name" xml:space="preserve">
-    <value>CLI ツール</value>
-  </data>
-  <data name="Param_LearnCliTools_ExperienceLevel_Name" xml:space="preserve">
-    <value>経験レベル</value>
+  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
+    <value>学習したい具体的なトピック（オプション、例: 'async/await', 'ブランチ', 'マルチスレッド'）</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>外国語ディクテーショントレーニング</value>
@@ -200,9 +188,6 @@
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>コンテンツを分析し、実行可能な推奨事項とともに洞察を提供します</value>
-  </data>
-  <data name="Prompt_LearnProgrammingLanguage_Description" xml:space="preserve">
-    <value>学習環境を作成し、ハンズオン実践を通じてプログラミング言語を段階的に学習します</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
     <value>作業手順書と進捗追跡ファイルを作成します。</value>
