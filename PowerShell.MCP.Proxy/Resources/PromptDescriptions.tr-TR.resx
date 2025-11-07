@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Tüm Türkiye, İstanbul, Ankara</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>Yapay Zeka için HTML Oluşturma Kılavuzu</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>Yapay zekanın uygun biçimlendirme, grafikler ve stil ile yüksek kaliteli HTML raporları oluşturması için kılavuz</value>
+  </data>
 </root>

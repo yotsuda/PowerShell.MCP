@@ -194,4 +194,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Toàn quốc, Hà Nội, TP.HCM</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>Hướng dẫn tạo HTML cho AI</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>Hướng dẫn cho AI tạo báo cáo HTML chất lượng cao với định dạng, biểu đồ và kiểu dáng phù hợp</value>
+  </data>
 </root>

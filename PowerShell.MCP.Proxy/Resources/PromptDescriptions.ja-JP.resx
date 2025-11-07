@@ -237,4 +237,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>日本全国、東京、大阪など。指定しない場合は会話中に決定</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>AIのためのHTML生成ガイドライン</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>適切なフォーマット、チャート、スタイリングを備えた高品質なHTMLレポートをAIが生成するためのガイドライン</value>
+  </data>
 </root>

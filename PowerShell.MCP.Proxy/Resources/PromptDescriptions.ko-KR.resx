@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>전국, 서울, 부산</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>AI를 위한 HTML 생성 가이드라인</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>적절한 형식, 차트 및 스타일이 포함된 고품질 HTML 보고서를 AI가 생성하기 위한 가이드라인</value>
+  </data>
 </root>

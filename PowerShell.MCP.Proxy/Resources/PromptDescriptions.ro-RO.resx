@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Toată România, București, Cluj-Napoca</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>Ghid de generare HTML pentru AI</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>Ghid pentru AI de generare a rapoartelor HTML de înaltă calitate cu formatare, diagrame și stilizare adecvate</value>
+  </data>
 </root>

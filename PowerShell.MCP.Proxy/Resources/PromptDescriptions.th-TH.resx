@@ -194,4 +194,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>ทั่วประเทศ, กรุงเทพฯ, เชียงใหม่</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>แนวทางการสร้าง HTML สำหรับ AI</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>แนวทางสำหรับ AI ในการสร้างรายงาน HTML คุณภาพสูงพร้อมการจัดรูปแบบ แผนภูมิ และสไตล์ที่เหมาะสม</value>
+  </data>
 </root>

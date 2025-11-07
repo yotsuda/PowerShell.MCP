@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Todo o Brasil, São Paulo, Rio de Janeiro</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>Diretrizes de geração de HTML para IA</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>Diretrizes para a IA gerar relatórios HTML de alta qualidade com formatação, gráficos e estilo apropriados</value>
+  </data>
 </root>

@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>全国、北京、上海</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>面向AI的HTML生成指南</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>用于AI生成具有适当格式、图表和样式的高质量HTML报告的指南</value>
+  </data>
 </root>

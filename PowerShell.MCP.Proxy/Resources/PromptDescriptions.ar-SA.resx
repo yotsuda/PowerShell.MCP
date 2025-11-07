@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>جميع أنحاء البلد، دبي، الرياض</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>إرشادات إنشاء HTML للذكاء الاصطناعي</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>إرشادات للذكاء الاصطناعي لإنشاء تقارير HTML عالية الجودة بتنسيق ورسوم بيانية وأنماط مناسبة</value>
+  </data>
 </root>

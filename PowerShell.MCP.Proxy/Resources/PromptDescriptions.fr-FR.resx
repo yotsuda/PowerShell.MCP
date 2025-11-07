@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Toute la France, Paris, Lyon</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>Directives de génération HTML pour l'IA</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>Directives pour que l'IA génère des rapports HTML de haute qualité avec un formatage, des graphiques et un style appropriés</value>
+  </data>
 </root>

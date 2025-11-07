@@ -1,15 +1,18 @@
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Hosting;
 using ModelContextProtocol.Server;
 using PowerShell.MCP.Proxy.Attributes;
-using System;
+using System.Resources;
+using System.Reflection;
 
 namespace PowerShell.MCP.Proxy.Prompts;
 
 [McpServerPromptType]
 public static class PowerShellPrompts
 {
-    [McpServerPrompt]
+    private static readonly Lazy<ResourceManager> _resourceManager = new Lazy<ResourceManager>(() =>
+        new ResourceManager("PowerShell.MCP.Proxy.Resources.PromptDescriptions", Assembly.GetExecutingAssembly()));
+
+    private static string GetResourceString(string key) => _resourceManager.Value.GetString(key) ?? key;
     [LocalizedName("Prompt_SoftwareDevelopment_Name")]
     [ResourceDescription("Prompt_SoftwareDevelopment_Description")]
     public static ChatMessage SoftwareDevelopment(
@@ -65,47 +68,15 @@ For new projects, create appropriate directory structure and initialize version 
         [ResourceDescription("Prompt_AnalyzeContent_Param_ContentPath")]
         string content_path)
     {
+        var htmlPromptName = GetResourceString("Prompt_HtmlGenerationGuidelinesForAi_Name");
+        
         var prompt = $@"Analyze '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
 
-**FIRST**: Ask user to choose:
-1. Report format (html or md)
-2. Preferred language for the report
+If the '{htmlPromptName}' prompt is not also selected, remind the user: 'For a visual HTML report, please also select the {htmlPromptName} prompt.'
 
-Then confirm analysis scope before proceeding.
-
-## HTML Report Generation
-
-**CRITICAL - Variable Scope:** Use `$script:` for ALL variables used across multiple invoke_expression calls.
-
-**CRITICAL - Chart.js Data:** Use ForEach-Object to extract arrays, not .Count property.
-```powershell
-# ❌ WRONG: ($data | Select -First 10).Count  # Returns single number
-# ✅ CORRECT: 
-$script:labels = ($script:data | Select -First 10 | % {{ $_.Name }}) | ConvertTo-Json -Compress -AsArray
-$script:values = ($script:data | Select -First 10 | % {{ $_.Count }}) | ConvertTo-Json -Compress -AsArray
-```
-
-**CRITICAL - Data Validation:** After preparing Chart.js data, ALWAYS verify format using Write-Host.
-```powershell
-# MANDATORY: Validate all chart data variables are JSON arrays
-Write-Host ""Labels: $script:labels""  # Must show [""value""] not ""value""
-Write-Host ""Values: $script:values""  # Must show [10] not 10
-```
-
-**CRITICAL - CSS Contrast:** When using gradients, child elements inherit parent text color. All elements with `background: white` MUST explicitly set `color: #333` to prevent invisible white-on-white text.
-```css
-/* Parent with gradient may set color: white */
-.executive-summary {{ background: linear-gradient(...); color: white; }}
-/* Child with white background MUST override inherited color */
-.insights li {{ background: white; color: #333; /* REQUIRED - overrides parent */ }}
-```
-
-**Design:**
-- Chart.js (https://cdn.jsdelivr.net/npm/chart.js)
-- Use cohesive color palette with visual harmony - diversify colors across charts
-- Use gradients for depth (CSS backgrounds AND Chart.js charts - createLinearGradient)
-- Responsive, print-friendly, with ""Back to Top"" button
-- **CRITICAL**: Display analysis target path at the top of the report (in title or header section)
+**FIRST**: Check if user already specified format/language. If not, ask user to choose:
+1. Report format (html or md) - default: html
+2. Preferred language - default: user's language
 
 **Structure:** 
 - **MANDATORY**: Title/Header section displaying the analysis target path
@@ -113,17 +84,67 @@ Write-Host ""Values: $script:values""  # Must show [10] not 10
 - Common sections to consider: Executive Summary, Key Findings, Visual Charts, Detailed Analysis, Recommendations, Conclusion
 - Adapt sections to best suit the analysis subject
 
-## Output
+**Output:**
+If the analysis target is a file, save it in the same folder as that file.
+If the analysis target is a folder, save it inside that folder.
+The report file name should be as follows:
+$reportPath = ""$sourceFolder\$contentName_AnalysisReport_$(Get-Date -Format 'yyyyMMdd_HHmmss').<ext>""
 
-Generate filename using content name from path and save to source folder:
+# Save the report to $reportPath, then:
+`Start-Process $reportPath`";
+
+        return new ChatMessage(ChatRole.User, prompt);
+    }
+
+    [McpServerPrompt]
+    [LocalizedName("Prompt_HtmlGenerationGuidelinesForAi_Name")]
+    [ResourceDescription("Prompt_HtmlGenerationGuidelinesForAi_Description")]
+    public static ChatMessage HtmlGenerationGuidelinesForAi()
+    {
+        var prompt = $@"## HTML Report Generation - Technical Constraints
+
+**USAGE:** Apply these technical guidelines when generating HTML files as specified in task instructions.
+
+**CRITICAL - Variable Scope:** Use `$script:` for ALL variables shared across invoke_expression calls.
+
+**CRITICAL - Chart.js Data:** Extract arrays using ForEach-Object (%), NOT .Count.
 ```powershell
-$contentName = Split-Path '{content_path}' -Leaf
-$sourceFolder = Split-Path '{content_path}' -Parent
-$reportPath = ""$sourceFolder\AnalysisReport_${{contentName}}_$(Get-Date -Format 'yyyyMMdd_HHmmss').<ext>""
+# ❌ ($data | Select -First 10).Count  # Returns number, not array
+# ✅ Correct:
+$script:labels = ($data | Select -First 10 | % {{ $_.Name }}) | ConvertTo-Json -Compress -AsArray
+$script:values = ($data | Select -First 10 | % {{ $_.Count }}) | ConvertTo-Json -Compress -AsArray
 ```
 
-**HTML**: Save to `$reportPath.html` → `Start-Process $reportPath`
-**Markdown**: Save to `$reportPath.md` → `Start-Process notepad $reportPath`";
+**CRITICAL - Data Validation:** Verify Chart.js data format with Write-Host.
+```powershell
+Write-Host ""Labels: $script:labels""  # Must show [""value""] not ""value""
+Write-Host ""Values: $script:values""  # Must show [10] not 10
+```
+
+**CRITICAL - CSS Inheritance:** White backgrounds MUST override inherited text color.
+```css
+.parent {{ background: linear-gradient(...); color: white; }}
+.child {{ background: white; color: #333; /* Prevents white-on-white */ }}
+```
+
+**Design:**
+- **CRITICAL**: Display analysis target path at the top of the report (in title or header section)
+- Chart.js: https://cdn.jsdelivr.net/npm/chart.js
+- Use gradients in CSS and Chart.js (ctx.createLinearGradient)
+- Use cohesive color palette with visual harmony - diversify colors across charts
+- Display analysis target path in report header
+- Responsive, print-friendly, with ""Back to Top"" button
+
+**Output:**
+If the analysis target is a file, save it in the same folder as that file.
+If the analysis target is a folder, save it inside that folder.
+The report file name should be as follows:
+$reportPath = ""$sourceFolder\$contentName_AnalysisReport_$(Get-Date -Format 'yyyyMMdd_HHmmss').html""
+
+# Save HTML to $reportPath, then:
+Start-Process $reportPath
+```";
+
         return new ChatMessage(ChatRole.User, prompt);
     }
 

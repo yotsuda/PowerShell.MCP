@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Tutta Italia, Roma, Milano</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>Linee guida per la generazione HTML per l'IA</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>Linee guida per la generazione di report HTML di alta qualità con formattazione, grafici e stile appropriati da parte dell'IA</value>
+  </data>
 </root>

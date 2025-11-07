@@ -178,4 +178,10 @@
   <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Toda España, Madrid, Barcelona</value>
   </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
+    <value>Directrices de generación de HTML para IA</value>
+  </data>
+  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
+    <value>Directrices para que la IA genere informes HTML de alta calidad con formato, gráficos y estilos apropiados</value>
+  </data>
 </root>
