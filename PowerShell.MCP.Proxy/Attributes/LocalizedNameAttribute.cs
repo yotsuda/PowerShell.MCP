@@ -16,7 +16,7 @@ public class LocalizedNameAttribute : Attribute
     /// <summary>
     /// Creates a localized name attribute that loads text from resource files.
     /// </summary>
-    /// <param name="resourceKey">Key in the resource file (e.g., "Prompt_SoftwareDevelopment_Name")</param>
+    /// <param name="resourceKey">Key in the resource file (e.g., "Prompt_AnalyzeContent_Name")</param>
     public LocalizedNameAttribute(string resourceKey)
     {
         _resourceKey = resourceKey;

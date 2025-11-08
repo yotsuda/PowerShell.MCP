@@ -1,66 +1,12 @@
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
 using PowerShell.MCP.Proxy.Attributes;
-using System.Resources;
-using System.Reflection;
 
 namespace PowerShell.MCP.Proxy.Prompts;
 
 [McpServerPromptType]
 public static class PowerShellPrompts
 {
-    private static readonly Lazy<ResourceManager> _resourceManager = new Lazy<ResourceManager>(() =>
-        new ResourceManager("PowerShell.MCP.Proxy.Resources.PromptDescriptions", Assembly.GetExecutingAssembly()));
-
-    private static string GetResourceString(string key) => _resourceManager.Value.GetString(key) ?? key;
-    [LocalizedName("Prompt_SoftwareDevelopment_Name")]
-    [ResourceDescription("Prompt_SoftwareDevelopment_Description")]
-    public static ChatMessage SoftwareDevelopment(
-        [ResourceDescription("Prompt_SoftwareDevelopment_Param_Technology")]
-        string? technology = null,
-        [ResourceDescription("Prompt_SoftwareDevelopment_Param_TaskType")]
-        string? task_type = null,
-        [ResourceDescription("Prompt_SoftwareDevelopment_Param_ProjectPath")]
-        string? project_path = null)
-    {
-        var technologyFocus = !string.IsNullOrEmpty(technology)
-            ? $"Focus on {technology} development"
-            : "General software development support";
-
-        var taskFocus = !string.IsNullOrEmpty(task_type)
-            ? $"\nSpecific task: {task_type}"
-            : "";
-
-        var projectSection = !string.IsNullOrEmpty(project_path)
-            ? $"\nProject location: {project_path}"
-            : "";
-
-        var prompt = $@"LANGUAGE:
-Communicate with users in the user's native language
-
-{technologyFocus} with comprehensive development lifecycle support.{taskFocus}{projectSection}
-
-First, analyze project context (existing structure for established projects, requirements for new projects).
-
-Provide development support across:
-- Coding: creation, review, optimization, refactoring
-- Testing: strategy, test creation, quality assurance
-- Debugging: error analysis, performance optimization
-- Build/Deploy: automation, CI/CD, environment setup
-- Documentation: technical docs, API documentation
-
-Use PowerShell.MCP for project operations:
-- Navigate to project directory (assess existing or create new structure)
-- File operations respecting existing conventions
-- Build automation and testing execution
-- Version control and deployment tasks
-
-Execute safely with proper version control and follow existing project conventions when applicable.
-For new projects, create appropriate directory structure and initialize version control.";
-
-        return new ChatMessage(ChatRole.User, prompt);
-    }
-
     [McpServerPrompt]
     [LocalizedName("Prompt_AnalyzeContent_Name")]
     [ResourceDescription("Prompt_AnalyzeContent_Description")]
@@ -68,7 +14,7 @@ For new projects, create appropriate directory structure and initialize version 
         [ResourceDescription("Prompt_AnalyzeContent_Param_ContentPath")]
         string content_path)
     {
-        var htmlPromptName = GetResourceString("Prompt_HtmlGenerationGuidelinesForAi_Name");
+        var htmlPromptName = Resources.PromptDescriptions.Prompt_HtmlGenerationGuidelinesForAi_Name;
         
         var prompt = $@"Analyze '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
 

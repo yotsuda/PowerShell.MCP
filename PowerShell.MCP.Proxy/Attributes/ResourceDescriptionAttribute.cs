@@ -19,7 +19,7 @@ public class ResourceDescriptionAttribute : DescriptionAttribute
     /// <summary>
     /// Creates a description attribute that loads text from resource files.
     /// </summary>
-    /// <param name="resourceKey">Key in the resource file (e.g., "Prompt_SoftwareDevelopment_Name")</param>
+    /// <param name="resourceKey">Key in the resource file (e.g., "Prompt_AnalyzeContent_Description")</param>
     public ResourceDescriptionAttribute(string resourceKey)
     {
         _resourceKey = resourceKey;
