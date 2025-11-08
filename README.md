@@ -148,6 +148,24 @@ After trying these demos, explore the 9 built-in prompts below or ask AI to expl
 
 PowerShell.MCP includes 9 specialized prompts accessible from your MCP client's prompts menu. Each prompt is designed for specific tasks and guides AI to provide optimal results.
 
+<div align="center">
+  <table cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+      <td align="center" width="45%">
+        <img src="images/builtin-prompt-1.png" alt="Built-in Prompts Menu" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>Built-in Prompts Menu</em>
+      </td>
+      <td width="3%"></td>
+      <td align="center" width="45%">
+        <img src="images/builtin-prompt-2.png" alt="Prompt Selection" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>Selecting a Prompt</em>
+      </td>
+    </tr>
+  </table>
+</div>
+
 ---
 
 ### 📋 Create Work Procedure + ⚙️ Execute Work Procedure
