@@ -152,7 +152,6 @@ Remember: The goal is hands-on learning through active practice, not passive obs
         return new ChatMessage(ChatRole.User, prompt);
     }
 
-
     [McpServerPrompt]
     [LocalizedName("Prompt_CreateWorkProcedure_Name")]
     [ResourceDescription("Prompt_CreateWorkProcedure_Description")]
@@ -170,33 +169,32 @@ Communicate with users and write files in the user's native language
 Create work procedure for: {work_description}
 Directory: {working_directory} | Focus: {focus_area ?? "all"}
 
-FORMATS:
-- File: filename | status | priority | effort_remaining | notes
-- Task: task_name | status | dependencies | effort_est | effort_actual | notes  
-- Milestone: milestone_name | status | target_date | actual_date | success_criteria | notes
-- STATUS: ✅🟡⏳❌🔄🚀
+TRACKING FORMAT (File-level - Default):
+filename | status | priority | effort_remaining | notes
+STATUS: 🚀NotStarted ⏳Working 🔍Review ✅Complete 🟡Hold ❌Error
 
-EXECUTE:
-1. ASK USER: purpose・scope・deadline・quality criteria
-2. Git check → init if needed → ASK Y/N initial commit
-3. ANALYZE working directory + auto-detect format type if needed
-4. ASK USER: format type + scope
-5. CREATE work_procedure.md:
-   - LLM reference document for consistent workflow execution
-   - overview
-   - Git Y/N policy
-   - refine this file when learning
-   - update work_progress.txt immediately when progress occurs
-   - procedures
-   - quality
-   - risks
-6. CREATE work_progress.txt: exact format + COMPLETE coverage
-   - List EVERY work item identified (files/tasks/milestones)
-   - Zero omissions - if N items exist, list N items
-   - NO history section
-7. ASK Y/N final commit
+WORKFLOW:
+1. ASK USER: purpose, scope
+2. Git check → init if needed → If uncommitted changes exist: LIST uncommitted files → ASK initial commit Y/N (to preserve pre-work state)
+3. ANALYZE: Does work need multiple stages (design→implementation)?
+   - Most tasks: Single stage with file-level tracking
+   - Complex projects: ASK USER stage breakdown → each stage uses file-level tracking
+4. CREATE work_procedure.md using Add-LinesToFile in working_directory IMMEDIATELY:
+   - Overview, procedures, quality criteria (AI sets; consult user if unclear), risks
+   - Note: Update work_progress.md when progress occurs
+5. CREATE work_progress.md using Add-LinesToFile in working_directory IMMEDIATELY:
+   - Overall progress summary (counts + percentage)
+   - Status legend with workflow: 🚀→⏳→🔍→✅ (🟡Hold/❌Error as needed)
+   - File list with exact format (if staged: use ## sections)
+   - List ALL files - zero omissions
+6. LIST files to commit → ASK final commit Y/N
 
-CRITICAL: Create real files on disk + user approval for commits + exact formats";
+CRITICAL:
+- Default to file-level tracking (works for translation, refactoring, testing, etc.)
+- When uncertain, prefer simple file-level over complex formats
+- Status workflow: NotStarted → AI works (Working) → AI done (Review) → User approves (Complete)
+- Complete means work finished; Git commits handled separately
+- Create work_procedure.md and work_progress.md in working_directory using Add-LinesToFile IMMEDIATELY + get user approval for commits";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
@@ -211,45 +209,36 @@ CRITICAL: Create real files on disk + user approval for commits + exact formats"
         var prompt = $@"LANGUAGE:
 Communicate with users in the user's native language
 
-Execute work in '{working_directory}' with mandatory continuous procedure refinement.
+Execute work in '{working_directory}' following established procedures.
 
-EXECUTE:
+WORKFLOW:
 1. Navigate to: {working_directory}
-2. READ work_procedure.md + work_progress.txt
-3. IDENTIFY next priority tasks from documents
-4. PERFORM actual work following documented procedures
-5. UPDATE work_progress.txt immediately with ✅ status + completion notes
-6. MANDATORY: UPDATE work_procedure.md with new learnings/improvements
-7. ASK Y/N commit approval
+2. READ work_procedure.md + work_progress.md
+3. IDENTIFY next priority tasks (prioritize 🚀NotStarted and ❌Error items)
+4. PERFORM work:
+   - Update status: 🚀→⏳ (start work) → 🔍 (AI done, needs review)
+   - Create real outputs + validate quality
+   - Create backups before significant changes
+5. UPDATE work_progress.md immediately:
+   - Status: ⏳Working → 🔍Review (when AI completes work)
+   - Notes: What was done + results
+   - If blocked: ❌Error with clear blocker description
+6. UPDATE work_procedure.md when learning occurs:
+   - Better approaches discovered
+   - Clarifications needed for unclear steps
+   - Remove outdated information
+7. ASK commit approval Y/N
 
-WORK STANDARDS:
+CRITICAL:
 - Actually perform tasks, don't just plan
-- Generate real outputs + validate quality
-- Document what you actually did
-- Create backups before significant changes
-
-PROGRESS TRACKING:
-- Update status immediately upon completion
-- Add specific notes about work performed + results
-- Mark blocked tasks as ❌ with clear blocker descriptions
-
-PROCEDURE REFINEMENT (CRITICAL):
-Update procedure document with:
-- New insights or better approaches discovered
-- Clarifications for unclear steps
-- Additional details for future sessions
-- Remove outdated/incorrect information
-
-DOCUMENT HANDLING:
-- Standard filenames: work_procedure.md, work_progress.txt
-- If missing: Create basic templates + begin execution
+- Status workflow: AI works (⏳) → AI done (🔍) → User reviews → User approves (✅)
+- If documents missing: Create basic templates + begin execution
 - User approval required for all commits
 
-Start by reading documents, then execute next priority tasks while improving procedures.";
+Start by reading documents, then execute next priority tasks.";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
-
 
     [McpServerPrompt]
     [LocalizedName("Prompt_ForeignLanguageDictationTraining_Name")]
