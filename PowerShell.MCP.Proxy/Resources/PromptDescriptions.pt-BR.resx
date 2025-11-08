@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -86,7 +86,7 @@
     <value>Aprender Programação e CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Aprendizado interativo para linguagens de programação ou ferramentas CLI com prática</value>
+    <value>Aprender linguagens de programação ou ferramentas CLI de forma interativa com prática</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -116,10 +116,10 @@
     <value>Analisar conteúdo e fornecer insights com recomendações acionáveis</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>Criar documento de procedimento de trabalho e arquivos de acompanhamento do progresso.</value>
+    <value>Criar work_procedure.md e work_progress.md para gerenciamento de fluxo de trabalho do projeto</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>Executar documento de procedimento de trabalho e acompanhar o progresso com melhoria contínua.</value>
+    <value>Seguir work_procedure.md e acompanhar progresso em work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Iniciar treinamento rápido de ditado em língua estrangeira com áudio PowerShell e avaliação de IA</value>
@@ -140,6 +140,6 @@
     <value>Diretrizes de geração de HTML para IA</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>Diretrizes para a IA gerar relatórios HTML de alta qualidade com formatação, gráficos e estilo apropriados</value>
+    <value>Fornecer diretrizes para a IA gerar relatórios HTML de alta qualidade com formatação, gráficos e estilo apropriados</value>
   </data>
 </root>

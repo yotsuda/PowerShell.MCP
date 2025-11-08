@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -86,7 +86,7 @@
     <value>تعلم البرمجة وأدوات CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>تعلم تفاعلي للغات البرمجة أو أدوات CLI مع ممارسة عملية</value>
+    <value>تعلم لغات البرمجة أو أدوات CLI بشكل تفاعلي مع الممارسة العملية</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -116,10 +116,10 @@
     <value>تحليل المحتوى وتقديم رؤى مع توصيات قابلة للتنفيذ</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>إنشاء وثيقة إجراء العمل وملفات تتبع التقدم.</value>
+    <value>إنشاء work_procedure.md و work_progress.md لإدارة سير عمل المشروع</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>تنفيذ وثيقة إجراء العمل وتتبع التقدم مع التحسين المستمر.</value>
+    <value>اتباع work_procedure.md وتتبع التقدم في work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>بدء تدريب الإملاء السريع باللغة الأجنبية مع صوت PowerShell وتقييم الذكاء الاصطناعي</value>
@@ -140,6 +140,6 @@
     <value>إرشادات إنشاء HTML للذكاء الاصطناعي</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>إرشادات للذكاء الاصطناعي لإنشاء تقارير HTML عالية الجودة بتنسيق ورسوم بيانية وأنماط مناسبة</value>
+    <value>توفير إرشادات للذكاء الاصطناعي لإنشاء تقارير HTML عالية الجودة بتنسيق ورسوم بيانية وأنماط مناسبة</value>
   </data>
 </root>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -92,7 +92,7 @@
     <value>เรียนรู้การเขียนโปรแกรมและ CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>การเรียนรู้แบบโต้ตอบสำหรับภาษาโปรแกรมหรือเครื่องมือ CLI พร้อมการฝึกปฏิบัติ</value>
+    <value>เรียนรู้ภาษาโปรแกรมหรือเครื่องมือ CLI แบบโต้ตอบพร้อมการฝึกปฏิบัติ</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -124,10 +124,10 @@
     <value>วิเคราะห์เนื้อหาและให้ข้อมูลเชิงลึกพร้อมคำแนะนำที่ปฏิบัติได้</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>สร้างเอกสารขั้นตอนการทำงานและไฟล์ติดตามความคืบหน้า</value>
+    <value>สร้าง work_procedure.md และ work_progress.md สำหรับการจัดการขั้นตอนการทำงานของโครงการ</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>ดำเนินการตามเอกสารขั้นตอนการทำงานและติดตามความคืบหน้าพร้อมการปรับปรุงอย่างต่อเนื่อง</value>
+    <value>ทำตาม work_procedure.md และติดตามความคืบหน้าใน work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>เริ่มการฝึกคัดลอกภาษาต่างประเทศแบบเร่งรัดด้วยเสียง PowerShell และการประเมินโดย AI</value>
@@ -148,6 +148,6 @@
     <value>แนวทางการสร้าง HTML สำหรับ AI</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>แนวทางสำหรับ AI ในการสร้างรายงาน HTML คุณภาพสูงพร้อมการจัดรูปแบบ แผนภูมิ และสไตล์ที่เหมาะสม</value>
+    <value>จัดทำแนวทางสำหรับ AI ในการสร้างรายงาน HTML คุณภาพสูงพร้อมการจัดรูปแบบ แผนภูมิ และสไตล์ที่เหมาะสม</value>
   </data>
 </root>

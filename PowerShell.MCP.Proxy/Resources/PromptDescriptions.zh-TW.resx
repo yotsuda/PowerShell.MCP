@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -116,10 +116,10 @@
     <value>分析內容並提供可行的建議和見解</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>建立工作流程文件和進度追蹤檔案。</value>
+    <value>建立 work_procedure.md 和 work_progress.md 用於專案工作流程管理</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>執行工作流程文件並透過持續改進追蹤進度。</value>
+    <value>遵循 work_procedure.md 並在 work_progress.md 中追蹤進度</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>使用 PowerShell 音訊和 AI 評估開始快節奏外語聽寫訓練</value>
@@ -140,6 +140,6 @@
     <value>面向AI的HTML生成指南</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>用於AI生成具有適當格式、圖表和樣式的高質量HTML報告的指南</value>
+    <value>提供AI生成高質量HTML報告的指南,包含適當的格式、圖表和樣式</value>
   </data>
 </root>

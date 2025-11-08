@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -86,7 +86,7 @@
     <value>Apprendre Programmation et CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Apprentissage interactif pour les langages de programmation ou outils CLI avec pratique</value>
+    <value>Apprendre des langages de programmation ou des outils CLI de manière interactive avec des exercices pratiques</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -116,10 +116,10 @@
     <value>Analyser le contenu et fournir des informations avec des recommandations exploitables</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>Créer un document de procédure de travail et des fichiers de suivi de la progression.</value>
+    <value>Créer work_procedure.md et work_progress.md pour la gestion du flux de travail du projet</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>Exécuter un document de procédure de travail et suivre la progression avec amélioration continue.</value>
+    <value>Suivre work_procedure.md et suivre les progrès dans work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Commencer la formation rapide à la dictée en langue étrangère avec audio PowerShell et évaluation IA</value>
@@ -140,6 +140,6 @@
     <value>Directives de génération HTML pour l'IA</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>Directives pour que l'IA génère des rapports HTML de haute qualité avec un formatage, des graphiques et un style appropriés</value>
+    <value>Fournir des directives pour que l'IA génère des rapports HTML de haute qualité avec un formatage, des graphiques et un style appropriés</value>
   </data>
 </root>

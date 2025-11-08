@@ -145,7 +145,7 @@
     <value>Learn Programming &amp; CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Interactive learning for programming languages or CLI tools with hands-on practice</value>
+    <value>Learn programming languages or CLI tools interactively with hands-on practice</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -175,10 +175,10 @@
     <value>Analyze content and provide insights with actionable recommendations</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>Create work procedure and progress tracking files.</value>
+    <value>Create work_procedure.md and work_progress.md for project workflow management</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>Execute work procedure and track progress with continuous improvement.</value>
+    <value>Follow work_procedure.md and track progress in work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Start fast-paced foreign language dictation training with PowerShell audio and AI evaluation</value>
@@ -199,6 +199,6 @@
     <value>HTML Generation Guidelines for AI</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>Guidelines for AI to generate high-quality HTML reports with proper formatting, charts, and styling</value>
+    <value>Provide guidelines for AI to generate high-quality HTML reports with proper formatting, charts, and styling</value>
   </data>
 </root>

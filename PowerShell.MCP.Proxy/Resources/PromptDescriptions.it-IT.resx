@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -86,7 +86,7 @@
     <value>Imparare Programmazione e CLI</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Apprendimento interattivo per linguaggi di programmazione o strumenti CLI con pratica</value>
+    <value>Imparare linguaggi di programmazione o strumenti CLI in modo interattivo con pratica</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -116,10 +116,10 @@
     <value>Analizza contenuto e fornisce approfondimenti con raccomandazioni attuabili</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>Crea documento di procedura di lavoro e file di monitoraggio dei progressi.</value>
+    <value>Creare work_procedure.md e work_progress.md per la gestione del flusso di lavoro del progetto</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>Esegui documento di procedura di lavoro e monitora i progressi con miglioramento continuo.</value>
+    <value>Seguire work_procedure.md e tracciare i progressi in work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Inizia allenamento rapido di dettatura in lingua straniera con audio PowerShell e valutazione AI</value>
@@ -140,6 +140,6 @@
     <value>Linee guida per la generazione HTML per l'IA</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>Linee guida per la generazione di report HTML di alta qualità con formattazione, grafici e stile appropriati da parte dell'IA</value>
+    <value>Fornire linee guida per la generazione di report HTML di alta qualità con formattazione, grafici e stile appropriati da parte dell'IA</value>
   </data>
 </root>

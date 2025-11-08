@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -86,7 +86,7 @@
     <value>Programlama ve CLI Öğrenme</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Programlama dilleri veya CLI araçları için uygulamalı etkileşimli öğrenme</value>
+    <value>Programlama dillerini veya CLI araçlarını uygulamalı olarak etkileşimli şekilde öğren</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -116,10 +116,10 @@
     <value>İçeriği analiz et ve uygulanabilir önerilerle içgörüler sağla</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>Çalışma prosedürü belgesi ve ilerleme takip dosyaları oluştur.</value>
+    <value>Proje iş akışı yönetimi için work_procedure.md ve work_progress.md oluştur</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>Çalışma prosedürü belgesini yürüt ve sürekli iyileştirme ile ilerlemeyi takip et.</value>
+    <value>work_procedure.md takip et ve ilerlemeyi work_progress.md içinde izle</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>PowerShell ses ve AI değerlendirmesi ile hızlı yabancı dil dikte eğitimine başla</value>
@@ -140,6 +140,6 @@
     <value>Yapay Zeka için HTML Oluşturma Kılavuzu</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>Yapay zekanın uygun biçimlendirme, grafikler ve stil ile yüksek kaliteli HTML raporları oluşturması için kılavuz</value>
+    <value>Yapay zekanın uygun biçimlendirme, grafikler ve stil ile yüksek kaliteli HTML raporları oluşturması için kılavuz sağla</value>
   </data>
 </root>

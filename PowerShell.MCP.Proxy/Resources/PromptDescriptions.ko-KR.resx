@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -86,7 +86,7 @@
     <value>프로그래밍 및 CLI 학습</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>프로그래밍 언어 또는 CLI 도구의 실습 기반 대화형 학습</value>
+    <value>실습을 통해 프로그래밍 언어 또는 CLI 도구를 대화식으로 학습</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
     <value>Python, Git, Docker, C#</value>
@@ -116,10 +116,10 @@
     <value>콘텐츠를 분석하고 실행 가능한 권장 사항과 함께 통찰력 제공</value>
   </data>
   <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>작업 절차서 및 진행 상황 추적 파일을 생성합니다.</value>
+    <value>프로젝트 워크플로우 관리를 위한 work_procedure.md 및 work_progress.md 생성</value>
   </data>
   <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>작업 절차서를 실행하고 지속적인 개선을 통해 진행 상황을 추적합니다.</value>
+    <value>work_procedure.md를 따르고 work_progress.md에서 진행 상황 추적</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>PowerShell 오디오 및 AI 평가를 사용한 빠른 외국어 받아쓰기 훈련 시작</value>
@@ -140,6 +140,6 @@
     <value>AI를 위한 HTML 생성 가이드라인</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>적절한 형식, 차트 및 스타일이 포함된 고품질 HTML 보고서를 AI가 생성하기 위한 가이드라인</value>
+    <value>적절한 형식, 차트 및 스타일이 포함된 고품질 HTML 보고서를 AI가 생성하기 위한 가이드라인 제공</value>
   </data>
 </root>

@@ -175,13 +175,17 @@ STATUS: 🚀NotStarted ⏳Working 🔍Review ✅Complete 🟡Hold ❌Error
 
 WORKFLOW:
 1. ASK USER: purpose, scope
-2. Git check → init if needed → If uncommitted changes exist: LIST uncommitted files → ASK initial commit Y/N (to preserve pre-work state)
+2. Git check:
+   - Check if git.exe exists → if not: ASK user to auto-install Git CLI → if YES: install git.exe automatically → if NO: continue without version control
+   - If Git exists: check repo → init if needed → if uncommitted changes: LIST files → ASK initial commit Y/N
 3. ANALYZE: Does work need multiple stages (design→implementation)?
    - Most tasks: Single stage with file-level tracking
    - Complex projects: ASK USER stage breakdown → each stage uses file-level tracking
 4. CREATE work_procedure.md using Add-LinesToFile in working_directory IMMEDIATELY:
-   - Overview, procedures, quality criteria (AI sets; consult user if unclear), risks
-   - Note: Update work_progress.md when progress occurs
+   - Overview, procedures, quality criteria (AI sets; consult user if unclear), risks, commit policy, progress update rule, learning update rule
+   - **COMMIT POLICY**: Unless user explicitly permits otherwise, all commits require BOTH test pass AND user review approval
+   - **PROGRESS UPDATE RULE**: Must update work_progress.md immediately whenever work progresses (status changes, task completion, etc.)
+   - **LEARNING UPDATE RULE**: Update work_procedure.md when learning occurs during work. Organize and insert at appropriate location (not just append to end). Keep document concise and focused.
 5. CREATE work_progress.md using Add-LinesToFile in working_directory IMMEDIATELY:
    - Overall progress summary (counts + percentage)
    - Status legend with workflow: 🚀→⏳→🔍→✅ (🟡Hold/❌Error as needed)
@@ -193,8 +197,7 @@ CRITICAL:
 - Default to file-level tracking (works for translation, refactoring, testing, etc.)
 - When uncertain, prefer simple file-level over complex formats
 - Status workflow: NotStarted → AI works (Working) → AI done (Review) → User approves (Complete)
-- Complete means work finished; Git commits handled separately
-- Create work_procedure.md and work_progress.md in working_directory using Add-LinesToFile IMMEDIATELY + get user approval for commits";
+- Complete means work finished; Git commits handled separately";
 
         return new ChatMessage(ChatRole.User, prompt);
     }
@@ -206,6 +209,7 @@ CRITICAL:
         [ResourceDescription("Prompt_ExecuteWorkProcedure_Param_WorkingDirectory")]
         string working_directory)
     {
+        var createWorkProcedureName = Resources.PromptDescriptions.Prompt_CreateWorkProcedure_Name;
         var prompt = $@"LANGUAGE:
 Communicate with users in the user's native language
 
@@ -219,21 +223,13 @@ WORKFLOW:
    - Update status: 🚀→⏳ (start work) → 🔍 (AI done, needs review)
    - Create real outputs + validate quality
    - Create backups before significant changes
-5. UPDATE work_progress.md immediately:
-   - Status: ⏳Working → 🔍Review (when AI completes work)
-   - Notes: What was done + results
-   - If blocked: ❌Error with clear blocker description
-6. UPDATE work_procedure.md when learning occurs:
-   - Better approaches discovered
-   - Clarifications needed for unclear steps
-   - Remove outdated information
-7. ASK commit approval Y/N
+5. FOLLOW work_procedure.md rules for commits, progress updates, and learning updates
 
 CRITICAL:
 - Actually perform tasks, don't just plan
 - Status workflow: AI works (⏳) → AI done (🔍) → User reviews → User approves (✅)
-- If documents missing: Create basic templates + begin execution
-- User approval required for all commits
+- If documents missing: Guide user to run '{createWorkProcedureName}' prompt first before executing this prompt
+- Follow all policies defined in work_procedure.md
 
 Start by reading documents, then execute next priority tasks.";
 
