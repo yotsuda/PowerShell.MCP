@@ -194,9 +194,27 @@ Creates dictation exercises with automatic checking.
 ### 🗺️ Create Interactive Map
 **Best for:** Visualizing geographic data or locations
 
-Generates interactive HTML maps with markers, descriptions, and optional 3D display.
+Generates interactive HTML maps with markers, descriptions, and optional 3D display using PowerShell.Map module.
 
 **Examples:** "Show major Roman battles in chronological order" • "Create a map of hot springs in Japan"
+
+<div align="center">
+  <table cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+      <td align="center" width="45%">
+        <img src="images/RomanWar.png" alt="Roman Battle Map" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>Roman Battle Locations</em>
+      </td>
+      <td width="3%"></td>
+      <td align="center" width="45%">
+        <img src="images/Colosseum.png" alt="Colosseum 3D View" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>Colosseum 3D Visualization</em>
+      </td>
+    </tr>
+  </table>
+</div>
 
 ---
 
