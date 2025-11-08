@@ -196,7 +196,7 @@ Creates dictation exercises with automatic checking.
 
 Generates interactive HTML maps with markers, descriptions, and optional 3D display.
 
-**Examples:** "Create a map of Tokyo's major landmarks" • "Map all office locations in Japan" • "3D map of hiking trails"
+**Examples:** "Show major Roman battles in chronological order" • "Create a map of hot springs in Japan"
 
 ---
 
