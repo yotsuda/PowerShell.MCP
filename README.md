@@ -131,13 +131,7 @@ Add to your Claude Desktop configuration:
 
 ### 5. Restart Claude Desktop and test
 - Restart Claude Desktop to activate the integration
-- See the **Examples** section below for your first demo!
-
-## Limitations
-- **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C. To cancel AI-executed commands, close the PowerShell console
-- **User Command Privacy**: Commands executed by users are not visible to AI assistants
-- **Verbose/Debug Streams**: Verbose and Debug output streams are not captured. Users can share this information with AI assistants via clipboard if needed
-- **External Command Colors**: Color output from external commands (e.g., git.exe) is lost and displayed without colors in the PowerShell console
+- See the **First-Time Demo** section below for your first demo!
 
 ## First-Time Demo
 🎨 Experience PowerShell.MCP's capabilities with these engaging demonstrations:
@@ -161,8 +155,8 @@ PowerShell.MCP includes 9 specialized prompts accessible from your MCP client's 
 
 Work together as a powerful workflow system with automatic file management:
 
-1. **Create Work Procedure** - AI analyzes your task and generates a reusable procedure saved to `work_procedure.md`
-2. **Execute Work Procedure** - AI follows the procedure, tracks progress in `work_progress.txt`, and updates the procedure based on execution experience
+1. **Create Work Procedure** - AI analyzes the task and generates `work_procedure.md` as the reusable procedure and `work_progress.txt` as the execution plan.
+2. **Execute Work Procedure** - AI follows and refines `work_procedure.md` during execution, and tracks and records outcomes in `work_progress.txt`.
 
 **Key benefits:** Consistent results, automatic progress tracking, continuous improvement, easy team sharing
 
@@ -202,25 +196,15 @@ Creates dictation exercises with automatic checking.
 
 Generates interactive HTML maps with markers, descriptions, and optional 3D display.
 
-**Examples:** "Create a map of Tokyo's major landmarks" • "Map all office locations in Japan" • "3D map of hiking trails"
+**Examples:** "Show major Roman battles in chronological order" • "Create a map of hot springs in Japan"
 
 ---
 
-## Quick Tips
-
-**Combining Prompts:**
-- Analyze Content + HTML Generation Guidelines = Beautiful visual reports
-- Create Work Procedure → Execute Work Procedure = Automated workflows
-
-**When to use prompts vs. natural language:**
-- Use prompts for structured, repeatable tasks
-- Use natural language for quick, one-off operations
-- Ask AI "which prompt should I use?" if unsure
-
-**Learning by doing:**
-- Start with First-Time Demo to see capabilities
-- Try each built-in prompt to understand its strengths
-- Ask AI to explain commands as you go
+## Limitations
+- **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C. To cancel AI-executed commands, close the PowerShell console
+- **User Command Privacy**: Commands executed by users are not visible to AI assistants
+- **Verbose/Debug Streams**: Verbose and Debug output streams are not captured. Users can share this information with AI assistants via clipboard if needed
+- **External Command Colors**: Color output from external commands (e.g., git.exe) is lost and displayed without colors in the PowerShell console
 
 ## Disclaimer
 This software is provided "AS IS" without warranty of any kind, either expressed or implied.  
