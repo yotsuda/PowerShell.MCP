@@ -36,7 +36,7 @@ public static class PowerShellTools
     }
 
     [McpServerTool]
-    [Description(@"Execute PowerShell commands in the PowerShell console. Supports both immediate execution and command insertion modes.
+    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help. Commands visible in history for user learning.
 
 ⚠️ CRITICAL - Variable Scope:
 Local variables are NOT preserved between invoke_expression calls. Use $script: or $global: scope to share variables across calls.

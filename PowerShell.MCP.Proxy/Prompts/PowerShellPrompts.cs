@@ -67,11 +67,18 @@ Write-Host ""Labels: $script:labels""  # Must show [""value""] not ""value""
 Write-Host ""Values: $script:values""  # Must show [10] not 10
 ```
 
-**CRITICAL - CSS Inheritance:** White backgrounds MUST override inherited text color.
+**CRITICAL - CSS Color Specification:** ALWAYS set BOTH background AND color explicitly for every element.
 ```css
-.parent {{ background: linear-gradient(...); color: white; }}
-.child {{ background: white; color: #333; /* Prevents white-on-white */ }}
+/* ❌ BAD: Inherits parent's white color */
+.parent {{ background: gradient; color: white; }}
+.child {{ background: white; }} /* white on white - unreadable! */
+
+/* ✅ GOOD: Explicitly overrides */
+.parent {{ background: gradient; color: white; }}
+.child {{ background: white; color: #333; }}
+.table-container {{ background: white; color: #333; }} /* Always explicit */
 ```
+Never rely on color inheritance. Light bg → dark text, dark bg → light text.
 
 **Design:**
 - Display analysis target path at the top of the report (in title or header section)
