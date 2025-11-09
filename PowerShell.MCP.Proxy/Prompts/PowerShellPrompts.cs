@@ -74,11 +74,11 @@ Write-Host ""Values: $script:values""  # Must show [10] not 10
 ```
 
 **Design:**
-- **CRITICAL**: Display analysis target path at the top of the report (in title or header section)
+- Display analysis target path at the top of the report (in title or header section)
 - Chart.js: https://cdn.jsdelivr.net/npm/chart.js
+- Choose the most appropriate chart type based on the analysis results (e.g., Bar, Line, Pie, Scatter, Histogram, Box Plot, Stacked Bar, Radar).
 - Use gradients in CSS and Chart.js (ctx.createLinearGradient)
 - Use cohesive color palette with visual harmony - diversify colors across charts
-- Display analysis target path in report header
 - Responsive, print-friendly, with ""Back to Top"" button
 
 **Output:**
