@@ -200,6 +200,15 @@ Companion prompt that ensures AI generates high-quality HTML with Chart.js visua
 
 ---
 
+### 📚 Learn Programming & CLI
+**Best for:** Learning programming languages and command-line tools at any level
+
+Provides personalized learning experiences with clear explanations, practical examples, and hands-on exercises. Specify your learning goals directly without worrying about experience levels.
+
+**Examples:** "Learn Python basics for data analysis" • "Learn Git commands for version control" • "Learn PowerShell scripting"
+
+---
+
 ### 🗣️ Foreign Language Dictation Training
 **Best for:** Improving listening skills in foreign languages
 
