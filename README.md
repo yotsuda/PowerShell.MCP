@@ -158,7 +158,7 @@ PowerShell.MCP includes 7 specialized prompts accessible from your MCP client's 
       </td>
       <td width="3%"></td>
       <td align="center" width="45%">
-        <img src="images/builtin-prompt-2.png" alt="Prompt Selection" style="max-width: 100%; height: auto;"/>
+        <img src="images/builtin-prompt-2.png" alt="Selecting a Prompt" style="max-width: 100%; height: auto;"/>
         <br/>
         <em>Selecting a Prompt</em>
       </td>
@@ -184,13 +184,13 @@ Work together as a powerful workflow system with automatic file management:
   <table cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
       <td align="center" width="45%">
-        <img src="images/work_procedure.png" alt="Built-in Prompts Menu" style="max-width: 100%; height: auto;"/>
+        <img src="images/work_procedure.png" alt="AI-generated work_procedure.md" style="max-width: 100%; height: auto;"/>
         <br/>
         <em>AI-generated work_procedure.md</em>
       </td>
       <td width="3%"></td>
       <td align="center" width="45%">
-        <img src="images/work_progress.png" alt="Prompt Selection" style="max-width: 100%; height: auto;"/>
+        <img src="images/work_progress.png" alt="AI-generated work_progress.md" style="max-width: 100%; height: auto;"/>
         <br/>
         <em>AI-generated work_progress.md</em>
       </td>
@@ -215,6 +215,12 @@ Generates comprehensive reports with insights and recommendations. Combine with 
 Companion prompt that ensures AI generates high-quality HTML with Chart.js visualization, responsive design, and proper styling. Works with any prompt or task that needs HTML output.
 
 **Examples:** Analyze Content + this = visual reports • Your custom prompt + this = professional HTML • Any data task + this = interactive output
+
+<div align="center">
+  <img src="images/combine_prompts.png" alt="Combined prompts generate visual HTML file" width="400"/>
+  <br/>
+  <em>Combined prompts generate visual HTML file</em>
+</div>
 
 ---
 
