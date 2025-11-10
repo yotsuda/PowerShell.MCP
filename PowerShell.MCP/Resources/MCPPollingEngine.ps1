@@ -289,7 +289,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         provider = (Get-Location).Provider.Name
                     }
 
-                    $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Location [$($currentLocation.provider)]: $($currentLocation.currentPath)"
 
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
@@ -331,7 +331,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         provider = (Get-Location).Provider.Name
                     }
 
-                    $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Location [$($currentLocation.provider)]: $($currentLocation.currentPath)"
 
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
@@ -343,7 +343,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         provider = (Get-Location).Provider.Name
                     }
 
-                    $locationInfo = "Location: $($currentLocation.currentPath) [$($currentLocation.provider)]"
+                    $locationInfo = "Location [$($currentLocation.provider)]: $($currentLocation.currentPath)"
                     $errorMessage = "Error: $($_.Exception.Message)"
                     $mcpOutput = $locationInfo + "`n" + $errorMessage
                 }
