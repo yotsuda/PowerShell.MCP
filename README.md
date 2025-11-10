@@ -178,7 +178,7 @@ Work together as a powerful workflow system with automatic file management:
 
 **Key benefits:** self-refining procedures, resumable workflows, automatic progress tracking, consistent results
 
-**Example:** "Create a procedure for deploying my web application" → "Execute the deployment procedure"
+**Example:** "Write Get-Help markdown for multiple cmdlets through execution and verification"
 
 <div align="center">
   <table cellspacing="0" cellpadding="0" border="0" width="100%">
