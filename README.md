@@ -207,9 +207,21 @@ Generates comprehensive reports with insights and recommendations. Combine with 
 **Examples:** "Analyze my project's log files" • "Create a report on this CSV dataset" • "Analyze this HAR file"
 
 <div align="center">
-  <img src="images/cs_analysis.png" alt="C# code analysis report" width="400"/>
-  <br/>
-  <em>C# code quality analysis report</em>
+  <table cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+      <td align="center" width="45%">
+        <img src="images/cs_analysis-1.png" alt="C# code quality analysis report" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>C# code quality analysis report</em>
+      </td>
+      <td width="3%"></td>
+      <td align="center" width="45%">
+        <img src="images/cs_analysis-2.png" alt="C# code quality analysis report (continued)" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>C# code quality analysis report (continued)</em>
+      </td>
+    </tr>
+  </table>
 </div>
 
 ---
