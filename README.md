@@ -139,7 +139,6 @@ Add to your Claude Desktop configuration:
 - "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
 - "Try out different styles of notifications using the BurntToast module"
 - "Automate Notepad: type text and smoothly move the window in a circle"
-- "Tell me how to use Git in PowerShell"
 - "How does it feel now that you have a tool like PowerShell.MCP?"
 
 After trying these demos, explore the 7 built-in prompts below or ask AI to explain any command - learning by doing is the best approach.
@@ -178,7 +177,7 @@ Work together as a powerful workflow system with automatic file management:
 
 **Key benefits:** self-refining procedures, resumable workflows, automatic progress tracking, consistent results
 
-**Example:** "Create a procedure for deploying my web application" → "Execute the deployment procedure"
+**Example:** "Write Get-Help markdown for multiple cmdlets through execution and verification"
 
 <div align="center">
   <table cellspacing="0" cellpadding="0" border="0" width="100%">
@@ -206,6 +205,12 @@ Work together as a powerful workflow system with automatic file management:
 Generates comprehensive reports with insights and recommendations. Combine with **HTML Generation Guidelines for AI** for visual reports with charts.
 
 **Examples:** "Analyze my project's log files" • "Create a report on this CSV dataset" • "Analyze this HAR file"
+
+<div align="center">
+  <img src="images/cs_analysis.png" alt="C# code analysis report" width="400"/>
+  <br/>
+  <em>C# code quality analysis report</em>
+</div>
 
 ---
 
