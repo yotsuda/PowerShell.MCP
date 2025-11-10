@@ -207,6 +207,12 @@ Generates comprehensive reports with insights and recommendations. Combine with 
 
 **Examples:** "Analyze my project's log files" • "Create a report on this CSV dataset" • "Analyze this HAR file"
 
+<div align="center">
+  <img src="images/cs_analysis.png" alt="C# code analysis report" width="400"/>
+  <br/>
+  <em>C# code quality analysis report</em>
+</div>
+
 ---
 
 ### 🎨 HTML Generation Guidelines for AI
