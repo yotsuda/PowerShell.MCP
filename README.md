@@ -176,9 +176,27 @@ Work together as a powerful workflow system with automatic file management:
 1. **Create Work Procedure** - AI analyzes the task and generates `work_procedure.md` as the reusable procedure and `work_progress.txt` as the execution plan.
 2. **Execute Work Procedure** - AI follows and refines `work_procedure.md` during execution, and tracks and records outcomes in `work_progress.txt`.
 
-**Key benefits:** Consistent results, automatic progress tracking, continuous improvement, easy team sharing
+**Key benefits:** self-refining procedures, resumable workflows, automatic progress tracking, consistent results
 
 **Example:** "Create a procedure for deploying my web application" → "Execute the deployment procedure"
+
+<div align="center">
+  <table cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+      <td align="center" width="45%">
+        <img src="images/work_procedure.png" alt="Built-in Prompts Menu" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>AI-generated work_procedure.md</em>
+      </td>
+      <td width="3%"></td>
+      <td align="center" width="45%">
+        <img src="images/work_progress.png" alt="Prompt Selection" style="max-width: 100%; height: auto;"/>
+        <br/>
+        <em>AI-generated work_progress.md</em>
+      </td>
+    </tr>
+  </table>
+</div>
 
 ---
 
