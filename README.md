@@ -139,7 +139,6 @@ Add to your Claude Desktop configuration:
 - "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
 - "Try out different styles of notifications using the BurntToast module"
 - "Automate Notepad: type text and smoothly move the window in a circle"
-- "Tell me how to use Git in PowerShell"
 - "How does it feel now that you have a tool like PowerShell.MCP?"
 
 After trying these demos, explore the 7 built-in prompts below or ask AI to explain any command - learning by doing is the best approach.
