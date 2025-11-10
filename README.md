@@ -212,7 +212,7 @@ Creates dictation exercises with automatic checking.
 ### 🗺️ Create Interactive Map
 **Best for:** Visualizing geographic data or locations
 
-Generates interactive HTML maps with markers, descriptions, and optional 3D display using PowerShell.Map module.
+Generates interactive HTML maps with markers, descriptions, and optional 3D display using [PowerShell.Map](https://github.com/yotsuda/PowerShell.Map) module.
 
 **Examples:** "Show major Roman battles in chronological order" • "Create a map of hot springs in Japan"
 
