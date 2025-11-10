@@ -81,7 +81,7 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Natural and intuitive way to provide domain-specific knowledge to AI
 
 **🎯 Ready-to-Use Built-in Prompts**
-- 9 specialized prompts for development, analysis, administration, and learning scenarios
+- 7 specialized prompts for development, analysis, administration, and learning scenarios
 - Intelligent automation with native language support and interactive guidance
 - Built-in safety measures, progress tracking, and hands-on learning environments
 - Accessible directly through MCP client prompts list - no command writing required
@@ -142,11 +142,11 @@ Add to your Claude Desktop configuration:
 - "Tell me how to use Git in PowerShell"
 - "How does it feel now that you have a tool like PowerShell.MCP?"
 
-After trying these demos, explore the 9 built-in prompts below or ask AI to explain any command - learning by doing is the best approach.
+After trying these demos, explore the 7 built-in prompts below or ask AI to explain any command - learning by doing is the best approach.
 
 ## Built-in Prompts
 
-PowerShell.MCP includes 9 specialized prompts accessible from your MCP client's prompts menu. Each prompt is designed for specific tasks and guides AI to provide optimal results.
+PowerShell.MCP includes 7 specialized prompts accessible from your MCP client's prompts menu. Each prompt is designed for specific tasks and guides AI to provide optimal results.
 
 <div align="center">
   <table cellspacing="0" cellpadding="0" border="0" width="100%">
