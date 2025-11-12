@@ -6,6 +6,41 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     $global:McpTimer = New-Object System.Timers.Timer 100
     $global:McpTimer.AutoReset = $true
 
+    # Enable ANSI colors for common development CLI tools
+    # These environment variables force color output even when stdout is not a TTY
+
+    # Git: Preserve existing GIT_CONFIG_PARAMETERS and append color.ui=always
+    # Only add color.ui=always if not already configured
+    $existingGitConfig = $env:GIT_CONFIG_PARAMETERS
+    if ($existingGitConfig -and $existingGitConfig -match "'color\.ui\s*=") {
+        # User already has color.ui configured, respect their setting
+    } elseif ($existingGitConfig) {
+        # Append color.ui=always to existing config
+        $env:GIT_CONFIG_PARAMETERS = "$existingGitConfig 'color.ui=always'"
+    } else {
+        # No existing config, set color.ui=always
+        $env:GIT_CONFIG_PARAMETERS = "'color.ui=always'"
+    }
+
+    # yarn, and other Node.js tools
+    if (-not $env:FORCE_COLOR) {
+        $env:FORCE_COLOR = '1'
+    }
+    # npm uses NPM_CONFIG_* environment variables for configuration
+    if (-not $env:NPM_CONFIG_COLOR) {
+        $env:NPM_CONFIG_COLOR = 'always'
+    }
+
+    # Rust cargo
+    if (-not $env:CARGO_TERM_COLOR) {
+        $env:CARGO_TERM_COLOR = 'always'
+    }
+
+    # pytest and other Python tools
+    if (-not $env:PY_COLORS) {
+        $env:PY_COLORS = '1'
+    }
+
     Register-ObjectEvent `
         -InputObject    $global:McpTimer `
         -EventName      Elapsed `
@@ -40,7 +75,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         } else {
                             $err.ToString()
                         }
-                        
+
                         if (-not $seenErrors.ContainsKey($key)) {
                             $uniqueErrors += $err
                             $seenErrors[$key] = $true
@@ -85,7 +120,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
 
                 # Process errors
-                foreach($err in $StreamResults.Error) { 
+                foreach($err in $StreamResults.Error) {
                     if ($err -is [System.Management.Automation.ErrorRecord]) {
                         $outputStreams.Error += $err.Exception.Message
                     } else {
@@ -94,7 +129,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
 
                 # Process exceptions
-                foreach($ex in $StreamResults.Exception) { 
+                foreach($ex in $StreamResults.Exception) {
                     if ($ex -is [System.Management.Automation.ErrorRecord]) {
                         $outputStreams.Exception += $ex.Exception.Message
                     } else {
@@ -103,7 +138,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
 
                 # Process warnings
-                foreach($warn in $StreamResults.Warning) { 
+                foreach($warn in $StreamResults.Warning) {
                     if ($warn -is [System.Management.Automation.WarningRecord]) {
                         $outputStreams.Warning += $warn.Message
                     } else {
@@ -112,7 +147,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
 
                 # Process information
-                foreach($info in $StreamResults.Information) { 
+                foreach($info in $StreamResults.Information) {
                     if ($info -is [System.Management.Automation.InformationRecord]) {
                         $messageData = if ($info.MessageData -ne $null) {
                             $info.MessageData.ToString()
@@ -135,12 +170,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $warningCount = $outputStreams.Warning.Count
                 $infoCount = $outputStreams.Information.Count
                 $hasErrors = $errorCount -gt 0
-                
+
                 # Generate status line
                 $statusIcon = if ($hasErrors) { "✗" } else { "✓" }
                 $statusText = if ($hasErrors) { "executed with errors" } else { "executed successfully" }
                 $durationText = "{0:F2}s" -f $Duration
-                
+
                 $statusLine = "$statusIcon Pipeline $statusText | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
 
                 # Generate structured output strings
@@ -163,7 +198,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # Generate formatted output
                 # Check if only success output exists
                 $onlySuccess = ($cleanOutput.Count -eq 1 -and $cleanOutput.Keys -contains 'Success')
-                
+
                 if ($onlySuccess -and -not $hasErrors) {
                     # Simple success case: status + output
                     if ($cleanOutput.Success) {
