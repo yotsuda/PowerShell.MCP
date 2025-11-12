@@ -103,6 +103,90 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
 
+            function Write-ColoredCommand {
+                param([string]$Command)
+
+                try {
+                    # Get PSReadLine color options
+                    $psReadLineOptions = Get-PSReadLineOption
+
+                    # Default ANSI colors (matching PSReadLine defaults)
+                    $defaultColors = @{
+                        'Command' = "`e[93m"  # Yellow
+                        'Parameter' = "`e[90m"  # DarkGray
+                        'String' = "`e[36m"  # DarkCyan
+                        'Variable' = "`e[92m"  # Green
+                        'Number' = "`e[97m"  # White
+                        'Operator' = "`e[90m"  # DarkGray
+                        'Keyword' = "`e[93m"  # Yellow
+                        'Member' = "`e[97m"  # White
+                        'Default' = "`e[97m"  # White
+                    }
+
+                    $tokens = [System.Management.Automation.PSParser]::Tokenize($Command, [ref]$null)
+
+                    $lastEnd = 0
+                    foreach ($token in $tokens) {
+                        # Write any text between tokens (whitespace, etc.)
+                        if ($token.Start -gt $lastEnd) {
+                            [Console]::Write($Command.Substring($lastEnd, $token.Start - $lastEnd))
+                        }
+
+                        # Get token text
+                        $tokenText = $Command.Substring($token.Start, $token.Length)
+
+                        # Get ANSI color from PSReadLine options, with fallback to defaults
+                        $ansiColor = switch ($token.Type) {
+                            'Command' {
+                                if ($psReadLineOptions.CommandColor) { $psReadLineOptions.CommandColor } else { $defaultColors['Command'] }
+                            }
+                            'CommandParameter' {
+                                if ($psReadLineOptions.ParameterColor) { $psReadLineOptions.ParameterColor } else { $defaultColors['Parameter'] }
+                            }
+                            'CommandArgument' {
+                                if ($psReadLineOptions.DefaultTokenColor) { $psReadLineOptions.DefaultTokenColor } else { $defaultColors['Default'] }
+                            }
+                            'String' {
+                                if ($psReadLineOptions.StringColor) { $psReadLineOptions.StringColor } else { $defaultColors['String'] }
+                            }
+                            'Variable' {
+                                if ($psReadLineOptions.VariableColor) { $psReadLineOptions.VariableColor } else { $defaultColors['Variable'] }
+                            }
+                            'Member' {
+                                if ($psReadLineOptions.MemberColor) { $psReadLineOptions.MemberColor } else { $defaultColors['Member'] }
+                            }
+                            'Number' {
+                                if ($psReadLineOptions.NumberColor) { $psReadLineOptions.NumberColor } else { $defaultColors['Number'] }
+                            }
+                            'Operator' {
+                                if ($psReadLineOptions.OperatorColor) { $psReadLineOptions.OperatorColor } else { $defaultColors['Operator'] }
+                            }
+                            'Keyword' {
+                                if ($psReadLineOptions.KeywordColor) { $psReadLineOptions.KeywordColor } else { $defaultColors['Keyword'] }
+                            }
+                            default {
+                                if ($psReadLineOptions.DefaultTokenColor) { $psReadLineOptions.DefaultTokenColor } else { $defaultColors['Default'] }
+                            }
+                        }
+
+                        # Write colored token
+                        [Console]::Write("${ansiColor}${tokenText}`e[0m")
+                        $lastEnd = $token.Start + $token.Length
+                    }
+
+                    # Write any remaining text
+                    if ($lastEnd -lt $Command.Length) {
+                        [Console]::Write($Command.Substring($lastEnd))
+                    }
+
+                    [Console]::WriteLine()
+                }
+                catch {
+                    # Fallback to simple output if parsing fails
+                    [Console]::WriteLine($Command)
+                }
+            }
+
             function Format-McpOutput {
                 param(
                     [hashtable]$StreamResults,
@@ -281,7 +365,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         [Console]::WriteLine()
                     }
 
-                    Write-Host $cmd
+                    Write-ColoredCommand $cmd
 
                     # Measure execution time
                     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
