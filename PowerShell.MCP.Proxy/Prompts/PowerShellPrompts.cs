@@ -15,7 +15,7 @@ public static class PowerShellPrompts
         string content_path)
     {
         var htmlPromptName = Resources.PromptDescriptions.Prompt_HtmlGenerationGuidelinesForAi_Name;
-        
+
         var prompt = $@"Analyze '{content_path}' using PowerShell.MCP and provide comprehensive insights with actionable recommendations.
 
 If the '{htmlPromptName}' prompt is not also selected, remind the user: 'For a visual HTML report, please also select the {htmlPromptName} prompt.'
@@ -24,7 +24,7 @@ If the '{htmlPromptName}' prompt is not also selected, remind the user: 'For a v
 1. Report format (html or md) - default: html
 2. Preferred language - default: user's language
 
-**Structure:** 
+**Structure:**
 - **MANDATORY**: Title/Header section displaying the analysis target path
 - Plan the optimal report structure based on content type (e.g., HAR files, logs, CSV, JSON, text)
 - Common sections to consider: Executive Summary, Key Findings, Visual Charts, Detailed Analysis, Recommendations, Conclusion
@@ -177,7 +177,7 @@ Create work procedure for: {work_description}
 Directory: {working_directory} | Focus: {focus_area ?? "all"}
 
 TRACKING FORMAT (File-level - Default):
-filename | status | priority | effort_remaining | notes
+filename | status | priority | effort | notes
 STATUS: 🚀NotStarted ⏳Working 🔍Review ✅Complete 🟡Hold ❌Error
 
 WORKFLOW:
@@ -196,13 +196,24 @@ WORKFLOW:
 5. CREATE work_progress.md using Add-LinesToFile in working_directory IMMEDIATELY:
    - Overall progress summary (counts + percentage)
    - Status legend with workflow: 🚀→⏳→🔍→✅ (🟡Hold/❌Error as needed)
-   - File list with exact format (if staged: use ## sections)
+   - File list with markdown table format (see example below)
    - List ALL files - zero omissions
+   - **TABLE FORMAT EXAMPLE**:
+     ```
+     ## 📁 File List
+
+     | filename | status | priority | effort | notes |
+     |----------|:------:|:--------:|-------:|-------|
+     | Add-User.md | 🚀 | Normal | 1h | 4 examples verified |
+     | Get-User.md | ⏳ | High | 2h | Ex5 prompt corrected |
+     | Remove-User.md | ✅ | Normal | 0h | |
+     ```
 6. LIST files to commit → ASK final commit Y/N
 
 CRITICAL:
 - Default to file-level tracking (works for translation, refactoring, testing, etc.)
 - When uncertain, prefer simple file-level over complex formats
+- Markdown table separator row: Use minimal hyphens (e.g., |----------|:------:|) to ensure proper rendering in VS Code preview
 - Status workflow: NotStarted → AI works (Working) → AI done (Review) → User approves (Complete)
 - Complete means work finished; Git commits handled separately";
 
@@ -403,7 +414,7 @@ red, blue, green, orange, violet, yellow, grey, black, gold
 
 **CRITICAL:** Descriptions appear on marker click. Make them informative!
 
-Include: 
+Include:
 - Emoji identifier
 - Key facts (height, date, capacity, rating)
 - Practical info (entry fee, hours, access)
