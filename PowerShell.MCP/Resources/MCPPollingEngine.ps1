@@ -1,4 +1,4 @@
-# MCPPollingEngine.ps1
+﻿# MCPPollingEngine.ps1
 
 # ===== Main Timer Setup =====
 
@@ -26,19 +26,29 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     if (-not $env:FORCE_COLOR) {
         $env:FORCE_COLOR = '1'
     }
+    # GitHub CLI (gh) and other tools using CLICOLOR
+    if (-not $env:CLICOLOR_FORCE) {
+        $env:CLICOLOR_FORCE = '1'
+    }
+    # Modern terminals supporting 24-bit color (truecolor)
+    if (-not $env:COLORTERM) {
+        $env:COLORTERM = 'truecolor'
+    }
     # npm uses NPM_CONFIG_* environment variables for configuration
     if (-not $env:NPM_CONFIG_COLOR) {
         $env:NPM_CONFIG_COLOR = 'always'
     }
-
     # Rust cargo
     if (-not $env:CARGO_TERM_COLOR) {
         $env:CARGO_TERM_COLOR = 'always'
     }
-
     # pytest and other Python tools
     if (-not $env:PY_COLORS) {
         $env:PY_COLORS = '1'
+    }
+    # .NET tools using System.Console
+    if (-not $env:DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION) {
+        $env:DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION = '1'
     }
 
     Register-ObjectEvent `
