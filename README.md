@@ -290,6 +290,7 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 - **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C. To cancel AI-executed commands, close the PowerShell console
 - **User Command Privacy**: Commands executed by users are not visible to AI assistants
 - **Verbose/Debug Streams**: Verbose and Debug output streams are not captured. Users can share this information with AI assistants via clipboard if needed
+- **Standard Error (stderr)**: Standard error output from CLI programs is not displayed in the PowerShell console and is not visible to AI assistants. To capture stderr, explicitly redirect it to a variable (e.g., `$result = & command.exe 2>&1`)
 - **External Command Colors**: Color output from external commands (e.g., git.exe) is lost and displayed without colors in the PowerShell console
 
 ## Disclaimer
