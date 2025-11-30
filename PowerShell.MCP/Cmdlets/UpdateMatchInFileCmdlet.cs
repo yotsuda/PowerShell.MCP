@@ -136,110 +136,140 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             actionDescription = $"Replace pattern '{Pattern}' with '{Replacement}'{rangeInfo}";
         }
 
-        if (ShouldProcess(resolvedPath, actionDescription))
+        // -WhatIf が明示的に指定されているかチェック
+        bool isWhatIf = MyInvocation.BoundParameters.ContainsKey("WhatIf") && 
+                        (SwitchParameter)MyInvocation.BoundParameters["WhatIf"];
+        
+        // ShouldProcess で確認（-Confirm や -WhatIf の処理）
+        if (!ShouldProcess(resolvedPath, actionDescription))
         {
-            // バックアップ
-            if (Backup)
+            // -Confirm で No を選んだ場合、または -WhatIf の場合
+            if (!isWhatIf)
             {
-                var backupPath = TextFileUtility.CreateBackup(resolvedPath);
-                WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
+                // -Confirm で No: 何も表示せず終了
+                return;
             }
+            // -WhatIf の場合は差分プレビューを表示するため続行
+        }
+        
+        bool dryRun = isWhatIf;
 
-            // ===== 1st pass: マッチ行番号収集 =====
-            var matchedLines = new HashSet<int>();
-            
-            using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-            {
-                bool hasLines = enumerator.MoveNext();
-                if (!hasLines)
-                {
-                    WriteObject($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made");
-                    return;
-                }
-                
-                int lineNumber = 1;
-                string currentLine = enumerator.Current;
-                bool hasNext = enumerator.MoveNext();
-                
-                while (true)
-                {
-                    if (lineNumber >= startLine && lineNumber <= endLine)
-                    {
-                        bool matched = false;
-                        
-                        if (isLiteral)
-                        {
-                            if (currentLine.Contains(Contains!))
-                            {
-                                matched = true;
-                            }
-                        }
-                        else
-                        {
-                            if (regex!.IsMatch(currentLine))
-                            {
-                                matched = true;
-                            }
-                        }
-                        
-                        if (matched)
-                        {
-                            matchedLines.Add(lineNumber);
-                        }
-                    }
-                    
-                    if (hasNext)
-                    {
-                        lineNumber++;
-                        currentLine = enumerator.Current;
-                        hasNext = enumerator.MoveNext();
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-            }
+        // バックアップ（dryRun でない場合のみ）
+        if (!dryRun && Backup)
+        {
+            var backupPath = TextFileUtility.CreateBackup(resolvedPath);
+            WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
+        }
 
-            if (matchedLines.Count == 0)
+        // ===== 1st pass: マッチ行番号収集 =====
+        var matchedLines = new HashSet<int>();
+        
+        using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
+        {
+            bool hasLines = enumerator.MoveNext();
+            if (!hasLines)
             {
                 WriteObject($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made");
                 return;
             }
-
-            // ===== 2nd pass: 置換実行 + コンテキスト表示 =====
-            var tempFile = System.IO.Path.GetTempFileName();
-            int replacementCount = 0;
-
-            try
+            
+            int lineNumber = 1;
+            string currentLine = enumerator.Current;
+            bool hasNext = enumerator.MoveNext();
+            
+            while (true)
             {
-                replacementCount = ReplaceAndOutputContext(
-                    resolvedPath, 
-                    tempFile, 
-                    originalPath,
-                    metadata, 
-                    matchedLines, 
-                    isLiteral, 
-                    regex,
-                    startLine,
-                    endLine);
-
-                // アトミックに置換
-                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
-
-                // 空行でコンテキストとサマリを分離
-                WriteObject("");
+                if (lineNumber >= startLine && lineNumber <= endLine)
+                {
+                    bool matched = false;
+                    
+                    if (isLiteral)
+                    {
+                        if (currentLine.Contains(Contains!))
+                        {
+                            matched = true;
+                        }
+                    }
+                    else
+                    {
+                        if (regex!.IsMatch(currentLine))
+                        {
+                            matched = true;
+                        }
+                    }
+                    
+                    if (matched)
+                    {
+                        matchedLines.Add(lineNumber);
+                    }
+                }
                 
+                if (hasNext)
+                {
+                    lineNumber++;
+                    currentLine = enumerator.Current;
+                    hasNext = enumerator.MoveNext();
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        if (matchedLines.Count == 0)
+        {
+            if (dryRun)
+            {
+                WriteWarning("No lines matched. File not modified.");
+            }
+            else
+            {
+                WriteObject($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made");
+            }
+            return;
+        }
+
+        // ===== 2nd pass: 置換実行 + コンテキスト表示 =====
+        string? tempFile = dryRun ? null : System.IO.Path.GetTempFileName();
+        int replacementCount = 0;
+
+        try
+        {
+            replacementCount = ReplaceAndOutputContext(
+                resolvedPath, 
+                tempFile, 
+                originalPath,
+                metadata, 
+                matchedLines, 
+                isLiteral, 
+                regex,
+                startLine,
+                endLine,
+                dryRun);
+
+            // 空行でコンテキストとサマリを分離
+            WriteObject("");
+
+            if (dryRun)
+            {
+                // WhatIf: ファイルは変更しない
+                WriteObject($"What if: Would update {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s)");
+            }
+            else
+            {
+                // アトミックに置換
+                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile!);
                 WriteObject($"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made");
             }
-            catch
+        }
+        catch
+        {
+            if (tempFile != null && File.Exists(tempFile))
             {
-                if (File.Exists(tempFile))
-                {
-                    File.Delete(tempFile);
-                }
-                throw;
+                File.Delete(tempFile);
             }
+            throw;
         }
     }
     /// <summary>
@@ -247,14 +277,15 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     /// </summary>
     private int ReplaceAndOutputContext(
         string resolvedPath, 
-        string tempFile,
+        string? tempFile,
         string originalPath, 
         TextFileUtility.FileMetadata metadata,
         HashSet<int> matchedLines,
         bool isLiteral,
         Regex? regex,
         int startLine,
-        int endLine)
+        int endLine,
+        bool dryRun = false)
     {
         int replacementCount = 0;
         var outputLines = new HashSet<int>();  // 出力済み行を追跡
@@ -272,117 +303,128 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         WriteObject($"==> {displayPath} <==");
         
         using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
-        using (var writer = new StreamWriter(tempFile, false, metadata.Encoding))
         {
-            writer.NewLine = metadata.NewlineSequence;
-            
-            bool hasLines = enumerator.MoveNext();
-            if (!hasLines) return 0;
-            
-            int lineNumber = 1;
-            string currentLine = enumerator.Current;
-            bool hasNext = enumerator.MoveNext();
-            
-            // Rotate buffer: 前2行を保持（行内容と行番号のペア）
-            var preContextBuffer = new RotateBuffer<(string line, int lineNumber)>(2);
-            
-            // 後続コンテキストカウンタ: マッチ後の2行を収集
-            int afterMatchCounter = 0;
-            
-            while (true)
+            StreamWriter? writer = null;
+            try
             {
-                bool isMatched = matchedLines.Contains(lineNumber);
-                string outputLine = currentLine;
-                
-                if (isMatched)
+                if (!dryRun && tempFile != null)
                 {
-                    // ギャップ検出: 前回出力から2行以上離れている場合、空行を挿入
-                    if (lastOutputLine > 0 && lineNumber - 2 > lastOutputLine + 1)
-                    {
-                        WriteObject("");
-                    }
+                    writer = new StreamWriter(tempFile, false, metadata.Encoding);
+                    writer.NewLine = metadata.NewlineSequence;
+                }
+                
+                bool hasLines = enumerator.MoveNext();
+                if (!hasLines) return 0;
+                
+                int lineNumber = 1;
+                string currentLine = enumerator.Current;
+                bool hasNext = enumerator.MoveNext();
+                
+                // Rotate buffer: 前2行を保持（行内容と行番号のペア）
+                var preContextBuffer = new RotateBuffer<(string line, int lineNumber)>(2);
+                
+                // 後続コンテキストカウンタ: マッチ後の2行を収集
+                int afterMatchCounter = 0;
+                
+                while (true)
+                {
+                    bool isMatched = matchedLines.Contains(lineNumber);
+                    string outputLine = currentLine;
                     
-                    // 前2行を出力（rotate bufferから、未出力の場合のみ）
-                    foreach (var ctx in preContextBuffer)
+                    if (isMatched)
                     {
-                        if (!outputLines.Contains(ctx.lineNumber))
+                        // ギャップ検出: 前回出力から2行以上離れている場合、空行を挿入
+                        if (lastOutputLine > 0 && lineNumber - 2 > lastOutputLine + 1)
                         {
-                            var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex, highlightOn, highlightOff);
-                            WriteObject($"{ctx.lineNumber,3}- {ctxDisplayLine}");
-                            outputLines.Add(ctx.lineNumber);
-                            lastOutputLine = ctx.lineNumber;
+                            WriteObject("");
+                        }
+                        
+                        // 前2行を出力（rotate bufferから、未出力の場合のみ）
+                        foreach (var ctx in preContextBuffer)
+                        {
+                            if (!outputLines.Contains(ctx.lineNumber))
+                            {
+                                var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex, highlightOn, highlightOff);
+                                WriteObject($"{ctx.lineNumber,3}- {ctxDisplayLine}");
+                                outputLines.Add(ctx.lineNumber);
+                                lastOutputLine = ctx.lineNumber;
+                            }
+                        }
+                        
+                        // 置換実行
+                        if (isLiteral)
+                        {
+                            int count = (currentLine.Length - currentLine.Replace(Contains!, "").Length) / 
+                                        Math.Max(1, Contains!.Length);
+                            replacementCount += count;
+                            outputLine = currentLine.Replace(Contains, Replacement);
+                        }
+                        else
+                        {
+                            var matches = regex!.Matches(currentLine);
+                            replacementCount += matches.Count;
+                            outputLine = regex.Replace(currentLine, Replacement!);
+                        }
+                        
+                        // マッチ行を赤（削除）と緑（追加）で表示
+                        string displayLine;
+                        if (isLiteral)
+                        {
+                            // リテラル置換: 削除部分（赤）と追加部分（緑）を連続表示
+                            displayLine = currentLine.Replace(Contains!, 
+                                $"{deleteOn}{Contains}{deleteOff}{insertOn}{Replacement}{insertOff}");
+                        }
+                        else
+                        {
+                            // 正規表現置換: 各マッチに対して削除→追加を表示
+                            displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, deleteOn, deleteOff, insertOn, insertOff);
+                        }
+                        
+                        WriteObject($"{lineNumber,3}: {displayLine}");
+                        outputLines.Add(lineNumber);
+                        lastOutputLine = lineNumber;
+                        afterMatchCounter = 2;
+                    }
+                    else
+                    {
+                        // 後続コンテキストの出力
+                        if (afterMatchCounter > 0 && !outputLines.Contains(lineNumber))
+                        {
+                            var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex, highlightOn, highlightOff);
+                            WriteObject($"{lineNumber,3}- {displayContextLine}");
+                            outputLines.Add(lineNumber);
+                            lastOutputLine = lineNumber;
+                            afterMatchCounter--;
                         }
                     }
                     
-                    // 置換実行
-                    if (isLiteral)
+                    // ファイルに書き込み（dryRun でない場合のみ）
+                    writer?.Write(outputLine);
+                    
+                    // Rotate buffer更新（行番号とともに保存）
+                    preContextBuffer.Add((currentLine, lineNumber));
+                    
+                    if (hasNext)
                     {
-                        int count = (currentLine.Length - currentLine.Replace(Contains!, "").Length) / 
-                                    Math.Max(1, Contains!.Length);
-                        replacementCount += count;
-                        outputLine = currentLine.Replace(Contains, Replacement);
+                        writer?.Write(metadata.NewlineSequence);
+                        lineNumber++;
+                        currentLine = enumerator.Current;
+                        hasNext = enumerator.MoveNext();
                     }
                     else
                     {
-                        var matches = regex!.Matches(currentLine);
-                        replacementCount += matches.Count;
-                        outputLine = regex.Replace(currentLine, Replacement!);
-                    }
-                    
-                    // マッチ行を赤（削除）と緑（追加）で表示
-                    string displayLine;
-                    if (isLiteral)
-                    {
-                        // リテラル置換: 削除部分（赤+取り消し線）と追加部分（緑）を連続表示
-                        displayLine = currentLine.Replace(Contains!, 
-                            $"{deleteOn}{Contains}{deleteOff}{insertOn}{Replacement}{insertOff}");
-                    }
-                    else
-                    {
-                        // 正規表現置換: 各マッチに対して削除→追加を表示
-                        displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, deleteOn, deleteOff, insertOn, insertOff);
-                    }
-                    
-                    WriteObject($"{lineNumber,3}: {displayLine}");
-                    outputLines.Add(lineNumber);
-                    lastOutputLine = lineNumber;
-                    afterMatchCounter = 2;
-                }
-                else
-                {
-                    // 後続コンテキストの出力
-                    if (afterMatchCounter > 0 && !outputLines.Contains(lineNumber))
-                    {
-                        var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex, highlightOn, highlightOff);
-                        WriteObject($"{lineNumber,3}- {displayContextLine}");
-                        outputLines.Add(lineNumber);
-                        lastOutputLine = lineNumber;
-                        afterMatchCounter--;
+                        break;
                     }
                 }
                 
-                // ファイルに書き込み
-                writer.Write(outputLine);
-                
-                // Rotate buffer更新（行番号とともに保存）
-                preContextBuffer.Add((currentLine, lineNumber));
-                
-                if (hasNext)
+                if (metadata.HasTrailingNewline)
                 {
-                    writer.Write(metadata.NewlineSequence);
-                    lineNumber++;
-                    currentLine = enumerator.Current;
-                    hasNext = enumerator.MoveNext();
-                }
-                else
-                {
-                    break;
+                    writer?.Write(metadata.NewlineSequence);
                 }
             }
-            
-            if (metadata.HasTrailingNewline)
+            finally
             {
-                writer.Write(metadata.NewlineSequence);
+                writer?.Dispose();
             }
         }
         
