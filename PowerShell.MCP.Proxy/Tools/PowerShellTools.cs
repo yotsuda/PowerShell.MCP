@@ -16,8 +16,6 @@ public static class PowerShellTools
         IPowerShellService powerShellService,
         CancellationToken cancellationToken = default)
     {
-        Console.Error.WriteLine("[DEBUG] GetCurrentLocation static method called!");
-        
         var result = await powerShellService.GetCurrentLocationAsync(cancellationToken);
         
         // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
@@ -84,8 +82,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         bool execute_immediately = true,
         CancellationToken cancellationToken = default)
     {
-        Console.Error.WriteLine($"[DEBUG] InvokeExpression static method called! Pipeline: {pipeline}, ExecuteImmediately: {execute_immediately}");
-        
         var result = await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
         
         // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
@@ -112,8 +108,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         IPowerShellService powerShellService,
         CancellationToken cancellationToken = default)
     {
-        Console.Error.WriteLine("[DEBUG] StartPowershellConsole static method called!");
-
         try
         {
             Console.Error.WriteLine("[INFO] Starting new PowerShell console with PowerShell.MCP module...");

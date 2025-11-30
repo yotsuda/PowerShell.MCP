@@ -57,6 +57,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
     protected override void ProcessRecord()
     {
         foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
+        {
             try
             {
                 var metadata = TextFileUtility.DetectFileMetadata(fileInfo.ResolvedPath, Encoding);
@@ -70,32 +71,32 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 bool useContains = !string.IsNullOrEmpty(Contains);
                 bool usePattern = !string.IsNullOrEmpty(Pattern);
 
-                    string actionDescription;
-                    if (useLineRange && useContains)
-                    {
-                        (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
-                        actionDescription = $"Remove lines {startLine}-{endLine} containing: {Contains}";
-                    }
-                    else if (useLineRange && usePattern)
-                    {
-                        (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
-                        regex = new Regex(Pattern!, RegexOptions.Compiled);
-                        actionDescription = $"Remove lines {startLine}-{endLine} matching pattern: {Pattern}";
-                    }
-                    else if (useLineRange)
-                    {
-                        (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
-                        actionDescription = $"Remove lines {startLine}-{endLine}";
-                    }
-                    else if (useContains)
-                    {
-                        actionDescription = $"Remove lines containing: {Contains}";
-                    }
-                    else // usePattern only
-                    {
-                        regex = new Regex(Pattern!, RegexOptions.Compiled);
-                        actionDescription = $"Remove lines matching pattern: {Pattern}";
-                    }
+                string actionDescription;
+                if (useLineRange && useContains)
+                {
+                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
+                    actionDescription = $"Remove lines {startLine}-{endLine} containing: {Contains}";
+                }
+                else if (useLineRange && usePattern)
+                {
+                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
+                    regex = new Regex(Pattern!, RegexOptions.Compiled);
+                    actionDescription = $"Remove lines {startLine}-{endLine} matching pattern: {Pattern}";
+                }
+                else if (useLineRange)
+                {
+                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
+                    actionDescription = $"Remove lines {startLine}-{endLine}";
+                }
+                else if (useContains)
+                {
+                    actionDescription = $"Remove lines containing: {Contains}";
+                }
+                else // usePattern only
+                {
+                    regex = new Regex(Pattern!, RegexOptions.Compiled);
+                    actionDescription = $"Remove lines matching pattern: {Pattern}";
+                }
 
                 if (ShouldProcess(fileInfo.ResolvedPath, actionDescription))
                 {
@@ -108,7 +109,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     var tempFile = System.IO.Path.GetTempFileName();
                     int linesRemoved = 0;
                     int currentRemovalCount = 0; // 現在の削除範囲でのカウント
-                    
+
                     // コンテキスト表示用（rotate buffer）
                     var preContextBuffer = new RotateBuffer<(string line, int outputLineNum)>(2);
                     int afterRemovalCounter = 0;
@@ -131,7 +132,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
                         {
                             writer.NewLine = metadata.NewlineSequence;
-                            
+
                             // 空ファイルは上でチェック済み
                             if (!enumerator.MoveNext())
                             {
@@ -152,13 +153,13 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 if (useLineRange && useContains)
                                 {
                                     // 両方指定されている場合はAND条件
-                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
+                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) &&
                                                   currentLine.Contains(Contains!);
                                 }
                                 else if (useLineRange && usePattern)
                                 {
                                     // 両方指定されている場合はAND条件
-                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) && 
+                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) &&
                                                   regex!.IsMatch(currentLine);
                                 }
                                 else if (useLineRange)
@@ -184,9 +185,9 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                                         headerPrinted = true;
                                     }
-                                    
+
                                     currentRemovalCount = 0; // 新しい削除範囲開始
-                                    
+
                                     // 前2行をコンテキストとして出力（重複チェック）
                                     foreach (var ctx in preContextBuffer)
                                     {
@@ -213,11 +214,11 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     {
                                         writer.Write(metadata.NewlineSequence);
                                     }
-                                    
+
                                     writer.Write(currentLine);
                                     isFirstOutputLine = false;
                                     outputLineNumber++;
-                                    
+
                                     // 削除後の2行をコンテキストとして出力
                                     if (afterRemovalCounter > 0)
                                     {
@@ -233,7 +234,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 }
 
                                 wasRemoving = shouldRemove;
-                                
+
                                 // Rotate buffer更新（削除されなかった行のみ追加）
                                 if (!shouldRemove)
                                 {
@@ -254,7 +255,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     {
                                         writer.Write(metadata.NewlineSequence);
                                     }
-                                    
+
                                     // ファイル末尾で削除が終わった場合
                                     if (wasRemoving)
                                     {
@@ -277,7 +278,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                         // 空行でコンテキストとサマリを分離
                         WriteObject("");
-                        
+
                         // サマリー出力
                         WriteObject($"{(char)27}[36mRemoved {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)} (net: -{linesRemoved}){(char)27}[0m");
                     }
@@ -297,3 +298,4 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             }
         }
     }
+}

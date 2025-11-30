@@ -1,4 +1,4 @@
-using System.IO.Pipes;
+﻿using System.IO.Pipes;
 using System.Text;
 
 namespace PowerShell.MCP.Proxy.Services;
@@ -112,11 +112,11 @@ public class NamedPipeClient
             }
             catch (TimeoutException)
             {
-                Console.Error.WriteLine($"[DEBUG] Waiting for Named Pipe... attempt {attempt}/{maxAttempts}");
+                // Expected during startup - waiting for Named Pipe
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[DEBUG] Named Pipe test failed (attempt {attempt}): {ex.Message}");
+                Console.Error.WriteLine($"[WARNING] Named Pipe connection attempt {attempt} failed: {ex.Message}");
             }
         }
         
