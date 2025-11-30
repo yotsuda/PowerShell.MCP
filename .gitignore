@@ -443,3 +443,6 @@ Tests/TestReport_*.txt
 Tests/test*.ps1
 Tests/Temp*.ps1
 deployRelease.bat
+
+# PlatyPS auto-generated module help file
+PowerShell.MCP/PlatyPS/en-US/PowerShell.MCP.md
