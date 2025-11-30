@@ -1,4 +1,4 @@
-# Test-AllCmdlets.ps1
+﻿# Test-AllCmdlets.ps1
 # すべてのテキストファイル操作コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -133,13 +133,6 @@ Describe "All Text File Cmdlets Integration Tests" {
     }
 
     Context "エラー処理とリカバリ" {
-        It "Test-TextFileContains でファイルの検証ができる" {
-            $exists = Test-TextFileContains -Path $script:testFile -Contains "First line"
-            $exists | Should -Be $true
-            
-            $notExists = Test-TextFileContains -Path $script:testFile -Contains "NonExistent"
-            $notExists | Should -Be $false
-        }
 
         It "Update-MatchInFile でパターンマッチング置換ができる" {
             $testFile = Join-Path $script:testDir "pattern_test.txt"

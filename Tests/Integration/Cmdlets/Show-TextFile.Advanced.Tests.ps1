@@ -251,19 +251,6 @@ Describe "LineRange - Negative Values Support (End of File)" {
         }
     }
 
-    Context "Test-TextFileContains での負の LineRange" {
-        It "-LineRange 5,-1 で5行目から最後まで検索" {
-            Set-Content -Path $script:testFile -Value $script:content -Encoding UTF8
-            
-            # Line 7 は範囲内（5-10）なので見つかる
-            $result = Test-TextFileContains -Path $script:testFile -LineRange 5,-1 -Contains "Line 7"
-            $result | Should -Be $true
-            
-            # Line 2 は範囲外（1-4）なので見つからない
-            $result = Test-TextFileContains -Path $script:testFile -LineRange 5,-1 -Contains "Line 2"
-            $result | Should -Be $false
-        }
-    }
 
     Context "Update-MatchInFile での負の LineRange" {
         It "-LineRange 5,-1 で5行目から最後までの範囲で置換" {

@@ -50,6 +50,7 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
 
 • Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
   Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex).
+  Use negative LineRange to show tail: -LineRange -10 shows last 10 lines, -LineRange -10,-1 is equivalent.
 
 • Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
   Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines.
@@ -63,15 +64,13 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
 • Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup]
   Removes lines matching text (literal or regex) within optional range.
 
-• Test-TextFileContains [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
-  Tests if file contains matching text (literal or regex) within specified line range. Returns Boolean.
-
 Note: All cmdlets support -LiteralPath for exact paths and accept arrays directly (no loops needed). For LineRange, use -1 or 0 for end of file (e.g., 100,-1).
 
 Examples:
   ✅ CORRECT: invoke_expression('Add-LinesToFile -Path file.cs -Content $code')
   ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 10,20')
   ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 100,-1')  # To end of file
+  ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange -10')     # Last 10 lines
   ❌ WRONG: invoke_expression('Set-Content -Path file.cs -Value $code')
   ❌ WRONG: invoke_expression('Get-Content file.txt | Select-Object -Skip 9 -First 11')
 
