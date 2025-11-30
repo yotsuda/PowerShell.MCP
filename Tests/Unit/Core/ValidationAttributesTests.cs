@@ -73,24 +73,19 @@ public class ValidationAttributesTests
             InvokeValidate(invalidRange));
         
         Assert.IsType<ValidationMetadataException>(exception.InnerException);
-        Assert.Contains("Start line must be", exception.InnerException!.Message);
-        Assert.Contains("Invalid value: 0", exception.InnerException.Message);
+        Assert.Contains("Start line cannot be 0", exception.InnerException!.Message);
     }
 
 
     [Fact]
-    public void Validate_NegativeLineNumber_ThrowsValidationException()
+    public void Validate_NegativeSingleValue_IsValidForTailLines()
     {
-        // Arrange
-        var invalidRange = new[] { -1 };
+        // Arrange - negative single value means "last N lines"
+        var validRange = new[] { -10 };
 
-        // Act & Assert
-        var exception = Assert.Throws<TargetInvocationException>(() => 
-            InvokeValidate(invalidRange));
-        
-        Assert.IsType<ValidationMetadataException>(exception.InnerException);
-        Assert.Contains("Start line must be", exception.InnerException!.Message);
-        Assert.Contains("Invalid value: -1", exception.InnerException.Message);
+        // Act & Assert - should not throw
+        var exception = Record.Exception(() => InvokeValidate(validRange));
+        Assert.Null(exception);
     }
 
 
