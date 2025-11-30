@@ -520,22 +520,22 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             for (int i = 0; i < linesInserted; i++)
             {
                 int lineNum = startLine + i;
-                WriteObject($"{lineNum,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                WriteObject($"{lineNum,3}: \x1b[32m{contentLines[i]}\x1b[0m");
             }
         }
         else
         {
             // 6行以上: 先頭2行 + 省略マーカー + 末尾2行
             // 先頭2行
-            WriteObject($"{startLine,3}: \x1b[7m{contentLines[0]}\x1b[0m");
-            WriteObject($"{startLine + 1,3}: \x1b[7m{contentLines[1]}\x1b[0m");
+            WriteObject($"{startLine,3}: \x1b[32m{contentLines[0]}\x1b[0m");
+            WriteObject($"{startLine + 1,3}: \x1b[32m{contentLines[1]}\x1b[0m");
             
             // 省略マーカー
             WriteObject("   :");
             
             // 末尾2行
-            WriteObject($"{endLine - 1,3}: \x1b[7m{contentLines[linesInserted - 2]}\x1b[0m");
-            WriteObject($"{endLine,3}: \x1b[7m{contentLines[linesInserted - 1]}\x1b[0m");
+            WriteObject($"{endLine - 1,3}: \x1b[32m{contentLines[linesInserted - 2]}\x1b[0m");
+            WriteObject($"{endLine,3}: \x1b[32m{contentLines[linesInserted - 1]}\x1b[0m");
         }
         
         // 後2行のコンテキスト

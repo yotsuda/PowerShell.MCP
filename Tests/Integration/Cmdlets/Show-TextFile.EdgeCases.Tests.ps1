@@ -43,7 +43,7 @@
             
             $matchLine = $result | Where-Object { $_ -match ":" }
             # 3箇所の "Test" がすべてハイライトされる
-            $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[7m")).Count
+            $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[33m")).Count
             $highlightCount | Should -Be 3
         }
 
@@ -53,7 +53,7 @@
             
             $matchLine = $result | Where-Object { $_ -match ":" }
             # 3箇所の数字がすべてハイライトされる
-            $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[7m")).Count
+            $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[33m")).Count
             $highlightCount | Should -Be 3
         }
     }
@@ -138,7 +138,7 @@
             $result = Show-TextFile -Path $script:testFile -Contains "TARGET"
             
             $matchLine = $result | Where-Object { $_ -match "^\s+\d+:" }
-            $matchLine | Should -Match "$([char]27)\[7mTARGET$([char]27)\[0m"
+            $matchLine | Should -Match "$([char]27)\[33mTARGET$([char]27)\[0m"
         }
     }
 

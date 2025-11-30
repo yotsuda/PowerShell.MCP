@@ -1,4 +1,4 @@
-# Context Display Feature Tests
+﻿# Context Display Feature Tests
 # v1.3.0以降のコンテキスト表示機能の統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -76,12 +76,13 @@ Describe "Context Display Feature Tests" {
             $contextLines | Should -Not -BeNullOrEmpty
         }
 
-        It "反転表示マーカー（ANSIエスケープシーケンス）が含まれる" {
+        It "差分表示マーカー（ANSIエスケープシーケンス）が含まれる" {
             $output = Update-MatchInFile -Path $script:testFile -Contains "old value" -Replacement "new value" -InformationAction Continue 6>&1 | Out-String
             
-            # ANSIエスケープシーケンス（反転表示 [7m と リセット [0m）が含まれている
-            $output | Should -Match '\x1b\[7m'
-            $output | Should -Match '\x1b\[0m'
+            # ANSIエスケープシーケンス（赤 [31m と 緑 [32m と リセット [0m）が含まれている
+            $output | Should -Match '\x1b\[31m'  # 赤（削除）
+            $output | Should -Match '\x1b\[32m'  # 緑（追加）
+            $output | Should -Match '\x1b\[0m'   # リセット
         }
 
         It "複数マッチのギャップが適切に表示される" {
@@ -153,7 +154,7 @@ Describe "Context Display Feature Tests" {
             $output = Add-LinesToFile -Path $script:testFile -LineNumber 3 -Content "Inserted Line" -InformationAction Continue 6>&1 | Out-String
             
             # ANSIエスケープシーケンスが含まれている
-            $output | Should -Match '\x1b\[7m'
+            $output | Should -Match '\x1b\[32m'
         }
     }
 
@@ -208,7 +209,7 @@ Describe "Context Display Feature Tests" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 3,3 -Content "Updated Line" -InformationAction Continue 6>&1 | Out-String
             
             # ANSIエスケープシーケンスが含まれている
-            $output | Should -Match '\x1b\[7m'
+            $output | Should -Match '\x1b\[32m'
         }
     }
 

@@ -113,7 +113,7 @@
             
             # ANSI エスケープシーケンス \e[7m (反転ON) と \e[0m (リセット) が含まれる
             $matchLine = $result | Where-Object { $_ -match "^\s*\d+:" }
-            $matchLine | Should -Match "$([char]27)\[7m"  # 反転ON
+            $matchLine | Should -Match "$([char]27)\[33m"  # 黄色ハイライト
             $matchLine | Should -Match "$([char]27)\[0m"  # リセット
         }
 
@@ -122,7 +122,7 @@
             $result = Show-TextFile -Path $script:testFile -Pattern "Error:"
             
             $matchLine = $result | Where-Object { $_ -match "^\s*\d+:" }
-            $matchLine | Should -Match "$([char]27)\[7m"
+            $matchLine | Should -Match "$([char]27)\[33m"
             $matchLine | Should -Match "$([char]27)\[0m"
         }
 

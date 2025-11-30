@@ -260,8 +260,12 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         var outputLines = new HashSet<int>();  // 出力済み行を追跡
         int lastOutputLine = 0;  // 前回出力した行番号（ギャップ検出用）
         
-        string reverseOn = $"{(char)27}[7m";
-        string reverseOff = $"{(char)27}[0m";
+        string deleteOn = $"{(char)27}[31m";  // 赤
+        string deleteOff = $"{(char)27}[0m";
+        string insertOn = $"{(char)27}[32m";  // 緑
+        string insertOff = $"{(char)27}[0m";
+        string highlightOn = $"{(char)27}[33m";  // 黄色（コンテキスト行のマッチ用）
+        string highlightOff = $"{(char)27}[0m";
         
         // ヘッダー出力
         var displayPath = GetDisplayPath(originalPath, resolvedPath);
@@ -303,7 +307,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                     {
                         if (!outputLines.Contains(ctx.lineNumber))
                         {
-                            var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex, reverseOn, reverseOff);
+                            var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex, highlightOn, highlightOff);
                             WriteObject($"{ctx.lineNumber,3}- {ctxDisplayLine}");
                             outputLines.Add(ctx.lineNumber);
                             lastOutputLine = ctx.lineNumber;
@@ -325,22 +329,18 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                         outputLine = regex.Replace(currentLine, Replacement!);
                     }
                     
-                    // マッチ行を反転表示して出力
+                    // マッチ行を赤（削除）と緑（追加）で表示
                     string displayLine;
                     if (isLiteral)
                     {
-                        if (!string.IsNullOrEmpty(Replacement))
-                        {
-                            displayLine = outputLine.Replace(Replacement, $"{reverseOn}{Replacement}{reverseOff}");
-                        }
-                        else
-                        {
-                            displayLine = outputLine;
-                        }
+                        // リテラル置換: 削除部分（赤+取り消し線）と追加部分（緑）を連続表示
+                        displayLine = currentLine.Replace(Contains!, 
+                            $"{deleteOn}{Contains}{deleteOff}{insertOn}{Replacement}{insertOff}");
                     }
                     else
                     {
-                        displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, reverseOn, reverseOff);
+                        // 正規表現置換: 各マッチに対して削除→追加を表示
+                        displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, deleteOn, deleteOff, insertOn, insertOff);
                     }
                     
                     WriteObject($"{lineNumber,3}: {displayLine}");
@@ -353,7 +353,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                     // 後続コンテキストの出力
                     if (afterMatchCounter > 0 && !outputLines.Contains(lineNumber))
                     {
-                        var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex, reverseOn, reverseOff);
+                        var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex, highlightOn, highlightOff);
                         WriteObject($"{lineNumber,3}- {displayContextLine}");
                         outputLines.Add(lineNumber);
                         lastOutputLine = lineNumber;
@@ -390,33 +390,29 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         return replacementCount;
     }
 
+
     /// <summary>
-    /// 正規表現置換の反転表示行を構築
+    /// 正規表現置換の差分表示行を構築（削除部分を赤、追加部分を緑で表示）
     /// </summary>
-    private string BuildRegexDisplayLine(string originalLine, Regex regex, string replacement, string reverseOn, string reverseOff)
+    private string BuildRegexDisplayLine(string originalLine, Regex regex, string replacement, 
+        string deleteOn, string deleteOff, string insertOn, string insertOff)
     {
-        // 各マッチの置換結果に反転表示を適用（キャプチャグループ対応）
+        // 各マッチの削除→追加を連続表示（キャプチャグループ対応）
         var result = regex.Replace(originalLine, match => 
         {
             // match.Result() で $1, $2 などを展開した結果を取得
             var replacedText = match.Result(replacement);
             
-            // 空文字列置換（削除）の場合は反転表示しない
-            if (string.IsNullOrEmpty(replacedText))
-            {
-                return replacedText;
-            }
-            
-            // 置換結果全体に反転表示を適用
-            return $"{reverseOn}{replacedText}{reverseOff}";
+            // 削除部分（元のマッチ）を赤+取り消し線、追加部分（置換結果）を緑で表示
+            return $"{deleteOn}{match.Value}{deleteOff}{insertOn}{replacedText}{insertOff}";
         });
         
         return result;
     }
     /// <summary>
-    /// コンテキスト行の表示を構築（マッチがあれば元の文字列を反転表示）
+    /// コンテキスト行の表示を構築（マッチがあれば元の文字列を黄色でハイライト）
     /// </summary>
-    private string BuildContextDisplayLine(string line, bool isLiteral, Regex? regex, string reverseOn, string reverseOff)
+    private string BuildContextDisplayLine(string line, bool isLiteral, Regex? regex, string highlightOn, string highlightOff)
     {
         bool hasMatch = false;
         
@@ -425,7 +421,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             hasMatch = line.Contains(Contains!);
             if (hasMatch)
             {
-                return line.Replace(Contains!, $"{reverseOn}{Contains}{reverseOff}");
+                return line.Replace(Contains!, $"{highlightOn}{Contains}{highlightOff}");
             }
         }
         else
@@ -433,8 +429,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             hasMatch = regex!.IsMatch(line);
             if (hasMatch)
             {
-                // 正規表現のマッチ部分を反転表示（元の文字列のまま）
-                return regex.Replace(line, match => $"{reverseOn}{match.Value}{reverseOff}");
+                // 正規表現のマッチ部分を黄色でハイライト（元の文字列のまま）
+                return regex.Replace(line, match => $"{highlightOn}{match.Value}{highlightOff}");
             }
         }
         

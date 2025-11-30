@@ -317,7 +317,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         for (int i = 0; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                            WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
                             
                             if (i < contentLines.Length - 1)
                             {
@@ -333,7 +333,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         for (int i = 0; i < 2; i++)
                         {
                             writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                            WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
                             writer.Write(metadata.NewlineSequence);
                             outputLineNumber++;
                         }
@@ -353,7 +353,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                            WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
                             
                             if (i < contentLines.Length - 1)
                             {
@@ -425,7 +425,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             for (int i = 0; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                                WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
                                 
                                 if (i < contentLines.Length - 1)
                                 {
@@ -447,7 +447,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             for (int i = 0; i < 2; i++)
                             {
                                 writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                                WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
                                 writer.Write(metadata.NewlineSequence);
                                 outputLineNumber++;
                             }
@@ -467,7 +467,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: \x1b[7m{contentLines[i]}\x1b[0m");
+                                WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
                                 
                                 if (i < contentLines.Length - 1)
                                 {
