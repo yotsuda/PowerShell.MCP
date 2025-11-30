@@ -436,3 +436,9 @@ Convert-ShouldThrowTests.ps1
 
 # Release preparation documents
 *リリース準備*.txt
+
+# Tests directory specific ignores (added 2025-11-30)
+Tests/*.txt
+Tests/TestReport_*.txt
+Tests/test*.ps1
+Tests/Temp*.ps1

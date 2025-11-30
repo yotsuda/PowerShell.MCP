@@ -1,4 +1,4 @@
-﻿# Context Display Feature Tests
+# Context Display Feature Tests
 # v1.3.0以降のコンテキスト表示機能の統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -248,6 +248,121 @@ Describe "Context Display Feature Tests" {
             
             # ギャップが空行で分離されている（Line 5 と Line 8 の間に空行がある）
             $output | Should -Match "5-.*\n\s*\n\s*8-"
+        }
+    }
+
+    Context "Show-TextFile GapLine Duplicate Fix" {
+        # Issue: 近接するマッチでgapLine出力後にprevLineが重複出力される不具合の修正を検証
+        BeforeEach {
+            $script:testFile = Join-Path $script:testDir "gapline-test.txt"
+        }
+
+        It "近接マッチでコンテキスト行が重複しない（ギャップ1行）" {
+            # 実際の不具合再現ケース: 425と429行がマッチ、428行が重複出力されていた
+            $content = @(
+                "Line 1: header"        # 1
+                "Line 2: normal"        # 2
+                "Line 3: if condition"  # 3  context before
+                "Line 4: open"          # 4  context before
+                "Line 5: MATCH_A"       # 5  match
+                "Line 6: close"         # 6  context after
+                "Line 7: else"          # 7  context after / gapLine
+                "Line 8: open2"         # 8  context before (was duplicated)
+                "Line 9: MATCH_B"       # 9  match
+                "Line 10: end"          # 10 context after
+                "Line 11: footer"       # 11 context after
+            )
+            Set-Content -Path $script:testFile -Value $content -Encoding UTF8
+            
+            $output = Show-TextFile -Path $script:testFile -Contains "MATCH_" | Out-String
+            
+            # 各行が1回だけ出力されることを確認（行番号でカウント）
+            # Line 8 が2回出力されていないことを確認
+            $line8Matches = [regex]::Matches($output, "^\s*8[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
+            $line8Matches.Count | Should -Be 1 -Because "Line 8 should appear exactly once (was duplicated before fix)"
+            
+            # 両方のマッチ行が含まれている（行番号で確認）
+            $output | Should -Match "5:"
+            $output | Should -Match "9:"
+        }
+
+        It "連続するコンテキストで重複がない" {
+            # 後続コンテキストと前置コンテキストが重なるケース
+            $content = @(
+                "Line 1"          # 1
+                "Line 2"          # 2  context before
+                "Line 3"          # 3  context before
+                "Line 4: MATCH_A" # 4  match
+                "Line 5"          # 5  context after
+                "Line 6"          # 6  context after / context before
+                "Line 7: MATCH_B" # 7  match
+                "Line 8"          # 8  context after
+                "Line 9"          # 9  context after
+            )
+            Set-Content -Path $script:testFile -Value $content -Encoding UTF8
+            
+            $output = Show-TextFile -Path $script:testFile -Contains "MATCH_" | Out-String
+            
+            # Line 5 と Line 6 が1回だけ出力されることを確認
+            $line5Matches = [regex]::Matches($output, "^\s*5[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
+            $line6Matches = [regex]::Matches($output, "^\s*6[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
+            
+            $line5Matches.Count | Should -Be 1 -Because "Line 5 should appear exactly once"
+            $line6Matches.Count | Should -Be 1 -Because "Line 6 should appear exactly once"
+        }
+
+        It "gapLine が正しく1回だけ出力される（ギャップ1行のケース）" {
+            # gapLine (ギャップが1行の場合に連結出力される行) の動作確認
+            # 後続コンテキスト(2行) + gapLine(1行) + 前置コンテキスト(2行) で連続出力される
+            $content = @(
+                "Line 1"           # 1
+                "Line 2"           # 2  context before
+                "Line 3"           # 3  context before
+                "Line 4: MATCH_A"  # 4  match
+                "Line 5"           # 5  context after
+                "Line 6"           # 6  context after
+                "Line 7"           # 7  gapLine (exactly 1 line gap)
+                "Line 8"           # 8  context before
+                "Line 9"           # 9  context before
+                "Line 10: MATCH_B" # 10 match
+                "Line 11"          # 11 context after
+                "Line 12"          # 12 context after
+            )
+            Set-Content -Path $script:testFile -Value $content -Encoding UTF8
+            
+            $output = Show-TextFile -Path $script:testFile -Contains "MATCH_" | Out-String
+            
+            # 重複がないことを確認
+            # Line 8 と Line 9 が1回だけ出力される（重複していない）
+            $line8Matches = [regex]::Matches($output, "^\s*8[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
+            $line9Matches = [regex]::Matches($output, "^\s*9[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
+            $line8Matches.Count | Should -Be 1 -Because "Line 8 should appear exactly once"
+            $line9Matches.Count | Should -Be 1 -Because "Line 9 should appear exactly once"
+            
+            # マッチ行が出力されている
+            $output | Should -Match "4:"
+            $output | Should -Match "10:"
+        }
+
+        It "Pattern モードでも重複がない" {
+            $content = @(
+                "Line 1"
+                "Line 2"
+                "Line 3: TARGET_ONE"
+                "Line 4"
+                "Line 5"
+                "Line 6: TARGET_TWO"
+                "Line 7"
+            )
+            Set-Content -Path $script:testFile -Value $content -Encoding UTF8
+            
+            $output = Show-TextFile -Path $script:testFile -Pattern "TARGET_\w+" | Out-String
+            
+            # 各行が最大1回だけ出力される
+            foreach ($lineNum in 1..7) {
+                $matches = [regex]::Matches($output, "^\s*$lineNum[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
+                $matches.Count | Should -BeLessOrEqual 1 -Because "Line $lineNum should appear at most once"
+            }
         }
     }
 }
