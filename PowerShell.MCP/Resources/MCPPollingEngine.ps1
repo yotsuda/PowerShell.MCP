@@ -420,6 +420,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     $locationInfo = "Location [$($currentLocation.provider)]: $($currentLocation.currentPath)"
 
+                    # Display prompt after command output (without trailing newline)
+                    try {
+                        $promptText = & { prompt }
+                        $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
+                        [Console]::Write("${cleanPrompt}> ")
+                    }
+                    catch {
+                        [Console]::Write("PS $($currentLocation.currentPath)> ")
+                    }
+
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
                 }
