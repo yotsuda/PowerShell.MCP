@@ -99,21 +99,41 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private void ShowWithLineRange(string inputPath, string filePath, System.Text.Encoding encoding)
     {
-        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
-        
-        // ヘッダー出力
         var displayPath = GetDisplayPath(inputPath, filePath);
         WriteObject($"==> {displayPath} <==");
 
-        // Skip/Take で必要な範囲だけを取得（LINQの遅延評価で効率的）
-        int skipCount = startLine - 1;
-        int takeCount = endLine - startLine + 1;
+        // LineRange が null または空の場合はデフォルト (1, int.MaxValue)
+        int requestedStart = 1;
+        int requestedEnd = int.MaxValue;
+        
+        if (LineRange != null && LineRange.Length > 0)
+        {
+            requestedStart = LineRange[0];
+            requestedEnd = LineRange.Length > 1 ? LineRange[1] : requestedStart;
+            
+            // 末尾からの指定 (-10 または -10,-1)
+            if (requestedStart < 0)
+            {
+                ShowTailLines(filePath, encoding, -requestedStart);
+                return;
+            }
+            
+            // endLine が 0 または負数の場合は末尾まで
+            if (requestedEnd <= 0)
+            {
+                requestedEnd = int.MaxValue;
+            }
+        }
+
+        // 通常の範囲指定
+        int skipCount = requestedStart - 1;
+        int takeCount = requestedEnd == int.MaxValue ? int.MaxValue : requestedEnd - requestedStart + 1;
 
         var lines = File.ReadLines(filePath, encoding)
             .Skip(skipCount)
             .Take(takeCount);
 
-        int currentLine = startLine;
+        int currentLine = requestedStart;
         bool hasOutput = false;
 
         foreach (var line in lines)
@@ -123,10 +143,33 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             hasOutput = true;
         }
 
-        // 1行も出力されなかった場合のみメッセージ
         if (!hasOutput && LineRange != null)
         {
-            WriteWarning($"Line range {startLine}-{endLine} is beyond file length. No output.");
+            WriteWarning($"Line range {requestedStart}-{requestedEnd} is beyond file length. No output.");
+        }
+    }
+
+    private void ShowTailLines(string filePath, System.Text.Encoding encoding, int tailCount)
+    {
+        // RotateBuffer を使って末尾N行を1passで取得
+        var buffer = new RotateBuffer<(string line, int lineNumber)>(tailCount);
+        
+        int lineNumber = 1;
+        foreach (var line in File.ReadLines(filePath, encoding))
+        {
+            buffer.Add((line, lineNumber));
+            lineNumber++;
+        }
+
+        if (buffer.Count == 0)
+        {
+            WriteWarning("File is empty. No output.");
+            return;
+        }
+
+        foreach (var item in buffer)
+        {
+            WriteObject($"{item.lineNumber,3}: {item.line}");
         }
     }
 
@@ -174,11 +217,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             string currentLine = enumerator.Current;
             bool hasNext = enumerator.MoveNext();
             
-            // Rotate buffer: 前2行 + ギャップ候補1行
-            string? prevPrevLine = null;
-            string? prevLine = null;
-            string? gapLine = null;
-            int gapLineNumber = 0;
+            // Rotate buffer: 前2行を保持（行内容と行番号のペア）
+            var preContextBuffer = new RotateBuffer<(string line, int lineNumber)>(2);
+            
+            // ギャップ候補（後続コンテキスト直後の1行）
+            (string line, int lineNumber)? gapLineInfo = null;
             
             // 後続コンテキストカウンタ
             int afterMatchCounter = 0;
@@ -205,28 +248,29 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         headerPrinted = true;
                     }
                     
-                    // ギャップ処理: gapLine があれば判定して出力
-                    if (gapLine != null && gapLineNumber > 0)
+                    // ギャップ処理: gapLineInfo があれば判定して出力
+                    if (gapLineInfo.HasValue)
                     {
                         // 前置コンテキストの開始行を計算
                         int preContextStart = lineNumber;
-                        if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)
+                        for (int i = preContextBuffer.Count - 1; i >= 0; i--)
                         {
-                            preContextStart = lineNumber - 2;
-                        }
-                        else if (prevLine != null && lineNumber >= 2 && lineNumber - 1 > lastOutputLine)
-                        {
-                            preContextStart = lineNumber - 1;
+                            var ctx = preContextBuffer[i];
+                            if (ctx.lineNumber > lastOutputLine)
+                            {
+                                preContextStart = ctx.lineNumber;
+                            }
                         }
                         
+                        var gapInfo = gapLineInfo.Value;
                         // gapLine の次の行が前置コンテキストの開始なら、gapLine を出力（連続）
-                        if (gapLineNumber + 1 == preContextStart)
+                        if (gapInfo.lineNumber + 1 == preContextStart)
                         {
-                            string gapDisplay = ApplyHighlightingIfMatched(gapLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
-                            WriteObject($"{gapLineNumber,3}- {gapDisplay}");
-                            lastOutputLine = gapLineNumber;
+                            string gapDisplay = ApplyHighlightingIfMatched(gapInfo.line, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                            WriteObject($"{gapInfo.lineNumber,3}- {gapDisplay}");
+                            lastOutputLine = gapInfo.lineNumber;
                         }
-                        else if (gapLineNumber >= preContextStart)
+                        else if (gapInfo.lineNumber >= preContextStart)
                         {
                             // gapLine が前置コンテキストに含まれる → 前置として出力されるので何もしない
                         }
@@ -235,8 +279,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                             // ギャップが2行以上 → 空行で分離
                             WriteObject("");
                         }
-                        gapLine = null;
-                        gapLineNumber = 0;
+                        gapLineInfo = null;
                         needsGapSeparator = false;
                     }
                     else if (needsGapSeparator)
@@ -247,15 +290,13 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     }
                     
                     // 前2行を出力（rotate buffer から）
-                    if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)
+                    foreach (var ctx in preContextBuffer)
                     {
-                        string prevPrevDisplay = ApplyHighlightingIfMatched(prevPrevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
-                        WriteObject($"{lineNumber - 2,3}- {prevPrevDisplay}");
-                    }
-                    if (prevLine != null && lineNumber >= 2 && lineNumber - 1 > lastOutputLine)
-                    {
-                        string prevDisplay = ApplyHighlightingIfMatched(prevLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
-                        WriteObject($"{lineNumber - 1,3}- {prevDisplay}");
+                        if (ctx.lineNumber > lastOutputLine)
+                        {
+                            string ctxDisplay = ApplyHighlightingIfMatched(ctx.line, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                            WriteObject($"{ctx.lineNumber,3}- {ctxDisplay}");
+                        }
                     }
                     
                     // マッチ行を出力（反転表示）
@@ -273,7 +314,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     
                     afterMatchCounter = 2;
                     lastOutputLine = lineNumber;
-                    gapLine = null; // ギャップリセット
+                    gapLineInfo = null; // ギャップリセット
                     needsGapSeparator = false; // フラグもリセット
                 }
                 else
@@ -292,22 +333,19 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         if (lineNumber == lastOutputLine + 1)
                         {
                             // 最後の出力行の次の1行目 → ギャップ候補として保持
-                            gapLine = currentLine;
-                            gapLineNumber = lineNumber;
+                            gapLineInfo = (currentLine, lineNumber);
                         }
                         else if (lineNumber == lastOutputLine + 2)
                         {
                             // 最後の出力行の次の2行目 → ギャップが2行以上 → 空行出力フラグ
                             needsGapSeparator = true;
-                            // gapLine は保持（後で判定に使用）
-                            // lastOutputLine はリセットしない（次のマッチの前置コンテキスト判定に必要）
+                            // gapLineInfo は保持（後で判定に使用）
                         }
                     }
                 }
                 
-                // Rotate buffer更新（元の行を保存）
-                prevPrevLine = prevLine;
-                prevLine = currentLine;
+                // Rotate buffer更新（行番号とともに保存）
+                preContextBuffer.Add((currentLine, lineNumber));
                 
                 // 次へ
                 if (hasNext)
