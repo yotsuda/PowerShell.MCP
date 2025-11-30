@@ -60,6 +60,7 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
 
 • Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup]
   Replaces matching text (literal or regex) within optional line range.
+  ⚠️ STRONGLY RECOMMENDED: Run with -WhatIf first to preview changes. Regex mistakes can corrupt files.
 
 • Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup]
   Removes lines matching text (literal or regex) within optional range.

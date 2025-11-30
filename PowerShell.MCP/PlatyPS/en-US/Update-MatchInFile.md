@@ -175,8 +175,8 @@ Accept wildcard characters: False
 ```
 
 ### -WhatIf
-Shows what would happen if the cmdlet runs.
-The cmdlet is not run.
+Shows a detailed preview of what would change without modifying the file. Displays each matching line with the original text highlighted for removal and the replacement text highlighted for addition, along with surrounding context lines. This is strongly recommended before running regex replacements to verify the changes are correct.
+The cmdlet does not modify the file when this parameter is specified.
 
 ```yaml
 Type: SwitchParameter
