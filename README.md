@@ -11,7 +11,7 @@ Malicious use could result in severe damage. Use responsibly and only in trusted
 
 ## Overview
 
-PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to execute any cmdlets/CLI tools within a PowerShell console. Users can also execute cmdlets/CLI tools in the same console, allowing AI and users to work collaboratively. It operates at high speed without needing to launch a new console each time, while preserving the state of imported modules, functions and variables.
+PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to execute any PowerShell commands and CLI tools within a PowerShell console. Users can also execute cmdlets/CLI tools in the same console, allowing AI and users to work collaboratively. It operates at high speed without needing to launch a new console each time, while preserving the state of imported modules, functions and variables.
 
 Despite its powerful capabilities, PowerShell.MCP is built with just three carefully designed tools:
 - **start_powershell_console:** launching a persistent console
@@ -114,7 +114,7 @@ Import-Module PowerShell.MCP
 ### 3. Get your module path
 ```powershell
 (Get-Module PowerShell.MCP).ModuleBase
-# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.3.6
+# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.3.7
 ```
 
 ### 4. Configure Claude Desktop
@@ -123,7 +123,7 @@ Add to your Claude Desktop configuration:
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.6\\bin\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.7\\bin\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
