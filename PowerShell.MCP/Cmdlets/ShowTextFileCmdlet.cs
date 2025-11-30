@@ -71,7 +71,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 if (fileInfoObj.Length == 0)
                 {
                     var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                    WriteObject($"==> {displayPath} <==");
+                    WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                     WriteWarning("File is empty");
                     continue;
                 }
@@ -100,7 +100,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     private void ShowWithLineRange(string inputPath, string filePath, System.Text.Encoding encoding)
     {
         var displayPath = GetDisplayPath(inputPath, filePath);
-        WriteObject($"==> {displayPath} <==");
+        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
 
         // LineRange が null または空の場合はデフォルト (1, int.MaxValue)
         int requestedStart = 1;
@@ -244,7 +244,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     // ヘッダー出力（初回のみ）
                     if (!headerPrinted)
                     {
-                        WriteObject($"==> {displayPath} <==");
+                        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                         headerPrinted = true;
                     }
                     

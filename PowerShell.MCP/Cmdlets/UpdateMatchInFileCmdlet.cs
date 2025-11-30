@@ -169,7 +169,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             bool hasLines = enumerator.MoveNext();
             if (!hasLines)
             {
-                WriteObject($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made");
+                WriteObject($"{(char)27}[97m{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made{(char)27}[0m");
                 return;
             }
             
@@ -225,7 +225,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             }
             else
             {
-                WriteObject($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made");
+                WriteObject($"{(char)27}[97m{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made{(char)27}[0m");
             }
             return;
         }
@@ -254,13 +254,13 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             if (dryRun)
             {
                 // WhatIf: ファイルは変更しない
-                WriteObject($"What if: Would update {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s)");
+                WriteObject($"{(char)27}[33mWhat if: Would update {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s){(char)27}[0m");
             }
             else
             {
                 // アトミックに置換
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile!);
-                WriteObject($"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made");
+                WriteObject($"{(char)27}[36mUpdated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made{(char)27}[0m");
             }
         }
         catch
@@ -300,7 +300,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         
         // ヘッダー出力
         var displayPath = GetDisplayPath(originalPath, resolvedPath);
-        WriteObject($"==> {displayPath} <==");
+        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
         
         using (var enumerator = File.ReadLines(resolvedPath, metadata.Encoding).GetEnumerator())
         {

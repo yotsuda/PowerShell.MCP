@@ -242,7 +242,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             // 結果メッセージ
             string message = GenerateResultMessage(fileExists, linesRemoved, linesInserted);
             string prefix = fileExists ? "Updated" : "Created";
-            WriteObject($"{prefix} {GetDisplayPath(originalPath, resolvedPath)}: {message}");
+            WriteObject($"{(char)27}[36m{prefix} {GetDisplayPath(originalPath, resolvedPath)}: {message}{(char)27}[0m");
         }
         catch
         {
@@ -495,6 +495,9 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         string[] contentLines)
     {
         var displayPath = GetDisplayPath(originalPath, filePath);
+        
+        // ヘッダー出力
+        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
         
         int endLine = startLine + linesInserted - 1;
         

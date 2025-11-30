@@ -229,8 +229,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                 string message = isNewFile 
-                    ? $"Created {GetDisplayPath(originalPath, resolvedPath)}: {contentLines.Length} line(s) (net: +{contentLines.Length})"
-                    : $"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")} (net: +{contentLines.Length})";
+                    ? $"{(char)27}[36mCreated {GetDisplayPath(originalPath, resolvedPath)}: {contentLines.Length} line(s) (net: +{contentLines.Length}){(char)27}[0m"
+                    : $"{(char)27}[36mAdded {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")} (net: +{contentLines.Length}){(char)27}[0m";
                 
                 WriteObject(message);
 
@@ -300,7 +300,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     // コンテキストヘッダー出力
                     if (!contextHeaderPrinted)
                     {
-                        WriteObject($"==> {displayPath} <==");
+                        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                         contextHeaderPrinted = true;
                     }
                     
@@ -408,7 +408,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         // コンテキストヘッダー出力
                         if (!contextHeaderPrinted)
                         {
-                            WriteObject($"==> {displayPath} <==");
+                            WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                             contextHeaderPrinted = true;
                         }
                         

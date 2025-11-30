@@ -154,7 +154,7 @@
                 $result = Show-TextFile -Path $file1,$file2 -Contains "Target"
                 
                 # 両方のファイルでヘッダーとコンテキストが表示される
-                ($result | Where-Object { $_ -match "^==>" }).Count | Should -Be 2
+                ($result | Where-Object { $_ -match "==>" }).Count | Should -Be 2
                 ($result | Where-Object { $_ -match "^\s+\d+:" }).Count | Should -Be 2
             }
             finally {

@@ -181,7 +181,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     if (!headerPrinted)
                                     {
                                         var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                                        WriteObject($"==> {displayPath} <==");
+                                        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                                         headerPrinted = true;
                                     }
                                     
@@ -279,7 +279,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         WriteObject("");
                         
                         // サマリー出力
-                        WriteObject($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)} (net: -{linesRemoved})");
+                        WriteObject($"{(char)27}[36mRemoved {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)} (net: -{linesRemoved}){(char)27}[0m");
                     }
                     catch
                     {

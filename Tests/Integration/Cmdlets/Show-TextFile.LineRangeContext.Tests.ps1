@@ -1,4 +1,4 @@
-# Show-TextFile: LineRange with Pattern/Contains should display context lines
+﻿# Show-TextFile: LineRange with Pattern/Contains should display context lines
 # Issue: When using -LineRange with -Pattern or -Contains, context lines are not displayed
 
 Describe "Show-TextFile LineRange Context Display" {
@@ -29,7 +29,7 @@ Describe "Show-TextFile LineRange Context Display" {
             $result = Show-TextFile -Path $script:testFile -Pattern "MATCH" -LineRange 4,4
             
             # ヘッダーを除外
-            $contentLines = $result | Where-Object { $_ -notmatch "^==>" -and $_ -ne "" }
+            $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
             
             # 結果を表示（デバッグ用）
             Write-Host "Result lines:"
@@ -51,7 +51,7 @@ Describe "Show-TextFile LineRange Context Display" {
         It "Should display context lines when match is in LineRange" {
             $result = Show-TextFile -Path $script:testFile -Contains "MATCH" -LineRange 4,4
             
-            $contentLines = $result | Where-Object { $_ -notmatch "^==>" -and $_ -ne "" }
+            $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
             
             # 期待される行数：2（前）+ 1（マッチ）+ 2（後）= 5行
             $contentLines.Count | Should -Be 5
@@ -68,7 +68,7 @@ Describe "Show-TextFile LineRange Context Display" {
         It "Should display context lines when LineRange is not specified" {
             $result = Show-TextFile -Path $script:testFile -Pattern "MATCH"
             
-            $contentLines = $result | Where-Object { $_ -notmatch "^==>" -and $_ -ne "" }
+            $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
             
             # LineRange なしではコンテキストが表示される（ベースライン確認）
             $contentLines.Count | Should -BeGreaterThan 1

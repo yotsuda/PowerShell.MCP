@@ -1,4 +1,4 @@
-# Blank Line Separation Tests
+﻿# Blank Line Separation Tests
 # コンテキスト行とサマリ行の間に空行が挿入されることをテストする
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -35,7 +35,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             
             $summaryIndex = -1
             for ($i = 0; $i -lt $lines.Count; $i++) {
-                if ($lines[$i] -match '^Added \d+ line\(s\)') {
+                if ($lines[$i] -match '^.*Added \d+ line\(s\)') {
                     $summaryIndex = $i
                     break
                 }
@@ -68,7 +68,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             
             $summaryIndex = -1
             for ($i = 0; $i -lt $lines.Count; $i++) {
-                if ($lines[$i] -match '^Updated .+: Replaced') {
+                if ($lines[$i] -match '^.*Updated .+: Replaced') {
                     $summaryIndex = $i
                     break
                 }
@@ -100,7 +100,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             
             $summaryIndex = -1
             for ($i = 0; $i -lt $lines.Count; $i++) {
-                if ($lines[$i] -match '^Removed \d+ line\(s\)') {
+                if ($lines[$i] -match '^.*Removed \d+ line\(s\)') {
                     $summaryIndex = $i
                     break
                 }
@@ -132,7 +132,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             
             $summaryIndex = -1
             for ($i = 0; $i -lt $lines.Count; $i++) {
-                if ($lines[$i] -match '^Updated .+: \d+ replacement\(s\) made') {
+                if ($lines[$i] -match '^.*Updated .+: \d+ replacement\(s\) made') {
                     $summaryIndex = $i
                     break
                 }
