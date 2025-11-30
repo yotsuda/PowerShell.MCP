@@ -178,6 +178,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             string? prevPrevLine = null;
             string? prevLine = null;
             string? gapLine = null;
+            int gapLineNumber = 0;
             
             // 後続コンテキストカウンタ
             int afterMatchCounter = 0;
@@ -204,12 +205,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         headerPrinted = true;
                     }
                     
-                    // ギャップがあれば空行を出力
-                    // ただし、gapLineがある場合や、前置コンテキストがlastOutputLineの直後から続く場合は不要
-                    bool needsEmptyLine = needsGapSeparator && gapLine == null;
-                    if (needsEmptyLine)
+                    // ギャップ処理: gapLine があれば判定して出力
+                    if (gapLine != null && gapLineNumber > 0)
                     {
-                        // 前置コンテキストがあっても、lastOutputLineとの間にギャップがあれば空行が必要
+                        // 前置コンテキストの開始行を計算
                         int preContextStart = lineNumber;
                         if (prevPrevLine != null && lineNumber >= 3 && lineNumber - 2 > lastOutputLine)
                         {
@@ -220,20 +219,31 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                             preContextStart = lineNumber - 1;
                         }
                         
-                        // preContextStart が lastOutputLine の直後でない場合のみ空行を出力
-                        if (preContextStart > lastOutputLine + 2)
+                        // gapLine の次の行が前置コンテキストの開始なら、gapLine を出力（連続）
+                        if (gapLineNumber + 1 == preContextStart)
                         {
+                            string gapDisplay = ApplyHighlightingIfMatched(gapLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
+                            WriteObject($"{gapLineNumber,3}- {gapDisplay}");
+                            lastOutputLine = gapLineNumber;
+                        }
+                        else if (gapLineNumber >= preContextStart)
+                        {
+                            // gapLine が前置コンテキストに含まれる → 前置として出力されるので何もしない
+                        }
+                        else
+                        {
+                            // ギャップが2行以上 → 空行で分離
                             WriteObject("");
                         }
+                        gapLine = null;
+                        gapLineNumber = 0;
                         needsGapSeparator = false;
                     }
-                    
-                    // ギャップがあれば gapLine を出力（ギャップが1行だけなので結合）
-                    if (gapLine != null)
+                    else if (needsGapSeparator)
                     {
-                        string gapDisplay = ApplyHighlightingIfMatched(gapLine, matchPredicate, matchValue, isRegex, reverseOn, reverseOff);
-                        WriteObject($"{lastOutputLine + 1,3}- {gapDisplay}");
-                        gapLine = null;
+                        // gapLine がない場合の空行出力
+                        WriteObject("");
+                        needsGapSeparator = false;
                     }
                     
                     // 前2行を出力（rotate buffer から）
@@ -283,12 +293,13 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         {
                             // 最後の出力行の次の1行目 → ギャップ候補として保持
                             gapLine = currentLine;
+                            gapLineNumber = lineNumber;
                         }
                         else if (lineNumber == lastOutputLine + 2)
                         {
                             // 最後の出力行の次の2行目 → ギャップが2行以上 → 空行出力フラグ
                             needsGapSeparator = true;
-                            gapLine = null;
+                            // gapLine は保持（後で判定に使用）
                             // lastOutputLine はリセットしない（次のマッチの前置コンテキスト判定に必要）
                         }
                     }
