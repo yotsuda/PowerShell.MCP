@@ -279,9 +279,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             string currentLine = enumerator.Current;
             bool hasNext = enumerator.MoveNext();
             
-            // Rotate buffer: 前2行を保持
-            string? prevPrevLine = null;
-            string? prevLine = null;
+            // Rotate buffer: 前2行を保持（行内容と行番号のペア）
+            var preContextBuffer = new RotateBuffer<(string line, int lineNumber)>(2);
             
             // 後続コンテキストカウンタ: マッチ後の2行を収集
             int afterMatchCounter = 0;
@@ -300,19 +299,15 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                     }
                     
                     // 前2行を出力（rotate bufferから、未出力の場合のみ）
-                    if (prevPrevLine != null && !outputLines.Contains(lineNumber - 2))
+                    foreach (var ctx in preContextBuffer)
                     {
-                        var displayPrevPrevLine = BuildContextDisplayLine(prevPrevLine, isLiteral, regex, reverseOn, reverseOff);
-                        WriteObject($"{lineNumber - 2,3}- {displayPrevPrevLine}");
-                        outputLines.Add(lineNumber - 2);
-                        lastOutputLine = lineNumber - 2;
-                    }
-                    if (prevLine != null && !outputLines.Contains(lineNumber - 1))
-                    {
-                        var displayPrevLine = BuildContextDisplayLine(prevLine, isLiteral, regex, reverseOn, reverseOff);
-                        WriteObject($"{lineNumber - 1,3}- {displayPrevLine}");
-                        outputLines.Add(lineNumber - 1);
-                        lastOutputLine = lineNumber - 1;
+                        if (!outputLines.Contains(ctx.lineNumber))
+                        {
+                            var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex, reverseOn, reverseOff);
+                            WriteObject($"{ctx.lineNumber,3}- {ctxDisplayLine}");
+                            outputLines.Add(ctx.lineNumber);
+                            lastOutputLine = ctx.lineNumber;
+                        }
                     }
                     
                     // 置換実行
@@ -369,9 +364,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 // ファイルに書き込み
                 writer.Write(outputLine);
                 
-                // Rotate buffer更新（元の行を保存）
-                prevPrevLine = prevLine;
-                prevLine = currentLine;
+                // Rotate buffer更新（行番号とともに保存）
+                preContextBuffer.Add((currentLine, lineNumber));
                 
                 if (hasNext)
                 {

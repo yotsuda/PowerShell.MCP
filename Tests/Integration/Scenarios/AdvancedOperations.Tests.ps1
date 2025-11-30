@@ -1,4 +1,4 @@
-# Test-AdvancedCmdlets.ps1
+﻿# Test-AdvancedCmdlets.ps1
 # Update-LinesInFile, Remove-LinesFromFile, Update-MatchInFile の HIGH優先度テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -56,10 +56,16 @@ Describe "Update-LinesInFile HIGH Priority Tests" {
             $result.Count | Should -BeLessThan 5
         }
 
-        It "H25. 範囲外の LineRange で警告を出す" {
-            $warnings = @()
-            Update-LinesInFile -Path $script:testFile -LineRange 100,200 -Content "Test" -WarningVariable warnings -WarningAction SilentlyContinue
-            # 警告が出る
+        It "H25. 範囲外の LineRange で例外を出す" {
+            $threw = $false
+            try {
+                Update-LinesInFile -Path $script:testFile -LineRange 100,200 -Content "Test" -ErrorAction Stop
+            } catch {
+                $threw = $true
+                $_.Exception.Message | Should -Match "out of bounds"
+            }
+            $threw | Should -BeTrue
+            # ファイルは変更されていない
             $result = Get-Content $script:testFile
             $result | Should -Not -BeNullOrEmpty
         }

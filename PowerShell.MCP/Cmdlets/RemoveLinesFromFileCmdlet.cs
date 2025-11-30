@@ -109,9 +109,8 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     int linesRemoved = 0;
                     int currentRemovalCount = 0; // 現在の削除範囲でのカウント
                     
-                    // コンテキスト表示用（rotate buffer のみ、Dictionary/HashSet/List不使用）
-                    string? prevPrevLine = null;
-                    string? prevLine = null;
+                    // コンテキスト表示用（rotate buffer）
+                    var preContextBuffer = new RotateBuffer<(string line, int outputLineNum)>(2);
                     int afterRemovalCounter = 0;
                     int outputLineNumber = 0; // 新ファイルでの行番号
                     int lastOutputLine = 0; // 最後に出力した行番号（重複回避用）
@@ -189,15 +188,13 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     currentRemovalCount = 0; // 新しい削除範囲開始
                                     
                                     // 前2行をコンテキストとして出力（重複チェック）
-                                    if (prevPrevLine != null && lineNumber >= 3 && outputLineNumber - 1 > lastOutputLine)
+                                    foreach (var ctx in preContextBuffer)
                                     {
-                                        WriteObject($"{outputLineNumber - 1,3}- {prevPrevLine}");
-                                        lastOutputLine = outputLineNumber - 1;
-                                    }
-                                    if (prevLine != null && lineNumber >= 2 && outputLineNumber > lastOutputLine)
-                                    {
-                                        WriteObject($"{outputLineNumber,3}- {prevLine}");
-                                        lastOutputLine = outputLineNumber;
+                                        if (ctx.outputLineNum > lastOutputLine)
+                                        {
+                                            WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
+                                            lastOutputLine = ctx.outputLineNum;
+                                        }
                                     }
                                 }
 
@@ -237,9 +234,11 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                                 wasRemoving = shouldRemove;
                                 
-                                // Rotate buffer更新（常に実行、条件分岐なし）
-                                prevPrevLine = prevLine;
-                                prevLine = currentLine;
+                                // Rotate buffer更新（削除されなかった行のみ追加）
+                                if (!shouldRemove)
+                                {
+                                    preContextBuffer.Add((currentLine, outputLineNumber));
+                                }
 
                                 if (hasNext)
                                 {

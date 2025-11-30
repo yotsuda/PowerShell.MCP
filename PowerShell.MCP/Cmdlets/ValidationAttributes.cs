@@ -34,19 +34,27 @@ public class ValidateLineRangeAttribute : ValidateArgumentsAttribute
             // If two elements, validate the combination
             if (range.Length > 1)
             {
-                // Both negative: -10,-1 means "10th from end to last"
-                // Both positive: 10,20 means "line 10 to 20"
-                // Mixed: not allowed for now
-                if ((range[0] > 0 && range[1] < 0 && range[1] != -1 && range[1] != 0) ||
-                    (range[0] < 0 && range[1] > 0))
+                // range[1] <= 0 means "to end of file" - always valid with positive start
+                if (range[0] > 0 && range[1] <= 0)
                 {
-                    // Allow range[1] == -1 or 0 with positive range[0] (means to end of file)
-                    if (!(range[0] > 0 && (range[1] == -1 || range[1] == 0)))
-                    {
-                        throw new ValidationMetadataException(
-                            "Cannot mix positive and negative line numbers in range (except -1 or 0 for end of file).");
-                    }
+                    return; // Valid: 5,-1 or 5,0 or 5,-99 all mean "line 5 to end"
                 }
+                
+                // Both negative: -10,-1 means "10th from end to last"
+                if (range[0] < 0 && range[1] < 0)
+                {
+                    return; // Valid
+                }
+                
+                // Both positive: 10,20 means "line 10 to 20"
+                if (range[0] > 0 && range[1] > 0)
+                {
+                    return; // Valid
+                }
+                
+                // Mixed (negative start, positive end): not allowed
+                throw new ValidationMetadataException(
+                    "Cannot mix negative start with positive end in line range.");
             }
         }
     }

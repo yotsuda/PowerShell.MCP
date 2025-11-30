@@ -287,9 +287,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             int actualInsertAt = insertAt;
             int afterContextCounter = 0;
             
-            // Rotate buffer: 末尾追加時のコンテキスト表示用
-            string? prevPrevLine = null;
-            string? prevLine = null;
+            // Rotate buffer: コンテキスト表示用（行内容と出力行番号のペア）
+            var preContextBuffer = new RotateBuffer<(string line, int outputLineNum)>(2);
             
             while (true)
             {
@@ -306,13 +305,9 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     }
                     
                     // 前2行を出力（rotate buffer から）
-                    if (prevPrevLine != null && outputLineNumber >= 3)
+                    foreach (var ctx in preContextBuffer)
                     {
-                        WriteObject($"{outputLineNumber-2,3}- {prevPrevLine}");
-                    }
-                    if (prevLine != null && outputLineNumber >= 2)
-                    {
-                        WriteObject($"{outputLineNumber-1,3}- {prevLine}");
+                        WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                     }
                     
                     // 挿入する行を出力
@@ -389,9 +384,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     }
                 }
                 
-                // Rotate buffer 更新: 末尾追加時のコンテキスト表示用に最後の2行を保持
-                prevPrevLine = prevLine;
-                prevLine = currentLine;
+                // Rotate buffer 更新: コンテキスト表示用に保持
+                preContextBuffer.Add((currentLine, outputLineNumber));
                 
                 if (hasNext)
                 {
@@ -419,14 +413,9 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         }
                         
                         // 前2行を出力（rotate buffer から）
-                        int prevLineNum = outputLineNumber - 1;
-                        if (prevPrevLine != null && prevLineNum >= 2)
+                        foreach (var ctx in preContextBuffer)
                         {
-                            WriteObject($"{prevLineNum-1,3}- {prevPrevLine}");
-                        }
-                        if (prevLine != null)
-                        {
-                            WriteObject($"{prevLineNum,3}- {prevLine}");
+                            WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                         }
                         
                         // 挿入する行を出力

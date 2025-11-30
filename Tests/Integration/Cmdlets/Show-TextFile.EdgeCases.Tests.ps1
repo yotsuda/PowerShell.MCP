@@ -85,16 +85,18 @@
     }
 
     Context "負のLineRange値のバリエーション" {
-        It "異なる負の値（-1, -2, -99）はすべて同じ動作をする" {
+        It "5,-1 と 5,0 と 5,-99 はすべて5行目から末尾まで表示" {
             $content = 1..10 | ForEach-Object { "Line $_" }
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
             $result1 = Show-TextFile -Path $script:testFile -LineRange 5,-1
-            $result2 = Show-TextFile -Path $script:testFile -LineRange 5,-2
+            $result2 = Show-TextFile -Path $script:testFile -LineRange 5,0
             $result3 = Show-TextFile -Path $script:testFile -LineRange 5,-99
             
-            $result1.Count | Should -Be $result2.Count
-            $result2.Count | Should -Be $result3.Count
+            # すべて同じ結果（5行目から末尾まで = 6行 + ヘッダー1行 = 7行）
+            $result1.Count | Should -Be 7
+            $result2.Count | Should -Be 7
+            $result3.Count | Should -Be 7
         }
 
         It "0も負の値と同様に末尾を意味する" {
