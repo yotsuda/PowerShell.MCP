@@ -1,4 +1,4 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -20,7 +20,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         public string? ContextBefore1 { get; set; }
         public int ContextBefore2Line { get; set; }
         public int ContextBefore1Line { get; set; }
-        
+
         // 削除時のみ使用
         public string? DeletedFirst { get; set; }
         public string? DeletedSecond { get; set; }
@@ -29,7 +29,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         public string? DeletedLast { get; set; }
         public int DeletedCount { get; set; }
         public int DeletedStartLine { get; set; }
-        
+
         // 後2行コンテキスト
         public string? ContextAfter1 { get; set; }
         public string? ContextAfter2 { get; set; }
@@ -37,7 +37,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         public int ContextAfter2Line { get; set; }
     }
 
-    private const string ErrorMessageLineRangeWithoutFile = 
+    private const string ErrorMessageLineRangeWithoutFile =
         "File not found: {0}. Cannot use -LineRange with non-existent file.";
 
     [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
@@ -55,20 +55,46 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     [Parameter]
     public object[]? Content { get; set; }
 
+    [Parameter(ValueFromPipeline = true, DontShow = true)]
+    public object? InputObject { get; set; }
+
     [Parameter]
     public string? Encoding { get; set; }
 
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
+    private readonly List<object> _contentBuffer = new();
+    private bool _accumulateContent;
+
+    protected override void BeginProcessing()
+    {
+        // Path が引数で指定され、Content が引数で指定されていない場合のみパイプ入力を蓄積
+        bool pathFromArgument = MyInvocation.BoundParameters.ContainsKey("Path") ||
+                                MyInvocation.BoundParameters.ContainsKey("LiteralPath");
+        bool contentFromArgument = MyInvocation.BoundParameters.ContainsKey("Content");
+
+        _accumulateContent = pathFromArgument && !contentFromArgument;
+    }
+
     protected override void ProcessRecord()
     {
+        // パイプから InputObject が来ている場合は蓄積
+        if (_accumulateContent)
+        {
+            if (InputObject != null)
+            {
+                _contentBuffer.Add(InputObject);
+            }
+            return;
+        }
+
         // LineRangeバリデーション
         ValidateLineRange(LineRange);
 
         // LineRange指定時は既存ファイルが必要
         bool allowNewFiles = (LineRange == null);
-        
+
         if (!allowNewFiles)
         {
             // LineRange指定時は既存ファイル必須なので、存在しない場合はカスタムエラー
@@ -99,13 +125,13 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 : CreateNewFileMetadata(resolvedPath);
 
             string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
-            
+
             // Content に非 ASCII 文字が含まれている場合、エンコーディングを UTF-8 にアップグレード
             if (TextFileUtility.TryUpgradeEncodingIfNeeded(metadata, contentLines, Encoding != null, out var upgradeMessage))
             {
                 WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
             }
-            
+
             var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
             bool isFullFileReplace = LineRange == null;
 
@@ -121,13 +147,13 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 }
 
                 ExecuteFileOperation(
-                    resolvedPath, 
-                    metadata, 
-                    contentLines, 
-                    isFullFileReplace, 
-                    startLine, 
-                    endLine, 
-                    fileExists, 
+                    resolvedPath,
+                    metadata,
+                    contentLines,
+                    isFullFileReplace,
+                    startLine,
+                    endLine,
+                    fileExists,
                     originalPath);
             }
         }
@@ -142,8 +168,8 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     {
         var metadata = new TextFileUtility.FileMetadata
         {
-            Encoding = Encoding != null 
-                ? TextFileUtility.GetEncoding(resolvedPath, Encoding) 
+            Encoding = Encoding != null
+                ? TextFileUtility.GetEncoding(resolvedPath, Encoding)
                 : new System.Text.UTF8Encoding(false), // UTF8 without BOM
             NewlineSequence = Environment.NewLine,
             HasTrailingNewline = true  // デフォルトで末尾改行あり
@@ -187,7 +213,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         var tempFile = System.IO.Path.GetTempFileName();
         int linesRemoved;
         int linesInserted;
-        
+
         // コンテキスト情報（rotate buffer で収集）
         ContextData? context = null;
         int totalLines = 0;
@@ -207,7 +233,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             {
                 // 行範囲を置換 + コンテキスト収集（rotate buffer パターン）
                 bool collectContext = fileExists && LineRange != null;
-                
+
                 string? warningMessage;
                 (linesRemoved, linesInserted, totalLines, warningMessage, context) = ReplaceLineRangeWithContext(
                     resolvedPath,
@@ -217,7 +243,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     endLine,
                     contentLines,
                     collectContext);
-                
+
                 // 警告があれば出力
                 if (!string.IsNullOrEmpty(warningMessage))
                 {
@@ -231,8 +257,8 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             // コンテキスト表示（rotate buffer から表示、ファイル再読込なし）
             if (context != null)
             {
-                OutputUpdateContext(originalPath, resolvedPath, 
-                    context, 
+                OutputUpdateContext(originalPath, resolvedPath,
+                    context,
                     startLine,
                     linesInserted,
                     totalLines,
@@ -261,7 +287,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         }
 
         // linesRemoved は実際に処理された行数
-        
+
         if (linesInserted == 0)
         {
             return $"Removed {linesRemoved} line(s) (net: -{linesRemoved})";
@@ -289,21 +315,21 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         // Context 収集用の変数を初期化
         ContextData? context = collectContext ? new ContextData() : null;
         bool isDelete = contentLines.Length == 0;
-        
+
         int currentLine = 1;
         int outputLine = 1;
         int linesRemoved = 0;  // 実際に処理した行数をカウント
         int linesInserted = contentLines.Length;
         string? warningMessage = null;
         bool insertedContent = false;
-        
-        
+
+
         // 削除時の情報収集用
         int deletedCount = 0;
-        
+
         // 後コンテキストカウンタ
         int afterCounter = 0;
-        
+
         // 置換範囲の後に行があるかどうかを記録
         bool hasLinesAfterRange = false;
 
@@ -317,7 +343,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             while ((line = reader.ReadLine()) != null)
             {
                 hasNextLine = reader.Peek() != -1;
-                
+
                 // 前2行のコンテキスト収集（範囲の直前）
                 if (context != null)
                 {
@@ -339,7 +365,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     for (int i = 0; i < contentLines.Length; i++)
                     {
                         writer.Write(contentLines[i]);
-                        
+
                         // 各行の後に改行を追加（最終行は別処理）
                         if (i < contentLines.Length - 1)
                         {
@@ -358,7 +384,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     if (isDelete && context != null)
                     {
                         deletedCount++;
-                        
+
                         // 先頭2行を保存
                         if (deletedCount == 1)
                         {
@@ -368,19 +394,19 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                         {
                             context.DeletedSecond = line;
                         }
-                        
+
                         // リングバッファで末尾3行を更新
                         context.DeletedThirdLast = context.DeletedSecondLast;
                         context.DeletedSecondLast = context.DeletedLast;
                         context.DeletedLast = line;
                     }
                     linesRemoved++;  // 実際に削除/置換された行をカウント
-                    
+
                     // 置換範囲の最終行に達したら、後続行があるかチェック
                     if (currentLine == endLine)
                     {
                         hasLinesAfterRange = hasNextLine;
-                        
+
                         // 新しい内容の最終行の改行を書き込む
                         if (contentLines.Length > 0)
                         {
@@ -396,14 +422,14 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                             }
                         }
                     }
-                    
+
                     currentLine++;
                     continue;
                 }
 
                 // 置換範囲外の行をコピー
                 writer.Write(line);
-                
+
                 // 後コンテキスト収集（範囲の直後の2行）
                 if (context != null && currentLine > endLine && afterCounter < 2)
                 {
@@ -419,7 +445,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                     }
                     afterCounter++;
                 }
-                
+
                 // 改行の追加判定
                 if (hasNextLine)
                 {
@@ -440,14 +466,14 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             if (currentLine <= startLine && !insertedContent)
             {
                 int actualLineCount = currentLine - 1;
-                
+
                 if (startLine > actualLineCount)
                 {
                     throw new ArgumentException(
                         $"Line range {startLine}-{endLine} is out of bounds. File has only {actualLineCount} line(s).",
                         nameof(startLine));
                 }
-                
+
                 if (endLine > actualLineCount)
                 {
                     warningMessage = $"End line {endLine} exceeds file length ({actualLineCount} lines). Will process up to line {actualLineCount}.";
@@ -457,7 +483,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
                 for (int i = 0; i < contentLines.Length; i++)
                 {
                     writer.Write(contentLines[i]);
-                    
+
                     if (i < contentLines.Length - 1)
                     {
                         writer.Write(metadata.NewlineSequence);
@@ -495,12 +521,12 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         string[] contentLines)
     {
         var displayPath = GetDisplayPath(originalPath, filePath);
-        
+
         // ヘッダー出力
         WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
-        
+
         int endLine = startLine + linesInserted - 1;
-        
+
         // 前2行のコンテキスト
         if (context.ContextBefore2Line > 0)
         {
@@ -510,7 +536,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         {
             WriteObject($"{context.ContextBefore1Line,3}- {context.ContextBefore1}");
         }
-        
+
         // 更新された行を表示
         if (linesInserted == 0)
         {
@@ -532,15 +558,15 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             // 先頭2行
             WriteObject($"{startLine,3}: \x1b[32m{contentLines[0]}\x1b[0m");
             WriteObject($"{startLine + 1,3}: \x1b[32m{contentLines[1]}\x1b[0m");
-            
+
             // 省略マーカー
             WriteObject("   :");
-            
+
             // 末尾2行
             WriteObject($"{endLine - 1,3}: \x1b[32m{contentLines[linesInserted - 2]}\x1b[0m");
             WriteObject($"{endLine,3}: \x1b[32m{contentLines[linesInserted - 1]}\x1b[0m");
         }
-        
+
         // 後2行のコンテキスト
         if (context.ContextAfter1Line > 0)
         {
@@ -550,8 +576,38 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         {
             WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
         }
-        
+
         // 空行でコンテキストとサマリを分離
         WriteObject("");
+    }
+
+    protected override void EndProcessing()
+    {
+        // 蓄積した Content を一括処理
+        if (_accumulateContent && _contentBuffer.Count > 0)
+        {
+            Content = _contentBuffer.ToArray();
+
+            // LineRangeバリデーション
+            ValidateLineRange(LineRange);
+
+            // LineRange指定時は既存ファイルが必要
+            bool allowNewFiles = (LineRange == null);
+
+            if (!allowNewFiles)
+            {
+                foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
+                {
+                    ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
+                }
+            }
+            else
+            {
+                foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: true, requireExisting: false))
+                {
+                    ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
+                }
+            }
+        }
     }
 }

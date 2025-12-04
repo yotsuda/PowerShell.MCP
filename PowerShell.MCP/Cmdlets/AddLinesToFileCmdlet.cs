@@ -1,4 +1,4 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -17,8 +17,11 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     [Alias("PSPath")]
     public string[] LiteralPath { get; set; } = null!;
 
-    [Parameter(Mandatory = true, Position = 1)]
+    [Parameter(Position = 1)]
     public object[] Content { get; set; } = null!;
+
+    [Parameter(ValueFromPipeline = true, DontShow = true)]
+    public object? InputObject { get; set; }
 
     [Parameter]
     [ValidateRange(1, int.MaxValue)]
@@ -30,17 +33,51 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
+    private readonly List<object> _contentBuffer = new();
+    private bool _accumulateContent;
+
+    protected override void BeginProcessing()
+    {
+        // Path が引数で指定され、Content が引数で指定されていない場合のみパイプ入力を蓄積
+        bool pathFromArgument = MyInvocation.BoundParameters.ContainsKey("Path") ||
+                                MyInvocation.BoundParameters.ContainsKey("LiteralPath");
+        bool contentFromArgument = MyInvocation.BoundParameters.ContainsKey("Content");
+
+        _accumulateContent = pathFromArgument && !contentFromArgument;
+    }
+
     protected override void ProcessRecord()
     {
+        // パイプから InputObject が来ている場合は蓄積
+        if (_accumulateContent)
+        {
+            if (InputObject != null)
+            {
+                _contentBuffer.Add(InputObject);
+            }
+            return;
+        }
+
+        // Content が引数で指定されていない場合はエラー
+        if (Content == null || Content.Length == 0)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new PSArgumentException("Content is required. Provide via -Content parameter or pipeline input."),
+                "ContentRequired",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+
+
         // -Path または -LiteralPath から処理対象を取得
         string[] inputPaths = Path ?? LiteralPath;
         bool isLiteralPath = (LiteralPath != null);
-        
+
         foreach (var inputPath in inputPaths)
         {
             bool isNewFile = false;
             string? resolvedPath = null;
-            
+
             // パス解決の試行
             try
             {
@@ -56,7 +93,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     try
                     {
                         var resolved = GetResolvedProviderPathFromPSPath(inputPath, out _);
-                        
+
                         // 解決されたパスを処理
                         foreach (var rPath in resolved)
                         {
@@ -83,13 +120,13 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                                 inputPath));
                             continue;
                         }
-                        
+
                         // 新規ファイル作成の準備
                         resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
                         isNewFile = true;
                     }
                 }
-                
+
                 // resolvedPath が設定されていれば処理
                 if (resolvedPath != null)
                 {
@@ -121,7 +158,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             for (int i = 0; i < contentLines.Length; i++)
             {
                 writer.Write(contentLines[i]);
-                
+
                 if (i < contentLines.Length - 1)
                 {
                     writer.Write(metadata.NewlineSequence);
@@ -161,11 +198,11 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         {
             WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
         }
-        
+
         // LineNumber 指定がなければ末尾追加（新規・既存共通）
         int insertAt;
         bool effectiveAtEnd;
-        
+
         if (isNewFile)
         {
             // 新規ファイル作成時: LineNumber > 1 の場合は警告を出す
@@ -173,7 +210,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             {
                 WriteWarning($"File does not exist. Creating new file. LineNumber {LineNumber} will be treated as line 1.");
             }
-            
+
             // 新規ファイル: LineNumber 未指定なら末尾追加、LineNumber > 1 なら 1 として扱う
             insertAt = (LineNumber > 1) ? 1 : (LineNumber > 0 ? LineNumber : int.MaxValue);
             effectiveAtEnd = LineNumber == 0;
@@ -184,9 +221,9 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             insertAt = LineNumber > 0 ? LineNumber : int.MaxValue;
             effectiveAtEnd = LineNumber == 0;
         }
-        
+
         string actionDescription = effectiveAtEnd
-            ? $"Add {contentLines.Length} line(s) at end" 
+            ? $"Add {contentLines.Length} line(s) at end"
             : $"Add {contentLines.Length} line(s) at line {insertAt}";
 
         if (ShouldProcess(resolvedPath, actionDescription))
@@ -218,20 +255,20 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 {
                     // 既存の非空ファイル：挿入処理（コンテキストはリアルタイム出力）
                     int totalLines;
-                    (totalLines, actualInsertAt) = InsertLinesWithContext(originalPath, resolvedPath, 
-                        tempFile, 
-                        contentLines, 
-                        metadata, 
+                    (totalLines, actualInsertAt) = InsertLinesWithContext(originalPath, resolvedPath,
+                        tempFile,
+                        contentLines,
+                        metadata,
                         insertAt);
                 }
 
                 // アトミックに置換（または新規作成）
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-                string message = isNewFile 
+                string message = isNewFile
                     ? $"{(char)27}[36mCreated {GetDisplayPath(originalPath, resolvedPath)}: {contentLines.Length} line(s) (net: +{contentLines.Length}){(char)27}[0m"
                     : $"{(char)27}[36mAdded {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")} (net: +{contentLines.Length}){(char)27}[0m";
-                
+
                 WriteObject(message);
 
             }
@@ -250,20 +287,20 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// 通常のファイルへの行挿入処理（コンテキストをリアルタイム出力、1 pass）
     /// </summary>
-    private (int totalLines, int actualInsertAt) InsertLinesWithContext(string originalPath, string inputPath, 
-        string outputPath, 
-        string[] contentLines, 
-        TextFileUtility.FileMetadata metadata, 
+    private (int totalLines, int actualInsertAt) InsertLinesWithContext(string originalPath, string inputPath,
+        string outputPath,
+        string[] contentLines,
+        TextFileUtility.FileMetadata metadata,
         int insertAt)
     {
         var displayPath = GetDisplayPath(originalPath, inputPath);
         bool contextHeaderPrinted = false;
-        
+
         using (var enumerator = File.ReadLines(inputPath, metadata.Encoding).GetEnumerator())
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
             writer.NewLine = metadata.NewlineSequence;
-            
+
             bool hasLines = enumerator.MoveNext();
             if (!hasLines)
             {
@@ -286,30 +323,30 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             bool inserted = false;
             int actualInsertAt = insertAt;
             int afterContextCounter = 0;
-            
+
             // Rotate buffer: コンテキスト表示用（行内容と出力行番号のペア）
             var preContextBuffer = new RotateBuffer<(string line, int outputLineNum)>(2);
-            
+
             while (true)
             {
                 // 挿入位置に到達したら、新しい内容を先に書き込む
                 if (!inserted && inputLineNumber == insertAt)
                 {
                     actualInsertAt = outputLineNumber;
-                    
+
                     // コンテキストヘッダー出力
                     if (!contextHeaderPrinted)
                     {
                         WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                         contextHeaderPrinted = true;
                     }
-                    
+
                     // 前2行を出力（rotate buffer から）
                     foreach (var ctx in preContextBuffer)
                     {
                         WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                     }
-                    
+
                     // 挿入する行を出力
                     if (contentLines.Length <= 5)
                     {
@@ -318,7 +355,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         {
                             writer.Write(contentLines[i]);
                             WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
-                            
+
                             if (i < contentLines.Length - 1)
                             {
                                 writer.Write(metadata.NewlineSequence);
@@ -337,7 +374,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             writer.Write(metadata.NewlineSequence);
                             outputLineNumber++;
                         }
-                        
+
                         // 省略マーカー出力
                         WriteObject("   :");
 
@@ -348,13 +385,13 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             writer.Write(metadata.NewlineSequence);
                             outputLineNumber++;
                         }
-                        
+
                         // 末尾2行
                         for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
                             WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
-                            
+
                             if (i < contentLines.Length - 1)
                             {
                                 writer.Write(metadata.NewlineSequence);
@@ -362,7 +399,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             }
                         }
                     }
-                    
+
                     writer.Write(metadata.NewlineSequence);
                     outputLineNumber++;
                     inserted = true;
@@ -371,7 +408,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
                 // 現在の行を書き込む
                 writer.Write(currentLine);
-                
+
                 // 後コンテキストの出力
                 if (afterContextCounter > 0)
                 {
@@ -383,10 +420,10 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         WriteObject("");
                     }
                 }
-                
+
                 // Rotate buffer 更新: コンテキスト表示用に保持
                 preContextBuffer.Add((currentLine, outputLineNumber));
-                
+
                 if (hasNext)
                 {
                     writer.Write(metadata.NewlineSequence);
@@ -404,20 +441,20 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         writer.Write(metadata.NewlineSequence);
                         outputLineNumber++;
                         actualInsertAt = outputLineNumber;
-                        
+
                         // コンテキストヘッダー出力
                         if (!contextHeaderPrinted)
                         {
                             WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
                             contextHeaderPrinted = true;
                         }
-                        
+
                         // 前2行を出力（rotate buffer から）
                         foreach (var ctx in preContextBuffer)
                         {
                             WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                         }
-                        
+
                         // 挿入する行を出力
                         if (contentLines.Length <= 5)
                         {
@@ -426,14 +463,14 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             {
                                 writer.Write(contentLines[i]);
                                 WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
-                                
+
                                 if (i < contentLines.Length - 1)
                                 {
                                     writer.Write(metadata.NewlineSequence);
                                     outputLineNumber++;
                                 }
                             }
-                            
+
                             // 元のファイルの末尾改行を保持
                             if (metadata.HasTrailingNewline)
                             {
@@ -451,7 +488,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                                 writer.Write(metadata.NewlineSequence);
                                 outputLineNumber++;
                             }
-                            
+
                             // 省略マーカー出力
                             WriteObject("   :");
 
@@ -462,30 +499,30 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                                 writer.Write(metadata.NewlineSequence);
                                 outputLineNumber++;
                             }
-                            
+
                             // 末尾2行
                             for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
                                 WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
-                                
+
                                 if (i < contentLines.Length - 1)
                                 {
                                     writer.Write(metadata.NewlineSequence);
                                     outputLineNumber++;
                                 }
                             }
-                            
+
                             // 元のファイルの末尾改行を保持
                             if (metadata.HasTrailingNewline)
                             {
                                 writer.Write(metadata.NewlineSequence);
                             }
                         }
-                        
+
                         // 末尾追加時は後コンテキストなし、空行のみ
                         WriteObject("");
-                        
+
                         inserted = true;
                     }
                     else
@@ -499,7 +536,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     break;
                 }
             }
-            
+
             return (outputLineNumber, actualInsertAt);
         }
     }
@@ -510,9 +547,9 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     /// 複数行の内容を書き込む
     /// </summary>
     private static void WriteContentLines(
-        StreamWriter writer, 
-        string[] contentLines, 
-        string newlineSequence, 
+        StreamWriter writer,
+        string[] contentLines,
+        string newlineSequence,
         bool addTrailingNewline)
     {
         for (int i = 0; i < contentLines.Length; i++)
@@ -527,4 +564,89 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         }
     }
 
+
+    protected override void EndProcessing()
+    {
+        // 蓄積モードの場合
+        if (_accumulateContent)
+        {
+            if (_contentBuffer.Count == 0)
+            {
+                ThrowTerminatingError(new ErrorRecord(
+                    new PSArgumentException("Content is required. Provide via -Content parameter or pipeline input."),
+                    "ContentRequired",
+                    ErrorCategory.InvalidArgument,
+                    null));
+            }
+            Content = _contentBuffer.ToArray();
+
+            // 通常の処理を実行
+            string[] inputPaths = Path ?? LiteralPath;
+            bool isLiteralPath = (LiteralPath != null);
+
+            foreach (var inputPath in inputPaths)
+            {
+                bool isNewFile = false;
+                string? resolvedPath = null;
+
+                try
+                {
+                    if (isLiteralPath)
+                    {
+                        resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
+                        isNewFile = !File.Exists(resolvedPath);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var resolved = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                            foreach (var rPath in resolved)
+                            {
+                                try
+                                {
+                                    AddToFile(rPath, inputPath, false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, rPath));
+                                }
+                            }
+                            continue;
+                        }
+                        catch (ItemNotFoundException)
+                        {
+                            if (WildcardPattern.ContainsWildcardCharacters(inputPath))
+                            {
+                                WriteError(new ErrorRecord(
+                                    new InvalidOperationException($"Cannot create new file with wildcard pattern: {inputPath}"),
+                                    "WildcardNotSupportedForNewFile",
+                                    ErrorCategory.InvalidArgument,
+                                    inputPath));
+                                continue;
+                            }
+                            resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
+                            isNewFile = true;
+                        }
+                    }
+
+                    if (resolvedPath != null)
+                    {
+                        try
+                        {
+                            AddToFile(resolvedPath, inputPath, isNewFile);
+                        }
+                        catch (Exception ex)
+                        {
+                            WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WriteError(new ErrorRecord(ex, "PathResolutionFailed", ErrorCategory.InvalidArgument, inputPath));
+                }
+            }
+        }
+    }
 }
