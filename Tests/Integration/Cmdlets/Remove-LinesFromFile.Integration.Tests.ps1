@@ -325,4 +325,57 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $keep2Count | Should -Be 1
         }
     }
+
+    Context "-WhatIf エスケープシーケンス" {
+        It "Contains マッチ部分のみ黄色背景でハイライトされる" {
+            Set-Content -Path $script:testFile -Value @(
+                "Line 1"
+                "DELETE this line"
+                "Line 3"
+            ) -Encoding UTF8
+            
+            $result = Remove-LinesFromFile -Path $script:testFile -Contains "DELETE" -WhatIf
+            $deleteLine = $result | Where-Object { $_ -match "DELETE" }
+            
+            # マッチ部分は [31;43m (赤文字+黄色背景) で開始
+            $deleteLine | Should -Match '\x1b\[31;43mDELETE'
+            
+            # マッチ後は [31;49m (赤文字+デフォルト背景) にリセット
+            $deleteLine | Should -Match 'DELETE\x1b\[31;49m'
+        }
+        
+        It "Pattern マッチ部分のみ黄色背景でハイライトされる" {
+            Set-Content -Path $script:testFile -Value @(
+                "Line 1"
+                "Error code 123 found"
+                "Line 3"
+            ) -Encoding UTF8
+            
+            $result = Remove-LinesFromFile -Path $script:testFile -Pattern "\d+" -WhatIf
+            $matchLine = $result | Where-Object { $_ -match "123" }
+            
+            # マッチ部分は [31;43m (赤文字+黄色背景) で開始
+            $matchLine | Should -Match '\x1b\[31;43m123'
+            
+            # マッチ後は [31;49m (赤文字+デフォルト背景) にリセット
+            $matchLine | Should -Match '123\x1b\[31;49m'
+        }
+        
+        It "LineRange のみの場合は黄色背景ハイライトなし" {
+            Set-Content -Path $script:testFile -Value @(
+                "Line 1"
+                "Line 2"
+                "Line 3"
+            ) -Encoding UTF8
+            
+            $result = Remove-LinesFromFile -Path $script:testFile -LineRange 2,2 -WhatIf
+            $deleteLine = $result | Where-Object { $_ -match "Line 2" }
+            
+            # 行全体が赤 [31m で表示
+            $deleteLine | Should -Match '\x1b\[31m'
+            
+            # 黄色背景 [43m は含まれない
+            $deleteLine | Should -Not -Match '\[43m'
+        }
+    }
 }
