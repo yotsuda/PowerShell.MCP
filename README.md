@@ -66,7 +66,7 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 
 **📝 LLM-Optimized Text File Operations**
 - Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
-- To address this, PowerShell.MCP includes 6 specialized cmdlets designed specifically for AI assistants to handle text file operations reliably
+- To address this, PowerShell.MCP includes 5 specialized cmdlets designed specifically for AI assistants to handle text file operations reliably
 - Single-pass processing architecture enables up to 100x faster performance than Get/Set-Content on large files
 - 1-based line numbering eliminates array index confusion and matches compiler error messages
 - Automatic encoding detection and preservation (UTF-8/16/32, Shift-JIS, line endings)
