@@ -147,7 +147,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 string deleteOn = $"{(char)27}[31m";  // 赤
                 string deleteOff = $"{(char)27}[0m";
                 string matchHighlightOn = $"{(char)27}[31;43m";  // 赤文字 + 黄色背景
-                string matchHighlightOff = $"{(char)27}[31m";    // 赤に戻す
+                string matchHighlightOff = $"{(char)27}[31;49m";  // 赤文字 + デフォルト背景に戻す
 
                 try
                 {
