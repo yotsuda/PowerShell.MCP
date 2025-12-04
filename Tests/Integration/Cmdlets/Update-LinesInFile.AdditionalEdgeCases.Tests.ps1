@@ -34,17 +34,39 @@ Describe "Update-LinesInFile - Additional Edge Cases" {
         }
     }
 
-    Context "Content なしでの行削除" {
-        It "Content を省略すると指定範囲の行が削除される" {
+    Context "行の削除" {
+        It "Content 省略時はエラーになる" {
+            $testFile = Join-Path $script:testDir "delete-error.txt"
+            Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
+
+            { Update-LinesInFile -Path $testFile -LineRange 2,2 } | Should -Throw "*Content is required*"
+        }
+
+        It "-Content @() で指定範囲の行を削除できる" {
             $testFile = Join-Path $script:testDir "delete1.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3", "Line 4", "Line 5")
-            
-            Update-LinesInFile -Path $testFile -LineRange 2,4
-            
+
+            Update-LinesInFile -Path $testFile -LineRange 2,4 -Content @()
+
             $content = Get-Content $testFile
             $content.Count | Should -Be 2
             $content[0] | Should -Be "Line 1"
             $content[1] | Should -Be "Line 5"
+        }
+    }
+
+    Context "空文字列での置換" {
+        It "-Content `"`" で空行に置換できる" {
+            $testFile = Join-Path $script:testDir "empty-string.txt"
+            Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
+
+            Update-LinesInFile -Path $testFile -LineRange 2,2 -Content ""
+
+            $content = Get-Content $testFile
+            $content.Count | Should -Be 3
+            $content[0] | Should -Be "Line 1"
+            $content[1] | Should -Be ""
+            $content[2] | Should -Be "Line 3"
         }
     }
 

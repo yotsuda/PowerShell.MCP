@@ -31,12 +31,12 @@ Describe "Update-LinesInFile HIGH Priority Tests" {
                 Should -Throw
         }
 
-        It "H22. Content なしで行を削除できる" {
+        It "H22. -Content @() で行を削除できる" {
             $originalCount = (Get-Content $script:testFile).Count
-            Update-LinesInFile -Path $script:testFile -LineRange 2,3
+            Update-LinesInFile -Path $script:testFile -LineRange 2,3 -Content @()
             $newCount = (Get-Content $script:testFile).Count
-            # 行が削除されるか、同じ数のまま
-            $newCount | Should -BeLessOrEqual $originalCount
+            # 2行が削除される
+            $newCount | Should -Be ($originalCount - 2)
         }
 
         It "H23. Content が元より多い行数でも処理できる" {

@@ -67,7 +67,7 @@ Accept wildcard characters: False
 ```
 
 ### Content
-The new content to set. Can be a string, array of strings, or omitted to delete lines. If omitted, the specified line range is deleted.
+The new content to set. Can be a string or array of strings. Use -Content @() to explicitly delete lines. Content is required when LineRange is specified.
 
 ```yaml
 Type: Object[]
@@ -208,7 +208,7 @@ Accept wildcard characters: False
 ```
 
 ### -Content
-The new content to set. Can be a string, array of strings, or omitted to delete lines. If omitted, the specified line range is deleted.
+The new content to set. Can be a string or array of strings. Use -Content @() to explicitly delete lines. Content is required when LineRange is specified.
 
 ```yaml
 Type: Object[]

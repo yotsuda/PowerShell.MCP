@@ -74,16 +74,20 @@ Describe "Update-LinesInFile Integration Tests" {
         }
     }
 
-    Context "行の削除（Content省略）" {
-        It "Contentを指定しない場合、指定行が削除される" {
-            Update-LinesInFile -Path $script:testFile -LineRange 3
+    Context "行の削除" {
+        It "Content省略時はエラーになる" {
+            { Update-LinesInFile -Path $script:testFile -LineRange 3 } | Should -Throw "*Content is required*"
+        }
+
+        It "-Content @() で単一行を削除できる" {
+            Update-LinesInFile -Path $script:testFile -LineRange 3,3 -Content @()
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 4
             $result -notcontains "Line 3: Third line" | Should -Be $true
         }
 
-        It "複数行を削除できる" {
-            Update-LinesInFile -Path $script:testFile -LineRange 2,4
+        It "-Content @() で複数行を削除できる" {
+            Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content @()
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 2
             $result[0] | Should -Be "Line 1: First line"
@@ -212,7 +216,7 @@ Describe "Update-LinesInFile Integration Tests" {
         }
         
         It "削除時は Removed メッセージを表示" {
-            $output = Update-LinesInFile -Path $script:testFile -LineRange 2,4
+            $output = Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content @()
             
             $message = $output | Out-String
             $message | Should -Match "Removed \d+ line\(s\)"

@@ -186,7 +186,7 @@ Describe "Context Display Feature Tests" {
         }
 
         It "行削除時にコンテキストが表示される" {
-            $output = Update-LinesInFile -Path $script:testFile -LineRange 3,4 -InformationAction Continue 6>&1
+            $output = Update-LinesInFile -Path $script:testFile -LineRange 3,4 -Content @() -InformationAction Continue 6>&1
             
             # 削除が成功していることを確認
             $result = Get-Content $script:testFile

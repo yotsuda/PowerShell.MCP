@@ -583,21 +583,41 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
 
     protected override void EndProcessing()
     {
-        // 蓄積した Content を一括処理
-        if (_accumulateContent && _contentBuffer is { Count: > 0 })
+        // パイプ入力蓄積モードでない場合は何もしない
+        if (!_accumulateContent)
+        {
+            return;
+        }
+
+        // パイプから入力があった場合
+        if (_contentBuffer is { Count: > 0 })
         {
             Content = _contentBuffer!.ToArray();
+        }
+        // パイプから入力がない + LineRange 指定あり → エラー
+        else if (LineRange != null)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new PSArgumentException("Content is required when LineRange is specified. Use -Content @() to explicitly delete lines."),
+                "ContentRequired",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+        // パイプから入力がない + LineRange なし → 何もしない
+        else
+        {
+            return;
+        }
 
-            // LineRangeバリデーション
-            ValidateLineRange(LineRange);
+        // LineRangeバリデーション
+        ValidateLineRange(LineRange);
 
-            // LineRange指定時は既存ファイルが必要
-            bool allowNewFiles = (LineRange == null);
+        // LineRange指定時は既存ファイルが必要
+        bool allowNewFiles = (LineRange == null);
 
-            foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles, requireExisting: !allowNewFiles))
-            {
-                ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
-            }
+        foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles, requireExisting: !allowNewFiles))
+        {
+            ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
         }
     }
 }
