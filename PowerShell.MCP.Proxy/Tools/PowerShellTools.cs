@@ -51,10 +51,10 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
   Use negative LineRange to show tail: -LineRange -10 shows last 10 lines, -LineRange -10,-1 is equivalent.
 
 • Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
-  Inserts lines at specified position or appends to end or creates new file. Accepts arrays for multiple lines.
+  Inserts lines at specified position or appends to end or creates new file. Accepts pipeline input for Content.
 
 • Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup]
-  Replaces specified line range with new content or creates new file. Omit content to delete lines.
+  Replaces specified line range with new content or creates new file. Use -Content @() to delete lines. Accepts pipeline input for Content.
 
 • Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup]
   Replaces matching text (literal or regex) within optional line range.

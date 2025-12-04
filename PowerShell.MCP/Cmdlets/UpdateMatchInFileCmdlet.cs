@@ -72,6 +72,16 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 ErrorCategory.InvalidArgument,
                 null));
         }
+
+        // Contains に改行が含まれている場合はエラー（行単位で処理するため）
+        if (hasLiteral && (Contains!.Contains('\n') || Contains.Contains('\r')))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Contains cannot contain newline characters. Update-MatchInFile processes files line by line."),
+                "InvalidContains",
+                ErrorCategory.InvalidArgument,
+                Contains));
+        }
         
         // Regexモードで片方だけ指定されている
         if (hasRegex && Replacement == null)
@@ -81,6 +91,16 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 "IncompleteParameters",
                 ErrorCategory.InvalidArgument,
                 null));
+        }
+
+        // Pattern に改行が含まれている場合はエラー（行単位で処理するため）
+        if (hasRegex && (Pattern!.Contains('\n') || Pattern.Contains('\r')))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Pattern cannot contain newline characters. Update-MatchInFile processes files line by line."),
+                "InvalidPattern",
+                ErrorCategory.InvalidArgument,
+                Pattern));
         }
     }
 

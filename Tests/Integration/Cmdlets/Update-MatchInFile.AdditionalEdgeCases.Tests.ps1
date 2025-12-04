@@ -56,5 +56,20 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
             { Update-MatchInFile -Path $nonExistentFile -Pattern "test" -Replacement "new" -ErrorAction Stop } |
                 Should -Throw
         }
+        It "Pattern に改行が含まれている場合はエラー" {
+            $testFile = Join-Path $script:testDir "newline-pattern.txt"
+            Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
+
+            { Update-MatchInFile -Path $testFile -Pattern "Line 1`nLine 2" -Replacement "Test" -ErrorAction Stop } |
+                Should -Throw "*cannot contain newline*"
+        }
+
+        It "Contains に改行が含まれている場合はエラー" {
+            $testFile = Join-Path $script:testDir "newline-contains.txt"
+            Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
+
+            { Update-MatchInFile -Path $testFile -Contains "Line 1`nLine 2" -Replacement "Test" -ErrorAction Stop } |
+                Should -Throw "*cannot contain newline*"
+        }
     }
 }
