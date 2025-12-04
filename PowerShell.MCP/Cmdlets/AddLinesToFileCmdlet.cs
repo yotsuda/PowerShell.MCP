@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -33,7 +33,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
-    private readonly List<object> _contentBuffer = new();
+    private List<object>? _contentBuffer;
     private bool _accumulateContent;
 
     protected override void BeginProcessing()
@@ -53,7 +53,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         {
             if (InputObject != null)
             {
-                _contentBuffer.Add(InputObject);
+                (_contentBuffer ??= []).Add(InputObject);
             }
             return;
         }
@@ -68,85 +68,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-
-        // -Path または -LiteralPath から処理対象を取得
-        string[] inputPaths = Path ?? LiteralPath;
-        bool isLiteralPath = (LiteralPath != null);
-
-        foreach (var inputPath in inputPaths)
-        {
-            bool isNewFile = false;
-            string? resolvedPath = null;
-
-            // パス解決の試行
-            try
-            {
-                if (isLiteralPath)
-                {
-                    // -LiteralPath: ワイルドカード展開なし
-                    resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
-                    isNewFile = !File.Exists(resolvedPath);
-                }
-                else
-                {
-                    // -Path: ワイルドカード展開あり
-                    try
-                    {
-                        var resolved = GetResolvedProviderPathFromPSPath(inputPath, out _);
-
-                        // 解決されたパスを処理
-                        foreach (var rPath in resolved)
-                        {
-                            try
-                            {
-                                AddToFile(rPath, inputPath, false);
-                            }
-                            catch (Exception ex)
-                            {
-                                WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, rPath));
-                            }
-                        }
-                        continue; // 正常に処理完了したので次へ
-                    }
-                    catch (ItemNotFoundException)
-                    {
-                        // ファイルが存在しない場合、ワイルドカードチェック
-                        if (WildcardPattern.ContainsWildcardCharacters(inputPath))
-                        {
-                            WriteError(new ErrorRecord(
-                                new InvalidOperationException($"Cannot create new file with wildcard pattern: {inputPath}"),
-                                "WildcardNotSupportedForNewFile",
-                                ErrorCategory.InvalidArgument,
-                                inputPath));
-                            continue;
-                        }
-
-                        // 新規ファイル作成の準備
-                        resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
-                        isNewFile = true;
-                    }
-                }
-
-                // resolvedPath が設定されていれば処理
-                if (resolvedPath != null)
-                {
-                    try
-                    {
-                        AddToFile(resolvedPath, inputPath, isNewFile);
-                    }
-                    catch (Exception ex)
-                    {
-                        WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteError(new ErrorRecord(ex, "PathResolutionFailed", ErrorCategory.InvalidArgument, inputPath));
-            }
-        }
+        ProcessAllPaths();
     }
-
 
     /// <summary>
     /// 新しい内容をファイルに書き込む（新規ファイルと空ファイルで共通）
@@ -282,7 +205,6 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
             }
         }
     }
-
 
     /// <summary>
     /// 通常のファイルへの行挿入処理（コンテキストをリアルタイム出力、1 pass）
@@ -541,36 +463,85 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
         }
     }
 
-
-
     /// <summary>
-    /// 複数行の内容を書き込む
+    /// パスを解決してファイルに追加処理を実行
     /// </summary>
-    private static void WriteContentLines(
-        StreamWriter writer,
-        string[] contentLines,
-        string newlineSequence,
-        bool addTrailingNewline)
+    private void ProcessAllPaths()
     {
-        for (int i = 0; i < contentLines.Length; i++)
-        {
-            writer.Write(contentLines[i]);
+        string[] inputPaths = Path ?? LiteralPath;
+        bool isLiteralPath = (LiteralPath != null);
 
-            // 各行の後に改行を追加（最後の行は条件による）
-            if (i < contentLines.Length - 1 || addTrailingNewline)
+        foreach (var inputPath in inputPaths)
+        {
+            bool isNewFile = false;
+            string? resolvedPath = null;
+
+            try
             {
-                writer.Write(newlineSequence);
+                if (isLiteralPath)
+                {
+                    resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
+                    isNewFile = !File.Exists(resolvedPath);
+                }
+                else
+                {
+                    try
+                    {
+                        var resolved = GetResolvedProviderPathFromPSPath(inputPath, out _);
+                        foreach (var rPath in resolved)
+                        {
+                            try
+                            {
+                                AddToFile(rPath, inputPath, false);
+                            }
+                            catch (Exception ex)
+                            {
+                                WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, rPath));
+                            }
+                        }
+                        continue;
+                    }
+                    catch (ItemNotFoundException)
+                    {
+                        if (WildcardPattern.ContainsWildcardCharacters(inputPath))
+                        {
+                            WriteError(new ErrorRecord(
+                                new InvalidOperationException($"Cannot create new file with wildcard pattern: {inputPath}"),
+                                "WildcardNotSupportedForNewFile",
+                                ErrorCategory.InvalidArgument,
+                                inputPath));
+                            continue;
+                        }
+                        resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
+                        isNewFile = true;
+                    }
+                }
+
+                if (resolvedPath != null)
+                {
+                    try
+                    {
+                        AddToFile(resolvedPath, inputPath, isNewFile);
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteError(new ErrorRecord(ex, "PathResolutionFailed", ErrorCategory.InvalidArgument, inputPath));
             }
         }
     }
-
 
     protected override void EndProcessing()
     {
         // 蓄積モードの場合
         if (_accumulateContent)
         {
-            if (_contentBuffer.Count == 0)
+            if (_contentBuffer is null or { Count: 0 })
             {
                 ThrowTerminatingError(new ErrorRecord(
                     new PSArgumentException("Content is required. Provide via -Content parameter or pipeline input."),
@@ -578,75 +549,9 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     ErrorCategory.InvalidArgument,
                     null));
             }
-            Content = _contentBuffer.ToArray();
+            Content = _contentBuffer!.ToArray();
 
-            // 通常の処理を実行
-            string[] inputPaths = Path ?? LiteralPath;
-            bool isLiteralPath = (LiteralPath != null);
-
-            foreach (var inputPath in inputPaths)
-            {
-                bool isNewFile = false;
-                string? resolvedPath = null;
-
-                try
-                {
-                    if (isLiteralPath)
-                    {
-                        resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
-                        isNewFile = !File.Exists(resolvedPath);
-                    }
-                    else
-                    {
-                        try
-                        {
-                            var resolved = GetResolvedProviderPathFromPSPath(inputPath, out _);
-                            foreach (var rPath in resolved)
-                            {
-                                try
-                                {
-                                    AddToFile(rPath, inputPath, false);
-                                }
-                                catch (Exception ex)
-                                {
-                                    WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, rPath));
-                                }
-                            }
-                            continue;
-                        }
-                        catch (ItemNotFoundException)
-                        {
-                            if (WildcardPattern.ContainsWildcardCharacters(inputPath))
-                            {
-                                WriteError(new ErrorRecord(
-                                    new InvalidOperationException($"Cannot create new file with wildcard pattern: {inputPath}"),
-                                    "WildcardNotSupportedForNewFile",
-                                    ErrorCategory.InvalidArgument,
-                                    inputPath));
-                                continue;
-                            }
-                            resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
-                            isNewFile = true;
-                        }
-                    }
-
-                    if (resolvedPath != null)
-                    {
-                        try
-                        {
-                            AddToFile(resolvedPath, inputPath, isNewFile);
-                        }
-                        catch (Exception ex)
-                        {
-                            WriteError(new ErrorRecord(ex, "AddLineFailed", ErrorCategory.WriteError, resolvedPath));
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    WriteError(new ErrorRecord(ex, "PathResolutionFailed", ErrorCategory.InvalidArgument, inputPath));
-                }
-            }
+            ProcessAllPaths();
         }
     }
 }

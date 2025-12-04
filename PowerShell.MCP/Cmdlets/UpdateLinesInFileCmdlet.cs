@@ -1,4 +1,4 @@
-using System.Management.Automation;
+﻿using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -64,7 +64,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
-    private readonly List<object> _contentBuffer = new();
+    private List<object>? _contentBuffer;
     private bool _accumulateContent;
 
     protected override void BeginProcessing()
@@ -84,7 +84,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         {
             if (InputObject != null)
             {
-                _contentBuffer.Add(InputObject);
+                (_contentBuffer ??= []).Add(InputObject);
             }
             return;
         }
@@ -584,9 +584,9 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     protected override void EndProcessing()
     {
         // 蓄積した Content を一括処理
-        if (_accumulateContent && _contentBuffer.Count > 0)
+        if (_accumulateContent && _contentBuffer is { Count: > 0 })
         {
-            Content = _contentBuffer.ToArray();
+            Content = _contentBuffer!.ToArray();
 
             // LineRangeバリデーション
             ValidateLineRange(LineRange);
@@ -594,19 +594,9 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             // LineRange指定時は既存ファイルが必要
             bool allowNewFiles = (LineRange == null);
 
-            if (!allowNewFiles)
+            foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles, requireExisting: !allowNewFiles))
             {
-                foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
-                {
-                    ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
-                }
-            }
-            else
-            {
-                foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: true, requireExisting: false))
-                {
-                    ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
-                }
+                ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
             }
         }
     }
