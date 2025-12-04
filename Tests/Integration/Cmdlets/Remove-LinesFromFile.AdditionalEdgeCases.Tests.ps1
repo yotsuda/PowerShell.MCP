@@ -58,5 +58,21 @@
             
             { Remove-LinesFromFile -Path $nonExistentFile -Contains "test" -ErrorAction Stop } | Should -Throw
         }
+
+        It "Pattern に改行が含まれている場合はエラー" {
+            $testFile = Join-Path $script:testDir "newline-pattern.txt"
+            Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
+
+            { Remove-LinesFromFile -Path $testFile -Pattern "Line 1`nLine 2" -ErrorAction Stop } |
+                Should -Throw "*cannot contain newline*"
+        }
+
+        It "Contains に改行が含まれている場合はエラー" {
+            $testFile = Join-Path $script:testDir "newline-contains.txt"
+            Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
+
+            { Remove-LinesFromFile -Path $testFile -Contains "Line 1`nLine 2" -ErrorAction Stop } |
+                Should -Throw "*cannot contain newline*"
+        }
     }
 }
