@@ -146,6 +146,8 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 // ANSI カラーコード
                 string deleteOn = $"{(char)27}[31m";  // 赤
                 string deleteOff = $"{(char)27}[0m";
+                string matchHighlightOn = $"{(char)27}[31;43m";  // 赤文字 + 黄色背景
+                string matchHighlightOff = $"{(char)27}[31m";    // 赤に戻す
 
                 try
                 {
@@ -250,8 +252,26 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 {
                                     if (dryRun)
                                     {
-                                        // -WhatIf: 削除行を赤色で表示（削除前の行番号）
-                                        WriteObject($"{lineNumber,3}: {deleteOn}{currentLine}{deleteOff}");
+                                        // -WhatIf: 削除行を赤色で表示（マッチ部分を黄色背景でハイライト）
+                                        string displayLine;
+                                        if (useContains)
+                                        {
+                                            // Contains: マッチ部分を黄色背景でハイライト
+                                            displayLine = currentLine.Replace(Contains!, 
+                                                $"{matchHighlightOn}{Contains}{matchHighlightOff}");
+                                        }
+                                        else if (usePattern)
+                                        {
+                                            // Pattern: 正規表現マッチ部分を黄色背景でハイライト
+                                            displayLine = regex!.Replace(currentLine, 
+                                                match => $"{matchHighlightOn}{match.Value}{matchHighlightOff}");
+                                        }
+                                        else
+                                        {
+                                            // LineRange のみ: 行全体を赤で表示
+                                            displayLine = currentLine;
+                                        }
+                                        WriteObject($"{lineNumber,3}: {deleteOn}{displayLine}{deleteOff}");
                                         lastOutputLine = lineNumber;
                                     }
                                     else
