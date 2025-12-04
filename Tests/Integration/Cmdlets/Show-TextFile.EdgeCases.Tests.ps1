@@ -162,4 +162,30 @@
             }
         }
     }
+    
+    Context "改行を含むパターンのエラー" {
+        It "Pattern に改行が含まれている場合はエラー" {
+            $testFile = [System.IO.Path]::GetTempFileName()
+            try {
+                "Line 1`nLine 2" | Set-Content $testFile -Encoding UTF8
+                
+                { Show-TextFile -Path $testFile -Pattern "Line`nLine" } | Should -Throw "*newline*"
+            }
+            finally {
+                Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+        
+        It "Contains に改行が含まれている場合はエラー" {
+            $testFile = [System.IO.Path]::GetTempFileName()
+            try {
+                "Line 1`nLine 2" | Set-Content $testFile -Encoding UTF8
+                
+                { Show-TextFile -Path $testFile -Contains "Line`nLine" } | Should -Throw "*newline*"
+            }
+            finally {
+                Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }

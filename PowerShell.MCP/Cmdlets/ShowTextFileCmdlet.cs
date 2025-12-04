@@ -41,6 +41,25 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     protected override void BeginProcessing()
     {
         ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
+        
+        // 改行を含むパターンはエラー（行単位処理のため絶対にマッチしない）
+        if (!string.IsNullOrEmpty(Pattern) && (Pattern.Contains('\n') || Pattern.Contains('\r')))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Pattern cannot contain newline characters. Show-TextFile processes files line by line."),
+                "InvalidPattern",
+                ErrorCategory.InvalidArgument,
+                Pattern));
+        }
+        
+        if (!string.IsNullOrEmpty(Contains) && (Contains.Contains('\n') || Contains.Contains('\r')))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Contains cannot contain newline characters. Show-TextFile processes files line by line."),
+                "InvalidContains",
+                ErrorCategory.InvalidArgument,
+                Contains));
+        }
     }
 
     protected override void ProcessRecord()
