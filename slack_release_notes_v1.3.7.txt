@@ -1,0 +1,6 @@
+1.3.7
+- Visual diff preview with `-WhatIf`: `Update-MatchInFile -WhatIf` now shows detailed line-by-line changes with red/green highlighting before modifying files
+- Tail display support: `Show-TextFile -LineRange -10` displays the last N lines of a file
+- Consistent ANSI color output across all text file cmdlets
+- PowerShell prompt now displays after each command execution
+- Various bug fixes and code quality improvements

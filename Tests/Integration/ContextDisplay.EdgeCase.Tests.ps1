@@ -141,7 +141,7 @@ Describe "Context Display Edge Case Tests" {
             
             # 特殊文字を含む置換でもコンテキスト表示が機能する
             $output | Should -Match "Line 2"
-            $output | Should -Match '\x1b\[31m'  # 赤（削除）
+            $output | Should -Match '\x1b\[32m'  # 緑（置換後）- 通常実行時は置換テキストのみ表示
         }
     }
 }

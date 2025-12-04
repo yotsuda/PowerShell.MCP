@@ -1,0 +1,2 @@
+1.3.6
+- Extended automatic ANSI color output support to additional CLI tools: GitHub CLI (gh), .NET console applications, and terminals with 24-bit color (truecolor) support.

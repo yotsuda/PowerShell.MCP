@@ -52,11 +52,8 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     [ValidateLineRange]
     public int[]? LineRange { get; set; }
 
-    [Parameter]
+    [Parameter(ValueFromPipeline = true)]
     public object[]? Content { get; set; }
-
-    [Parameter(ValueFromPipeline = true, DontShow = true)]
-    public object? InputObject { get; set; }
 
     [Parameter]
     public string? Encoding { get; set; }
@@ -79,12 +76,12 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
-        // パイプから InputObject が来ている場合は蓄積
+        // パイプから Content が来ている場合は蓄積
         if (_accumulateContent)
         {
-            if (InputObject != null)
+            if (Content != null)
             {
-                (_contentBuffer ??= []).Add(InputObject);
+                (_contentBuffer ??= []).AddRange(Content);
             }
             return;
         }

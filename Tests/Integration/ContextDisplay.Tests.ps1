@@ -76,12 +76,11 @@ Describe "Context Display Feature Tests" {
             $contextLines | Should -Not -BeNullOrEmpty
         }
 
-        It "差分表示マーカー（ANSIエスケープシーケンス）が含まれる" {
+        It "置換テキストのANSIエスケープシーケンスが含まれる" {
             $output = Update-MatchInFile -Path $script:testFile -Contains "old value" -Replacement "new value" -InformationAction Continue 6>&1 | Out-String
             
-            # ANSIエスケープシーケンス（赤 [31m と 緑 [32m と リセット [0m）が含まれている
-            $output | Should -Match '\x1b\[31m'  # 赤（削除）
-            $output | Should -Match '\x1b\[32m'  # 緑（追加）
+            # 通常実行時は置換後のテキストのみ表示（緑）
+            $output | Should -Match '\x1b\[32m'  # 緑（置換後）
             $output | Should -Match '\x1b\[0m'   # リセット
         }
 

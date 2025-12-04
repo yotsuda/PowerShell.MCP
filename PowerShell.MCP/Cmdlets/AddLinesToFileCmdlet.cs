@@ -17,11 +17,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     [Alias("PSPath")]
     public string[] LiteralPath { get; set; } = null!;
 
-    [Parameter(Position = 1)]
-    public object[] Content { get; set; } = null!;
-
-    [Parameter(ValueFromPipeline = true, DontShow = true)]
-    public object? InputObject { get; set; }
+    [Parameter(Position = 1, ValueFromPipeline = true)]
+    public object[]? Content { get; set; }
 
     [Parameter]
     [ValidateRange(1, int.MaxValue)]
@@ -48,12 +45,12 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
-        // パイプから InputObject が来ている場合は蓄積
+        // パイプから Content が来ている場合は蓄積
         if (_accumulateContent)
         {
-            if (InputObject != null)
+            if (Content != null)
             {
-                (_contentBuffer ??= []).Add(InputObject);
+                (_contentBuffer ??= []).AddRange(Content);
             }
             return;
         }

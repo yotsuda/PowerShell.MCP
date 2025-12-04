@@ -14,13 +14,13 @@ Insert lines into a text file at a specific position or at the end
 
 ### Path
 ```
-Add-LinesToFile [-Path] <String[]> [-Content] <Object[]> [-LineNumber <Int32>] [-Encoding <String>] [-Backup]
+Add-LinesToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineNumber <Int32>] [-Encoding <String>] [-Backup]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Add-LinesToFile -LiteralPath <String[]> [-Content] <Object[]> [-LineNumber <Int32>] [-Encoding <String>]
+Add-LinesToFile -LiteralPath <String[]> [[-Content] <Object[]>] [-LineNumber <Int32>] [-Encoding <String>]
  [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -76,10 +76,10 @@ Type: Object[]
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: 1
 Default value: None
-Accept pipeline input: False
+Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
