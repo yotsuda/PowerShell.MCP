@@ -249,7 +249,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $output = Remove-LinesFromFile -Path $script:testFile -LineRange 1,1 | Out-String
             
             # 前2行は存在しない（先頭なので）
-            # 削除マーカー
+            # 削除マーカー（行番号なし）
             $output | Should -Match '   :'
             
             # 後2行（'-'で表示、削除後の行番号）
@@ -264,28 +264,26 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $output | Should -Match '7- Line 4: Fourth line'
             $output | Should -Match '8- WARNING: This is a warning'
             
-            # 削除マーカー
+            # 削除マーカー（行番号なし）
             $output | Should -Match '   :'
-            
-            # 後2行は存在しない（末尾なので）
-            $output | Should -Not -Match '9:'
         }
 
-        It "連続する複数行削除時に削除行数が正しく表示される" {
+        It "連続する複数行削除時にマーカーは1つだけ表示される" {
             $output = Remove-LinesFromFile -Path $script:testFile -LineRange 2,4 | Out-String
             
             # 前2行（1行目しかない）
             $output | Should -Match '1- # Header'
             
-            # 削除マーカーに正しい削除行数
-            $output | Should -Match '   :'
+            # 削除マーカー（連続削除なので1回のみ表示）
+            $markerCount = ([regex]::Matches($output, '(?m)^\s+:\s*$')).Count
+            $markerCount | Should -Be 1
             
             # 後2行（'-'で表示、削除後の行番号）
             $output | Should -Match '2- ERROR: Connection timeout'
             $output | Should -Match '3- error: invalid input'
         }
 
-        It "複数の削除範囲がある場合に各範囲の削除行数が正しく表示される" {
+        It "複数の削除範囲がある場合に各範囲ごとにマーカーが表示される" {
             # "error" (小文字) で検索すると error: invalid input のみマッチ
             $output = Remove-LinesFromFile -Path $script:testFile -Contains "error" | Out-String
             
@@ -293,7 +291,7 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $output | Should -Match '   :'
             
             # マーカーは1つのみ
-            $markerCount = ([regex]::Matches($output, '   :')).Count
+            $markerCount = ([regex]::Matches($output, '(?m)^\s+:\s*$')).Count
             $markerCount | Should -Be 1
         }
 
