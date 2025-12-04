@@ -190,7 +190,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
                 string message = isNewFile
                     ? $"{(char)27}[36mCreated {GetDisplayPath(originalPath, resolvedPath)}: {contentLines.Length} line(s) (net: +{contentLines.Length}){(char)27}[0m"
-                    : $"{(char)27}[36mAdded {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {insertAt}")} (net: +{contentLines.Length}){(char)27}[0m";
+                    : $"{(char)27}[36mAdded {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {actualInsertAt}")} (net: +{contentLines.Length}){(char)27}[0m";
 
                 WriteObject(message);
 
