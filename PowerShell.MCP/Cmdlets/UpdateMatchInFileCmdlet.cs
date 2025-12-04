@@ -297,16 +297,34 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 outputLine = regex.Replace(currentLine, Replacement!);
                             }
 
-                            // マッチ行を赤（削除）と緑（追加）で表示
+                            // マッチ行を表示（WhatIf: 赤＋緑、通常: 緑のみ）
                             string displayLine;
-                            if (isLiteral)
+                            if (dryRun)
                             {
-                                displayLine = currentLine.Replace(Contains!, 
-                                    $"{deleteOn}{Contains}{deleteOff}{insertOn}{Replacement}{insertOff}");
+                                // WhatIf: 置換前（赤）と置換後（緑）を両方表示
+                                if (isLiteral)
+                                {
+                                    displayLine = currentLine.Replace(Contains!, 
+                                        $"{deleteOn}{Contains}{deleteOff}{insertOn}{Replacement}{insertOff}");
+                                }
+                                else
+                                {
+                                    displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, deleteOn, deleteOff, insertOn, insertOff);
+                                }
                             }
                             else
                             {
-                                displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, deleteOn, deleteOff, insertOn, insertOff);
+                                // 通常実行: 置換後の結果のみ表示（緑でハイライト）
+                                if (isLiteral)
+                                {
+                                    displayLine = currentLine.Replace(Contains!, 
+                                        $"{insertOn}{Replacement}{insertOff}");
+                                }
+                                else
+                                {
+                                    displayLine = regex!.Replace(currentLine, 
+                                        match => $"{insertOn}{Replacement}{insertOff}");
+                                }
                             }
 
                             WriteObject($"{lineNumber,3}: {displayLine}");
