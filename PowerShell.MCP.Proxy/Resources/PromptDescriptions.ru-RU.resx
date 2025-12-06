@@ -124,16 +124,16 @@
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Начать быструю тренировку диктанта на иностранном языке с аудио PowerShell и оценкой ИИ</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Name" xml:space="preserve">
-    <value>Создать интерактивную карту</value>
+  <data name="Prompt_ShowInteractiveMap_Name" xml:space="preserve">
+    <value>Показать интерактивную карту</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Description" xml:space="preserve">
-    <value>Создавайте тематические карты с помощью PowerShell.Map (рестораны, музеи, парки и т. д.)</value>
+  <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
+    <value>Показывайте тематические карты с помощью PowerShell.Map (рестораны, музеи, парки и т. д.)</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Param_MapTheme" xml:space="preserve">
+  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
     <value>Достопримечательности, Рестораны, Музеи</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
+  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>Вся Россия, Москва, Санкт-Петербург</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">

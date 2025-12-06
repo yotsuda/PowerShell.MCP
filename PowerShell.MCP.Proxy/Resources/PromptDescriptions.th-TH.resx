@@ -132,16 +132,16 @@
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>เริ่มการฝึกคัดลอกภาษาต่างประเทศแบบเร่งรัดด้วยเสียง PowerShell และการประเมินโดย AI</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Name" xml:space="preserve">
-    <value>สร้างแผนที่เชิงโต้ตอบ</value>
+  <data name="Prompt_ShowInteractiveMap_Name" xml:space="preserve">
+    <value>แสดงแผนที่เชิงโต้ตอบ</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Description" xml:space="preserve">
-    <value>สร้างแผนที่เชิงโต้ตอบตามธีมโดยใช้ PowerShell.Map (ตลาดนัด, ร้านอาหาร, วัด, ฯลฯ)</value>
+  <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
+    <value>แสดงแผนที่เชิงโต้ตอบตามธีมโดยใช้ PowerShell.Map (ตลาดนัด, ร้านอาหาร, วัด, ฯลฯ)</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Param_MapTheme" xml:space="preserve">
+  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
     <value>สถานที่ท่องเที่ยว, ร้านอาหารอร่อย, วัดสวยงาม</value>
   </data>
-  <data name="Prompt_CreateInteractiveMap_Param_TargetArea" xml:space="preserve">
+  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
     <value>ทั่วประเทศ, กรุงเทพฯ, เชียงใหม่</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">

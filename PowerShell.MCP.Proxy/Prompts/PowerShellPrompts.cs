@@ -323,12 +323,12 @@ RULES:
     }
 
     [McpServerPrompt]
-    [LocalizedName("Prompt_CreateInteractiveMap_Name")]
-    [ResourceDescription("Prompt_CreateInteractiveMap_Description")]
-    public static ChatMessage CreateInteractiveMap(
-        [ResourceDescription("Prompt_CreateInteractiveMap_Param_MapTheme")]
+    [LocalizedName("Prompt_ShowInteractiveMap_Name")]
+    [ResourceDescription("Prompt_ShowInteractiveMap_Description")]
+    public static ChatMessage ShowInteractiveMap(
+        [ResourceDescription("Prompt_ShowInteractiveMap_Param_MapTheme")]
         string map_theme,
-        [ResourceDescription("Prompt_CreateInteractiveMap_Param_TargetArea")]
+        [ResourceDescription("Prompt_ShowInteractiveMap_Param_TargetArea")]
         string? target_area = null)
     {
         var areaSection = !string.IsNullOrEmpty(target_area)
