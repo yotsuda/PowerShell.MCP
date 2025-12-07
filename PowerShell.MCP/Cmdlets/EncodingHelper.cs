@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -97,7 +97,7 @@ public static class EncodingHelper
                 return encodingName.ToLowerInvariant() switch
                 {
                     // UTF encodings
-                    "utf-8" or "utf8" => new UTF8Encoding(false),
+                    "utf-8" or "utf8" or "utf8nobom" or "utf-8nobom" or "utf-8-nobom" or "utf8-nobom" => new UTF8Encoding(false),
                     "utf-8-bom" or "utf8-bom" or "utf8bom" or "utf8-sig" or "utf-8-sig" => new UTF8Encoding(true),
                     "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" or "utf16bom" or "utf-16bom" or "utf16lebom" or "utf-16lebom" => Encoding.Unicode,
                     "utf-16be" or "utf16be" or "utf16bebom" or "utf-16bebom" => Encoding.BigEndianUnicode,

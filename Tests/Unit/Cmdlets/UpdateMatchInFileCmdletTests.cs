@@ -181,4 +181,61 @@ public class UpdateMatchInFileCmdletTests : IDisposable
         Assert.Null(upgradeMessage);
         Assert.Equal(65001, metadata.Encoding.CodePage); // Remains UTF-8
     }
+
+    [Theory]
+    [InlineData("utf8nobom")]
+    [InlineData("utf8NoBOM")]
+    [InlineData("utf-8nobom")]
+    [InlineData("utf-8-nobom")]
+    [InlineData("utf8-nobom")]
+    public void EncodingHelper_GetEncoding_Utf8NoBomAliases_ReturnsUtf8WithoutBom(string encodingName)
+    {
+        // Arrange: Create a temp file for GetEncoding to use
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, "test");
+            
+            // Act: Get encoding with utf8nobom alias
+            var encoding = EncodingHelper.GetEncoding(tempFile, encodingName);
+            
+            // Assert: Should be UTF-8 without BOM
+            Assert.IsType<UTF8Encoding>(encoding);
+            Assert.Empty(encoding.GetPreamble()); // No BOM
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void EncodingHelper_GetEncoding_Utf8NoBom_OverridesFileWithBom()
+    {
+        // Arrange: Create a file with UTF-8 BOM
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            var utf8WithBom = new UTF8Encoding(true);
+            File.WriteAllText(tempFile, "test content", utf8WithBom);
+            
+            // Verify file has BOM
+            var bytes = File.ReadAllBytes(tempFile);
+            Assert.True(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, 
+                "Test file should have BOM");
+            
+            // Act: Get encoding with explicit utf8NoBOM
+            var encoding = EncodingHelper.GetEncoding(tempFile, "utf8NoBOM");
+            
+            // Assert: Should return UTF-8 without BOM (explicit spec overrides file)
+            Assert.IsType<UTF8Encoding>(encoding);
+            Assert.Empty(encoding.GetPreamble());
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+        }
+    }
 }
