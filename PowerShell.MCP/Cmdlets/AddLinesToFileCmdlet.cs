@@ -186,8 +186,8 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                 string message = isNewFile
-                    ? $"{(char)27}[36mCreated {GetDisplayPath(originalPath, resolvedPath)}: {contentLines.Length} line(s) (net: +{contentLines.Length}){(char)27}[0m"
-                    : $"{(char)27}[36mAdded {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {actualInsertAt}")} (net: +{contentLines.Length}){(char)27}[0m";
+                    ? AnsiColors.Success($"Created {GetDisplayPath(originalPath, resolvedPath)}: {contentLines.Length} line(s) (net: +{contentLines.Length})")
+                    : AnsiColors.Success($"Added {contentLines.Length} line(s) to {GetDisplayPath(originalPath, resolvedPath)} {(effectiveAtEnd ? "at end" : $"at line {actualInsertAt}")} (net: +{contentLines.Length})");
 
                 WriteObject(message);
 
@@ -256,7 +256,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                     // コンテキストヘッダー出力
                     if (!contextHeaderPrinted)
                     {
-                        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+                        WriteObject(AnsiColors.Header(displayPath));
                         contextHeaderPrinted = true;
                     }
 
@@ -273,7 +273,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         for (int i = 0; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
+                            WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
 
                             if (i < contentLines.Length - 1)
                             {
@@ -289,7 +289,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         for (int i = 0; i < 2; i++)
                         {
                             writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
+                            WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
                             writer.Write(metadata.NewlineSequence);
                             outputLineNumber++;
                         }
@@ -309,7 +309,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
+                            WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
 
                             if (i < contentLines.Length - 1)
                             {
@@ -364,7 +364,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                         // コンテキストヘッダー出力
                         if (!contextHeaderPrinted)
                         {
-                            WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+                            WriteObject(AnsiColors.Header(displayPath));
                             contextHeaderPrinted = true;
                         }
 
@@ -381,7 +381,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             for (int i = 0; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
+                                WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
 
                                 if (i < contentLines.Length - 1)
                                 {
@@ -403,7 +403,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             for (int i = 0; i < 2; i++)
                             {
                                 writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
+                                WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
                                 writer.Write(metadata.NewlineSequence);
                                 outputLineNumber++;
                             }
@@ -423,7 +423,7 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
                             for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: \x1b[32m{contentLines[i]}\x1b[0m");
+                                WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
 
                                 if (i < contentLines.Length - 1)
                                 {

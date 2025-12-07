@@ -265,7 +265,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             // 結果メッセージ
             string message = GenerateResultMessage(fileExists, linesRemoved, linesInserted);
             string prefix = fileExists ? "Updated" : "Created";
-            WriteObject($"{(char)27}[36m{prefix} {GetDisplayPath(originalPath, resolvedPath)}: {message}{(char)27}[0m");
+            WriteObject(AnsiColors.Success($"{prefix} {GetDisplayPath(originalPath, resolvedPath)}: {message}"));
         }
         catch
         {
@@ -520,7 +520,7 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
         var displayPath = GetDisplayPath(originalPath, filePath);
 
         // ヘッダー出力
-        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+        WriteObject(AnsiColors.Header(displayPath));
 
         int endLine = startLine + linesInserted - 1;
 
@@ -546,22 +546,22 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
             for (int i = 0; i < linesInserted; i++)
             {
                 int lineNum = startLine + i;
-                WriteObject($"{lineNum,3}: \x1b[32m{contentLines[i]}\x1b[0m");
+                WriteObject($"{lineNum,3}: {AnsiColors.Inserted(contentLines[i])}");
             }
         }
         else
         {
             // 6行以上: 先頭2行 + 省略マーカー + 末尾2行
             // 先頭2行
-            WriteObject($"{startLine,3}: \x1b[32m{contentLines[0]}\x1b[0m");
-            WriteObject($"{startLine + 1,3}: \x1b[32m{contentLines[1]}\x1b[0m");
+            WriteObject($"{startLine,3}: {AnsiColors.Inserted(contentLines[0])}");
+            WriteObject($"{startLine + 1,3}: {AnsiColors.Inserted(contentLines[1])}");
 
             // 省略マーカー
             WriteObject("   :");
 
             // 末尾2行
-            WriteObject($"{endLine - 1,3}: \x1b[32m{contentLines[linesInserted - 2]}\x1b[0m");
-            WriteObject($"{endLine,3}: \x1b[32m{contentLines[linesInserted - 1]}\x1b[0m");
+            WriteObject($"{endLine - 1,3}: {AnsiColors.Inserted(contentLines[linesInserted - 2])}");
+            WriteObject($"{endLine,3}: {AnsiColors.Inserted(contentLines[linesInserted - 1])}");
         }
 
         // 後2行のコンテキスト

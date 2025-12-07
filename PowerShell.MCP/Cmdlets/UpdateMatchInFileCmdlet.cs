@@ -190,13 +190,6 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         int afterMatchCounter = 0;
         int lastOutputLine = 0;
         
-        // ANSI カラーコード
-        string deleteOn = $"{(char)27}[31m";  // 赤
-        string deleteOff = $"{(char)27}[0m";
-        string insertOn = $"{(char)27}[32m";  // 緑
-        string insertOff = $"{(char)27}[0m";
-        string highlightOn = $"{(char)27}[33m";  // 黄色（コンテキスト行のマッチ用）
-        string highlightOff = $"{(char)27}[0m";
 
         try
         {
@@ -210,7 +203,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 }
                 else
                 {
-                    WriteObject($"{(char)27}[97m{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made{(char)27}[0m");
+                    WriteObject(AnsiColors.Info($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made"));
                 }
                 if (tempFile != null) File.Delete(tempFile);
                 return;
@@ -261,7 +254,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             if (!headerPrinted)
                             {
                                 var displayPath = GetDisplayPath(originalPath, resolvedPath);
-                                WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+                                WriteObject(AnsiColors.Header(displayPath));
                                 headerPrinted = true;
                             }
 
@@ -276,7 +269,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             {
                                 if (ctx.lineNum > lastOutputLine)
                                 {
-                                    var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex, highlightOn, highlightOff);
+                                    var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex);
                                     WriteObject($"{ctx.lineNum,3}- {ctxDisplayLine}");
                                     lastOutputLine = ctx.lineNum;
                                 }
@@ -305,11 +298,11 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 if (isLiteral)
                                 {
                                     displayLine = currentLine.Replace(Contains!, 
-                                        $"{deleteOn}{Contains}{deleteOff}{insertOn}{Replacement}{insertOff}");
+                                        $"{AnsiColors.Red}{Contains}{AnsiColors.Reset}{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                                 else
                                 {
-                                    displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!, deleteOn, deleteOff, insertOn, insertOff);
+                                    displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!);
                                 }
                             }
                             else
@@ -318,12 +311,12 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 if (isLiteral)
                                 {
                                     displayLine = currentLine.Replace(Contains!, 
-                                        $"{insertOn}{Replacement}{insertOff}");
+                                        $"{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                                 else
                                 {
                                     displayLine = regex!.Replace(currentLine, 
-                                        match => $"{insertOn}{Replacement}{insertOff}");
+                                        match => $"{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                             }
 
@@ -336,7 +329,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             // 後続コンテキストの出力
                             if (afterMatchCounter > 0)
                             {
-                                var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex, highlightOn, highlightOff);
+                                var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex);
                                 WriteObject($"{lineNumber,3}- {displayContextLine}");
                                 lastOutputLine = lineNumber;
                                 afterMatchCounter--;
@@ -388,7 +381,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 }
                 else
                 {
-                    WriteObject($"{(char)27}[97m{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made{(char)27}[0m");
+                    WriteObject(AnsiColors.Info($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made"));
                 }
                 if (tempFile != null) File.Delete(tempFile);
                 return;
@@ -400,13 +393,13 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             if (dryRun)
             {
                 // WhatIf: ファイルは変更しない
-                WriteObject($"{(char)27}[33mWhat if: Would update {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s){(char)27}[0m");
+                WriteObject(AnsiColors.WhatIf($"What if: Would update {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s)"));
             }
             else
             {
                 // アトミックに置換
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile!);
-                WriteObject($"{(char)27}[36mUpdated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made{(char)27}[0m");
+                WriteObject(AnsiColors.Success($"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made"));
             }
         }
         catch
@@ -423,8 +416,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// 正規表現置換の差分表示行を構築（削除部分を赤、追加部分を緑で表示）
     /// </summary>
-    private string BuildRegexDisplayLine(string originalLine, Regex regex, string replacement, 
-        string deleteOn, string deleteOff, string insertOn, string insertOff)
+    private static string BuildRegexDisplayLine(string originalLine, Regex regex, string replacement)
     {
         // 各マッチの削除→追加を連続表示（キャプチャグループ対応）
         var result = regex.Replace(originalLine, match => 
@@ -433,40 +425,33 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             var replacedText = match.Result(replacement);
             
             // 削除部分（元のマッチ）を赤+取り消し線、追加部分（置換結果）を緑で表示
-            return $"{deleteOn}{match.Value}{deleteOff}{insertOn}{replacedText}{insertOff}";
+            return $"{AnsiColors.Red}{match.Value}{AnsiColors.Reset}{AnsiColors.Green}{replacedText}{AnsiColors.Reset}";
         });
         
         return result;
     }
+
     /// <summary>
     /// コンテキスト行の表示を構築（マッチがあれば元の文字列を黄色でハイライト）
     /// </summary>
-    private string BuildContextDisplayLine(string line, bool isLiteral, Regex? regex, string highlightOn, string highlightOff)
+    private string BuildContextDisplayLine(string line, bool isLiteral, Regex? regex)
     {
-        bool hasMatch = false;
-        
         if (isLiteral)
         {
-            hasMatch = line.Contains(Contains!);
-            if (hasMatch)
+            if (line.Contains(Contains!))
             {
-                return line.Replace(Contains!, $"{highlightOn}{Contains}{highlightOff}");
+                return line.Replace(Contains!, $"{AnsiColors.Yellow}{Contains}{AnsiColors.Reset}");
             }
         }
         else
         {
-            hasMatch = regex!.IsMatch(line);
-            if (hasMatch)
+            if (regex!.IsMatch(line))
             {
                 // 正規表現のマッチ部分を黄色でハイライト（元の文字列のまま）
-                return regex.Replace(line, match => $"{highlightOn}{match.Value}{highlightOff}");
+                return regex.Replace(line, match => $"{AnsiColors.Yellow}{match.Value}{AnsiColors.Reset}");
             }
         }
         
         return line;
     }
-
-
-
-
 }

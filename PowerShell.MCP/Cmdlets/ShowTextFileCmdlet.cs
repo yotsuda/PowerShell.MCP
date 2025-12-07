@@ -90,7 +90,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 if (fileInfoObj.Length == 0)
                 {
                     var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                    WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+                    WriteObject(AnsiColors.Header(displayPath));
                     WriteWarning("File is empty");
                     continue;
                 }
@@ -119,7 +119,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     private void ShowWithLineRange(string inputPath, string filePath, System.Text.Encoding encoding)
     {
         var displayPath = GetDisplayPath(inputPath, filePath);
-        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+        WriteObject(AnsiColors.Header(displayPath));
 
         // LineRange が null または空の場合はデフォルト (1, int.MaxValue)
         int requestedStart = 1;
@@ -214,11 +214,6 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         bool isRegex)
     {
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
-        
-        // ANSIエスケープシーケンス（黄色でハイライト）
-        string highlightOn = $"{(char)27}[33m";
-        string highlightOff = $"{(char)27}[0m";
-        
         var displayPath = GetDisplayPath(inputPath, filePath);
         bool headerPrinted = false;
         bool anyMatch = false;
@@ -263,7 +258,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     // ヘッダー出力（初回のみ）
                     if (!headerPrinted)
                     {
-                        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+                        WriteObject(AnsiColors.Header(displayPath));
                         headerPrinted = true;
                     }
                     
@@ -285,7 +280,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         // gapLine の次の行が前置コンテキストの開始なら、gapLine を出力（連続）
                         if (gapInfo.lineNumber + 1 == preContextStart)
                         {
-                            string gapDisplay = ApplyHighlightingIfMatched(gapInfo.line, matchPredicate, matchValue, isRegex, highlightOn, highlightOff);
+                            string gapDisplay = ApplyHighlightingIfMatched(gapInfo.line, matchPredicate, matchValue, isRegex);
                             WriteObject($"{gapInfo.lineNumber,3}- {gapDisplay}");
                             lastOutputLine = gapInfo.lineNumber;
                         }
@@ -313,7 +308,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     {
                         if (ctx.lineNumber > lastOutputLine)
                         {
-                            string ctxDisplay = ApplyHighlightingIfMatched(ctx.line, matchPredicate, matchValue, isRegex, highlightOn, highlightOff);
+                            string ctxDisplay = ApplyHighlightingIfMatched(ctx.line, matchPredicate, matchValue, isRegex);
                             WriteObject($"{ctx.lineNumber,3}- {ctxDisplay}");
                         }
                     }
@@ -323,11 +318,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     if (isRegex)
                     {
                         var regex = new Regex(matchValue, RegexOptions.Compiled);
-                        displayLine = regex.Replace(currentLine, m => $"{highlightOn}{m.Value}{highlightOff}");
+                        displayLine = regex.Replace(currentLine, m => $"{AnsiColors.Yellow}{m.Value}{AnsiColors.Reset}");
                     }
                     else
                     {
-                        displayLine = currentLine.Replace(matchValue, $"{highlightOn}{matchValue}{highlightOff}");
+                        displayLine = currentLine.Replace(matchValue, $"{AnsiColors.Yellow}{matchValue}{AnsiColors.Reset}");
                     }
                     WriteObject($"{lineNumber,3}: {displayLine}");
                     
@@ -341,7 +336,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     // 後続コンテキストの出力
                     if (afterMatchCounter > 0)
                     {
-                        string display = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, isRegex, highlightOn, highlightOff);
+                        string display = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, isRegex);
                         WriteObject($"{lineNumber,3}- {display}");
                         afterMatchCounter--;
                         lastOutputLine = lineNumber;
@@ -393,7 +388,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// 行にマッチが含まれる場合、黄色でハイライトを適用する
     /// </summary>
-    private string ApplyHighlightingIfMatched(string line, Func<string, bool> matchPredicate, string matchValue, bool isRegex, string highlightOn, string highlightOff)
+    private string ApplyHighlightingIfMatched(string line, Func<string, bool> matchPredicate, string matchValue, bool isRegex)
     {
         if (!matchPredicate(line))
         {
@@ -403,11 +398,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         if (isRegex)
         {
             var regex = new Regex(matchValue, RegexOptions.Compiled);
-            return regex.Replace(line, m => $"{highlightOn}{m.Value}{highlightOff}");
+            return regex.Replace(line, m => $"{AnsiColors.Yellow}{m.Value}{AnsiColors.Reset}");
         }
         else
         {
-            return line.Replace(matchValue, $"{highlightOn}{matchValue}{highlightOff}");
+            return line.Replace(matchValue, $"{AnsiColors.Yellow}{matchValue}{AnsiColors.Reset}");
         }
     }
 }

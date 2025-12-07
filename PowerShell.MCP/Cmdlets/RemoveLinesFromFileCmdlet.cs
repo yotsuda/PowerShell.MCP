@@ -142,13 +142,6 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 int afterRemovalCounter = 0;
                 int lastOutputLine = 0;
                 bool headerPrinted = false;
-                
-                // ANSI カラーコード
-                string deleteOn = $"{(char)27}[31m";  // 赤
-                string deleteOff = $"{(char)27}[0m";
-                string matchHighlightOn = $"{(char)27}[31;43m";  // 赤文字 + 黄色背景
-                string matchHighlightOff = $"{(char)27}[31;49m";  // 赤文字 + デフォルト背景に戻す
-
                 try
                 {
                     // 空ファイルのチェック
@@ -217,7 +210,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     if (!headerPrinted)
                                     {
                                         var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                                        WriteObject($"{(char)27}[1m==> {displayPath} <=={(char)27}[0m");
+                                        WriteObject(AnsiColors.Header(displayPath));
                                         headerPrinted = true;
                                     }
 
@@ -258,20 +251,20 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         {
                                             // Contains: マッチ部分を黄色背景でハイライト
                                             displayLine = currentLine.Replace(Contains!, 
-                                                $"{matchHighlightOn}{Contains}{matchHighlightOff}");
+                                                $"{AnsiColors.RedOnYellow}{Contains}{AnsiColors.RedOnDefault}");
                                         }
                                         else if (usePattern)
                                         {
                                             // Pattern: 正規表現マッチ部分を黄色背景でハイライト
                                             displayLine = regex!.Replace(currentLine, 
-                                                match => $"{matchHighlightOn}{match.Value}{matchHighlightOff}");
+                                                match => $"{AnsiColors.RedOnYellow}{match.Value}{AnsiColors.RedOnDefault}");
                                         }
                                         else
                                         {
                                             // LineRange のみ: 行全体を赤で表示
                                             displayLine = currentLine;
                                         }
-                                        WriteObject($"{lineNumber,3}: {deleteOn}{displayLine}{deleteOff}");
+                                        WriteObject($"{lineNumber,3}: {AnsiColors.Red}{displayLine}{AnsiColors.Reset}");
                                         lastOutputLine = lineNumber;
                                     }
                                     else
@@ -350,13 +343,13 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     if (dryRun)
                     {
                         // WhatIf: ファイルは変更しない
-                        WriteObject($"{(char)27}[33mWhat if: Would remove {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)}{(char)27}[0m");
+                        WriteObject(AnsiColors.WhatIf($"What if: Would remove {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)}"));
                     }
                     else
                     {
                         // アトミックに置換
                         TextFileUtility.ReplaceFileAtomic(fileInfo.ResolvedPath, tempFile!);
-                        WriteObject($"{(char)27}[36mRemoved {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)} (net: -{linesRemoved}){(char)27}[0m");
+                        WriteObject(AnsiColors.Success($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)} (net: -{linesRemoved})"));
                     }
                 }
                 catch
