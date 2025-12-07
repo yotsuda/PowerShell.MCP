@@ -93,7 +93,7 @@ public static class EncodingHelper
         {
             try
             {
-                // 一般的なエンコーディングエイリアスの正規化
+                // Normalize common encoding aliases
                 return encodingName.ToLowerInvariant() switch
                 {
                     // UTF encodings

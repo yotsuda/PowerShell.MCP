@@ -12,7 +12,7 @@ public abstract class PowerShellMcpParams
     public abstract string Name { get; }
 }
 
-// PowerShell.MCP モジュール用の parameters 型定義
+// Parameter type definitions for PowerShell.MCP module
 public class GetCurrentLocationParams : PowerShellMcpParams
 {
     [JsonPropertyName("name")]

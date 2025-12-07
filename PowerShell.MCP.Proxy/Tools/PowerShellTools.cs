@@ -7,7 +7,7 @@ namespace PowerShell.MCP.Proxy.Tools;
 [McpServerToolType]
 public static class PowerShellTools
 {
-    // エラーメッセージの定数定義
+    // Error message constant definitions
     private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";
     
     [McpServerTool]
@@ -18,18 +18,18 @@ public static class PowerShellTools
     {
         var result = await powerShellService.GetCurrentLocationAsync(cancellationToken);
         
-        // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
-        // StartsWith を使用して、エラーメッセージの先頭部分のみをチェック
+        // Check if error message (when PowerShell is not running)
+        // Use StartsWith to check only the beginning of error message
         if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
         {
             Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
             
-            // 自動的に start_powershell_console を実行
+            // Automatically execute start_powershell_console
             return await StartPowershellConsole(powerShellService, cancellationToken);
         }
         
-        // モジュールがインポートされていない場合は自動起動しない（ユーザーの選択を尊重）
-        // 通常の結果またはその他のエラーメッセージをそのまま返す
+        // Do not auto-start if module is not imported (respect user choice)
+        // Return normal result or other error message as-is
         return result;
     }
 
@@ -85,21 +85,21 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     {
         var result = await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
         
-        // エラーメッセージかどうかをチェック（PowerShell が起動していない場合）
-        // StartsWith を使用して、エラーメッセージの先頭部分のみをチェック
+        // Check if error message (when PowerShell is not running)
+        // Use StartsWith to check only the beginning of error message
         if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
         {
             Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
             
-            // 自動的にコンソールを起動（location情報も取得される）
+            // Auto-start console (location info will also be retrieved)
             var startResult = await StartPowershellConsole(powerShellService, cancellationToken);
             
-            // pipeline は実行しない。AIに確認を促す（重要な情報を先頭に）
+            // Do not execute pipeline. Prompt AI for confirmation (important info first)
             return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
         }
         
-        // モジュールがインポートされていない場合は自動起動しない（ユーザーの選択を尊重）
-        // 通常の結果またはその他のエラーメッセージをそのまま返す
+        // Do not auto-start if module is not imported (respect user choice)
+        // Return normal result or other error message as-is
         return result;
     }
 
@@ -113,9 +113,9 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             Console.Error.WriteLine("[INFO] Starting new PowerShell console with PowerShell.MCP module...");
 
-            // 1. プロキシ側で直接 pwsh.exe を起動（Named Pipe 経由ではない）
+            // 1. Start pwsh.exe directly from proxy (not via Named Pipe)
 
-            // すでに pwsh.exe が起動済みであれば、操作に失敗する
+            // If pwsh.exe is already running, operation will fail
             if (PowerShellProcessManager.IsPowerShellProcessRunning())
             {
                 var loc = await GetCurrentLocation(powerShellService, cancellationToken);
@@ -153,12 +153,12 @@ Note that commands executed via invoke_expression cannot be cancelled with Ctrl+
             
             Console.Error.WriteLine("[INFO] PowerShell console started successfully, getting current location...");
             
-            // 2. 自動で get_current_location を実行
+            // 2. Automatically execute get_current_location
             var locationResult = await powerShellService.GetCurrentLocationAsync(cancellationToken);
             
             Console.Error.WriteLine("[INFO] PowerShell console startup completed");
             
-            // 3. 結果を MCP クライアントに返す
+            // 3. Return result to MCP client
             return $"PowerShell console started successfully with PowerShell.MCP module imported.\n\n{locationResult}";
         }
         catch (Exception ex)

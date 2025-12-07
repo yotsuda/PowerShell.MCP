@@ -1,0 +1,7 @@
+1.3.8
+- Visual diff preview with -WhatIf: `Remove-LinesFromFile -WhatIf` now shows lines to be deleted with red highlighting and yellow background for matched patterns
+- Performance improvement: `Update-MatchInFile` refactored from 2-pass to 1-pass processing
+- Safer deletion: `Update-LinesInFile` now requires `-Content @()` to explicitly delete lines (prevents accidental deletion)
+- Newline validation: `-Pattern` and `-Contains` parameters now reject newline characters across all cmdlets
+- Pipeline input support: `Add-LinesToFile` and `Update-LinesInFile` now accept content via pipeline
+- Various bug fixes and code quality improvements

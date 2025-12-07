@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace PowerShell.MCP.Proxy.Models;
 
-// Source Generator 用の JsonSerializerContext
+// JsonSerializerContext for Source Generator
 [JsonSerializable(typeof(GetCurrentLocationParams))]
 [JsonSerializable(typeof(InvokeExpressionParams))]
 [JsonSerializable(typeof(StartPowerShellConsoleParams))]

@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace PowerShell.MCP.Services;
 
 /// <summary>
-/// 実行状態を管理する静的クラス
+/// Static class for managing execution state
 /// </summary>
 public static class ExecutionState
 {
@@ -17,19 +17,19 @@ public static class ExecutionState
 }
 
 /// <summary>
-/// Named Pipe サーバー - PowerShell.MCP.Proxy.exe との通信を担当
-/// コマンド実行中は"busy"レスポンスを返す
+/// Named Pipe server - handles communication with PowerShell.MCP.Proxy.exe
+/// Returns "busy" response while command is executing
 /// </summary>
 public class NamedPipeServer : IDisposable
 {
     public const string PipeName = "PowerShell.MCP.Communication";
-    private const int MaxConcurrentConnections = 2; // 2つのパイプインスタンス
+    private const int MaxConcurrentConnections = 2; // Two pipe instances
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
     private bool _disposed = false;
 
     /// <summary>
-    /// Named Pipe サーバーを開始します
+    /// Starts the Named Pipe server
     /// </summary>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -38,19 +38,19 @@ public class NamedPipeServer : IDisposable
 
         try
         {
-            // 複数のサーバーインスタンスを起動
+            // Start multiple server instances
             for (int i = 0; i < MaxConcurrentConnections; i++)
             {
                 var task = RunServerInstanceAsync(combinedCts.Token);
                 _serverTasks.Add(task);
             }
 
-            // すべてのサーバーインスタンスの完了を待機
+            // Wait for all server instances to complete
             await Task.WhenAll(_serverTasks);
         }
         catch (OperationCanceledException)
         {
-            // キャンセルは正常な終了
+            // Cancellation is normal termination
         }
         catch (Exception ex)
         {
@@ -59,7 +59,7 @@ public class NamedPipeServer : IDisposable
     }
 
     /// <summary>
-    /// サーバーインスタンスを実行します
+    /// Runs a server instance
     /// </summary>
     private async Task RunServerInstanceAsync(CancellationToken cancellationToken)
     {
@@ -69,10 +69,10 @@ public class NamedPipeServer : IDisposable
             {
                 using var pipeServer = CreateNamedPipeServer();
                 
-                // クライアントの接続を待機
+                // Wait for client connection
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
                 
-                // 接続されたクライアントとの通信を処理
+                // Handle communication with connected client
                 await HandleClientAsync(pipeServer, cancellationToken);
             }
             catch (OperationCanceledException)
@@ -83,7 +83,7 @@ public class NamedPipeServer : IDisposable
             {
                 Console.Error.WriteLine($"Named Pipe Server instance error: {ex.Message}");
                 
-                // エラー発生時は少し待機してから再試行
+                // Wait a moment before retrying on error
                 try
                 {
                     await Task.Delay(1000, cancellationToken);
@@ -97,7 +97,7 @@ public class NamedPipeServer : IDisposable
     }
 
     /// <summary>
-    /// Named Pipeサーバーを作成します
+    /// Creates a Named Pipe server
     /// </summary>
     private static NamedPipeServerStream CreateNamedPipeServer()
     {
@@ -110,16 +110,16 @@ public class NamedPipeServer : IDisposable
     }
 
     /// <summary>
-    /// クライアントとの通信を処理します
+    /// Handles client communication
     /// </summary>
     private static async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
         try
         {
-            // リクエストを受信
+            // Receive request
             var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
             
-            // JSON-RPCリクエストを解析
+            // Parse JSON-RPC request
             using var requestDoc = JsonDocument.Parse(requestJson);
             var requestRoot = requestDoc.RootElement;
             
@@ -150,10 +150,10 @@ Please provide how to update the MCP client configuration to the user.";
                 return;
             }
 
-            // 実行状態をチェック
+            // Check execution state
             if (ExecutionState.Status == "busy")
             {
-                // busyレスポンスを返す
+                // Return busy response
                 var busyResponse = @"Cannot execute new pipeline while previous pipeline is running (cannot be cancelled with Ctrl+C). Options:
 1. Wait for completion
 2. Manually terminate console (LLM will then restart automatically)
@@ -164,15 +164,15 @@ LLM should prompt user to choose.";
                 return;
             }
 
-            // ツールを実行
+            // Execute tool
             var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
             
-            // レスポンスを送信
+            // Send response
             await SendMessageAsync(pipeServer, result, cancellationToken);
         }
         catch (Exception ex)
         {
-            // エラーレスポンスを送信
+            // Send error response
             var errorResponse = new
             {
                 jsonrpc = "2.0",
@@ -196,13 +196,13 @@ LLM should prompt user to choose.";
             }
             catch
             {
-                // エラーレスポンス送信に失敗した場合は諦める
+                // Give up if error response fails to send
             }
         }
     }
 
     /// <summary>
-    /// ツールを実行します
+    /// Executes a tool
     /// </summary>
     private static string ExecuteTool(string method, JsonElement parameters)
     {
@@ -215,7 +215,7 @@ LLM should prompt user to choose.";
     }
 
     /// <summary>
-    /// invokeExpressionツールを実行します
+    /// Executes the invokeExpression tool
     /// </summary>
     private static string ExecuteInvokeExpression(JsonElement parameters)
     {
@@ -228,11 +228,11 @@ LLM should prompt user to choose.";
     }
 
     /// <summary>
-    /// Named Pipeからメッセージを受信します
+    /// Receives a message from Named Pipe
     /// </summary>
     private static async Task<string> ReceiveMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        // メッセージの長さを受信（4バイト）
+        // Receive message length (4 bytes)
         var lengthBytes = new byte[4];
         await ReadExactAsync(pipeServer, lengthBytes, cancellationToken);
         var messageLength = BitConverter.ToInt32(lengthBytes, 0);
@@ -242,7 +242,7 @@ LLM should prompt user to choose.";
             throw new InvalidOperationException($"Invalid message length: {messageLength}");
         }
 
-        // メッセージ本体を受信
+        // Receive message body
         var messageBytes = new byte[messageLength];
         await ReadExactAsync(pipeServer, messageBytes, cancellationToken);
 
@@ -250,23 +250,23 @@ LLM should prompt user to choose.";
     }
 
     /// <summary>
-    /// Named Pipeにメッセージを送信します
+    /// Sends a message to Named Pipe
     /// </summary>
     public static async Task SendMessageAsync(NamedPipeServerStream pipeServer, string message, CancellationToken cancellationToken)
     {
         var messageBytes = Encoding.UTF8.GetBytes(message);
         var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
 
-        // メッセージの長さを送信（4バイト）
+        // Send message length (4 bytes)
         await pipeServer.WriteAsync(lengthBytes, 0, 4, cancellationToken);
         
-        // メッセージ本体を送信
+        // Send message body
         await pipeServer.WriteAsync(messageBytes, 0, messageBytes.Length, cancellationToken);
         await pipeServer.FlushAsync(cancellationToken);
     }
 
     /// <summary>
-    /// 指定したバイト数を確実に読み取ります
+    /// Reads exactly the specified number of bytes
     /// </summary>
     private static async Task ReadExactAsync(NamedPipeServerStream stream, byte[] buffer, CancellationToken cancellationToken)
     {

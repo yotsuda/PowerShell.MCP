@@ -3,9 +3,9 @@
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// テキストファイル編集のためのユーティリティクラス
-/// メタデータの検出・保持、バックアップ、アトミック書き込みを提供
-/// LLM最適化：予測可能で安全な操作
+/// Utility class for text file editing
+/// Provides metadata detection/retention, backup, and atomic writes
+/// LLM-optimized: predictable and safe operations
 /// </summary>
 public static class TextFileUtility
 {
@@ -17,7 +17,7 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// ファイルのメタデータを検出
+    /// Detects file metadata
     /// </summary>
     public static FileMetadata DetectFileMetadata(string filePath)
     {
@@ -25,14 +25,14 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// エンコーディングを検出（BOM検出 + ヒューリスティック）
+    /// Detects encoding (BOM detection + heuristics)
     /// </summary>
     public static Encoding DetectEncoding(string filePath)
     {
         return EncodingHelper.DetectEncoding(filePath);
     }
     /// <summary>
-    /// エンコーディングを取得（明示的指定または自動検出）
+    /// Gets encoding (explicit specification or auto-detection)
     /// </summary>
     public static Encoding GetEncoding(string filePath, string? encodingName)
     {
@@ -40,7 +40,7 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// ファイルのメタデータを検出（明示的エンコーディング指定対応）
+    /// Detects file metadata (with explicit encoding support)
     /// </summary>
     public static FileMetadata DetectFileMetadata(string filePath, string? encodingName)
     {
@@ -48,7 +48,7 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// 改行コードと末尾改行を検出
+    /// Detects line ending style and trailing newline
     /// </summary>
     public static (string NewlineSequence, bool HasTrailingNewline) DetectNewline(
         string filePath, Encoding encoding)
@@ -57,17 +57,17 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// バックアップファイルを作成
+    /// Creates a backup file
     /// </summary>
-    /// <returns>作成したバックアップファイルのパス</returns>
+    /// <returns>Path of created backup file</returns>
     public static string CreateBackup(string filePath)
     {
         return FileOperationHelper.CreateBackup(filePath);
     }
 
     /// <summary>
-    /// 1パスストリーミング処理でファイルを処理（最適化版）
-    /// 行を1つずつ処理し、メモリ効率的に書き込む
+    /// Processes file with single-pass streaming (optimized)
+    /// Processes lines one by one for memory efficiency
     /// </summary>
     public static void ProcessFileStreaming(
         string inputPath,
@@ -81,7 +81,7 @@ public static class TextFileUtility
         string? currentLine = reader.ReadLine();
         if (currentLine == null)
         {
-            // 空ファイル
+            // Empty file
             return;
         }
             
@@ -90,13 +90,13 @@ public static class TextFileUtility
             
         while (true)
         {
-            // 行を処理
+            // Process line
             string processedLine = lineProcessor(currentLine, lineNumber);
             writer.Write(processedLine);
                 
             if (nextLine != null)
             {
-                // 次の行があるので改行を追加
+                // Add newline since there is a next line
                 writer.Write(metadata.NewlineSequence);
                 lineNumber++;
                 currentLine = nextLine;
@@ -104,7 +104,7 @@ public static class TextFileUtility
             }
             else
             {
-                // 最終行：末尾改行が元々あった場合のみ追加
+                // Final line: add trailing newline only if originally present
                 if (metadata.HasTrailingNewline)
                 {
                     writer.Write(metadata.NewlineSequence);
@@ -115,7 +115,7 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// オブジェクトを文字列配列に変換
+    /// Converts objects to string array
     /// </summary>
     public static string[] ConvertToStringArray(object? content)
     {
@@ -132,13 +132,13 @@ public static class TextFileUtility
         }
         else if (content is object[] objArr)
         {
-            // object[] の場合、各要素を処理
+            // For object[], process each element
             var result = new List<string>();
             foreach (var item in objArr)
             {
                 if (item is string s)
                 {
-                    // 文字列の場合、改行で分割
+                    // For string, split by newlines
                     result.AddRange(s.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None));
                 }
                 else if (item != null)
@@ -159,7 +159,7 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// 一時ファイルを使ってアトミックにファイルを置換
+    /// Replaces file atomically using temp file
     /// </summary>
     public static void ReplaceFileAtomic(string targetPath, string tempFile)
     {
@@ -167,8 +167,8 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// LineRange パラメータから開始行と終了行を取得
-    /// 0以下の値は最終行を表す（例: -LineRange 100,-1 で100行目から最後まで）
+    /// Gets start and end lines from LineRange parameter
+    /// Values <= 0 represent last line (e.g., -LineRange 100,-1 for line 100 to end)
     /// </summary>
     public static (int StartLine, int EndLine) ParseLineRange(int[]? lineRange)
     {
@@ -185,12 +185,12 @@ public static class TextFileUtility
         
         if (lineRange.Length > 1)
         {
-            // 2つの値が指定された場合
+            // When two values specified
             endLine = lineRange[1] <= 0 ? int.MaxValue : lineRange[1];
         }
         else
         {
-            // 1つの値のみ指定された場合は、その行のみ
+            // When only one value specified, that line only
             endLine = startLine;
         }
         
@@ -198,10 +198,10 @@ public static class TextFileUtility
     }
     
     /// <summary>
-    /// ファイル全体を新しい内容で置換
+    /// Replaces entire file with new content
     /// <summary>
-    /// ファイル全体を新しい内容で置換
-    /// LLM向け：シンプルで予測可能な動作
+    /// Replaces entire file with new content
+    /// For LLM: simple and predictable behavior
     /// </summary>
     public static (int LinesRemoved, int LinesInserted) ReplaceEntireFile(
         string inputPath,
@@ -213,8 +213,8 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// 指定行範囲を置換（1パスストリーミング）
-    /// LLM向け：メモリ効率的で大きなファイルに対応
+    /// Replaces specified line range (single-pass streaming)
+    /// For LLM: memory efficient, handles large files
     /// </summary>
     public static (int LinesRemoved, int LinesInserted, string? WarningMessage) ReplaceLineRangeStreaming(
         string inputPath,
@@ -233,7 +233,7 @@ public static class TextFileUtility
         {
             if (!enumerator.MoveNext())
             {
-                // 空ファイル：startLine が指定されていればエラー
+                // Empty file: error if startLine is specified
                 if (startLine > 0)
                 {
                     throw new ArgumentException(
@@ -255,14 +255,14 @@ public static class TextFileUtility
 
                 if (lineNumber < startLine)
                 {
-                    // 置換範囲より前：そのまま書き込む
+                    // Before replacement range: write as-is
                     if (!isFirstLine) writer.Write(metadata.NewlineSequence);
                     writer.Write(currentLine);
                     isFirstLine = false;
                 }
                 else if (lineNumber >= startLine && lineNumber <= endLine)
                 {
-                    // 置換範囲内：最初の行で置換内容を書き込む
+                    // Within replacement range: write replacement content at first line
                     if (!replacementDone)
                     {
                         if (contentLines.Length > 0)
@@ -277,11 +277,11 @@ public static class TextFileUtility
                         }
                         replacementDone = true;
                     }
-                    // 置換範囲内の行はスキップ
+                    // Skip lines within replacement range
                 }
                 else
                 {
-                    // 置換範囲より後：そのまま書き込む
+                    // After replacement range: write as-is
                     if (!isFirstLine) writer.Write(metadata.NewlineSequence);
                     writer.Write(currentLine);
                     isFirstLine = false;
@@ -295,10 +295,10 @@ public static class TextFileUtility
                 }
                 else
                 {
-                    // 最終行処理完了
+                    // Final line processing complete
                     actualLineCount = lineNumber;
                     
-                    // 範囲外チェック（ファイル終端で判定）
+                    // Out of range check (determined at file end)
                     if (startLine > actualLineCount)
                     {
                         throw new ArgumentException(
@@ -329,20 +329,20 @@ public static class TextFileUtility
     }
 
     /// <summary>
-    /// カレントディレクトリからの相対パスを取得
+    /// Gets relative path from current directory
     /// </summary>
     public static string GetRelativePath(string fromPath, string toPath)
     {
         try
         {
-            // 両方のパスを正規化
+            // Normalize both paths
             fromPath = System.IO.Path.GetFullPath(fromPath);
             toPath = System.IO.Path.GetFullPath(toPath);
                 
-            // 同じドライブかチェック
+            // Check if same drive
             if (System.IO.Path.GetPathRoot(fromPath) != System.IO.Path.GetPathRoot(toPath))
             {
-                // 異なるドライブの場合は絶対パスを返す
+                // Return absolute path if different drives
                 return toPath;
             }
                 
@@ -354,25 +354,25 @@ public static class TextFileUtility
             var relativeUri = fromUri.MakeRelativeUri(toUri);
             var relativePath = Uri.UnescapeDataString(relativeUri.ToString());
                 
-            // バックスラッシュに変換（Windows）
+            // Convert to backslashes (Windows)
             return relativePath.Replace('/', System.IO.Path.DirectorySeparatorChar);
         }
         catch
         {
-            // エラー時は絶対パスを返す
+            // Return absolute path on error
             return toPath;
         }
     }
     
     /// <summary>
-    /// 必要に応じてエンコーディングを UTF-8 にアップグレード
-    /// Content に非 ASCII 文字が含まれ、現在のエンコーディングが ASCII の場合、UTF-8 にアップグレード
+    /// Upgrades encoding to UTF-8 if necessary
+    /// Upgrades to UTF-8 when Content contains non-ASCII and current encoding is ASCII
     /// </summary>
-    /// <param name="metadata">ファイルメタデータ（エンコーディングが更新される可能性あり）</param>
-    /// <param name="contentLines">追加/更新する内容の行配列</param>
-    /// <param name="encodingExplicitlySpecified">エンコーディングが明示的に指定されているか</param>
-    /// <param name="upgradeMessage">アップグレードされた場合のメッセージ（アップグレードされない場合は null）</param>
-    /// <returns>エンコーディングがアップグレードされた場合は true、それ以外は false</returns>
+    /// <param name="metadata">File metadata (encoding may be updated)</param>
+    /// <param name="contentLines">Array of lines to add/update</param>
+    /// <param name="encodingExplicitlySpecified">Whether encoding is explicitly specified</param>
+    /// <param name="upgradeMessage">Message if upgraded (null if not upgraded)</param>
+    /// <returns>true if encoding was upgraded, false otherwise</returns>
     public static bool TryUpgradeEncodingIfNeeded(
         FileMetadata metadata, 
         string[] contentLines, 

@@ -5,20 +5,20 @@ using System.Collections.Generic;
 namespace PowerShell.MCP.Cmdlets
 {
     /// <summary>
-    /// 固定容量のローテートバッファ。古い要素は自動的に上書きされる。
+    /// Fixed-capacity rotating buffer. Old elements are automatically overwritten.
     /// </summary>
-    /// <typeparam name="T">要素の型</typeparam>
+    /// <typeparam name="T">Element type</typeparam>
     public class RotateBuffer<T> : IEnumerable<T>
     {
         private readonly T[] _buffer;
-        private int _head;      // 次に書き込む位置
-        private int _count;     // 現在の要素数
+        private int _head;      // Next write position
+        private int _count;     // Current element count
 
         /// <summary>
-        /// 指定した容量でローテートバッファを作成する。
+        /// Creates a rotating buffer with specified capacity.
         /// </summary>
-        /// <param name="capacity">バッファの容量（1以上）</param>
-        /// <exception cref="ArgumentOutOfRangeException">容量が1未満の場合</exception>
+        /// <param name="capacity">Buffer capacity (1 or more)</param>
+        /// <exception cref="ArgumentOutOfRangeException">If capacity is less than 1</exception>
         public RotateBuffer(int capacity)
         {
             if (capacity < 1)
@@ -30,24 +30,24 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// バッファの容量を取得する。
+        /// Gets the buffer capacity.
         /// </summary>
         public int Capacity => _buffer.Length;
 
         /// <summary>
-        /// 現在の要素数を取得する。
+        /// Gets the current element count.
         /// </summary>
         public int Count => _count;
 
         /// <summary>
-        /// バッファが満杯かどうかを取得する。
+        /// Gets whether the buffer is full.
         /// </summary>
         public bool IsFull => _count == _buffer.Length;
 
         /// <summary>
-        /// 要素を追加する。バッファが満杯の場合、最も古い要素が上書きされる。
+        /// Adds an element. When buffer is full, oldest element is overwritten.
         /// </summary>
-        /// <param name="item">追加する要素</param>
+        /// <param name="item">Element to add</param>
         public void Add(T item)
         {
             _buffer[_head] = item;
@@ -57,12 +57,12 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// 指定したインデックスの要素を取得する。
-        /// 0 = 最も古い要素、Count - 1 = 最も新しい要素。
+        /// Gets element at specified index.
+        /// 0 = oldest element, Count - 1 = newest element.
         /// </summary>
-        /// <param name="index">インデックス（0 から Count - 1）</param>
-        /// <returns>指定した位置の要素</returns>
-        /// <exception cref="ArgumentOutOfRangeException">インデックスが範囲外の場合</exception>
+        /// <param name="index">Index (0 to Count - 1)</param>
+        /// <returns>Element at specified position</returns>
+        /// <exception cref="ArgumentOutOfRangeException">If index is out of range</exception>
         public T this[int index]
         {
             get
@@ -70,16 +70,16 @@ namespace PowerShell.MCP.Cmdlets
                 if (index < 0 || index >= _count)
                     throw new ArgumentOutOfRangeException(nameof(index), $"Index must be between 0 and {_count - 1}.");
                 
-                // 最も古い要素の位置を計算
+                // Calculate position of oldest element
                 int start = (_head - _count + _buffer.Length) % _buffer.Length;
                 return _buffer[(start + index) % _buffer.Length];
             }
         }
 
         /// <summary>
-        /// 最も新しい要素を取得する。
+        /// Gets the newest element.
         /// </summary>
-        /// <exception cref="InvalidOperationException">バッファが空の場合</exception>
+        /// <exception cref="InvalidOperationException">If buffer is empty</exception>
         public T Newest
         {
             get
@@ -91,9 +91,9 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// 最も古い要素を取得する。
+        /// Gets the oldest element.
         /// </summary>
-        /// <exception cref="InvalidOperationException">バッファが空の場合</exception>
+        /// <exception cref="InvalidOperationException">If buffer is empty</exception>
         public T Oldest
         {
             get
@@ -105,12 +105,12 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// 末尾から指定した位置の要素を取得する。
-        /// 0 = 最も新しい要素、Count - 1 = 最も古い要素。
+        /// Gets element at specified position from end.
+        /// 0 = newest element, Count - 1 = oldest element.
         /// </summary>
-        /// <param name="indexFromEnd">末尾からのインデックス（0 から Count - 1）</param>
-        /// <returns>指定した位置の要素</returns>
-        /// <exception cref="ArgumentOutOfRangeException">インデックスが範囲外の場合</exception>
+        /// <param name="indexFromEnd">Index from end (0 to Count - 1)</param>
+        /// <returns>Element at specified position</returns>
+        /// <exception cref="ArgumentOutOfRangeException">If index is out of range</exception>
         public T FromEnd(int indexFromEnd)
         {
             if (indexFromEnd < 0 || indexFromEnd >= _count)
@@ -120,7 +120,7 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// バッファをクリアする。
+        /// Clears the buffer.
         /// </summary>
         public void Clear()
         {
@@ -130,9 +130,9 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// バッファの内容を配列として取得する（古い順）。
+        /// Gets buffer contents as array (oldest first).
         /// </summary>
-        /// <returns>要素の配列</returns>
+        /// <returns>Array of elements</returns>
         public T[] ToArray()
         {
             var result = new T[_count];
@@ -144,7 +144,7 @@ namespace PowerShell.MCP.Cmdlets
         }
 
         /// <summary>
-        /// 要素を古い順に列挙する。
+        /// Enumerates elements from oldest to newest.
         /// </summary>
         public IEnumerator<T> GetEnumerator()
         {

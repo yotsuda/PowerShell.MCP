@@ -3,68 +3,68 @@
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// テキストファイル操作コマンドレットの共通基底クラス
-/// PS Drive パス保持などの共通機能を提供
+/// Common base class for text file operation cmdlets
+/// Provides common features like PS Drive path retention
 /// </summary>
 public abstract class TextFileCmdletBase : PSCmdlet
 {
     /// <summary>
-    /// 表示用のパスを決定（PS Drive パスを保持、短い方を優先）
+    /// Determines display path (retains PS Drive path, prefers shorter)
     /// </summary>
     protected string GetDisplayPath(string originalPath, string resolvedPath)
     {
-        // ワイルドカードを含むか確認
+        // Check if contains wildcard
         bool hasWildcard = originalPath.Contains('*') || originalPath.Contains('?');
         
         if (hasWildcard)
         {
-            // ワイルドカードの場合、ディレクトリ部分を保持してファイル名を置き換え
+            // For wildcards, keep directory part and replace filename
             return GetDisplayPathForWildcard(originalPath, resolvedPath);
         }
         
-        // PS Drive パスかチェック
+        // Check if PS Drive path
         if (IsPSDrivePath(originalPath))
         {
-            // PS Drive パスはそのまま返す
+            // Return PS Drive path as-is
             return originalPath;
         }
         
-        // FileSystem 絶対パスの場合、相対パスと絶対パスを比較して短い方を使用
+        // For FileSystem absolute path, compare relative and absolute, use shorter
         var currentDirectory = SessionState.Path.CurrentFileSystemLocation.Path;
         var currentResolved = GetResolvedProviderPathFromPSPath(currentDirectory, out _).FirstOrDefault() ?? currentDirectory;
         
         var relativePath = TextFileUtility.GetRelativePath(currentResolved, resolvedPath);
         var absolutePath = resolvedPath;
         
-        // 相対パスの方が短い、または同じ長さなら相対パスを使用
+        // Use relative path if shorter or equal length
         return relativePath.Length <= absolutePath.Length ? relativePath : absolutePath;
     }
     
     /// <summary>
-    /// ワイルドカード使用時の表示パスを生成
+    /// Generates display path when using wildcards
     /// </summary>
     protected string GetDisplayPathForWildcard(string originalPattern, string resolvedPath)
     {
         try
         {
-            // 元のパターンのディレクトリ部分
+            // Directory part of original pattern
             string? originalDir = System.IO.Path.GetDirectoryName(originalPattern);
             
-            // 解決されたパスのファイル名
+            // Filename of resolved path
             string fileName = System.IO.Path.GetFileName(resolvedPath);
             
             if (string.IsNullOrEmpty(originalDir))
             {
-                // ディレクトリ指定なし（*.txt など）
+                // No directory specified (e.g., *.txt)
                 return fileName;
             }
             
-            // ディレクトリ + ファイル名
+            // Directory + filename
             return System.IO.Path.Combine(originalDir, fileName);
         }
         catch
         {
-            // エラー時は resolvedPath から相対パスを計算
+            // On error, calculate relative path from resolvedPath
             var currentDirectory = SessionState.Path.CurrentFileSystemLocation.Path;
             var currentResolved = GetResolvedProviderPathFromPSPath(currentDirectory, out _).FirstOrDefault() ?? currentDirectory;
             return TextFileUtility.GetRelativePath(currentResolved, resolvedPath);
@@ -72,25 +72,25 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
     
     /// <summary>
-    /// PS Drive パスかどうかを判定
+    /// Determines if path is a PS Drive path
     /// </summary>
     protected static bool IsPSDrivePath(string path)
     {
         try
         {
-            // : を含むかチェック
+            // Check if contains :
             if (!path.Contains(':'))
             {
                 return false;
             }
             
-            // FileSystem の絶対パス（C:\, D:\ など）は PS Drive ではない
+            // FileSystem absolute paths (C:\, D:\, etc.) are not PS Drives
             if (System.IO.Path.IsPathRooted(path))
             {
                 return false;
             }
             
-            // それ以外で : を含む = PS Drive （Temp:\, Env:\, など）
+            // Otherwise containing : = PS Drive (Temp:\, Env:\, etc.)
             return true;
         }
         catch
@@ -100,8 +100,8 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
-    /// LineRangeパラメータをバリデーション
-    /// 3個以上の値が指定された場合は終了エラーをthrow
+    /// Validates LineRange parameter
+    /// Throws terminating error if 3 or more values specified
     /// </summary>
     protected void ValidateLineRange(int[]? lineRange)
     {
@@ -127,7 +127,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
-    /// -Contains と -Pattern の排他チェック
+    /// Exclusive check for -Contains and -Pattern
     /// </summary>
     protected static void ValidateContainsAndPatternMutuallyExclusive(string? contains, string? pattern)
     {
@@ -138,7 +138,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
-    /// パス解決結果を表す構造体
+    /// Struct representing path resolution result
     /// </summary>
     protected struct ResolvedFileInfo
     {
@@ -148,13 +148,13 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
-    /// -Path または -LiteralPath からファイルパスを解決し、存在チェックとエラーハンドリングを行う
+    /// Resolves file paths from -Path or -LiteralPath with existence check and error handling
     /// </summary>
-    /// <param name="path">-Path パラメータの値（ワイルドカード展開あり）</param>
-    /// <param name="literalPath">-LiteralPath パラメータの値（ワイルドカード展開なし）</param>
-    /// <param name="allowNewFiles">新規ファイル作成を許可するか</param>
-    /// <param name="requireExisting">ファイルが存在しない場合にエラーを出すか</param>
-    /// <returns>解決されたファイル情報のイテレータ</returns>
+    /// <param name="path">-Path parameter value (with wildcard expansion)</param>
+    /// <param name="literalPath">-LiteralPath parameter value (without wildcard expansion)</param>
+    /// <param name="allowNewFiles">Whether to allow new file creation</param>
+    /// <param name="requireExisting">Whether to error if file does not exist</param>
+    /// <returns>Iterator of resolved file information</returns>
     protected IEnumerable<ResolvedFileInfo> ResolveAndValidateFiles(
         string[]? path, 
         string[]? literalPath,
@@ -175,13 +175,13 @@ public abstract class TextFileCmdletBase : PSCmdlet
             {
                 if (isLiteralPath)
                 {
-                    // -LiteralPath: ワイルドカード展開なし
+                    // -LiteralPath: no wildcard expansion
                     var resolved = GetUnresolvedProviderPathFromPSPath(inputPath);
                     resolvedPaths = [resolved];
                 }
                 else
                 {
-                    // -Path: ワイルドカード展開あり
+                    // -Path: with wildcard expansion
                     resolvedPaths = GetResolvedProviderPathFromPSPath(inputPath, out _);
                 }
             }
@@ -189,7 +189,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
             {
                 if (allowNewFiles)
                 {
-                    // 新規ファイル作成を試みる
+                    // Attempt to create new file
                     try
                     {
                         var newPath = GetUnresolvedProviderPathFromPSPath(inputPath);
@@ -230,7 +230,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
                 hasError = true;
             }
             
-            // catchブロックの外でyield returnを実行
+            // Execute yield return outside catch block
             if (newFileInfo != null)
             {
                 yield return newFileInfo.Value;
@@ -274,7 +274,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
-    /// -WhatIf が明示的に指定されているかをチェック
+    /// Checks if -WhatIf is explicitly specified
     /// </summary>
     protected bool IsWhatIfMode()
     {

@@ -18,27 +18,27 @@ public class NamedPipeClient
             
             using var pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
 
-            // Named Pipe への接続を試行
+            // Attempt Named Pipe connection
             try
             {
-                await pipeClient.ConnectAsync(1000 * 3); // 3秒でタイムアウト
+                await pipeClient.ConnectAsync(1000 * 3); // 3 second timeout
             }
             catch (TimeoutException)
             {
                 return $"PowerShell 7 (pwsh.exe) is running but PowerShell.MCP module is not imported.\r\n\r\nMANDATORY STEPS - DO NOT SKIP ANY:\r\n1. Explain the situation to the user\r\n2. Present exactly these two options:\r\n   - Option 1: User imports PowerShell.MCP module manually in current console\r\n   - Option 2: I will automatically start fresh console with PowerShell.MCP imported\r\n3. STOP and wait for explicit user response - DO NOT make any choice for the user\r\n4. ONLY if user explicitly chooses option 2, execute start_powershell_console\r\n5. If user chooses option 1, provide the command: Import-Module PowerShell.MCP\r\n6. DO NOT execute any PowerShell commands until user makes their choice\r\n\r\nCRITICAL: Never assume user preference or execute start_powershell_console without explicit user consent.";
             }
  
-            // JSONメッセージをUTF-8バイトに変換
+            // Convert JSON message to UTF-8 bytes
             var messageBytes = Encoding.UTF8.GetBytes(arguments);
             
-            // メッセージ長をLittle Endianで4バイト作成
+            // Create 4-byte Little Endian message length
             var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
             
-            // メッセージ長プレフィックス + JSONメッセージ本体を送信
+            // Send message length prefix + JSON message body
             await pipeClient.WriteAsync(lengthBytes, 0, lengthBytes.Length);
             await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length);
 
-            // レスポンス受信: 正しい長さプレフィックス処理
+            // Receive response: proper length prefix handling
             var response = await ReceiveMessageAsync(pipeClient);
             return response;
         }
@@ -56,23 +56,23 @@ public class NamedPipeClient
 
     private async Task<string> ReceiveMessageAsync(NamedPipeClientStream pipeClient)
     {
-        // 1. メッセージ長（4バイト）を確実に読み取り
+        // 1. Read message length (4 bytes) reliably
         var lengthBuffer = new byte[4];
         await ReadExactAsync(pipeClient, lengthBuffer, 4);
         
         var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
         
-        // 2. メッセージ長の妥当性チェック
+        // 2. Validate message length
         if (messageLength < 0)
         {
             throw new InvalidOperationException($"Invalid message length received: {messageLength}");
         }
         
-        // 3. メッセージ本体を確実に読み取り
+        // 3. Read message body reliably
         var messageBuffer = new byte[messageLength];
         await ReadExactAsync(pipeClient, messageBuffer, messageLength);
         
-        // 4. UTF-8デコード
+        // 4. UTF-8 decode
         return Encoding.UTF8.GetString(messageBuffer);
     }
 
@@ -93,12 +93,12 @@ public class NamedPipeClient
         }
     }
     /// <summary>
-    /// Named Pipe が準備完了になるまで待機します
+    /// Waits until Named Pipe is ready
     /// </summary>
-    /// <returns>パイプが準備できた場合は true</returns>
+    /// <returns>true if pipe is ready</returns>
     public static async Task<bool> WaitForPipeReadyAsync()
     {
-        const int maxAttempts = 80; // 最大で40秒間待機する
+        const int maxAttempts = 80; // Wait up to 40 seconds
         //const int delayMs = 1000;
         
         for (int attempt = 1; attempt <= maxAttempts; attempt++)

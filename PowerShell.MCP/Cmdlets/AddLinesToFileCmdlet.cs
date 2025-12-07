@@ -3,8 +3,8 @@
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// ファイルに行を追加（新規作成も可能）
-/// LLM最適化:新規ファイル・既存ファイルともにパラメータ省略可(デフォルトで末尾追加、-LineNumber で挿入位置指定)
+/// Add lines to file (can also create new file)
+/// LLM optimized: parameters optional for both new/existing files (defaults to append, use -LineNumber to specify insert position)
 /// </summary>
 [Cmdlet(VerbsCommon.Add, "LinesToFile", SupportsShouldProcess = true)]
 public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
@@ -21,7 +21,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
     public object[]? Content { get; set; }
 
     /// <summary>
-    /// Content プロパティへのアクセサ（基底クラス用）
+    /// Accessor to Content property (for base class)
     /// </summary>
     protected override object[]? ContentProperty
     {
@@ -46,11 +46,11 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
 
     protected override void ProcessRecord()
     {
-        // パイプライン蓄積モードの場合は蓄積して終了
+        // If in pipeline accumulation mode, accumulate and exit
         if (TryAccumulateContent())
             return;
 
-        // Content が引数で指定されていない場合はエラー
+        // Error if Content not specified as argument
         if (Content == null || Content.Length == 0)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -64,7 +64,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
     }
 
     /// <summary>
-    /// 新しい内容をファイルに書き込む（新規ファイルと空ファイルで共通）
+    /// Writes new content to file (common for new and empty files)
     /// </summary>
     private static void WriteNewContent(string outputPath, string[] contentLines, TextFileUtility.FileMetadata metadata)
     {
@@ -83,16 +83,16 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
     }
 
     /// <summary>
-    /// ファイルに行を追加（新規・既存ファイル共通）
+    /// Add lines to file (common for new and existing files)
     /// </summary>
     private void AddToFile(string resolvedPath, string originalPath, bool isNewFile)
     {
 
-        // メタデータの取得または作成
+        // Get or create metadata
         TextFileUtility.FileMetadata metadata;
         if (isNewFile)
         {
-            // 新規ファイル：デフォルトのメタデータを使用
+            // New file: use default metadata
             metadata = new TextFileUtility.FileMetadata
             {
                 Encoding = string.IsNullOrEmpty(Encoding) ? new System.Text.UTF8Encoding(false) : TextFileUtility.GetEncoding(resolvedPath, Encoding),
@@ -102,37 +102,37 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
         }
         else
         {
-            // 既存ファイル：ファイルからメタデータを検出
+            // Existing file: detect metadata from file
             metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
         }
 
         string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
 
-        // Content に非 ASCII 文字が含まれている場合、エンコーディングを UTF-8 にアップグレード
+        // If Content contains non-ASCII chars, upgrade encoding to UTF-8
         if (TextFileUtility.TryUpgradeEncodingIfNeeded(metadata, contentLines, Encoding != null, out var upgradeMessage))
         {
             WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
         }
 
-        // LineNumber 指定がなければ末尾追加（新規・既存共通）
+        // If no LineNumber specified, append to end (common for new/existing)
         int insertAt;
         bool effectiveAtEnd;
 
         if (isNewFile)
         {
-            // 新規ファイル作成時: LineNumber > 1 の場合は警告を出す
+        // New file creation: warn if LineNumber > 1
             if (LineNumber > 1)
             {
                 WriteWarning($"File does not exist. Creating new file. LineNumber {LineNumber} will be treated as line 1.");
             }
 
-            // 新規ファイル: LineNumber 未指定なら末尾追加、LineNumber > 1 なら 1 として扱う
+        // New file: if LineNumber not specified append to end, if > 1 treat as 1
             insertAt = (LineNumber > 1) ? 1 : (LineNumber > 0 ? LineNumber : int.MaxValue);
             effectiveAtEnd = LineNumber == 0;
         }
         else
         {
-            // 既存ファイル: LineNumber 未指定ならデフォルトで末尾追加
+        // Existing file: if LineNumber not specified, default to append
             insertAt = LineNumber > 0 ? LineNumber : int.MaxValue;
             effectiveAtEnd = LineNumber == 0;
         }
@@ -163,12 +163,12 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
             {
                 if (isNewFile || new FileInfo(resolvedPath).Length == 0)
                 {
-                    // 新規ファイルまたは空ファイル：新しい内容のみを書き込む
+        // New file or empty file: write only new content
                     WriteNewContent(tempFile, contentLines, metadata);
                 }
                 else
                 {
-                    // 既存の非空ファイル：挿入処理（コンテキストはリアルタイム出力）
+        // Existing non-empty file: insert processing (context output in real-time)
                     int totalLines;
                     (totalLines, actualInsertAt) = InsertLinesWithContext(originalPath, resolvedPath,
                         tempFile,
@@ -177,7 +177,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                         insertAt);
                 }
 
-                // アトミックに置換（または新規作成）
+        // Replace atomically (or create new)
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                 string message = isNewFile
@@ -199,7 +199,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
     }
 
     /// <summary>
-    /// 通常のファイルへの行挿入処理（コンテキストをリアルタイム出力、1 pass）
+    /// Normal file line insertion processing (real-time context output, single pass)
     /// </summary>
     private (int totalLines, int actualInsertAt) InsertLinesWithContext(string originalPath, string inputPath,
         string outputPath,
@@ -218,7 +218,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
             bool hasLines = enumerator.MoveNext();
             if (!hasLines)
             {
-                // これは起こらないはず（空ファイルは別処理）
+            // This should not happen (empty file handled separately)
                 for (int i = 0; i < contentLines.Length; i++)
                 {
                     writer.Write(contentLines[i]);
@@ -238,33 +238,33 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
             int actualInsertAt = insertAt;
             int afterContextCounter = 0;
 
-            // Rotate buffer: コンテキスト表示用（行内容と出力行番号のペア）
+            // Rotate buffer: for context display (line content and output line number pairs)
             var preContextBuffer = new RotateBuffer<(string line, int outputLineNum)>(2);
 
             while (true)
             {
-                // 挿入位置に到達したら、新しい内容を先に書き込む
+                // When reaching insert position, write new content first
                 if (!inserted && inputLineNumber == insertAt)
                 {
                     actualInsertAt = outputLineNumber;
 
-                    // コンテキストヘッダー出力
+                    // Output context header
                     if (!contextHeaderPrinted)
                     {
                         WriteObject(AnsiColors.Header(displayPath));
                         contextHeaderPrinted = true;
                     }
 
-                    // 前2行を出力（rotate buffer から）
+                    // Output previous 2 lines (from rotate buffer)
                     foreach (var ctx in preContextBuffer)
                     {
                         WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                     }
 
-                    // 挿入する行を出力
+                    // Output inserted lines
                     if (contentLines.Length <= 5)
                     {
-                        // 1-5行: 全て表示
+                    // 1-5 lines: show all
                         for (int i = 0; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
@@ -279,8 +279,8 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                     }
                     else
                     {
-                        // 6行以上: 先頭2行と末尾2行のみ表示
-                        // 先頭2行
+                    // 6+ lines: show only first 2 and last 2
+                        // First 2 lines
                         for (int i = 0; i < 2; i++)
                         {
                             writer.Write(contentLines[i]);
@@ -289,10 +289,10 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                             outputLineNumber++;
                         }
 
-                        // 省略マーカー出力
+                        // Output ellipsis marker
                         WriteObject("   :");
 
-                        // 中間行を書き込み（出力なし）
+                        // Write middle lines (no output)
                         for (int i = 2; i < contentLines.Length - 2; i++)
                         {
                             writer.Write(contentLines[i]);
@@ -300,7 +300,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                             outputLineNumber++;
                         }
 
-                        // 末尾2行
+                        // Last 2 lines
                         for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
@@ -317,25 +317,25 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                     writer.Write(metadata.NewlineSequence);
                     outputLineNumber++;
                     inserted = true;
-                    afterContextCounter = 2; // 後2行を出力
+                    afterContextCounter = 2; // Output next 2 lines
                 }
 
-                // 現在の行を書き込む
+                // Write current line
                 writer.Write(currentLine);
 
-                // 後コンテキストの出力
+                // Output trailing context
                 if (afterContextCounter > 0)
                 {
                     WriteObject($"{outputLineNumber,3}- {currentLine}");
                     afterContextCounter--;
                     if (afterContextCounter == 0)
                     {
-                        // コンテキスト出力完了、空行追加
+                    // Context output complete, add empty line
                         WriteObject("");
                     }
                 }
 
-                // Rotate buffer 更新: コンテキスト表示用に保持
+                // Update rotate buffer: keep for context display
                 preContextBuffer.Add((currentLine, outputLineNumber));
 
                 if (hasNext)
@@ -348,31 +348,31 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                 }
                 else
                 {
-                    // 最終行の処理
+                // Process final line
                     if (!inserted)
                     {
-                        // 末尾追加（デフォルト）
+                // Append to end (default)
                         writer.Write(metadata.NewlineSequence);
                         outputLineNumber++;
                         actualInsertAt = outputLineNumber;
 
-                        // コンテキストヘッダー出力
+                    // Output context header
                         if (!contextHeaderPrinted)
                         {
                             WriteObject(AnsiColors.Header(displayPath));
                             contextHeaderPrinted = true;
                         }
 
-                        // 前2行を出力（rotate buffer から）
+                    // Output previous 2 lines (from rotate buffer)
                         foreach (var ctx in preContextBuffer)
                         {
                             WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                         }
 
-                        // 挿入する行を出力
+                    // Output inserted lines
                         if (contentLines.Length <= 5)
                         {
-                            // 1-5行: 全て表示
+                    // 1-5 lines: show all
                             for (int i = 0; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
@@ -385,7 +385,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                                 }
                             }
 
-                            // 元のファイルの末尾改行を保持
+                            // Preserve original file trailing newline
                             if (metadata.HasTrailingNewline)
                             {
                                 writer.Write(metadata.NewlineSequence);
@@ -393,8 +393,8 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                         }
                         else
                         {
-                            // 6行以上: 先頭2行と末尾2行のみ表示
-                            // 先頭2行
+                        // 6+ lines: show only first 2 and last 2
+                            // First 2 lines
                             for (int i = 0; i < 2; i++)
                             {
                                 writer.Write(contentLines[i]);
@@ -403,10 +403,10 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                                 outputLineNumber++;
                             }
 
-                            // 省略マーカー出力
+                            // Output ellipsis marker
                             WriteObject("   :");
 
-                            // 中間行を書き込み（出力なし）
+                            // Write middle lines (no output)
                             for (int i = 2; i < contentLines.Length - 2; i++)
                             {
                                 writer.Write(contentLines[i]);
@@ -414,7 +414,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                                 outputLineNumber++;
                             }
 
-                            // 末尾2行
+                            // Last 2 lines
                             for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
@@ -427,21 +427,21 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                                 }
                             }
 
-                            // 元のファイルの末尾改行を保持
+                            // Preserve original file trailing newline
                             if (metadata.HasTrailingNewline)
                             {
                                 writer.Write(metadata.NewlineSequence);
                             }
                         }
 
-                        // 末尾追加時は後コンテキストなし、空行のみ
+                        // No trailing context for append, just empty line
                         WriteObject("");
 
                         inserted = true;
                     }
                     else
                     {
-                        // 元のファイルの末尾改行を保持
+                    // Preserve original file trailing newline
                         if (metadata.HasTrailingNewline)
                         {
                             writer.Write(metadata.NewlineSequence);
@@ -456,7 +456,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
     }
 
     /// <summary>
-    /// パスを解決してファイルに追加処理を実行
+    /// Resolves path and executes add operation on file
     /// </summary>
     private void ProcessAllPaths()
     {
@@ -530,11 +530,11 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
 
     protected override void EndProcessing()
     {
-        // 蓄積モードでない場合は何もしない
+        // Do nothing if not in accumulation mode
         if (!IsAccumulatingMode)
             return;
 
-        // 蓄積された内容を Content に設定
+        // Set accumulated content to Content
         if (!FinalizeAccumulatedContent())
         {
             ThrowTerminatingError(new ErrorRecord(

@@ -5,7 +5,7 @@ using PowerShell.MCP.Services;
 namespace PowerShell.MCP
 {
     /// <summary>
-    /// Resources/ フォルダの埋め込みリソースを読み込むヘルパークラス
+    /// Helper class for loading embedded resources from the Resources/ folder
     /// </summary>
     public static class EmbeddedResourceLoader
     {
@@ -22,8 +22,8 @@ namespace PowerShell.MCP
     }
 
     /// <summary>
-    /// PowerShell.MCP モジュールの初期化クラス
-    /// モジュールインポート時に自動的に実行される
+    /// Initialization class for PowerShell.MCP module
+    /// Automatically executed when the module is imported
     /// </summary>
     public class MCPModuleInitializer : IModuleAssemblyInitializer
     {
@@ -33,31 +33,31 @@ namespace PowerShell.MCP
 
         public void OnImport()
         {
-            // TODO: named pipe が既に存在する場合は、このモジュールのインポートに失敗させる
-            // 例外をスローする？
+            // TODO: Fail module import if named pipe already exists
+            // Throw exception?
 
             try
             {
                 _tokenSource = new CancellationTokenSource();
                 _namedPipeServer = new NamedPipeServer();
 
-                // MCPポーリングエンジンスクリプトの読み込みと実行
+                // Load and execute MCP polling engine script
                 var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
                 
-                // PowerShell から実行するため、ScriptBlock として実行
+                // Execute as ScriptBlock for PowerShell execution
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
                 {
                     ps.AddScript(pollingScript);
                     ps.Invoke();
                 }
 
-                // Named Pipe Server の起動
+                // Start Named Pipe Server
                 Task.Run(async () =>
                 {
                     await _namedPipeServer.StartAsync(_tokenSource.Token);
                 }, _tokenSource.Token);
 
-                // 情報メッセージの出力
+                // Output information message
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
                 {
                     ps.AddScript("Write-Information '[PowerShell.MCP] MCP server started' -Tags 'PowerShell.MCP','ServerStart'");
@@ -66,7 +66,7 @@ namespace PowerShell.MCP
             }
             catch (Exception ex)
             {
-                // 警告メッセージの出力
+                // Output warning message
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
                 {
                     ps.AddScript($"Write-Warning '[PowerShell.MCP] Failed to start: {ex.Message}'");
@@ -76,16 +76,16 @@ namespace PowerShell.MCP
         }
 
         /// <summary>
-        /// 現在の場所とドライブ情報を取得します
+        /// Gets current location and drive information
         /// </summary>
         public static string GetCurrentLocation()
         {
             try
             {
-                // 既存のMCPLocationProvider.ps1スクリプトを使用
+                // Use existing MCPLocationProvider.ps1 script
                 var locationCommand = EmbeddedResourceLoader.LoadScript("MCPLocationProvider.ps1");
 
-                // 状態管理付きでサイレント実行
+                // Execute silently with state management
                 return McpServerHost.ExecuteSilentCommand(locationCommand);
             }
             catch (Exception ex)

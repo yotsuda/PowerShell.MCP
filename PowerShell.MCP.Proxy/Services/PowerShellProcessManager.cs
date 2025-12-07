@@ -9,9 +9,9 @@ public class PowerShellProcessManager
     private const string PowerShellExecutableName = "pwsh";
 
     /// <summary>
-    /// PowerShellプロセスが実行中かどうかをチェックします
+    /// Checks if a PowerShell process is running
     /// </summary>
-    /// <returns>PowerShellプロセスが見つかった場合は true</returns>
+    /// <returns>true if PowerShell process is found</returns>
     public static bool IsPowerShellProcessRunning()
     {
         try
@@ -19,7 +19,7 @@ public class PowerShellProcessManager
             var processes = Process.GetProcessesByName(PowerShellExecutableName);
             var found = processes.Length > 0;
             
-            // プロセスオブジェクトのリソースを解放
+            // Release process object resources
             foreach (var process in processes)
             {
                 process.Dispose();
@@ -35,10 +35,10 @@ public class PowerShellProcessManager
     }
 
     /// <summary>
-    /// PowerShell.MCPモジュールをインポートした状態で PowerShell プロセスを起動します
+    /// Starts PowerShell process with PowerShell.MCP module imported
     /// </summary>
-    /// <param name="pipeClient">Named pipe 通信用のクライアント（ヘルスチェックに使用）</param>
-    /// <returns>起動に成功した場合は true</returns>
+    /// <param name="pipeClient">Named pipe client for health check</param>
+    /// <returns>true if startup succeeded</returns>
     public static async Task<bool> StartPowerShellWithModuleAsync()
     {
         PwshNative.LaunchPwshStrict();
@@ -82,7 +82,7 @@ public static class PwshNative
     {
         public uint cb;
         public string? lpReserved;
-        public string? lpDesktop;   // 既定のままでOK: "winsta0\\default" が使われます
+        public string? lpDesktop;   // Default is OK: "winsta0\\default" will be used
         public string? lpTitle;
         public uint dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
         public ushort wShowWindow;
@@ -113,17 +113,17 @@ public static class PwshNative
 
         try
         {
-            // 1) 現在ユーザーのトークンを取得
+            // 1) Get current user token
             if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, out hToken))
                 throw new Win32Exception(Marshal.GetLastWin32Error());
 
-            // 2) そのユーザーの"既定"環境ブロックを生成（Explorer 同等）
+            // 2) Create default environment block for user (same as Explorer)
             if (!CreateEnvironmentBlock(out env, hToken, false))
                 throw new Win32Exception(Marshal.GetLastWin32Error());
 
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-            // 3) 新しいコンソールで pwsh.exe を起動
+            // 3) Start pwsh.exe in new console
             var si = new STARTUPINFOW { cb = (uint)Marshal.SizeOf<STARTUPINFOW>() };
             var pi = new PROCESS_INFORMATION();
 
@@ -148,7 +148,7 @@ public static class PwshNative
         }
         finally
         {
-            // リソースの確実な解放
+            // Ensure resource cleanup
             if (env != IntPtr.Zero)
                 DestroyEnvironmentBlock(env);
             

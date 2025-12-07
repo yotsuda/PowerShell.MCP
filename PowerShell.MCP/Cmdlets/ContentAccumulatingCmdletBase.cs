@@ -3,9 +3,9 @@ using System.Management.Automation;
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// Content パイプライン蓄積機能を持つコマンドレットの基底クラス
-/// Path/LiteralPath が引数で指定され、Content が引数で指定されていない場合、
-/// パイプライン入力を蓄積して EndProcessing で処理する
+/// Base class for cmdlets with Content pipeline accumulation functionality.
+/// When Path/LiteralPath is specified as argument and Content is not,
+/// accumulates pipeline input and processes in EndProcessing.
 /// </summary>
 public abstract class ContentAccumulatingCmdletBase : TextFileCmdletBase
 {
@@ -13,18 +13,18 @@ public abstract class ContentAccumulatingCmdletBase : TextFileCmdletBase
     private bool _accumulateContent;
 
     /// <summary>
-    /// 派生クラスで定義する Content プロパティへのアクセサ
+    /// Accessor to Content property defined in derived class
     /// </summary>
     protected abstract object[]? ContentProperty { get; set; }
 
     /// <summary>
-    /// パイプライン蓄積モードかどうか
+    /// Whether in pipeline accumulation mode
     /// </summary>
     protected bool IsAccumulatingMode => _accumulateContent;
 
     /// <summary>
-    /// パイプライン蓄積モードを初期化
-    /// BeginProcessing から呼び出す
+    /// Initializes pipeline accumulation mode.
+    /// Call from BeginProcessing.
     /// </summary>
     protected void InitializeContentAccumulation()
     {
@@ -36,10 +36,10 @@ public abstract class ContentAccumulatingCmdletBase : TextFileCmdletBase
     }
 
     /// <summary>
-    /// パイプライン入力を蓄積（蓄積モードの場合）
-    /// ProcessRecord の先頭で呼び出し、true が返った場合は return する
+    /// Accumulates pipeline input (when in accumulation mode).
+    /// Call at start of ProcessRecord, return if true is returned.
     /// </summary>
-    /// <returns>蓄積モードで入力を蓄積した場合は true</returns>
+    /// <returns>true if input was accumulated in accumulation mode</returns>
     protected bool TryAccumulateContent()
     {
         if (!_accumulateContent)
@@ -53,10 +53,10 @@ public abstract class ContentAccumulatingCmdletBase : TextFileCmdletBase
     }
 
     /// <summary>
-    /// 蓄積された Content を ContentProperty に設定
-    /// EndProcessing で呼び出す
+    /// Sets accumulated Content to ContentProperty.
+    /// Call in EndProcessing.
     /// </summary>
-    /// <returns>蓄積された内容がある場合は true</returns>
+    /// <returns>true if there is accumulated content</returns>
     protected bool FinalizeAccumulatedContent()
     {
         if (!_accumulateContent)
@@ -72,7 +72,7 @@ public abstract class ContentAccumulatingCmdletBase : TextFileCmdletBase
     }
 
     /// <summary>
-    /// 蓄積バッファが空かどうか
+    /// Whether accumulation buffer is empty
     /// </summary>
     protected bool IsContentBufferEmpty => _contentBuffer is null or { Count: 0 };
 }

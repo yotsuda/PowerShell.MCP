@@ -12,7 +12,7 @@ namespace PowerShell.MCP.Proxy
 
         public static async Task Main(string[] args)
         {
-            // テスト用：日本語に強制（検証後はコメントアウトしてください）
+            // For testing: Force Japanese locale (comment out after verification)
             //System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("ja-JP");
             //System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("fr-FR");
             var builder = Host.CreateApplicationBuilder(args);

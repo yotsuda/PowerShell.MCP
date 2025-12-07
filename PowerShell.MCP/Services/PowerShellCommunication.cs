@@ -1,7 +1,7 @@
-﻿namespace PowerShell.MCP.Services;
+namespace PowerShell.MCP.Services;
 
 /// <summary>
-/// PowerShellとの通信を管理するクラス
+/// Class for managing communication with PowerShell
 /// </summary>
 public static class PowerShellCommunication
 {
@@ -9,8 +9,8 @@ public static class PowerShellCommunication
     private static string? _currentResult = null;
 
     /// <summary>
-    /// 結果が準備完了したことを通知するメソッド
-    /// PowerShellスクリプトから明示的に呼び出される
+    /// Method to notify that the result is ready
+    /// Explicitly called from PowerShell script
     /// </summary>
     public static void NotifyResultReady(string result)
     {
@@ -19,17 +19,17 @@ public static class PowerShellCommunication
     }
 
     /// <summary>
-    /// 結果を待機します（ブロッキング方式）
+    /// Waits for result (blocking method)
     /// </summary>
     public static string WaitForResult()
     {
         var endTime = DateTime.UtcNow.AddSeconds(4 * 60 + 50);
         
-        // 前回の結果をクリア
+        // Clear previous result
         _currentResult = null;
         _resultReadyEvent.Reset();
         
-        // 実行状態をBusyに設定
+        // Set execution state to Busy
         ExecutionState.SetBusy();
         
         try
@@ -37,7 +37,7 @@ public static class PowerShellCommunication
             var remainingTime = endTime - DateTime.UtcNow;
             var timeoutMs = (int)Math.Max(0, remainingTime.TotalMilliseconds);
             
-            // ManualResetEventでブロッキング待機
+            // Block waiting with ManualResetEvent
             bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
             
             if (signaled)
@@ -51,23 +51,23 @@ public static class PowerShellCommunication
         }
         finally
         {
-            // 実行完了後は必ずIdleに戻す
+            // Always return to Idle after execution completes
             ExecutionState.SetIdle();
         }
     }
 }
 
 /// <summary>
-/// MCP通信のホストクラス
+/// Host class for MCP communication
 /// </summary>
 public static class McpServerHost
 {
-    // 既存の通信プロパティ
+    // Existing communication properties
     public static volatile string? executeCommand;
     public static volatile string? insertCommand;
     public static volatile string? executeCommandSilent;
     /// <summary>
-    /// コマンド実行
+    /// Command execution
     /// </summary>
     public static string ExecuteCommand(string command, bool executeImmediately = true)
     {
@@ -82,7 +82,7 @@ public static class McpServerHost
                 insertCommand = command;
             }
 
-            // 状態管理付きで結果を待機
+            // Wait for result with state management
             return PowerShellCommunication.WaitForResult();
         }
         catch (Exception ex)
@@ -92,7 +92,7 @@ public static class McpServerHost
     }
     
     /// <summary>
-    /// サイレント実行
+    /// Silent execution
     /// </summary>
     public static string ExecuteSilentCommand(string command)
     {
@@ -100,7 +100,7 @@ public static class McpServerHost
         {
             executeCommandSilent = command;
 
-            // WaitForResult()を使用して状態管理も含めて処理
+            // Process including state management using WaitForResult()
             return PowerShellCommunication.WaitForResult();
         }
         catch (Exception ex)
