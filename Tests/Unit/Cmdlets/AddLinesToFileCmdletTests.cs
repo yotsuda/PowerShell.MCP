@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
@@ -64,14 +64,14 @@ public class AddLinesToFileCmdletTests : IDisposable
     [Fact]
     public void AddLines_PreservesTrailingNewline_WhenFileHasTrailingNewline()
     {
-        // Arrange: ファイル末尾に改行がある状態を作成
+        // Arrange: Create file with trailing newline
         var testFile = Path.GetTempFileName();
         try
         {
             // UTF8 with CRLF
             File.WriteAllText(testFile, "Line1\r\nLine2\r\nLine3\r\n", System.Text.Encoding.UTF8);
             
-            // 末尾に改行があることを確認
+            // Verify trailing newline exists
             var bytesBeforeAdd = File.ReadAllBytes(testFile);
             Assert.Equal(0x0D, bytesBeforeAdd[^2]); // CR
             Assert.Equal(0x0A, bytesBeforeAdd[^1]); // LF
@@ -80,10 +80,10 @@ public class AddLinesToFileCmdletTests : IDisposable
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "Line4" };
             
-            // Act: PowerShell コンテキスト外でのテストのため、直接実行はスキップ
-            // 実際の動作確認は統合テストで行う
+            // Act: Skip direct execution as test is outside PowerShell context
+            // Actual behavior verification done in integration tests
             
-            // このテストは構造的な検証のため、実装が正しければパス
+            // This test is structural verification, passes if implementation is correct
             Assert.NotNull(cmdlet.Path);
             Assert.NotNull(cmdlet.Content);
         }
@@ -96,14 +96,14 @@ public class AddLinesToFileCmdletTests : IDisposable
     [Fact]
     public void AddLines_PreservesNoTrailingNewline_WhenFileHasNoTrailingNewline()
     {
-        // Arrange: ファイル末尾に改行がない状態を作成
+        // Arrange: Create file without trailing newline
         var testFile = Path.GetTempFileName();
         try
         {
             // UTF8 without trailing newline
             File.WriteAllText(testFile, "Line1\r\nLine2\r\nLine3", System.Text.Encoding.UTF8);
             
-            // 末尾に改行がないことを確認
+            // Verify no trailing newline
             var bytesBeforeAdd = File.ReadAllBytes(testFile);
             Assert.NotEqual(0x0A, bytesBeforeAdd[^1]); // No LF at end
             
@@ -111,10 +111,10 @@ public class AddLinesToFileCmdletTests : IDisposable
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "Line4" };
             
-            // Act: PowerShell コンテキスト外でのテストのため、直接実行はスキップ
-            // 実際の動作確認は統合テストで行う
+            // Act: Skip direct execution as test is outside PowerShell context
+            // Actual behavior verification done in integration tests
             
-            // このテストは構造的な検証のため、実装が正しければパス
+            // This test is structural verification, passes if implementation is correct
             Assert.NotNull(cmdlet.Path);
             Assert.NotNull(cmdlet.Content);
         }
@@ -127,7 +127,7 @@ public class AddLinesToFileCmdletTests : IDisposable
     [Fact]
     public void AddLines_PreservesTrailingNewline_WithMultipleLines()
     {
-        // Arrange: 複数行追加時の末尾改行保持をテスト
+        // Arrange: Test trailing newline preservation when adding multiple lines
         var testFile = Path.GetTempFileName();
         try
         {
@@ -137,7 +137,7 @@ public class AddLinesToFileCmdletTests : IDisposable
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "NewLine1", "NewLine2", "NewLine3" };
             
-            // 構造的な検証
+            // Structural verification
             Assert.NotNull(cmdlet.Path);
             Assert.Equal(3, cmdlet.Content.Length);
         }
@@ -150,7 +150,7 @@ public class AddLinesToFileCmdletTests : IDisposable
     [Fact]
     public void AddLines_PreservesTrailingNewline_WithMoreThanSixLines()
     {
-        // Arrange: 6行以上追加（省略表示のケース）での末尾改行保持をテスト
+        // Arrange: Test trailing newline preservation when adding 6+ lines (ellipsis display case)
         var testFile = Path.GetTempFileName();
         try
         {
@@ -160,7 +160,7 @@ public class AddLinesToFileCmdletTests : IDisposable
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "L1", "L2", "L3", "L4", "L5", "L6", "L7" };
             
-            // 構造的な検証
+            // Structural verification
             Assert.NotNull(cmdlet.Path);
             Assert.Equal(7, cmdlet.Content.Length);
         }

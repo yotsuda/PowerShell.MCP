@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
 
@@ -56,16 +56,16 @@ public class UpdateMatchInFileCmdletTests : IDisposable
     [Fact]
     public void EncodingHelper_DetectsAsciiCorrectly()
     {
-        // Arrange: ASCIIファイルを作成
+        // Arrange: Create ASCII file
         var testFile = Path.GetTempFileName();
         File.WriteAllText(testFile, "Line 1\nLine 2\nLine 3", Encoding.ASCII);
 
         try
         {
-            // Act: エンコーディングを検出
+            // Act: Detect encoding
             var encoding = EncodingHelper.DetectEncoding(testFile);
 
-            // Assert: ASCIIとして検出される
+            // Assert: Detected as ASCII
             Assert.Equal(20127, encoding.CodePage); // US-ASCII
         }
         finally
@@ -77,7 +77,7 @@ public class UpdateMatchInFileCmdletTests : IDisposable
     [Fact]
     public void EncodingHelper_UpgradeLogic_WorksWithNonAsciiReplacement()
     {
-        // Arrange: ASCIIメタデータと非ASCII文字を含む配列
+        // Arrange: ASCII metadata and array containing non-ASCII characters
         var metadata = new TextFileUtility.FileMetadata
         {
             Encoding = Encoding.ASCII,
@@ -87,15 +87,15 @@ public class UpdateMatchInFileCmdletTests : IDisposable
 
         string[] contentWithNonAscii = ["こんにちは", "世界"];
 
-        // Act: アップグレードが必要かチェック
+        // Act: Check if upgrade is needed
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
             metadata,
             contentWithNonAscii,
-            false, // エンコーディングが明示的に指定されていない
+            false, // Encoding not explicitly specified
             out string? upgradeMessage
         );
 
-        // Assert: UTF-8にアップグレードされる
+        // Assert: Upgraded to UTF-8
         Assert.True(upgraded);
         Assert.NotNull(upgradeMessage);
         Assert.Equal(65001, metadata.Encoding.CodePage); // UTF-8
@@ -104,7 +104,7 @@ public class UpdateMatchInFileCmdletTests : IDisposable
     [Fact]
     public void EncodingHelper_DoesNotUpgrade_WhenEncodingExplicitlySpecified()
     {
-        // Arrange: ASCIIメタデータと非ASCII文字
+        // Arrange: ASCII metadata and non-ASCII characters
         var metadata = new TextFileUtility.FileMetadata
         {
             Encoding = Encoding.ASCII,
@@ -114,24 +114,24 @@ public class UpdateMatchInFileCmdletTests : IDisposable
 
         string[] contentWithNonAscii = ["こんにちは"];
 
-        // Act: エンコーディングが明示的に指定されている場合
+        // Act: When encoding is explicitly specified
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
             metadata,
             contentWithNonAscii,
-            true, // エンコーディングが明示的に指定されている
+            true, // Encoding explicitly specified
             out string? upgradeMessage
         );
 
-        // Assert: アップグレードされない
+        // Assert: Not upgraded
         Assert.False(upgraded);
         Assert.Null(upgradeMessage);
-        Assert.Equal(20127, metadata.Encoding.CodePage); // 依然としてASCII
+        Assert.Equal(20127, metadata.Encoding.CodePage); // Still ASCII
     }
 
     [Fact]
     public void EncodingHelper_DoesNotUpgrade_WhenContentIsAsciiOnly()
     {
-        // Arrange: ASCIIメタデータとASCII文字のみの配列
+        // Arrange: ASCII metadata and array with ASCII characters only
         var metadata = new TextFileUtility.FileMetadata
         {
             Encoding = Encoding.ASCII,
@@ -141,7 +141,7 @@ public class UpdateMatchInFileCmdletTests : IDisposable
 
         string[] asciiContent = ["Hello", "World"];
 
-        // Act: アップグレードチェック
+        // Act: Upgrade check
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
             metadata,
             asciiContent,
@@ -149,16 +149,16 @@ public class UpdateMatchInFileCmdletTests : IDisposable
             out string? upgradeMessage
         );
 
-        // Assert: アップグレードされない
+        // Assert: Not upgraded
         Assert.False(upgraded);
         Assert.Null(upgradeMessage);
-        Assert.Equal(20127, metadata.Encoding.CodePage); // 依然としてASCII
+        Assert.Equal(20127, metadata.Encoding.CodePage); // Still ASCII
     }
 
     [Fact]
     public void EncodingHelper_DoesNotUpgrade_WhenAlreadyUtf8()
     {
-        // Arrange: UTF-8メタデータ
+        // Arrange: UTF-8 metadata
         var metadata = new TextFileUtility.FileMetadata
         {
             Encoding = new UTF8Encoding(false),
@@ -168,7 +168,7 @@ public class UpdateMatchInFileCmdletTests : IDisposable
 
         string[] contentWithNonAscii = ["こんにちは"];
 
-        // Act: アップグレードチェック
+        // Act: Upgrade check
         bool upgraded = EncodingHelper.TryUpgradeEncodingIfNeeded(
             metadata,
             contentWithNonAscii,
@@ -176,9 +176,9 @@ public class UpdateMatchInFileCmdletTests : IDisposable
             out string? upgradeMessage
         );
 
-        // Assert: 既にUTF-8なのでアップグレードされない
+        // Assert: Not upgraded since already UTF-8
         Assert.False(upgraded);
         Assert.Null(upgradeMessage);
-        Assert.Equal(65001, metadata.Encoding.CodePage); // UTF-8のまま
+        Assert.Equal(65001, metadata.Encoding.CodePage); // Remains UTF-8
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 using System.Reflection;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
@@ -6,8 +6,8 @@ using PowerShell.MCP.Cmdlets;
 namespace PowerShell.MCP.Tests;
 
 /// <summary>
-/// ValidateLineRangeAttribute のユニットテスト
-/// protectedメソッドをテストするためにリフレクションを使用
+/// Unit tests for ValidateLineRangeAttribute
+/// Uses reflection to test protected methods
 /// </summary>
 public class ValidationAttributesTests
 {
@@ -18,7 +18,7 @@ public class ValidationAttributesTests
     {
         _attribute = new ValidateLineRangeAttribute();
         
-        // protectedメソッドをリフレクションで取得
+        // Get protected method via reflection
         _validateMethod = typeof(ValidateLineRangeAttribute)
             .GetMethod("Validate", BindingFlags.Instance | BindingFlags.NonPublic)!;
     }

@@ -1,36 +1,36 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// ファイルの行を更新
-/// LLM最適化：行範囲指定または全体置換、Content省略で削除
-/// LineRange未指定時：ファイル全体の置き換え（既存）または新規作成（新規）
+/// Update lines in file
+/// LLM optimized: line range or full replacement, omit Content to delete
+/// When LineRange not specified: replace entire file (existing) or create new (new)
 /// </summary>
 [Cmdlet(VerbsData.Update, "LinesInFile", SupportsShouldProcess = true)]
 public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 {
     /// <summary>
-    /// rotate buffer で収集したコンテキスト情報
+    /// Context info collected by rotate buffer
     /// </summary>
     private class ContextData
     {
-        // 前2行コンテキスト
+        // Previous 2 lines context
         public string? ContextBefore2 { get; set; }
         public string? ContextBefore1 { get; set; }
         public int ContextBefore2Line { get; set; }
         public int ContextBefore1Line { get; set; }
 
-        // 削除時のみ使用
+        // Used only for deletion
         public string? DeletedFirst { get; set; }
         public string? DeletedSecond { get; set; }
-        public string? DeletedThirdLast { get; set; }  // リングバッファ（末尾3行）
-        public string? DeletedSecondLast { get; set; }  // リングバッファ（末尾2行）
+        public string? DeletedThirdLast { get; set; }  // Ring buffer (last 3 lines)
+        public string? DeletedSecondLast { get; set; }  // Ring buffer (last 2 lines)
         public string? DeletedLast { get; set; }
         public int DeletedCount { get; set; }
         public int DeletedStartLine { get; set; }
 
-        // 後2行コンテキスト
+        // Next 2 lines context
         public string? ContextAfter1 { get; set; }
         public string? ContextAfter2 { get; set; }
         public int ContextAfter1Line { get; set; }
@@ -56,7 +56,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
     public object[]? Content { get; set; }
 
     /// <summary>
-    /// Content プロパティへのアクセサ（基底クラス用）
+    /// Accessor to Content property (for base class)
     /// </summary>
     protected override object[]? ContentProperty
     {
@@ -77,19 +77,19 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
     protected override void ProcessRecord()
     {
-        // パイプライン蓄積モードの場合は蓄積して終了
+        // If in pipeline accumulation mode, accumulate and exit
         if (TryAccumulateContent())
             return;
 
-        // LineRangeバリデーション
+        // LineRange validation
         ValidateLineRange(LineRange);
 
-        // LineRange指定時は既存ファイルが必要
+        // Existing file required when LineRange is specified
         bool allowNewFiles = (LineRange == null);
 
         if (!allowNewFiles)
         {
-            // LineRange指定時は既存ファイル必須なので、存在しない場合はカスタムエラー
+            // LineRange requires existing file, custom error if not found
             foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
             {
                 ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
@@ -97,7 +97,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         }
         else
         {
-            // LineRange未指定時は新規ファイル作成可能
+            // New file creation allowed when LineRange not specified
             foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: true, requireExisting: false))
             {
                 ProcessFile(fileInfo.InputPath, fileInfo.ResolvedPath);
@@ -111,14 +111,14 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
         try
         {
-            // メタデータの取得または生成
+            // Get or generate metadata
             TextFileUtility.FileMetadata metadata = fileExists
                 ? TextFileUtility.DetectFileMetadata(resolvedPath, Encoding)
                 : CreateNewFileMetadata(resolvedPath);
 
             string[] contentLines = TextFileUtility.ConvertToStringArray(Content);
 
-            // Content に非 ASCII 文字が含まれている場合、エンコーディングを UTF-8 にアップグレード
+            // If Content contains non-ASCII chars, upgrade encoding to UTF-8
             if (TextFileUtility.TryUpgradeEncodingIfNeeded(metadata, contentLines, Encoding != null, out var upgradeMessage))
             {
                 WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
@@ -164,10 +164,10 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                 ? TextFileUtility.GetEncoding(resolvedPath, Encoding)
                 : new System.Text.UTF8Encoding(false), // UTF8 without BOM
             NewlineSequence = Environment.NewLine,
-            HasTrailingNewline = true  // デフォルトで末尾改行あり
+            HasTrailingNewline = true  // Default has trailing newline
         };
 
-        // ディレクトリが存在しない場合は作成
+        // Create directory if it does not exist
         var directory = System.IO.Path.GetDirectoryName(resolvedPath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
         {
@@ -206,7 +206,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         int linesRemoved;
         int linesInserted;
 
-        // コンテキスト情報（rotate buffer で収集）
+        // Context info (collected by rotate buffer)
         ContextData? context = null;
         int totalLines = 0;
 
@@ -214,7 +214,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         {
             if (isFullFileReplace)
             {
-                // ファイル全体を置換（新規も既存も同じメソッド）
+                // Replace entire file (same method for new and existing)
                 (linesRemoved, linesInserted) = TextFileUtility.ReplaceEntireFile(
                     resolvedPath,
                     tempFile,
@@ -223,7 +223,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             }
             else
             {
-                // 行範囲を置換 + コンテキスト収集（rotate buffer パターン）
+                // Replace line range + collect context (rotate buffer pattern)
                 bool collectContext = fileExists && LineRange != null;
 
                 string? warningMessage;
@@ -236,17 +236,17 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     contentLines,
                     collectContext);
 
-                // 警告があれば出力
+                // Output warning if any
                 if (!string.IsNullOrEmpty(warningMessage))
                 {
                     WriteWarning(warningMessage);
                 }
             }
 
-            // アトミックに置換
+            // Replace atomically
             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
-            // コンテキスト表示（rotate buffer から表示、ファイル再読込なし）
+            // Context display (from rotate buffer, no file re-read)
             if (context != null)
             {
                 OutputUpdateContext(originalPath, resolvedPath,
@@ -257,7 +257,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     contentLines);
             }
 
-            // 結果メッセージ
+            // Result message
             string message = GenerateResultMessage(fileExists, linesRemoved, linesInserted);
             string prefix = fileExists ? "Updated" : "Created";
             WriteObject(AnsiColors.Success($"{prefix} {GetDisplayPath(originalPath, resolvedPath)}: {message}"));
@@ -278,14 +278,14 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             return $"{linesInserted} line(s) (net: +{linesInserted})";
         }
 
-        // linesRemoved は実際に処理された行数
+        // linesRemoved is actual processed line count
 
         if (linesInserted == 0)
         {
             return $"Removed {linesRemoved} line(s) (net: -{linesRemoved})";
         }
 
-        // 行数に応じたメッセージを生成（常にnetを表示）
+        // Generate message based on line count (always show net)
         int netChange = linesInserted - linesRemoved;
         string netStr = netChange > 0 ? $"+{netChange}" : netChange.ToString();
         return $"Replaced {linesRemoved} line(s) with {linesInserted} line(s) (net: {netStr})";
@@ -293,7 +293,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
 
     /// <summary>
-    /// 行範囲を置換しながらコンテキストバッファを構築（1 pass）
+    /// Replace line range while building context buffer (single pass)
     /// </summary>
     private (int linesRemoved, int linesInserted, int totalLines, string? warningMessage, ContextData? context) ReplaceLineRangeWithContext(
         string inputPath,
@@ -304,25 +304,25 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         string[] contentLines,
         bool collectContext)
     {
-        // Context 収集用の変数を初期化
+        // Initialize variables for Context collection
         ContextData? context = collectContext ? new ContextData() : null;
         bool isDelete = contentLines.Length == 0;
 
         int currentLine = 1;
         int outputLine = 1;
-        int linesRemoved = 0;  // 実際に処理した行数をカウント
+        int linesRemoved = 0;  // Count actually processed lines
         int linesInserted = contentLines.Length;
         string? warningMessage = null;
         bool insertedContent = false;
 
 
-        // 削除時の情報収集用
+        // For deletion info collection
         int deletedCount = 0;
 
-        // 後コンテキストカウンタ
+        // After context counter
         int afterCounter = 0;
 
-        // 置換範囲の後に行があるかどうかを記録
+        // Record whether lines exist after replacement range
         bool hasLinesAfterRange = false;
 
         using (var reader = new StreamReader(inputPath, metadata.Encoding))
@@ -336,7 +336,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             {
                 hasNextLine = reader.Peek() != -1;
 
-                // 前2行のコンテキスト収集（範囲の直前）
+                // Collect previous 2 lines context (just before range)
                 if (context != null)
                 {
                     if (currentLine == startLine - 2)
@@ -351,33 +351,33 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     }
                 }
 
-                // 置換範囲の開始時に新しい内容を挿入
+                // Insert new content at start of replacement range
                 if (currentLine == startLine && !insertedContent)
                 {
                     for (int i = 0; i < contentLines.Length; i++)
                     {
                         writer.Write(contentLines[i]);
 
-                        // 各行の後に改行を追加（最終行は別処理）
+                        // Add newline after each line (final line handled separately)
                         if (i < contentLines.Length - 1)
                         {
                             writer.Write(metadata.NewlineSequence);
                         }
-                        // 最終行の処理は置換範囲の終わりで判定
+                        // Final line handling determined at end of replacement range
                         outputLine++;
                     }
                     insertedContent = true;
                 }
 
-                // 置換範囲内の行を処理
+                // Process lines within replacement range
                 if (currentLine >= startLine && currentLine <= endLine)
                 {
-                    // 削除時：削除される行を保存
+                    // Deletion: save lines being deleted
                     if (isDelete && context != null)
                     {
                         deletedCount++;
 
-                        // 先頭2行を保存
+                        // Save first 2 lines
                         if (deletedCount == 1)
                         {
                             context.DeletedFirst = line;
@@ -387,29 +387,29 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                             context.DeletedSecond = line;
                         }
 
-                        // リングバッファで末尾3行を更新
+                        // Update last 3 lines with ring buffer
                         context.DeletedThirdLast = context.DeletedSecondLast;
                         context.DeletedSecondLast = context.DeletedLast;
                         context.DeletedLast = line;
                     }
-                    linesRemoved++;  // 実際に削除/置換された行をカウント
+                    linesRemoved++;  // Count actually deleted/replaced lines
 
-                    // 置換範囲の最終行に達したら、後続行があるかチェック
+                    // At final line of replacement range, check if subsequent lines exist
                     if (currentLine == endLine)
                     {
                         hasLinesAfterRange = hasNextLine;
 
-                        // 新しい内容の最終行の改行を書き込む
+                        // Write newline for final line of new content
                         if (contentLines.Length > 0)
                         {
                             if (hasLinesAfterRange)
                             {
-                                // 後続行がある場合は必ず改行
+                                // Always add newline if subsequent lines exist
                                 writer.Write(metadata.NewlineSequence);
                             }
                             else if (metadata.HasTrailingNewline)
                             {
-                                // ファイル末尾で、元のファイルに末尾改行があった場合のみ改行
+                                // At file end, add newline only if original file had trailing newline
                                 writer.Write(metadata.NewlineSequence);
                             }
                         }
@@ -419,10 +419,10 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     continue;
                 }
 
-                // 置換範囲外の行をコピー
+                // Copy lines outside replacement range
                 writer.Write(line);
 
-                // 後コンテキスト収集（範囲の直後の2行）
+                // Collect after context (2 lines just after range)
                 if (context != null && currentLine > endLine && afterCounter < 2)
                 {
                     if (afterCounter == 0)
@@ -438,15 +438,15 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     afterCounter++;
                 }
 
-                // 改行の追加判定
+                // Determine newline addition
                 if (hasNextLine)
                 {
-                    // 後続行がある場合は必ず改行
+                    // Always add newline if subsequent lines exist
                     writer.Write(metadata.NewlineSequence);
                 }
                 else if (metadata.HasTrailingNewline)
                 {
-                    // 最終行で元のファイルに末尾改行があった場合のみ改行
+                    // At final line, add newline only if original file had trailing newline
                     writer.Write(metadata.NewlineSequence);
                 }
 
@@ -454,7 +454,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                 outputLine++;
             }
 
-            // ファイル末尾で置換範囲に達しなかった場合
+            // If replacement range not reached at file end
             if (currentLine <= startLine && !insertedContent)
             {
                 int actualLineCount = currentLine - 1;
@@ -471,7 +471,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     warningMessage = $"End line {endLine} exceeds file length ({actualLineCount} lines). Will process up to line {actualLineCount}.";
                 }
 
-                // 新しい内容を末尾に追加
+                // Append new content at end
                 for (int i = 0; i < contentLines.Length; i++)
                 {
                     writer.Write(contentLines[i]);
@@ -480,7 +480,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     {
                         writer.Write(metadata.NewlineSequence);
                     }
-                    // 最終行の処理：元のファイルに末尾改行があった場合のみ改行
+                    // Final line handling: add newline only if original file had trailing newline
                     else if (metadata.HasTrailingNewline)
                     {
                         writer.Write(metadata.NewlineSequence);
@@ -490,7 +490,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             }
         }
 
-        // Context 情報を設定
+        // Set Context info
         if (context != null && isDelete)
         {
             context.DeletedCount = deletedCount;
@@ -503,7 +503,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
 
     /// <summary>
-    /// 更新コンテキストを表示（rotate buffer から、ファイル再読込なし）
+    /// Display update context (from rotate buffer, no file re-read)
     /// </summary>
     private void OutputUpdateContext(string originalPath, string filePath,
         ContextData context,
@@ -514,12 +514,12 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
     {
         var displayPath = GetDisplayPath(originalPath, filePath);
 
-        // ヘッダー出力
+        // Output header
         WriteObject(AnsiColors.Header(displayPath));
 
         int endLine = startLine + linesInserted - 1;
 
-        // 前2行のコンテキスト
+        // Previous 2 lines context
         if (context.ContextBefore2Line > 0)
         {
             WriteObject($"{context.ContextBefore2Line,3}- {context.ContextBefore2}");
@@ -529,15 +529,15 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             WriteObject($"{context.ContextBefore1Line,3}- {context.ContextBefore1}");
         }
 
-        // 更新された行を表示
+        // Display updated lines
         if (linesInserted == 0)
         {
-            // 空配列: : のみを表示
+            // Empty array: display only :
             WriteObject($"   :");
         }
         else if (linesInserted <= 5)
         {
-            // 1-5行: すべて反転表示
+            // 1-5 lines: display all highlighted
             for (int i = 0; i < linesInserted; i++)
             {
                 int lineNum = startLine + i;
@@ -546,20 +546,20 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         }
         else
         {
-            // 6行以上: 先頭2行 + 省略マーカー + 末尾2行
-            // 先頭2行
+            // 6+ lines: first 2 + ellipsis marker + last 2
+            // First 2 lines
             WriteObject($"{startLine,3}: {AnsiColors.Inserted(contentLines[0])}");
             WriteObject($"{startLine + 1,3}: {AnsiColors.Inserted(contentLines[1])}");
 
-            // 省略マーカー
+            // Ellipsis marker
             WriteObject("   :");
 
-            // 末尾2行
+            // Last 2 lines
             WriteObject($"{endLine - 1,3}: {AnsiColors.Inserted(contentLines[linesInserted - 2])}");
             WriteObject($"{endLine,3}: {AnsiColors.Inserted(contentLines[linesInserted - 1])}");
         }
 
-        // 後2行のコンテキスト
+        // Next 2 lines context
         if (context.ContextAfter1Line > 0)
         {
             WriteObject($"{context.ContextAfter1Line,3}- {context.ContextAfter1}");
@@ -569,22 +569,22 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
         }
 
-        // 空行でコンテキストとサマリを分離
+        // Separate context and summary with empty line
         WriteObject("");
     }
 
     protected override void EndProcessing()
     {
-        // パイプ入力蓄積モードでない場合は何もしない
+        // Do nothing if not in pipe input accumulation mode
         if (!IsAccumulatingMode)
             return;
 
-        // パイプから入力があった場合
+        // If there was pipe input
         if (FinalizeAccumulatedContent())
         {
-            // Content が設定された
+            // Content was set
         }
-        // パイプから入力がない + LineRange 指定あり → エラー
+        // No pipe input + LineRange specified -> error
         else if (LineRange != null)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -593,16 +593,16 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                 ErrorCategory.InvalidArgument,
                 null));
         }
-        // パイプから入力がない + LineRange なし → 何もしない
+        // No pipe input + no LineRange -> do nothing
         else
         {
             return;
         }
 
-        // LineRangeバリデーション
+        // LineRange validation
         ValidateLineRange(LineRange);
 
-        // LineRange指定時は既存ファイルが必要
+        // Existing file required when LineRange is specified
         bool allowNewFiles = (LineRange == null);
 
         foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles, requireExisting: !allowNewFiles))

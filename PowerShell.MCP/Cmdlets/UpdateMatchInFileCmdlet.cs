@@ -1,12 +1,12 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 using System.Text.RegularExpressions;
 using System.IO;
 
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// テキストファイル内のパターンマッチを更新
-/// LLM最適化：文字列リテラル置換と正規表現置換の2つのモード
+/// Update pattern matches in text file
+/// LLM optimized: two modes - literal string replacement and regex replacement
 /// </summary>
 [Cmdlet(VerbsData.Update, "MatchInFile", SupportsShouldProcess = true)]
 public class UpdateMatchInFileCmdlet : TextFileCmdletBase
@@ -43,7 +43,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         bool hasLiteral = !string.IsNullOrEmpty(Contains);
         bool hasRegex = !string.IsNullOrEmpty(Pattern);
         
-        // どちらも指定されていない
+        // Neither specified
         if (!hasLiteral && !hasRegex)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -53,7 +53,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 null));
         }
         
-        // 両方指定されている
+        // Both specified
         if (hasLiteral && hasRegex)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -63,7 +63,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 null));
         }
         
-        // Literalモードで片方だけ指定されている
+        // Literal mode with only one specified
         if (hasLiteral && Replacement == null)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -73,7 +73,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-        // Contains に改行が含まれている場合はエラー（行単位で処理するため）
+        // Error if Contains includes newline (processing is line-by-line)
         if (hasLiteral && (Contains!.Contains('\n') || Contains.Contains('\r')))
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -83,7 +83,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 Contains));
         }
         
-        // Regexモードで片方だけ指定されている
+        // Regex mode with only one specified
         if (hasRegex && Replacement == null)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -93,7 +93,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-        // Pattern に改行が含まれている場合はエラー（行単位で処理するため）
+        // Error if Pattern includes newline (processing is line-by-line)
         if (hasRegex && (Pattern!.Contains('\n') || Pattern.Contains('\r')))
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -106,7 +106,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
     protected override void ProcessRecord()
     {
-        // LineRangeバリデーション
+        // LineRange validation
         ValidateLineRange(LineRange);
 
         foreach (var fileInfo in ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true))
@@ -123,14 +123,14 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// 文字列リテラル置換または正規表現置換を処理（1パス実装）
-    /// ファイルを1回読みながら、マッチ判定・置換・コンテキスト表示を同時に行う
+    /// Process literal string or regex replacement (single pass implementation)
+    /// Reads file once while performing match check, replacement, and context display simultaneously
     /// </summary>
     private void ProcessStringReplacement(string originalPath, string resolvedPath)
     {
         var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
         
-        // Replacement に非 ASCII 文字が含まれている場合、エンコーディングを UTF-8 にアップグレード
+        // If Replacement contains non-ASCII chars, upgrade encoding to UTF-8
         if (!string.IsNullOrEmpty(Replacement) && 
             EncodingHelper.TryUpgradeEncodingIfNeeded(metadata, [Replacement], Encoding != null, out var upgradeMessage))
         {
@@ -142,7 +142,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
-        // より具体的なアクション説明
+        // More specific action description
         string actionDescription;
         if (isLiteral)
         {
@@ -157,33 +157,33 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
         bool isWhatIf = IsWhatIfMode();
         
-        // ShouldProcess で確認（-Confirm や -WhatIf の処理）
+        // Confirm with ShouldProcess (-Confirm and -WhatIf handling)
         if (!ShouldProcess(resolvedPath, actionDescription))
         {
-            // -Confirm で No を選んだ場合、または -WhatIf の場合
+            // If -Confirm No was selected, or -WhatIf
             if (!isWhatIf)
             {
-                // -Confirm で No: 何も表示せず終了
+                // -Confirm No: exit without displaying anything
                 return;
             }
-            // -WhatIf の場合は差分プレビューを表示するため続行
+            // Continue for -WhatIf to display diff preview
         }
         
         bool dryRun = isWhatIf;
 
-        // バックアップ（dryRun でない場合のみ）
+        // Backup (only if not dryRun)
         if (!dryRun && Backup)
         {
             var backupPath = TextFileUtility.CreateBackup(resolvedPath);
             WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
         }
 
-        // ===== 1パス処理: マッチ判定・置換・コンテキスト表示を同時に実行 =====
+        // ===== Single pass: match check, replacement, and context display simultaneously =====
         string? tempFile = dryRun ? null : System.IO.Path.GetTempFileName();
         int replacementCount = 0;
         bool headerPrinted = false;
         
-        // コンテキスト表示用
+        // For context display
         var preContextBuffer = new RotateBuffer<(string line, int lineNum)>(2);
         int afterMatchCounter = 0;
         int lastOutputLine = 0;
@@ -191,7 +191,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
         try
         {
-            // 空ファイルのチェック
+            // Check for empty file
             var fileInfoObj = new FileInfo(resolvedPath);
             if (fileInfoObj.Length == 0)
             {
@@ -230,7 +230,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
                     while (true)
                     {
-                        // マッチ判定
+                        // Match check
                         bool isMatched = false;
                         if (lineNumber >= startLine && lineNumber <= endLine)
                         {
@@ -248,7 +248,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
                         if (isMatched)
                         {
-                            // ヘッダー出力（最初のマッチ時のみ）
+                            // Output header (first match only)
                             if (!headerPrinted)
                             {
                                 var displayPath = GetDisplayPath(originalPath, resolvedPath);
@@ -256,13 +256,13 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 headerPrinted = true;
                             }
 
-                            // ギャップ検出: 前回出力から2行以上離れている場合
+                            // Gap detection: if more than 2 lines from last output
                             if (lastOutputLine > 0 && lineNumber - 2 > lastOutputLine + 1)
                             {
                                 WriteObject("");
                             }
 
-                            // 前2行をコンテキストとして出力
+                            // Output previous 2 lines as context
                             foreach (var ctx in preContextBuffer)
                             {
                                 if (ctx.lineNum > lastOutputLine)
@@ -273,7 +273,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 }
                             }
 
-                            // 置換実行
+                            // Execute replacement
                             if (isLiteral)
                             {
                                 int count = (currentLine.Length - currentLine.Replace(Contains!, "").Length) / 
@@ -288,11 +288,11 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 outputLine = regex.Replace(currentLine, Replacement!);
                             }
 
-                            // マッチ行を表示（WhatIf: 赤＋緑、通常: 緑のみ）
+                            // Display match line (WhatIf: red+green, normal: green only)
                             string displayLine;
                             if (dryRun)
                             {
-                                // WhatIf: 置換前（赤）と置換後（緑）を両方表示
+                                // WhatIf: display both before (red) and after (green) replacement
                                 if (isLiteral)
                                 {
                                     displayLine = currentLine.Replace(Contains!, 
@@ -305,7 +305,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             }
                             else
                             {
-                                // 通常実行: 置換後の結果のみ表示（緑でハイライト）
+                                // Normal execution: display only replacement result (highlighted in green)
                                 if (isLiteral)
                                 {
                                     displayLine = currentLine.Replace(Contains!, 
@@ -324,7 +324,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                         }
                         else
                         {
-                            // 後続コンテキストの出力
+                            // Output subsequent context
                             if (afterMatchCounter > 0)
                             {
                                 var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex);
@@ -333,11 +333,11 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 afterMatchCounter--;
                             }
 
-                            // Rotate buffer更新
+                            // Update rotate buffer
                             preContextBuffer.Add((currentLine, lineNumber));
                         }
 
-                        // ファイルに書き込み（dryRun でない場合のみ）
+                        // Write to file (only if not dryRun)
                         if (writer != null)
                         {
                             if (!isFirstOutputLine)
@@ -356,7 +356,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                         }
                         else
                         {
-                            // 最終行の処理
+                            // Process final line
                             if (writer != null && metadata.HasTrailingNewline)
                             {
                                 writer.Write(metadata.NewlineSequence);
@@ -385,17 +385,17 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 return;
             }
 
-            // 空行でコンテキストとサマリを分離
+            // Separate context and summary with empty line
             WriteObject("");
 
             if (dryRun)
             {
-                // WhatIf: ファイルは変更しない
+                // WhatIf: do not modify file
                 WriteObject(AnsiColors.WhatIf($"What if: Would update {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s)"));
             }
             else
             {
-                // アトミックに置換
+                // Replace atomically
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile!);
                 WriteObject(AnsiColors.Success($"Updated {GetDisplayPath(originalPath, resolvedPath)}: {replacementCount} replacement(s) made"));
             }
@@ -412,17 +412,17 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
 
     /// <summary>
-    /// 正規表現置換の差分表示行を構築（削除部分を赤、追加部分を緑で表示）
+    /// Build diff display line for regex replacement (deleted in red, added in green)
     /// </summary>
     private static string BuildRegexDisplayLine(string originalLine, Regex regex, string replacement)
     {
-        // 各マッチの削除→追加を連続表示（キャプチャグループ対応）
+        // Display each match deletion->addition consecutively (supports capture groups)
         var result = regex.Replace(originalLine, match => 
         {
-            // match.Result() で $1, $2 などを展開した結果を取得
+            // Get expanded result of $1, $2 etc. with match.Result()
             var replacedText = match.Result(replacement);
             
-            // 削除部分（元のマッチ）を赤+取り消し線、追加部分（置換結果）を緑で表示
+            // Display deleted part (original match) in red+strikethrough, added part (replacement result) in green
             return $"{AnsiColors.Red}{match.Value}{AnsiColors.Reset}{AnsiColors.Green}{replacedText}{AnsiColors.Reset}";
         });
         
@@ -430,7 +430,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// コンテキスト行の表示を構築（マッチがあれば元の文字列を黄色でハイライト）
+    /// Build context line display (highlight original string in yellow if matched)
     /// </summary>
     private string BuildContextDisplayLine(string line, bool isLiteral, Regex? regex)
     {
@@ -445,7 +445,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         {
             if (regex!.IsMatch(line))
             {
-                // 正規表現のマッチ部分を黄色でハイライト（元の文字列のまま）
+                // Highlight regex match in yellow (original string unchanged)
                 return regex.Replace(line, match => $"{AnsiColors.Yellow}{match.Value}{AnsiColors.Reset}");
             }
         }

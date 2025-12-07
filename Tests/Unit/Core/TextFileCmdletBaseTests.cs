@@ -5,17 +5,17 @@ using PowerShell.MCP.Cmdlets;
 namespace PowerShell.MCP.Tests;
 
 /// <summary>
-/// TextFileCmdletBase の単体テスト
-/// テスト用派生クラスを使用して protected メソッドをテスト
+/// Unit tests for TextFileCmdletBase
+/// Tests protected methods using test-derived class
 /// </summary>
 public class TextFileCmdletBaseTests
 {
     /// <summary>
-    /// テスト用の派生クラス - protected メソッドを public として公開
+    /// Test-derived class - exposes protected methods as public
     /// </summary>
     private class TestCmdlet : TextFileCmdletBase
     {
-        // protected static メソッドを public として公開
+        // Expose protected static methods as public
         public static bool PublicIsPSDrivePath(string path)
             => IsPSDrivePath(path);
 

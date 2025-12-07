@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// ファイルから行を削除
-/// LLM最適化：行範囲指定、文字列包含、または正規表現マッチで削除（組み合わせも可能）
+/// Remove lines from file
+/// LLM optimized: delete by line range, string containment, or regex match (combinations supported)
 /// </summary>
 [Cmdlet(VerbsCommon.Remove, "LinesFromFile", SupportsShouldProcess = true)]
 public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
@@ -38,33 +38,33 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        // -Contains と -Pattern の同時指定チェック
+        // Check for simultaneous -Contains and -Pattern specification
         ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
 
-        // LineRange、Contains、Pattern の少なくとも一方が指定されているかチェック
+        // Check that at least one of LineRange, Contains, or Pattern is specified
         if (LineRange == null && string.IsNullOrEmpty(Contains) && string.IsNullOrEmpty(Pattern))
         {
             throw new PSArgumentException("At least one of -LineRange, -Contains, or -Pattern must be specified.");
         }
 
-        // Contains に改行が含まれている場合はエラー（行単位で処理するため）
+        // Error if Contains includes newline (processing is line-by-line)
         if (!string.IsNullOrEmpty(Contains) && (Contains.Contains('\n') || Contains.Contains('\r')))
         {
             throw new PSArgumentException("Contains cannot contain newline characters. Remove-LinesFromFile processes files line by line.");
         }
 
-        // Pattern に改行が含まれている場合はエラー（行単位で処理するため）
+        // Error if Pattern includes newline (processing is line-by-line)
         if (!string.IsNullOrEmpty(Pattern) && (Pattern.Contains('\n') || Pattern.Contains('\r')))
         {
             throw new PSArgumentException("Pattern cannot contain newline characters. Remove-LinesFromFile processes files line by line.");
         }
 
-        // LineRange バリデーション
+        // LineRange validation
         if (LineRange != null)
         {
             ValidateLineRange(LineRange);
         }
-        // 末尾N行削除モード（負のLineRange）と Contains/Pattern の組み合わせは未サポート
+        // Tail N lines deletion mode (negative LineRange) combined with Contains/Pattern is not supported
         if (LineRange != null && LineRange.Length > 0 && LineRange[0] < 0)
         {
             if (!string.IsNullOrEmpty(Contains) || !string.IsNullOrEmpty(Pattern))
@@ -81,7 +81,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             try
             {
                 var metadata = TextFileUtility.DetectFileMetadata(fileInfo.ResolvedPath, Encoding);
-                // 末尾N行削除モード（負のLineRange）
+                // Tail N lines deletion mode (negative LineRange)
                 if (LineRange != null && LineRange.Length > 0 && LineRange[0] < 0)
                 {
                     RemoveTailLines(fileInfo.InputPath, fileInfo.ResolvedPath, metadata, -LineRange[0]);
@@ -92,7 +92,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 int endLine = int.MaxValue;
                 Regex? regex = null;
 
-                // 削除条件の準備
+                // Prepare deletion conditions
                 bool useLineRange = LineRange != null;
                 bool useContains = !string.IsNullOrEmpty(Contains);
                 bool usePattern = !string.IsNullOrEmpty(Pattern);
@@ -126,15 +126,15 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                 bool isWhatIf = IsWhatIfMode();
 
-                // ShouldProcess で確認（-Confirm や -WhatIf の処理）
+                // Confirm with ShouldProcess (-Confirm and -WhatIf handling)
                 if (!ShouldProcess(fileInfo.ResolvedPath, actionDescription))
                 {
                     if (!isWhatIf)
                     {
-                        // -Confirm で No: 何も表示せず終了
+                        // -Confirm No: exit without displaying anything
                         continue;
                     }
-                    // -WhatIf の場合は差分プレビューを表示するため続行
+                    // Continue for -WhatIf to display diff preview
                 }
 
                 bool dryRun = isWhatIf;
@@ -148,15 +148,15 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 string? tempFile = dryRun ? null : System.IO.Path.GetTempFileName();
                 int linesRemoved = 0;
 
-                // コンテキスト表示用（rotate buffer）
-                // dryRun: 削除前の行番号、通常: 削除後の行番号
+                // For context display (rotate buffer)
+                // dryRun: line number before deletion, normal: line number after deletion
                 var preContextBuffer = new RotateBuffer<(string line, int lineNum)>(2);
                 int afterRemovalCounter = 0;
                 int lastOutputLine = 0;
                 bool headerPrinted = false;
                 try
                 {
-                    // 空ファイルのチェック
+                    // Check for empty file
                     var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
                     if (fileInfoObj.Length == 0)
                     {
@@ -181,8 +181,8 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 throw new InvalidOperationException("Unexpected empty file");
                             }
 
-                            int lineNumber = 1;        // 削除前の行番号
-                            int outputLineNumber = 1;  // 削除後の行番号
+                            int lineNumber = 1;        // Line number before deletion
+                            int outputLineNumber = 1;  // Line number after deletion
                             string currentLine = enumerator.Current;
                             bool hasNext = enumerator.MoveNext();
                             bool isFirstOutputLine = true;
@@ -192,7 +192,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                             {
                                 bool shouldRemove = false;
 
-                                // 条件判定
+                                // Condition check
                                 if (useLineRange && useContains)
                                 {
                                     shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) &&
@@ -216,7 +216,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     shouldRemove = regex!.IsMatch(currentLine);
                                 }
 
-                                // 削除範囲の開始検出
+                                // Detect start of deletion range
                                 if (!wasRemoving && shouldRemove)
                                 {
                                     if (!headerPrinted)
@@ -226,16 +226,16 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         headerPrinted = true;
                                     }
 
-                                    // 表示用の行番号を決定
+                                    // Determine line number for display
                                     int contextLineNum = dryRun ? lineNumber : outputLineNumber;
 
-                                    // ギャップ検出: 前回出力から2行以上離れている場合
+                                    // Gap detection: if more than 2 lines from last output
                                     if (lastOutputLine > 0 && contextLineNum - 2 > lastOutputLine + 1)
                                     {
                                         WriteObject("");
                                     }
 
-                                    // 前2行をコンテキストとして出力
+                                    // Output previous 2 lines as context
                                     foreach (var ctx in preContextBuffer)
                                     {
                                         int ctxDisplayNum = dryRun ? ctx.lineNum : ctx.lineNum - linesRemoved;
@@ -247,7 +247,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     }
                                 }
 
-                                // 削除範囲の終了検出
+                                // Detect end of deletion range
                                 if (wasRemoving && !shouldRemove)
                                 {
                                     afterRemovalCounter = 2;
@@ -257,23 +257,23 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 {
                                     if (dryRun)
                                     {
-                                        // -WhatIf: 削除行を赤色で表示（マッチ部分を黄色背景でハイライト）
+                                        // -WhatIf: display deleted lines in red (highlight match in yellow background)
                                         string displayLine;
                                         if (useContains)
                                         {
-                                            // Contains: マッチ部分を黄色背景でハイライト
+                                            // Contains: highlight match in yellow background
                                             displayLine = currentLine.Replace(Contains!, 
                                                 $"{AnsiColors.RedOnYellow}{Contains}{AnsiColors.RedOnDefault}");
                                         }
                                         else if (usePattern)
                                         {
-                                            // Pattern: 正規表現マッチ部分を黄色背景でハイライト
+                                            // Pattern: highlight regex match in yellow background
                                             displayLine = regex!.Replace(currentLine, 
                                                 match => $"{AnsiColors.RedOnYellow}{match.Value}{AnsiColors.RedOnDefault}");
                                         }
                                         else
                                         {
-                                            // LineRange のみ: 行全体を赤で表示
+                                            // LineRange only: display entire line in red
                                             displayLine = currentLine;
                                         }
                                         WriteObject($"{lineNumber,3}: {AnsiColors.Red}{displayLine}{AnsiColors.Reset}");
@@ -281,7 +281,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     }
                                     else
                                     {
-                                        // 通常実行: 連続削除の最初だけ位置マーカーを表示（行番号なし）
+                                        // Normal execution: display position marker only for first of consecutive deletions (no line number)
                                         if (!wasRemoving)
                                         {
                                             WriteObject("   :");
@@ -291,7 +291,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 }
                                 else
                                 {
-                                    // 削除しない行：書き込む（dryRun でない場合のみ）
+                                    // Non-deleted line: write (only if not dryRun)
                                     if (writer != null)
                                     {
                                         if (!isFirstOutputLine)
@@ -302,7 +302,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         isFirstOutputLine = false;
                                     }
 
-                                    // 削除後の2行をコンテキストとして出力
+                                    // Output 2 lines after deletion as context
                                     if (afterRemovalCounter > 0)
                                     {
                                         int displayNum = dryRun ? lineNumber : outputLineNumber;
@@ -311,7 +311,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         afterRemovalCounter--;
                                     }
 
-                                    // Rotate buffer更新
+                                    // Update rotate buffer
                                     preContextBuffer.Add((currentLine, lineNumber));
 
                                     outputLineNumber++;
@@ -327,7 +327,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 }
                                 else
                                 {
-                                    // 最終行の処理
+                                    // Process final line
                                     if (writer != null && !shouldRemove && metadata.HasTrailingNewline)
                                     {
                                         writer.Write(metadata.NewlineSequence);
@@ -349,17 +349,17 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         continue;
                     }
 
-                    // 空行でコンテキストとサマリを分離
+                    // Separate context and summary with empty line
                     WriteObject("");
 
                     if (dryRun)
                     {
-                        // WhatIf: ファイルは変更しない
+                        // WhatIf: do not modify file
                         WriteObject(AnsiColors.WhatIf($"What if: Would remove {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)}"));
                     }
                     else
                     {
-                        // アトミックに置換
+                        // Replace atomically
                         TextFileUtility.ReplaceFileAtomic(fileInfo.ResolvedPath, tempFile!);
                         WriteObject(AnsiColors.Success($"Removed {linesRemoved} line(s) from {GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath)} (net: -{linesRemoved})"));
                     }
@@ -381,7 +381,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// 末尾N行を削除（RotateBuffer による遅延書き出しパターン）
+    /// Delete last N lines (delayed write pattern using RotateBuffer)
     /// </summary>
     private void RemoveTailLines(string inputPath, string resolvedPath, TextFileUtility.FileMetadata metadata, int tailCount)
     {
@@ -408,7 +408,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
         try
         {
-            // 空ファイルのチェック
+            // Check for empty file
             var fileInfoObj = new FileInfo(resolvedPath);
             if (fileInfoObj.Length == 0)
             {
@@ -417,7 +417,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 return;
             }
 
-            // RotateBuffer: 末尾N行を保持（遅延書き出し用）
+            // RotateBuffer: hold last N lines (for delayed write)
             var tailBuffer = new RotateBuffer<(string line, int lineNum)>(tailCount);
             int totalLines = 0;
             int linesWritten = 0;
@@ -440,7 +440,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         totalLines++;
                         string currentLine = enumerator.Current;
 
-                        // バッファが満杯の場合、最も古い行を書き出す
+                        // If buffer is full, write out oldest line
                         if (tailBuffer.IsFull)
                         {
                             var oldest = tailBuffer.Oldest;
@@ -456,11 +456,11 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                             linesWritten++;
                         }
 
-                        // 現在の行をバッファに追加
+                        // Add current line to buffer
                         tailBuffer.Add((currentLine, totalLines));
                     }
 
-                    // 末尾改行の処理
+                    // Handle trailing newline
                     if (writer != null && linesWritten > 0 && metadata.HasTrailingNewline)
                     {
                         writer.Write(metadata.NewlineSequence);
@@ -472,7 +472,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 }
             }
 
-            // 削除される行数
+            // Number of lines to delete
             int linesRemoved = tailBuffer.Count;
 
             if (linesRemoved == 0)
@@ -482,18 +482,18 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 return;
             }
 
-            // コンテキスト表示
+            // Context display
             var displayPath = GetDisplayPath(inputPath, resolvedPath);
             WriteObject(AnsiColors.Header(displayPath));
 
-            // 削除される行の前のコンテキスト（最大2行）
+            // Context before deleted lines (max 2 lines)
             int contextStart = totalLines - linesRemoved - 1;
             if (contextStart >= 1)
             {
                 int contextCount = Math.Min(2, contextStart);
                 int contextLineNum = totalLines - linesRemoved - contextCount + 1;
 
-                // 前コンテキストを取得するため再度読み込み
+                // Re-read to get pre-context
                 foreach (var line in File.ReadLines(resolvedPath, metadata.Encoding).Skip(contextLineNum - 1).Take(contextCount))
                 {
                     WriteObject($"{contextLineNum,3}- {line}");
@@ -501,10 +501,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 }
             }
 
-            // 削除される行を表示
+            // Display lines to be deleted
             if (dryRun)
             {
-                // WhatIf: 削除行を赤色で表示
+                // WhatIf: display deleted lines in red
                 foreach (var item in tailBuffer)
                 {
                     WriteObject($"{item.lineNum,3}: {AnsiColors.Red}{item.line}{AnsiColors.Reset}");
@@ -512,11 +512,11 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             }
             else
             {
-                // 通常実行: 位置マーカーのみ
+                // Normal execution: position marker only
                 WriteObject("   :");
             }
 
-            // 空行でコンテキストとサマリを分離
+            // Separate context and summary with empty line
             WriteObject("");
 
             if (dryRun)
@@ -525,7 +525,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             }
             else
             {
-                // アトミックに置換
+                // Replace atomically
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile!);
                 WriteObject(AnsiColors.Success($"Removed {linesRemoved} line(s) from {displayPath} (net: -{linesRemoved})"));
             }
