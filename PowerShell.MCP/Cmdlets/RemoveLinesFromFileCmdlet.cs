@@ -110,9 +110,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     actionDescription = $"Remove lines matching pattern: {Pattern}";
                 }
 
-                // -WhatIf が明示的に指定されているかチェック
-                bool isWhatIf = MyInvocation.BoundParameters.ContainsKey("WhatIf") && 
-                                (SwitchParameter)MyInvocation.BoundParameters["WhatIf"];
+                bool isWhatIf = IsWhatIfMode();
                 
                 // ShouldProcess で確認（-Confirm や -WhatIf の処理）
                 if (!ShouldProcess(fileInfo.ResolvedPath, actionDescription))

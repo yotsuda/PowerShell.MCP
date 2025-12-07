@@ -272,4 +272,13 @@ public abstract class TextFileCmdletBase : PSCmdlet
             }
         }
     }
+
+    /// <summary>
+    /// -WhatIf が明示的に指定されているかをチェック
+    /// </summary>
+    protected bool IsWhatIfMode()
+    {
+        return MyInvocation.BoundParameters.ContainsKey("WhatIf") && 
+               (SwitchParameter)MyInvocation.BoundParameters["WhatIf"];
+    }
 }
