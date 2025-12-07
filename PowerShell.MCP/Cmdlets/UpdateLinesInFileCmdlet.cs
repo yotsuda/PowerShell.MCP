@@ -8,7 +8,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// LineRange未指定時：ファイル全体の置き換え（既存）または新規作成（新規）
 /// </summary>
 [Cmdlet(VerbsData.Update, "LinesInFile", SupportsShouldProcess = true)]
-public class UpdateLinesInFileCmdlet : TextFileCmdletBase
+public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 {
     /// <summary>
     /// rotate buffer で収集したコンテキスト情報
@@ -55,36 +55,31 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     [Parameter(ValueFromPipeline = true)]
     public object[]? Content { get; set; }
 
+    /// <summary>
+    /// Content プロパティへのアクセサ（基底クラス用）
+    /// </summary>
+    protected override object[]? ContentProperty
+    {
+        get => Content;
+        set => Content = value;
+    }
+
     [Parameter]
     public string? Encoding { get; set; }
 
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
-    private List<object>? _contentBuffer;
-    private bool _accumulateContent;
-
     protected override void BeginProcessing()
     {
-        // Path が引数で指定され、Content が引数で指定されていない場合のみパイプ入力を蓄積
-        bool pathFromArgument = MyInvocation.BoundParameters.ContainsKey("Path") ||
-                                MyInvocation.BoundParameters.ContainsKey("LiteralPath");
-        bool contentFromArgument = MyInvocation.BoundParameters.ContainsKey("Content");
-
-        _accumulateContent = pathFromArgument && !contentFromArgument;
+        InitializeContentAccumulation();
     }
 
     protected override void ProcessRecord()
     {
-        // パイプから Content が来ている場合は蓄積
-        if (_accumulateContent)
-        {
-            if (Content != null)
-            {
-                (_contentBuffer ??= []).AddRange(Content);
-            }
+        // パイプライン蓄積モードの場合は蓄積して終了
+        if (TryAccumulateContent())
             return;
-        }
 
         // LineRangeバリデーション
         ValidateLineRange(LineRange);
@@ -581,15 +576,13 @@ public class UpdateLinesInFileCmdlet : TextFileCmdletBase
     protected override void EndProcessing()
     {
         // パイプ入力蓄積モードでない場合は何もしない
-        if (!_accumulateContent)
-        {
+        if (!IsAccumulatingMode)
             return;
-        }
 
         // パイプから入力があった場合
-        if (_contentBuffer is { Count: > 0 })
+        if (FinalizeAccumulatedContent())
         {
-            Content = _contentBuffer!.ToArray();
+            // Content が設定された
         }
         // パイプから入力がない + LineRange 指定あり → エラー
         else if (LineRange != null)

@@ -7,7 +7,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// LLM最適化:新規ファイル・既存ファイルともにパラメータ省略可(デフォルトで末尾追加、-LineNumber で挿入位置指定)
 /// </summary>
 [Cmdlet(VerbsCommon.Add, "LinesToFile", SupportsShouldProcess = true)]
-public class AddLinesToFileCmdlet : TextFileCmdletBase
+public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
 {
     [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
@@ -20,6 +20,15 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     [Parameter(Position = 1, ValueFromPipeline = true)]
     public object[]? Content { get; set; }
 
+    /// <summary>
+    /// Content プロパティへのアクセサ（基底クラス用）
+    /// </summary>
+    protected override object[]? ContentProperty
+    {
+        get => Content;
+        set => Content = value;
+    }
+
     [Parameter]
     [ValidateRange(1, int.MaxValue)]
     public int LineNumber { get; set; }
@@ -30,30 +39,16 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
-    private List<object>? _contentBuffer;
-    private bool _accumulateContent;
-
     protected override void BeginProcessing()
     {
-        // Path が引数で指定され、Content が引数で指定されていない場合のみパイプ入力を蓄積
-        bool pathFromArgument = MyInvocation.BoundParameters.ContainsKey("Path") ||
-                                MyInvocation.BoundParameters.ContainsKey("LiteralPath");
-        bool contentFromArgument = MyInvocation.BoundParameters.ContainsKey("Content");
-
-        _accumulateContent = pathFromArgument && !contentFromArgument;
+        InitializeContentAccumulation();
     }
 
     protected override void ProcessRecord()
     {
-        // パイプから Content が来ている場合は蓄積
-        if (_accumulateContent)
-        {
-            if (Content != null)
-            {
-                (_contentBuffer ??= []).AddRange(Content);
-            }
+        // パイプライン蓄積モードの場合は蓄積して終了
+        if (TryAccumulateContent())
             return;
-        }
 
         // Content が引数で指定されていない場合はエラー
         if (Content == null || Content.Length == 0)
@@ -535,20 +530,20 @@ public class AddLinesToFileCmdlet : TextFileCmdletBase
 
     protected override void EndProcessing()
     {
-        // 蓄積モードの場合
-        if (_accumulateContent)
-        {
-            if (_contentBuffer is null or { Count: 0 })
-            {
-                ThrowTerminatingError(new ErrorRecord(
-                    new PSArgumentException("Content is required. Provide via -Content parameter or pipeline input."),
-                    "ContentRequired",
-                    ErrorCategory.InvalidArgument,
-                    null));
-            }
-            Content = _contentBuffer!.ToArray();
+        // 蓄積モードでない場合は何もしない
+        if (!IsAccumulatingMode)
+            return;
 
-            ProcessAllPaths();
+        // 蓄積された内容を Content に設定
+        if (!FinalizeAccumulatedContent())
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new PSArgumentException("Content is required. Provide via -Content parameter or pipeline input."),
+                "ContentRequired",
+                ErrorCategory.InvalidArgument,
+                null));
         }
+
+        ProcessAllPaths();
     }
 }
