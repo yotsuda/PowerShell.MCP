@@ -1,4 +1,4 @@
-namespace PowerShell.MCP.Services;
+﻿namespace PowerShell.MCP.Services;
 
 /// <summary>
 /// PowerShellとの通信を管理するクラス
@@ -66,24 +66,6 @@ public static class McpServerHost
     public static volatile string? executeCommand;
     public static volatile string? insertCommand;
     public static volatile string? executeCommandSilent;
-    //public static volatile string? pendingNotification;
-    /// <summary>
-    /// 位置変更通知を送信
-    /// </summary>
-    //public static void SendLocationChanged(string oldLocation, string newLocation)
-    //{
-    //    var notificationData = new
-    //    {
-    //        type = "location_changed",
-    //        old_location = oldLocation,
-    //        new_location = newLocation,
-    //        timestamp = DateTime.UtcNow.ToString("O")
-    //    };
-
-    //    // 既存のpendingNotificationシステムを活用
-    //    MCPProvider.SendNotification(notificationData);
-    //}
-
     /// <summary>
     /// コマンド実行
     /// </summary>
@@ -126,21 +108,4 @@ public static class McpServerHost
             return $"Error executing silent command: {ex.Message}";
         }
     }
-
-    /// </summary>
-    //public static void SendCommandExecuted(string command, string location, int? exitCode = null, long durationMs = 0)
-    //{
-    //    var notificationData = new
-    //    {
-    //        type = "command_executed",
-    //        command = command,
-    //        location = location,
-    //        exit_code = exitCode,
-    //        duration_ms = durationMs,
-    //        timestamp = DateTime.UtcNow.ToString("O")
-    //    };
-
-    //    // 既存の pendingNotification システムを活用
-    //    MCPProvider.SendNotification(notificationData);
-    //}
 }

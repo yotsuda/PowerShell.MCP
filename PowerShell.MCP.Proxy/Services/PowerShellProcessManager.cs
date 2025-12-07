@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -46,16 +46,6 @@ public class PowerShellProcessManager
     }
 }
 
-/// <summary>
-/// プロセス情報を格納するデータクラス
-/// </summary>
-public class ProcessInfo
-{
-    public int Id { get; set; }
-    public string ProcessName { get; set; } = string.Empty;
-    public DateTime StartTime { get; set; }
-    public bool HasExited { get; set; }
-}
 
 public static class PwshNative
 {

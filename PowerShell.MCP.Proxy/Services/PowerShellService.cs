@@ -5,13 +5,10 @@ namespace PowerShell.MCP.Proxy.Services;
 
 public class PowerShellService : IPowerShellService
 {
-    //private readonly ILocationTracker _locationTracker;
     private readonly NamedPipeClient _namedPipeClient;
 
-    //public PowerShellService(ILocationTracker locationTracker, NamedPipeClient namedPipeClient)
     public PowerShellService(NamedPipeClient namedPipeClient)
     {
-        //_locationTracker = locationTracker;
         _namedPipeClient = namedPipeClient;
     }
 

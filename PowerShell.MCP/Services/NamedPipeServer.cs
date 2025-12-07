@@ -23,7 +23,6 @@ public static class ExecutionState
 public class NamedPipeServer : IDisposable
 {
     public const string PipeName = "PowerShell.MCP.Communication";
-    //public const string PipeName = "PowerShell.MCP.Communication-debug";
     private const int MaxConcurrentConnections = 2; // 2つのパイプインスタンス
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
@@ -125,7 +124,6 @@ public class NamedPipeServer : IDisposable
             var requestRoot = requestDoc.RootElement;
             
             var name = requestRoot.GetProperty("name").GetString();
-            //var parameters = requestRoot.TryGetProperty("parameters", out var paramsElement) ? paramsElement : new JsonElement();
 
             string? proxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement proxyVersionElement)
                 ? proxyVersionElement.GetString() : "Not detected";
@@ -133,7 +131,6 @@ public class NamedPipeServer : IDisposable
             if (proxyVersion != MCPModuleInitializer.ServerVersion)
             {
                 string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\")");
-                //string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\") -replace '\\\\', '\\\\'");
                 string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
 
                 var versionErrorResponse =
@@ -293,32 +290,5 @@ LLM should prompt user to choose.";
             _internalCancellation.Dispose();
             _disposed = true;
         }
-    }
-
-    /// <summary>
-    /// 通知専用 pipe で EXE 側に通知を送信
-    // 今のところ、MCP notification をサポートしている MCP client はほとんどないようだ。
-    // いったんコメントアウトしておく。
-    /// </summary>
-    public static void SendNotificationToPipe(object notificationData)
-    {
-        //try
-        //{
-        //    const string NotificationPipeName = "PowerShell.MCP.Notifications";
-
-        //    using var pipeClient = new NamedPipeClientStream(".", NotificationPipeName, PipeDirection.Out);
-        //    pipeClient.Connect(1000); // 1秒でタイムアウト
-
-        //    var notificationJson = JsonSerializer.Serialize(notificationData);
-
-        //    // 簡潔な形式: JSONを直接送信
-        //    using var writer = new StreamWriter(pipeClient);
-        //    writer.Write(notificationJson);
-        //    writer.Flush();
-        //}
-        //catch
-        //{
-        //    // 通知エラーは無視（EXE側が起動していない場合など）
-        //}
     }
 }
