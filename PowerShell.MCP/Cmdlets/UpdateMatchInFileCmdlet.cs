@@ -20,7 +20,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     public string[] LiteralPath { get; set; } = null!;
 
     [Parameter]
-    public string? Contains { get; set; }
+    public string? OldText { get; set; }
 
     [Parameter]
     public string? Pattern { get; set; }
@@ -40,14 +40,14 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        bool hasLiteral = !string.IsNullOrEmpty(Contains);
+        bool hasLiteral = !string.IsNullOrEmpty(OldText);
         bool hasRegex = !string.IsNullOrEmpty(Pattern);
         
         // Neither specified
         if (!hasLiteral && !hasRegex)
         {
             ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Either -Contains/-Replacement or -Pattern/-Replacement must be specified."),
+                new ArgumentException("Either -OldText/-Replacement or -Pattern/-Replacement must be specified."),
                 "ParameterRequired",
                 ErrorCategory.InvalidArgument,
                 null));
@@ -57,7 +57,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         if (hasLiteral && hasRegex)
         {
             ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Cannot specify both -Contains/-Replacement and -Pattern/-Replacement."),
+                new ArgumentException("Cannot specify both -OldText/-Replacement and -Pattern/-Replacement."),
                 "ConflictingParameters",
                 ErrorCategory.InvalidArgument,
                 null));
@@ -67,20 +67,20 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         if (hasLiteral && Replacement == null)
         {
             ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Both -Contains and -Replacement must be specified together."),
+                new ArgumentException("Both -OldText and -Replacement must be specified together."),
                 "IncompleteParameters",
                 ErrorCategory.InvalidArgument,
                 null));
         }
 
-        // Error if Contains includes newline (processing is line-by-line)
-        if (hasLiteral && (Contains!.Contains('\n') || Contains.Contains('\r')))
+        // Error if OldText includes newline (processing is line-by-line)
+        if (hasLiteral && (OldText!.Contains('\n') || OldText.Contains('\r')))
         {
             ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Contains cannot contain newline characters. Update-MatchInFile processes files line by line."),
-                "InvalidContains",
+                new ArgumentException("OldText cannot contain newline characters. Update-MatchInFile processes files line by line."),
+                "InvalidOldText",
                 ErrorCategory.InvalidArgument,
-                Contains));
+                OldText));
         }
         
         // Regex mode with only one specified
@@ -137,7 +137,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
         }
         
-        var isLiteral = !string.IsNullOrEmpty(Contains);
+        var isLiteral = !string.IsNullOrEmpty(OldText);
         var regex = isLiteral ? null : new Regex(Pattern!, RegexOptions.Compiled);
         
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
@@ -147,7 +147,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         if (isLiteral)
         {
             string rangeInfo = LineRange != null ? $" in lines {startLine}-{endLine}" : "";
-            actionDescription = $"Replace '{Contains}' with '{Replacement}'{rangeInfo}";
+            actionDescription = $"Replace '{OldText}' with '{Replacement}'{rangeInfo}";
         }
         else
         {
@@ -236,7 +236,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                         {
                             if (isLiteral)
                             {
-                                isMatched = currentLine.Contains(Contains!);
+                                isMatched = currentLine.Contains(OldText!);
                             }
                             else
                             {
@@ -276,10 +276,10 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             // Execute replacement
                             if (isLiteral)
                             {
-                                int count = (currentLine.Length - currentLine.Replace(Contains!, "").Length) / 
-                                            Math.Max(1, Contains!.Length);
+                                int count = (currentLine.Length - currentLine.Replace(OldText!, "").Length) / 
+                                            Math.Max(1, OldText!.Length);
                                 replacementCount += count;
-                                outputLine = currentLine.Replace(Contains, Replacement);
+                                outputLine = currentLine.Replace(OldText, Replacement);
                             }
                             else
                             {
@@ -295,8 +295,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 // WhatIf: display both before (red) and after (green) replacement
                                 if (isLiteral)
                                 {
-                                    displayLine = currentLine.Replace(Contains!, 
-                                        $"{AnsiColors.Red}{Contains}{AnsiColors.Reset}{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
+                                    displayLine = currentLine.Replace(OldText!, 
+                                        $"{AnsiColors.Red}{OldText}{AnsiColors.Reset}{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                                 else
                                 {
@@ -308,7 +308,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 // Normal execution: display only replacement result (highlighted in green)
                                 if (isLiteral)
                                 {
-                                    displayLine = currentLine.Replace(Contains!, 
+                                    displayLine = currentLine.Replace(OldText!, 
                                         $"{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                                 else
@@ -436,9 +436,9 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     {
         if (isLiteral)
         {
-            if (line.Contains(Contains!))
+            if (line.Contains(OldText!))
             {
-                return line.Replace(Contains!, $"{AnsiColors.Yellow}{Contains}{AnsiColors.Reset}");
+                return line.Replace(OldText!, $"{AnsiColors.Yellow}{OldText}{AnsiColors.Reset}");
             }
         }
         else

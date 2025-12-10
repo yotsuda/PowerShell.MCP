@@ -54,15 +54,20 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
   Inserts lines at specified position or appends to end or creates new file. Accepts pipeline input for Content.
 
 • Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup]
-  Replaces specified line range with new content or creates new file. Use -Content @() to delete lines. Accepts pipeline input for Content.
+  Replaces ENTIRE LINES in specified range with new content. Use for replacing whole lines.
+  Use -Content @() to delete lines. Accepts pipeline input for Content.
 
-• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup]
-  Replaces matching text (literal or regex) within optional line range.
+• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-OldText <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup]
+  Replaces ONLY THE MATCHED PORTION within lines, not entire lines. Rest of line is preserved.
   ⚠️ Use -WhatIf first to preview changes.
 
 • Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup]
   Removes lines matching text (literal or regex) within optional range. Use negative LineRange to remove tail (e.g., -LineRange -10).
   ⚠️ With -Contains/-Pattern, use -WhatIf first to preview.
+
+⚠️ Update-LinesInFile vs Update-MatchInFile:
+  - Replace WHOLE LINE → Update-LinesInFile -LineRange N,N -Content 'new line'
+  - Replace PART OF LINE → Update-MatchInFile -OldText 'old' -Replacement 'new'
 
 Note: All cmdlets support -LiteralPath for exact paths and accept arrays directly (no loops needed). For LineRange, use -1 or 0 for end of file (e.g., 100,-1).
 
@@ -71,6 +76,8 @@ Examples:
   ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 10,20')
   ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 100,-1')  # To end of file
   ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange -10')     # Last 10 lines
+  ✅ CORRECT: invoke_expression('Update-LinesInFile file.md -LineRange 5,5 -Content ""new line""')  # Replace entire line 5
+  ✅ CORRECT: invoke_expression('Update-MatchInFile file.md -OldText ""TODO"" -Replacement ""DONE""')  # Replace only ""TODO"" → ""DONE""
   ❌ WRONG: invoke_expression('Set-Content -Path file.cs -Value $code')
   ❌ WRONG: invoke_expression('Get-Content file.txt | Select-Object -Skip 9 -First 11')
 
