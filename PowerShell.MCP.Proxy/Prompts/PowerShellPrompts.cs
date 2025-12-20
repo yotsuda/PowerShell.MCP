@@ -345,7 +345,7 @@ Create interactive map for ""{map_theme}"" using PowerShell.Map module.
 
 WORKFLOW:
 1. Run start_powershell_console
-2. Briefly mention to user: ""Run 'Update-Module PowerShell.Map -Force' if you haven't recently"" (then proceed immediately without waiting)
+2. If PowerShell.Map not installed, run `Install-Module PowerShell.Map -Force`. Otherwise, briefly mention: ""Run 'Update-Module PowerShell.Map -Force' if you haven't recently"" (then proceed immediately)
 3. If theme/area incomplete, confirm with user first
 4. Research locations thoroughly (use web search for detailed practical information)
 5. **CRITICAL - Variable Scope**: Store location data in `$global:` scope for reuse across multiple invoke_expression calls
