@@ -5,22 +5,22 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.3.8.0</Version>
-    
+    <Version>1.3.9.0</Version>
+
     <!-- Single File デプロイ設定 -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    
+
     <!-- ファイルサイズ最適化設定 -->
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>full</TrimMode>
     <PublishReadyToRun>false</PublishReadyToRun>
-    
+
     <!-- パフォーマンス最適化 -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>embedded</DebugType>
-    
+
     <!-- 警告の抑制（トリミング関連） -->
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
   </PropertyGroup>

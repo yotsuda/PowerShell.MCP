@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.3.8'
+ModuleVersion = '1.3.9'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -115,7 +115,7 @@ PrivateData = @{
         Platforms = @('Windows')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.3.7 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.3.9 - Enterprise-Ready MCP Server
 
 === Key Features ===
 • 🤝 Shared Console Experience
@@ -158,7 +158,7 @@ PrivateData = @{
    {
      "mcpServers": {
        "PowerShell": {
-         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.7\\bin\\PowerShell.MCP.Proxy.exe"
+         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.9\\bin\\PowerShell.MCP.Proxy.exe"
        }
      }
    }
