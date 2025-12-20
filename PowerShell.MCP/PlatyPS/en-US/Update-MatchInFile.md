@@ -14,26 +14,26 @@ Update text file content using string literal or regex replacement
 
 ### Path
 ```
-Update-MatchInFile [-Path] <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
+Update-MatchInFile [-Path] <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
  [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
  [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Update-MatchInFile -LiteralPath <String[]> [-Contains <String>] [-Pattern <String>] [-Replacement <String>]
+Update-MatchInFile -LiteralPath <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
  [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
  [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Replaces matching text (literal or regex) within optional line range. Preserves file metadata (encoding, newlines). Use -Contains for literal string replacement or -Pattern for regex-based replacement with capture groups support.
+Replaces matching text (literal or regex) within optional line range. Preserves file metadata (encoding, newlines). Use -OldText for literal string replacement or -Pattern for regex-based replacement with capture groups support.
 
 ## EXAMPLES
 
 ### Example 1: Replace text
 ```powershell
-Update-MatchInFile config.txt -Contains "debug=false" -Replacement "debug=true"     # Literal
+Update-MatchInFile config.txt -OldText "debug=false" -Replacement "debug=true"      # Literal
 Update-MatchInFile code.cs -Pattern "var (\w+)" -Replacement "string $1"            # Regex with capture groups
 ```
 
@@ -61,21 +61,6 @@ Prompts you for confirmation before running the cmdlet.
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases: cf
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Contains
-Specifies a literal string to match in lines. Only lines containing this substring will be processed for replacement. Unlike -Pattern (which uses regex), -Contains performs simple substring matching without interpreting special characters. This is useful when filtering lines that contain regex metacharacters like '[', ']', '(', ')', '.', '*', '+', '?', ' ' without needing to escape them. When used with -Replacement but without -Pattern, the entire line containing the string is replaced.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
 
 Required: False
 Position: Named
@@ -205,6 +190,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -OldText
+Literal string to search for and replace. Use with -Replacement parameter. The matched text (not the entire line) is replaced. For regex-based replacement, use -Pattern instead.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -222,14 +222,14 @@ BEST PRACTICE - Verify before and after:
 
 1. Check current content: Show-TextFile config.js -Pattern "localhost"
 
-2. Make the replacement: Update-MatchInFile config.js -Contains "localhost" -Replacement "production"
+2. Make the replacement: Update-MatchInFile config.js -OldText "localhost" -Replacement "production"
 
 3. Verify the change: Show-TextFile config.js -Pattern "production"
 
 CRITICAL - Handling special characters (dollar, braces, quotes):
 
 When replacing code with special characters, ALWAYS use here-strings.
-Example: $old = @'...'@ and $new = @'...'@ then Update-MatchInFile file.cs -Contains $old -Replacement $new
+Example: $old = @'...'@ and $new = @'...'@ then Update-MatchInFile file.cs -OldText $old -Replacement $new
 
 Here-strings (@'...'@) treat ALL characters literally.
 
@@ -249,6 +249,6 @@ Regular expression mode:
 - Use for complex transformations
 - Test first: Show-TextFile -Pattern "regex"
 - Escape special regex chars: . * + ? [ ] ( ) { } ^ $ |
-- -Contains and -Pattern are mutually exclusive (cannot be used together)
+- -OldText and -Pattern are mutually exclusive (cannot be used together)
 
 ## RELATED LINKS
