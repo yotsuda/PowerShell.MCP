@@ -1,4 +1,4 @@
-﻿# Trailing Newline Preservation Tests
+# Trailing Newline Preservation Tests
 # Add-LinesToFile が元のファイルの末尾改行を保持することを確認する統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -29,7 +29,7 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             $bytesBeforeAdd[-1] | Should -Be 0x0A  # LF
             
             # Act
-            Update-MatchInFile -Path $testFile -Contains "Line3" -Replacement "Line3Updated"
+            Update-MatchInFile -Path $testFile -OldText "Line3" -Replacement "Line3Updated"
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
@@ -57,7 +57,7 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             "Start`r`nMiddle`r`nEnd`r`n" | Out-File -FilePath $testFile -Encoding utf8 -NoNewline
             
             # Act
-            Update-MatchInFile -Path $testFile -Contains "Middle" -Replacement "Center"
+            Update-MatchInFile -Path $testFile -OldText "Middle" -Replacement "Center"
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
@@ -71,7 +71,7 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             "Line1`r`nLine2`r`nLine3`r`n" | Out-File -FilePath $testFile -Encoding utf8 -NoNewline
             
             # Act
-            Update-MatchInFile -Path $testFile -Contains "Line2" -Replacement "Line2Updated"
+            Update-MatchInFile -Path $testFile -OldText "Line2" -Replacement "Line2Updated"
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
@@ -91,7 +91,7 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             $bytesBeforeAdd[-1] | Should -Not -Be 0x0A -Because "元のファイルは末尾改行なし"
             
             # Act
-            Update-MatchInFile -Path $testFile -Contains "Line3" -Replacement "Line3Updated"
+            Update-MatchInFile -Path $testFile -OldText "Line3" -Replacement "Line3Updated"
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
@@ -132,7 +132,7 @@ Line3
             $bytesBeforeAdd[-1] | Should -Be 0x0A
             
             # Act: 元の問題の操作
-            Update-MatchInFile -Path $testFile -Contains "Line3" -Replacement "Line3Updated"
+            Update-MatchInFile -Path $testFile -OldText "Line3" -Replacement "Line3Updated"
             
             # Assert: バグ修正後は末尾改行が保持されるはず
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)

@@ -11,7 +11,7 @@ Line 4
 Line 5
 "@
 Set-Content -Path "edge-match1.txt" -Value $content
-Update-MatchInFile -Path "edge-match1.txt" -Contains "match" -Replacement "REPLACED"
+Update-MatchInFile -Path "edge-match1.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match1.txt"
 
 # テスト2: ファイル末尾でのマッチ
@@ -24,7 +24,7 @@ Line 4
 Line 5: match
 "@
 Set-Content -Path "edge-match2.txt" -Value $content
-Update-MatchInFile -Path "edge-match2.txt" -Contains "match" -Replacement "REPLACED"
+Update-MatchInFile -Path "edge-match2.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match2.txt"
 
 # テスト3: ファイル先頭と末尾の両方でマッチ
@@ -37,7 +37,7 @@ Line 4
 Line 5: match
 "@
 Set-Content -Path "edge-match3.txt" -Value $content
-Update-MatchInFile -Path "edge-match3.txt" -Contains "match" -Replacement "REPLACED"
+Update-MatchInFile -Path "edge-match3.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match3.txt"
 
 # テスト4: 3行ファイルの中央行マッチ
@@ -48,7 +48,7 @@ Line 2: match
 Line 3
 "@
 Set-Content -Path "edge-match4.txt" -Value $content
-Update-MatchInFile -Path "edge-match4.txt" -Contains "match" -Replacement "REPLACED"
+Update-MatchInFile -Path "edge-match4.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match4.txt"
 
 # テスト5: Show-TextFile - ファイル先頭でのマッチ

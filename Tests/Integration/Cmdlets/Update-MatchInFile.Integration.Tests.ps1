@@ -1,4 +1,4 @@
-﻿# Update-MatchInFile.Tests.ps1
+# Update-MatchInFile.Tests.ps1
 # Update-MatchInFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -31,26 +31,26 @@ Describe "Update-MatchInFile Integration Tests" {
 
     Context "テキストマッチによる置換（Contains）" {
         It "指定したテキストを含む部分を置換できる" {
-            Update-MatchInFile -Path $script:testFile -Contains "localhost" -Replacement "production.example.com"
+            Update-MatchInFile -Path $script:testFile -OldText "localhost" -Replacement "production.example.com"
             $result = Get-Content $script:testFile
             $result[0] | Should -Be "Server: production.example.com"
         }
 
         It "複数行にマッチする場合、すべて置換される" {
-            Update-MatchInFile -Path $script:testFile -Contains "true" -Replacement "false"
+            Update-MatchInFile -Path $script:testFile -OldText "true" -Replacement "false"
             $result = Get-Content $script:testFile
             $result[4] | Should -Be "Debug: false"
         }
 
         It "マッチしない場合、何も変更されない" {
             $originalContent = Get-Content $script:testFile
-            Update-MatchInFile -Path $script:testFile -Contains "NonExistentText" -Replacement "NewValue"
+            Update-MatchInFile -Path $script:testFile -OldText "NonExistentText" -Replacement "NewValue"
             $result = Get-Content $script:testFile
             $result | Should -Be $originalContent
         }
 
         It "大文字小文字を区別する（case-sensitive）" {
-            Update-MatchInFile -Path $script:testFile -Contains "LOCALHOST" -Replacement "server.local"
+            Update-MatchInFile -Path $script:testFile -OldText "LOCALHOST" -Replacement "server.local"
             $result = Get-Content $script:testFile
             $result[0] | Should -Be "Server: localhost"  # 大文字とマッチしないため変更されない
         }
@@ -94,7 +94,7 @@ Describe "Update-MatchInFile Integration Tests" {
 
     Context "範囲内での置換" {
         It "LineRange と Contains を組み合わせられる" {
-            Update-MatchInFile -Path $script:testFile -LineRange 1,3 -Contains "admin" -Replacement "superuser"
+            Update-MatchInFile -Path $script:testFile -LineRange 1,3 -OldText "admin" -Replacement "superuser"
             $result = Get-Content $script:testFile
             $result[2] | Should -Be "Username: superuser"
             # 範囲外は変更されない
@@ -141,7 +141,7 @@ Describe "Update-MatchInFile Integration Tests" {
     Context "特殊文字の処理" {
         It "特殊文字を含むテキストを置換できる" {
             Set-Content -Path $script:testFile -Value @("Price: $100", "Discount: 10%") -Encoding UTF8
-            Update-MatchInFile -Path $script:testFile -Contains '$100' -Replacement '$200'
+            Update-MatchInFile -Path $script:testFile -OldText '$100' -Replacement '$200'
             $result = Get-Content $script:testFile
             $result[0] | Should -Be "Price: $200"
         }
@@ -158,7 +158,7 @@ Describe "Update-MatchInFile Integration Tests" {
         It "UTF-8ファイルを正しく処理できる" {
             $content = "設定: 日本語"
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            Update-MatchInFile -Path $script:testFile -Contains "日本語" -Replacement "English" -Encoding UTF8
+            Update-MatchInFile -Path $script:testFile -OldText "日本語" -Replacement "English" -Encoding UTF8
             $result = Get-Content $script:testFile -Encoding UTF8
             $result | Should -Be "設定: English"
         }
@@ -173,14 +173,14 @@ Describe "Update-MatchInFile Integration Tests" {
 
     Context "バックアップ機能" {
         It "-Backup を指定するとバックアップファイルが作成される" {
-            Update-MatchInFile -Path $script:testFile -Contains "localhost" -Replacement "newhost" -Backup
+            Update-MatchInFile -Path $script:testFile -OldText "localhost" -Replacement "newhost" -Backup
             $backupFiles = Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*.bak"
             $backupFiles.Count | Should -BeGreaterThan 0
         }
 
         It "バックアップファイルに元の内容が保存される" {
             $originalContent = Get-Content $script:testFile
-            Update-MatchInFile -Path $script:testFile -Contains "localhost" -Replacement "newhost" -Backup
+            Update-MatchInFile -Path $script:testFile -OldText "localhost" -Replacement "newhost" -Backup
             $backupFile = Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*.bak" | Select-Object -First 1
             $backupContent = Get-Content $backupFile.FullName
             $backupContent | Should -Be $originalContent
@@ -190,7 +190,7 @@ Describe "Update-MatchInFile Integration Tests" {
     Context "WhatIf と Confirm" {
         It "-WhatIf を指定すると実際には変更しない" {
             $originalContent = Get-Content $script:testFile
-            Update-MatchInFile -Path $script:testFile -Contains "localhost" -Replacement "newhost" -WhatIf
+            Update-MatchInFile -Path $script:testFile -OldText "localhost" -Replacement "newhost" -WhatIf
             $result = Get-Content $script:testFile
             $result | Should -Be $originalContent
         }
@@ -198,17 +198,17 @@ Describe "Update-MatchInFile Integration Tests" {
 
     Context "エラーハンドリング" {
         It "存在しないファイルでエラーになる" {
-            { Update-MatchInFile -Path "C:\NonExistent\file.txt" -Contains "test" -Replacement "new" -ErrorAction Stop } | 
+            { Update-MatchInFile -Path "C:\NonExistent\file.txt" -OldText "test" -Replacement "new" -ErrorAction Stop } | 
                 Should -Throw
         }
 
         It "Contains と Pattern を同時に指定するとエラーになる" {
-            { Update-MatchInFile -Path $script:testFile -Contains "test" -Pattern "test" -Replacement "new" -ErrorAction Stop } | 
+            { Update-MatchInFile -Path $script:testFile -OldText "test" -Pattern "test" -Replacement "new" -ErrorAction Stop } | 
                 Should -Throw
         }
 
         It "Replacement を指定しないとエラーになる" {
-            { Update-MatchInFile -Path $script:testFile -Contains "test" -ErrorAction Stop } | 
+            { Update-MatchInFile -Path $script:testFile -OldText "test" -ErrorAction Stop } | 
                 Should -Throw
         }
 
@@ -224,7 +224,7 @@ Describe "Update-MatchInFile Integration Tests" {
             Set-Content -Path $file2 -Value "Server: localhost"
             
             try {
-                Get-Item @($script:testFile, $file2) | Update-MatchInFile -Contains "localhost" -Replacement "production"
+                Get-Item @($script:testFile, $file2) | Update-MatchInFile -OldText "localhost" -Replacement "production"
                 $result1 = Get-Content $script:testFile
                 $result2 = Get-Content $file2
                 $result1[0] | Should -Be "Server: production"
@@ -238,7 +238,7 @@ Describe "Update-MatchInFile Integration Tests" {
     Context "空文字列による削除（Empty Replacement）" {
         It "Contains + 空文字列でマッチしたテキストを削除できる" {
             Set-Content -Path $script:testFile -Value "Server=localhost:8080" -Encoding UTF8
-            Update-MatchInFile -Path $script:testFile -Contains ":8080" -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText ":8080" -Replacement ""
             $result = Get-Content $script:testFile -Raw
             $result.Trim() | Should -Be "Server=localhost"
         }
@@ -275,7 +275,7 @@ Describe "Update-MatchInFile Integration Tests" {
         It "空文字列削除後もエンコーディングが保持される" {
             $content = "日本語テキスト:削除対象"
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            Update-MatchInFile -Path $script:testFile -Contains ":削除対象" -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText ":削除対象" -Replacement ""
             $result = Get-Content $script:testFile -Raw -Encoding UTF8
             $result.Trim() | Should -Be "日本語テキスト"
         }
@@ -283,7 +283,7 @@ Describe "Update-MatchInFile Integration Tests" {
 
     Context "Replacement パラメータの検証" {
         It "Replacement を指定しない（null）場合、Contains でエラーになる" {
-            { Update-MatchInFile -Path $script:testFile -Contains "test" } | Should -Throw
+            { Update-MatchInFile -Path $script:testFile -OldText "test" } | Should -Throw
         }
 
         It "Replacement を指定しない（null）場合、Pattern でエラーになる" {
@@ -292,7 +292,7 @@ Describe "Update-MatchInFile Integration Tests" {
 
         It "Replacement に空文字列を指定した場合はエラーにならない（削除として動作）" {
             Set-Content -Path $script:testFile -Value "Test123" -Encoding UTF8
-            { Update-MatchInFile -Path $script:testFile -Contains "123" -Replacement "" } | 
+            { Update-MatchInFile -Path $script:testFile -OldText "123" -Replacement "" } | 
                 Should -Not -Throw
             $result = Get-Content $script:testFile -Raw
             $result.Trim() | Should -Be "Test"

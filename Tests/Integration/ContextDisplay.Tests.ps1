@@ -1,4 +1,4 @@
-﻿# Context Display Feature Tests
+# Context Display Feature Tests
 # v1.3.0以降のコンテキスト表示機能の統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -33,7 +33,7 @@ Describe "Context Display Feature Tests" {
 
         It "コンテキスト表示が含まれる（Contains モード）" {
             # 情報ストリームをキャプチャ
-            $output = Update-MatchInFile -Path $script:testFile -Contains "old value" -Replacement "new value" -InformationAction Continue 6>&1
+            $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1
             
             # 置換が成功していることを確認
             $result = Get-Content $script:testFile
@@ -60,7 +60,7 @@ Describe "Context Display Feature Tests" {
         }
 
         It "置換行にマーカーが含まれる（: で表示）" {
-            $output = Update-MatchInFile -Path $script:testFile -Contains "old value" -Replacement "new value" -InformationAction Continue 6>&1
+            $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1
             
             # 置換された行に : マーカーが含まれている
             $matchedLines = $output | Where-Object { $_ -match "^\s+\d+:" }
@@ -69,7 +69,7 @@ Describe "Context Display Feature Tests" {
         }
 
         It "コンテキスト行にマーカーが含まれる（- で表示）" {
-            $output = Update-MatchInFile -Path $script:testFile -Contains "old value" -Replacement "new value" -InformationAction Continue 6>&1
+            $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1
             
             # コンテキスト行に - マーカーが含まれている
             $contextLines = $output | Where-Object { $_ -match "^\s+\d+-" }
@@ -77,7 +77,7 @@ Describe "Context Display Feature Tests" {
         }
 
         It "置換テキストのANSIエスケープシーケンスが含まれる" {
-            $output = Update-MatchInFile -Path $script:testFile -Contains "old value" -Replacement "new value" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1 | Out-String
             
             # 通常実行時は置換後のテキストのみ表示（緑）
             $output | Should -Match '\x1b\[32m'  # 緑（置換後）
@@ -96,7 +96,7 @@ Describe "Context Display Feature Tests" {
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $script:testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $script:testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # 両方のマッチが含まれている
             $output | Should -Match "Line 3"
@@ -227,7 +227,7 @@ Describe "Context Display Feature Tests" {
             $newContent[5] = "Line 6: match"
             Set-Content -Path $script:testFile -Value $newContent -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $script:testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $script:testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # ギャップ1行以下なので、Line 4, 5 も表示される
             $output | Should -Match "Line 4"
@@ -244,7 +244,7 @@ Describe "Context Display Feature Tests" {
             $newContent[9] = "Line 10: match"
             Set-Content -Path $script:testFile -Value $newContent -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $script:testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $script:testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # ギャップが空行で分離されている（Line 5 と Line 8 の間に空行がある）
             $output | Should -Match "5-.*\n\s*\n\s*8-"

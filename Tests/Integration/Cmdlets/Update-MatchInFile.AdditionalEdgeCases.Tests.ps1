@@ -68,7 +68,7 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
             $testFile = Join-Path $script:testDir "newline-contains.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
-            { Update-MatchInFile -Path $testFile -Contains "Line 1`nLine 2" -Replacement "Test" -ErrorAction Stop } |
+            { Update-MatchInFile -Path $testFile -OldText "Line 1`nLine 2" -Replacement "Test" -ErrorAction Stop } |
                 Should -Throw "*cannot contain newline*"
         }
     }

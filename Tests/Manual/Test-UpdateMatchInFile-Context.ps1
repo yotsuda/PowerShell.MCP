@@ -1,4 +1,4 @@
-﻿# Update-MatchInFile コンテキスト表示機能のテスト
+# Update-MatchInFile コンテキスト表示機能のテスト
 Write-Host "=== Update-MatchInFile コンテキスト表示テスト ===" -ForegroundColor Cyan
 
 # テスト1: Contains モード
@@ -18,7 +18,7 @@ Line 11: Normal line
 Line 12: Normal line
 "@
 Set-Content -Path "test-replace1.txt" -Value $content1
-Update-MatchInFile -Path "test-replace1.txt" -Contains "old value" -Replacement "new value"
+Update-MatchInFile -Path "test-replace1.txt" -OldText "old value" -Replacement "new value"
 Remove-Item "test-replace1.txt"
 
 # テスト2: Pattern モード（正規表現）
@@ -54,7 +54,7 @@ Line 11
 Line 12
 "@
 Set-Content -Path "test-replace3.txt" -Value $content3
-Update-MatchInFile -Path "test-replace3.txt" -Contains "match" -Replacement "REPLACED"
+Update-MatchInFile -Path "test-replace3.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "test-replace3.txt"
 
 # テスト4: ギャップ3行（マージ）
@@ -76,7 +76,7 @@ Line 13
 Line 14
 "@
 Set-Content -Path "test-replace4.txt" -Value $content4
-Update-MatchInFile -Path "test-replace4.txt" -Contains "match" -Replacement "REPLACED"
+Update-MatchInFile -Path "test-replace4.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "test-replace4.txt"
 # テスト5: LineRange指定
 Write-Host "`n【テスト5】LineRange指定 - 5-10行目のみ置換" -ForegroundColor Yellow
@@ -95,7 +95,7 @@ Line 11: old
 Line 12: old
 "@
 Set-Content -Path "test-replace5.txt" -Value $content5
-Update-MatchInFile -Path "test-replace5.txt" -LineRange 5,10 -Contains "old" -Replacement "new"
+Update-MatchInFile -Path "test-replace5.txt" -LineRange 5,10 -OldText "old" -Replacement "new"
 Remove-Item "test-replace5.txt"
 
 Write-Host "`n=== テスト完了 ===" -ForegroundColor Green

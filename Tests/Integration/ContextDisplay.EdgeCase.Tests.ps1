@@ -1,4 +1,4 @@
-﻿# Additional Context Display Edge Case Tests
+# Additional Context Display Edge Case Tests
 # v1.3.0以降のコンテキスト表示機能の追加エッジケーステスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -21,7 +21,7 @@ Describe "Context Display Edge Case Tests" {
             $content = @("Line 1: match", "Line 2", "Line 3")
             Set-Content -Path $testFile -Value $content -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # 先頭行でも後続2行のコンテキストが表示される
             $output | Should -Match "Line 2"
@@ -33,7 +33,7 @@ Describe "Context Display Edge Case Tests" {
             $content = @("Line 1", "Line 2", "Line 3: match")
             Set-Content -Path $testFile -Value $content -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # 末尾行でも前方2行のコンテキストが表示される
             $output | Should -Match "Line 1"
@@ -44,7 +44,7 @@ Describe "Context Display Edge Case Tests" {
             $testFile = Join-Path $script:testDir "edge3.txt"
             Set-Content -Path $testFile -Value "Single line: match" -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # 1行でもコンテキスト表示が機能する
             $output | Should -Match "REPLACED"
@@ -84,7 +84,7 @@ Describe "Context Display Edge Case Tests" {
             $content = 1..10 | ForEach-Object { "Line $_ - test" }
             Set-Content -Path $testFile -Value $content -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $testFile -LineRange 3,7 -Contains "test" -Replacement "updated" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $testFile -LineRange 3,7 -OldText "test" -Replacement "updated" -InformationAction Continue 6>&1 | Out-String
             
             # LineRange内のマッチのみ表示される
             $output | Should -Match "Line 3"
@@ -103,7 +103,7 @@ Describe "Context Display Edge Case Tests" {
             $content[5] = "Line 6: match"
             Set-Content -Path $testFile -Value $content -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # ギャップ1行なのでマージされる
             $output | Should -Match "Line 4"
@@ -119,7 +119,7 @@ Describe "Context Display Edge Case Tests" {
             $content[11] = "Line 12: match"  # ギャップは6,7,8,9,10,11行目の6行
             Set-Content -Path $testFile -Value $content -Encoding UTF8
             
-            $output = Update-MatchInFile -Path $testFile -Contains "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
             
             # ギャップが大きいので分離される
             # 分離マーカー（空行）が含まれる

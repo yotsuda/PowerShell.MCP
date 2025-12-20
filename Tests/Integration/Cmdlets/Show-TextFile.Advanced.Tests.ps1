@@ -1,4 +1,4 @@
-﻿Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
+Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
     BeforeAll {
         $script:testFile = [System.IO.Path]::GetTempFileName()
     }
@@ -255,7 +255,7 @@ Describe "LineRange - Negative Values Support (End of File)" {
     Context "Update-MatchInFile での負の LineRange" {
         It "-LineRange 5,-1 で5行目から最後までの範囲で置換" {
             Set-Content -Path $script:testFile -Value $script:content -Encoding UTF8
-            Update-MatchInFile -Path $script:testFile -LineRange 5,-1 -Contains "Line" -Replacement "Row"
+            Update-MatchInFile -Path $script:testFile -LineRange 5,-1 -OldText "Line" -Replacement "Row"
             $result = Get-Content $script:testFile
             
             # 1-4行目は変更なし

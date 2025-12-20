@@ -1,4 +1,4 @@
-﻿# Blank Line Separation Tests
+# Blank Line Separation Tests
 # コンテキスト行とサマリ行の間に空行が挿入されることをテストする
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -119,7 +119,7 @@ Describe "Blank Line Separation Between Context and Summary" {
         }
 
         It "マッチ置換時、コンテキストとサマリの間に空行がある" {
-            $output = Update-MatchInFile -Path $script:testFile -Contains "old value" -Replacement "new value" 6>&1 | Out-String
+            $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" 6>&1 | Out-String
             
             $lines = $output -split "`r?`n"
             

@@ -1,4 +1,4 @@
-﻿# Update-MatchInFile コマンドレットの統合テスト
+# Update-MatchInFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
@@ -29,7 +29,7 @@ Describe "Update-MatchInFile Integration Tests" {
             Set-Content -Path $script:testFile -Value "Server=localhost:8080" -Encoding UTF8 -NoNewline
             
             # Act
-            Update-MatchInFile -Path $script:testFile -Contains ":8080" -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText ":8080" -Replacement ""
             
             # Assert
             $result = Get-Content -Path $script:testFile -Raw
@@ -53,7 +53,7 @@ Describe "Update-MatchInFile Integration Tests" {
             Set-Content -Path $script:testFile -Value "test1 DEBUG test2 DEBUG test3" -Encoding UTF8 -NoNewline
             
             # Act
-            Update-MatchInFile -Path $script:testFile -Contains "DEBUG " -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText "DEBUG " -Replacement ""
             
             # Assert
             $result = Get-Content -Path $script:testFile -Raw
@@ -79,7 +79,7 @@ Describe "Update-MatchInFile Integration Tests" {
             Set-Content -Path $script:testFile -Value "test content" -Encoding UTF8 -NoNewline
             
             # Act & Assert
-            { Update-MatchInFile -Path $script:testFile -Contains "test" } | Should -Throw
+            { Update-MatchInFile -Path $script:testFile -OldText "test" } | Should -Throw
         }
 
         It "Pattern を指定して Replacement を省略するとエラーになる" {
@@ -105,7 +105,7 @@ Describe "Update-MatchInFile Integration Tests" {
             Set-Content -Path $script:testFile -Value "日本語テキスト DEBUG 終了" -Encoding UTF8 -NoNewline
             
             # Act
-            Update-MatchInFile -Path $script:testFile -Contains "DEBUG " -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText "DEBUG " -Replacement ""
             
             # Assert
             $result = Get-Content -Path $script:testFile -Raw -Encoding UTF8
@@ -118,7 +118,7 @@ Describe "Update-MatchInFile Integration Tests" {
             [System.IO.File]::WriteAllText($script:testFile, $content, [System.Text.Encoding]::GetEncoding("Shift_JIS"))
             
             # Act
-            Update-MatchInFile -Path $script:testFile -Contains "DEBUG " -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText "DEBUG " -Replacement ""
             
             # Assert
             $result = [System.IO.File]::ReadAllText($script:testFile, [System.Text.Encoding]::GetEncoding("Shift_JIS"))
@@ -133,7 +133,7 @@ Describe "Update-MatchInFile Integration Tests" {
             Set-Content -Path $script:testFile -Value @("Line1", "DEBUG", "Line2") -Encoding UTF8
             
             # Act
-            Update-MatchInFile -Path $script:testFile -Contains "DEBUG" -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText "DEBUG" -Replacement ""
             
             # Assert
             $result = Get-Content -Path $script:testFile -Raw
@@ -146,7 +146,7 @@ Describe "Update-MatchInFile Integration Tests" {
             [System.IO.File]::WriteAllText($script:testFile, "Line1`r`nDEBUG`r`nLine2", [System.Text.Encoding]::UTF8)
             
             # Act
-            Update-MatchInFile -Path $script:testFile -Contains "DEBUG" -Replacement ""
+            Update-MatchInFile -Path $script:testFile -OldText "DEBUG" -Replacement ""
             
             # Assert
             $result = Get-Content -Path $script:testFile -Raw
