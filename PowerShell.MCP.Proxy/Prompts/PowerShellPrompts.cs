@@ -5,7 +5,7 @@ using PowerShell.MCP.Proxy.Attributes;
 namespace PowerShell.MCP.Proxy.Prompts;
 
 [McpServerPromptType]
-public static class PowerShellPrompts
+public class PowerShellPrompts
 {
     [McpServerPrompt]
     [LocalizedName("Prompt_AnalyzeContent_Name")]

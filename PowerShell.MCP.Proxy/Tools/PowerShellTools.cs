@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 namespace PowerShell.MCP.Proxy.Tools;
 
 [McpServerToolType]
-public static class PowerShellTools
+public class PowerShellTools
 {
     // Error message constant definitions
     private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";

@@ -2,6 +2,8 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PowerShell.MCP.Proxy.Services;
+using PowerShell.MCP.Proxy.Tools;
+using PowerShell.MCP.Proxy.Prompts;
 using System.Reflection;
 
 namespace PowerShell.MCP.Proxy
@@ -30,8 +32,8 @@ namespace PowerShell.MCP.Proxy
             builder.Services
                 .AddMcpServer()
                 .WithStdioServerTransport()
-                .WithToolsFromAssembly()
-                .WithLocalizedPromptsFromAssembly(Assembly.GetExecutingAssembly()); // Use localized prompts
+                .WithTools<PowerShellTools>()
+                .WithLocalizedPrompts<PowerShellPrompts>();
 
             await builder.Build().RunAsync();
         }
