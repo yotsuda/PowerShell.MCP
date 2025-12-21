@@ -137,24 +137,185 @@ jobs:
         
         Write-Host "`n=== All tests passed ===" -ForegroundColor Green
     
-    - name: Test Proxy startup
+    - name: Test Proxy JSON-RPC communication
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
         
-        Write-Host "=== Testing Proxy ===" -ForegroundColor Cyan
+        Write-Host "=== Testing Proxy JSON-RPC ===" -ForegroundColor Cyan
         $proxyPath = Get-MCPProxyPath
         
+        # Start Proxy process with redirected stdin/stdout
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $proxyPath
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        
+        $process = [System.Diagnostics.Process]::Start($psi)
+        
+        function Send-JsonRpc {
+          param([string]$Json)
+          $process.StandardInput.WriteLine($Json)
+          $process.StandardInput.Flush()
+          Start-Sleep -Milliseconds 500
+          
+          # Read available output
+          $output = ""
+          while ($process.StandardOutput.Peek() -ge 0) {
+            $output += [char]$process.StandardOutput.Read()
+          }
+          return $output
+        }
+        
+        try {
+          # Test 1: Initialize
+          Write-Host "`n=== Test 1: Initialize ===" -ForegroundColor Yellow
+          $initRequest = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+          $response = Send-JsonRpc $initRequest
+          Write-Host "Response: $response"
+          
+          if ($response -match '"protocolVersion"') {
+            Write-Host "Initialize: PASSED" -ForegroundColor Green
+          } else {
+            throw "Initialize failed - no protocolVersion in response"
+          }
+          
+          # Send initialized notification
+          $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
+          $process.StandardInput.Flush()
+          Start-Sleep -Milliseconds 200
+          
+          # Test 2: List tools
+          Write-Host "`n=== Test 2: List Tools ===" -ForegroundColor Yellow
+          $listRequest = '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+          $response = Send-JsonRpc $listRequest
+          Write-Host "Response: $response"
+          
+          if ($response -match '"get_current_location"' -and $response -match '"invoke_expression"' -and $response -match '"start_powershell_console"') {
+            Write-Host "List Tools: PASSED" -ForegroundColor Green
+          } else {
+            throw "List Tools failed - expected tools not found"
+          }
+          
+          Write-Host "`n=== All JSON-RPC tests passed ===" -ForegroundColor Green
+          
+        } finally {
+          if (-not $process.HasExited) {
+            $process.Kill()
+          }
+          $process.Dispose()
+        }
+
+    - name: Test Named Pipe communication
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        
+        Write-Host "=== Testing Named Pipe Communication ===" -ForegroundColor Cyan
+        
+        # Start a background pwsh process with PowerShell.MCP imported
+        Write-Host "Starting background pwsh with PowerShell.MCP..."
+        $bgPsi = [System.Diagnostics.ProcessStartInfo]::new()
+        $bgPsi.FileName = "pwsh"
+        $bgPsi.Arguments = "-NoProfile -NoExit -Command `"Import-Module PowerShell.MCP; while (`$true) { Start-Sleep -Seconds 1 }`""
+        $bgPsi.UseShellExecute = $false
+        $bgPsi.CreateNoWindow = $true
+        $bgPsi.RedirectStandardInput = $true
+        $bgPsi.RedirectStandardOutput = $true
+        $bgPsi.RedirectStandardError = $true
+        
+        $bgProcess = [System.Diagnostics.Process]::Start($bgPsi)
+        Write-Host "Background pwsh PID: $($bgProcess.Id)"
+        
+        # Wait for Named Pipe server to be ready
+        Write-Host "Waiting for Named Pipe server..."
+        $pipeName = "PowerShell.MCP.$($bgProcess.Id)"
+        $pipeReady = $false
+        for ($i = 0; $i -lt 30; $i++) {
+          Start-Sleep -Milliseconds 500
+          if ($IsWindows) {
+            $pipeReady = Test-Path "\\.\pipe\$pipeName"
+          } else {
+            $pipeReady = Test-Path "/tmp/CoreFxPipe_$pipeName"
+          }
+          if ($pipeReady) {
+            Write-Host "Named Pipe ready after $($i * 500)ms"
+            break
+          }
+        }
+        
+        if (-not $pipeReady) {
+          $bgProcess.Kill()
+          throw "Named Pipe server did not start within 15 seconds"
+        }
+        
+        # Start Proxy
         Write-Host "Starting Proxy..."
-        $process = Start-Process -FilePath $proxyPath -PassThru
+        $proxyPath = Get-MCPProxyPath
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $proxyPath
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
         
-        Start-Sleep -Seconds 2
+        $process = [System.Diagnostics.Process]::Start($psi)
         
-        if ($process.HasExited) {
-          Write-Host "Proxy exited with code: $($process.ExitCode)" -ForegroundColor Red
-          throw "Proxy exited unexpectedly"
-        } else {
-          Write-Host "Proxy is running (PID: $($process.Id))" -ForegroundColor Green
-          Stop-Process -Id $process.Id -Force
-          Write-Host "Proxy stopped successfully" -ForegroundColor Green
+        function Send-JsonRpc {
+          param([string]$Json, [int]$WaitMs = 2000)
+          $process.StandardInput.WriteLine($Json)
+          $process.StandardInput.Flush()
+          Start-Sleep -Milliseconds $WaitMs
+          
+          $output = ""
+          while ($process.StandardOutput.Peek() -ge 0) {
+            $output += [char]$process.StandardOutput.Read()
+          }
+          return $output
+        }
+        
+        try {
+          # Initialize
+          $initRequest = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+          $null = Send-JsonRpc $initRequest
+          $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
+          $process.StandardInput.Flush()
+          Start-Sleep -Milliseconds 200
+          
+          # Test: invoke_expression with Get-Date
+          Write-Host "`n=== Test: invoke_expression (Get-Date) ===" -ForegroundColor Yellow
+          $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
+          $response = Send-JsonRpc $invokeRequest 3000
+          Write-Host "Response: $response"
+          
+          $today = Get-Date -Format "yyyy-MM-dd"
+          if ($response -match $today) {
+            Write-Host "invoke_expression (Get-Date): PASSED - Got today's date" -ForegroundColor Green
+          } else {
+            throw "invoke_expression failed - expected date $today not found in response"
+          }
+          
+          # Test: get_current_location
+          Write-Host "`n=== Test: get_current_location ===" -ForegroundColor Yellow
+          $locRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_current_location","arguments":{}}}'
+          $response = Send-JsonRpc $locRequest 3000
+          Write-Host "Response: $response"
+          
+          if ($response -match '"current_location"' -or $response -match '"system"') {
+            Write-Host "get_current_location: PASSED" -ForegroundColor Green
+          } else {
+            throw "get_current_location failed - no location info in response"
+          }
+          
+          Write-Host "`n=== All Named Pipe tests passed ===" -ForegroundColor Green
+          
+        } finally {
+          if (-not $process.HasExited) { $process.Kill() }
+          $process.Dispose()
+          if (-not $bgProcess.HasExited) { $bgProcess.Kill() }
+          $bgProcess.Dispose()
         }
