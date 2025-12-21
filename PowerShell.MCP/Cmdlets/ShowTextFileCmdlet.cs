@@ -194,8 +194,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private void ShowWithPattern(string inputPath, string filePath, System.Text.Encoding encoding)
     {
-        var regex = new Regex(Pattern, RegexOptions.Compiled);
-        ShowWithMatch(inputPath, filePath, encoding, line => regex.IsMatch(line), "pattern", Pattern, true);
+        var regex = new Regex(Pattern!, RegexOptions.Compiled);
+        ShowWithMatch(inputPath, filePath, encoding, line => regex.IsMatch(line), "pattern", Pattern!, true);
     }
 
     private void ShowWithContains(string inputPath, string filePath, System.Text.Encoding encoding)

@@ -11,8 +11,8 @@ public static class TextFileUtility
 {
     public class FileMetadata
     {
-        public Encoding Encoding { get; set; }
-        public string NewlineSequence { get; set; }
+        public Encoding Encoding { get; set; } = Encoding.UTF8;
+        public string NewlineSequence { get; set; } = Environment.NewLine;
         public bool HasTrailingNewline { get; set; }
     }
 
