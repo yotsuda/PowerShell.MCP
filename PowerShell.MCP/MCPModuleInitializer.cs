@@ -35,58 +35,16 @@ namespace PowerShell.MCP
         {
             try
             {
-                // Check if Named Pipe already exists (another pwsh session is running)
-                bool pipeExists = false;
-                
-                if (OperatingSystem.IsWindows())
-                {
-                    // On Windows, try to connect briefly to check if pipe exists
-                    try
-                    {
-                        using var testClient = new System.IO.Pipes.NamedPipeClientStream(".", NamedPipeServer.PipeName, System.IO.Pipes.PipeDirection.InOut);
-                        testClient.Connect(100); // 100ms timeout
-                        pipeExists = true;
-                    }
-                    catch (TimeoutException)
-                    {
-                        // Pipe exists but no server is listening yet - this is OK, we can try to be the server
-                        pipeExists = false;
-                    }
-                    catch (System.IO.IOException)
-                    {
-                        // Pipe doesn't exist or connection failed
-                        pipeExists = false;
-                    }
-                }
-                else
-                {
-                    // On Linux/macOS, check for the socket file
-                    string pipePath = $"/tmp/CoreFxPipe_{NamedPipeServer.PipeName}";
-                    pipeExists = File.Exists(pipePath);
-                }
-                
-                if (pipeExists)
-                {
-                    // Still load the polling script for other functionality
-                    var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
-                    using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
-                    {
-                        ps.AddScript(pollingScript);
-                        ps.Invoke();
-                    }
-                    return;
-                }
-
                 _tokenSource = new CancellationTokenSource();
                 _namedPipeServer = new NamedPipeServer();
 
                 // Load and execute MCP polling engine script
-                var pollingScriptMain = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
+                var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
                 
                 // Execute as ScriptBlock for PowerShell execution
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
                 {
-                    ps.AddScript(pollingScriptMain);
+                    ps.AddScript(pollingScript);
                     ps.Invoke();
                 }
 

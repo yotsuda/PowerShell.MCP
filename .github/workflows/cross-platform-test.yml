@@ -250,7 +250,7 @@ jobs:
 
 
     - name: Test Named Pipe communication
-      if: false  # Skip Named Pipe test in CI - works locally but CI runs all steps in same pwsh session
+      if: runner.os != 'Windows'  # Skip on Windows due to CI environment issues
       shell: pwsh
       timeout-minutes: 2
       run: |
