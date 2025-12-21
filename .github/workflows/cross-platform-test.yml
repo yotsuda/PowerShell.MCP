@@ -45,10 +45,21 @@ jobs:
       run: |
         # GitHub Actions has PowerShell 7.4 which uses .NET 8
         # PowerShell.MCP requires .NET 9, so we need PowerShell 7.5+
+        $ErrorActionPreference = "Stop"
         $url = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.msi"
         $msiPath = "$env:TEMP\PowerShell-7.5.4-win-x64.msi"
-        Invoke-WebRequest -Uri $url -OutFile $msiPath
-        Start-Process msiexec.exe -Wait -ArgumentList "/i $msiPath /quiet ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ENABLE_PSREMOTING=0 REGISTER_MANIFEST=1 USE_MU=0 ENABLE_MU=0 ADD_PATH=1"
+        Write-Host "Downloading PowerShell 7.5.4..."
+        Invoke-WebRequest -Uri $url -OutFile $msiPath -UseBasicParsing
+        Write-Host "Downloaded to: $msiPath"
+        Write-Host "File size: $((Get-Item $msiPath).Length) bytes"
+        Write-Host "Installing PowerShell 7.5.4..."
+        $process = Start-Process msiexec.exe -Wait -PassThru -ArgumentList "/i `"$msiPath`" /quiet /norestart /l*v `"$env:TEMP\pwsh_install.log`""
+        Write-Host "MSI exit code: $($process.ExitCode)"
+        if ($process.ExitCode -ne 0) {
+          Write-Host "=== MSI Install Log ==="
+          Get-Content "$env:TEMP\pwsh_install.log" -Tail 50
+          throw "MSI installation failed with exit code $($process.ExitCode)"
+        }
         # Verify installation
         & "C:\Program Files\PowerShell\7\pwsh.exe" --version
       shell: pwsh
