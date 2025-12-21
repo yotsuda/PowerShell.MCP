@@ -45,23 +45,24 @@ jobs:
       run: |
         # GitHub Actions has PowerShell 7.4 which uses .NET 8
         # PowerShell.MCP requires .NET 9, so we need PowerShell 7.5+
+        # Use ZIP package to avoid MSI installation issues
         $ErrorActionPreference = "Stop"
-        $url = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.msi"
-        $msiPath = "$env:TEMP\PowerShell-7.5.4-win-x64.msi"
-        Write-Host "Downloading PowerShell 7.5.4..."
-        Invoke-WebRequest -Uri $url -OutFile $msiPath -UseBasicParsing
-        Write-Host "Downloaded: $((Get-Item $msiPath).Length) bytes"
-        Write-Host "Installing PowerShell 7.5.4..."
-        # Use cmd /c to properly wait for msiexec
-        $result = cmd /c "msiexec /i `"$msiPath`" /quiet /norestart /l*v `"$env:TEMP\pwsh_install.log`" & echo Exit code: %errorlevel%" 2>&1
-        Write-Host $result
-        if (Test-Path "$env:TEMP\pwsh_install.log") {
-          Write-Host "=== Last 30 lines of install log ==="
-          Get-Content "$env:TEMP\pwsh_install.log" -Tail 30
-        }
-        # Verify installation
-        Write-Host "=== Verifying installation ==="
-        & "C:\Program Files\PowerShell\7\pwsh.exe" --version
+        $url = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.zip"
+        $zipPath = "$env:TEMP\PowerShell-7.5.4-win-x64.zip"
+        $installPath = "C:\pwsh75"
+        
+        Write-Host "Downloading PowerShell 7.5.4 ZIP..."
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+        Write-Host "Downloaded: $((Get-Item $zipPath).Length) bytes"
+        
+        Write-Host "Extracting to $installPath..."
+        Expand-Archive -Path $zipPath -DestinationPath $installPath -Force
+        
+        Write-Host "Verifying installation..."
+        & "$installPath\pwsh.exe" --version
+        
+        # Add to PATH for subsequent steps
+        echo "$installPath" | Out-File -FilePath $env:GITHUB_PATH -Append
       shell: pwsh
 
     - name: Install PowerShell (macOS)
@@ -86,8 +87,13 @@ jobs:
       shell: pwsh
       run: |
         Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+        Write-Host "PowerShell Path: $((Get-Process -Id $PID).Path)"
         Write-Host "OS: $($PSVersionTable.OS)"
-    
+        # On Windows, verify we're using 7.5+
+        if ($IsWindows -and $PSVersionTable.PSVersion.Major -eq 7 -and $PSVersionTable.PSVersion.Minor -lt 5) {
+          throw "Expected PowerShell 7.5+, got $($PSVersionTable.PSVersion)"
+        }
+
     - name: Build PowerShell.MCP module
       run: |
         dotnet build PowerShell.MCP -c Release --no-incremental
