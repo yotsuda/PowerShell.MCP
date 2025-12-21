@@ -130,13 +130,13 @@ public class NamedPipeServer : IDisposable
 
             if (proxyVersion != MCPModuleInitializer.ServerVersion)
             {
-                string output = McpServerHost.ExecuteSilentCommand("((Get-Module PowerShell.MCP).ModuleBase + \"\\bin\\PowerShell.MCP.Proxy.exe\")");
+                string output = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath");
                 string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
 
                 var versionErrorResponse =
 $@"PowerShell MCP Configuration Error
 
-ISSUE: PowerShell.MCP.Proxy.exe version is outdated.
+ISSUE: PowerShell.MCP.Proxy version is outdated.
 - PowerShell.MCP module version: {MCPModuleInitializer.ServerVersion}
 - Proxy executable version: {proxyVersion}
 

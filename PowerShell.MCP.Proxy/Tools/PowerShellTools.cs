@@ -1,6 +1,7 @@
 ﻿using ModelContextProtocol.Server;
 using System.ComponentModel;
 using PowerShell.MCP.Proxy.Services;
+using System.Runtime.InteropServices;
 
 namespace PowerShell.MCP.Proxy.Tools;
 
@@ -86,10 +87,17 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         IPowerShellService powerShellService,
         [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]
         string pipeline,
-        [Description("If true, executes the command immediately and returns the result. If false, inserts the command into the console for manual execution.")]
+        [Description("If true, executes the command immediately and returns the result. If false, inserts the command into the console for manual execution. (Windows only - Linux/macOS always execute immediately)")]
         bool execute_immediately = true,
         CancellationToken cancellationToken = default)
     {
+        // Linux/macOS does not support execute_immediately=false (insert mode)
+        // because PSReadLine is not available
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && !execute_immediately)
+        {
+            return "execute_immediately=false (insert mode) is not supported on Linux/macOS. Please use execute_immediately=true or omit the parameter.";
+        }
+
         var result = await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
         
         // Check if error message (when PowerShell is not running)
@@ -120,31 +128,31 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             Console.Error.WriteLine("[INFO] Starting new PowerShell console with PowerShell.MCP module...");
 
-            // 1. Start pwsh.exe directly from proxy (not via Named Pipe)
+            // 1. Start pwsh directly from proxy (not via Named Pipe)
 
-            // If pwsh.exe is already running, operation will fail
+            // If pwsh is already running, operation will fail
             if (PowerShellProcessManager.IsPowerShellProcessRunning())
             {
                 var loc = await GetCurrentLocation(powerShellService, cancellationToken);
                 if (loc.Contains("PowerShell.MCP module is not imported"))
                 {
-                    // The existing pwsh.exe is available but PowerShell.MCP module is not imported
-                    return @"A pwsh.exe instance is already running and the existing session will continue to be used. However, the PowerShell.MCP module may not be imported in the existing session.
+                    // The existing pwsh is available but PowerShell.MCP module is not imported
+                    return @"A pwsh instance is already running and the existing session will continue to be used. However, the PowerShell.MCP module may not be imported in the existing session.
 Please guide the user to run 'Import-Module PowerShell.MCP' to import the module.
 Note LLM cannot import the module automatically.";
                 }
                 else if (loc.Contains("previous pipeline is running"))
                 {
-                    // The existing pwsh.exe is still executing the previous command
-                    return @"Since pwsh.exe with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
-However, the existing pwsh.exe is currently executing a pipeline from the previous invoke_expression call, so it cannot accept a new command.
+                    // The existing pwsh is still executing the previous command
+                    return @"Since pwsh with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
+However, the existing pwsh is currently executing a pipeline from the previous invoke_expression call, so it cannot accept a new command.
 Please guide the user to either wait for the command to complete or close the existing PowerShell console.
 Note that commands executed via invoke_expression cannot be cancelled with Ctrl+C and must complete naturally.";
                 }
                 else
                 {
-                    // The existing pwsh.exe is available with PowerShell.MCP module imported
-                    var msg = @"Since pwsh.exe with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
+                    // The existing pwsh is available with PowerShell.MCP module imported
+                    var msg = @"Since pwsh with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
 
 ";
                     return msg + await powerShellService.GetCurrentLocationAsync(cancellationToken);
@@ -155,7 +163,7 @@ Note that commands executed via invoke_expression cannot be cancelled with Ctrl+
             
             if (!success)
             {
-                throw new InvalidOperationException("Failed to start PowerShell console or establish Named Pipe connection");
+                return "Failed to start PowerShell console or establish Named Pipe connection.\n\nPossible causes:\n- No supported terminal emulator found (gnome-terminal, konsole, xfce4-terminal, xterm, etc.)\n- Terminal emulator failed to start\n- PowerShell.MCP module failed to initialize\n\nPlease ensure a terminal emulator is installed and try again.";
             }
             
             Console.Error.WriteLine("[INFO] PowerShell console started successfully, getting current location...");
@@ -171,7 +179,7 @@ Note that commands executed via invoke_expression cannot be cancelled with Ctrl+
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ERROR] StartPowershellConsole failed: {ex.Message}");
-            throw new InvalidOperationException($"Failed to start PowerShell console: {ex.Message}");
+            return $"Failed to start PowerShell console: {ex.Message}\n\nPlease check if a terminal emulator is available and try again.";
         }
     }
 }

@@ -10,7 +10,6 @@
     <!-- Single File デプロイ設定 -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
 
     <!-- ファイルサイズ最適化設定 -->
     <PublishTrimmed>true</PublishTrimmed>

@@ -117,8 +117,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 param([string]$Command)
 
                 try {
-                    # Get PSReadLine color options
-                    $psReadLineOptions = Get-PSReadLineOption
+                    # Get PSReadLine color options (Windows only)
+                    $psReadLineOptions = if ($IsWindows) { Invoke-Expression 'Get-PSReadLineOption' } else { $null }
 
                     # Default ANSI colors (matching PSReadLine defaults)
                     $defaultColors = @{
@@ -340,22 +340,24 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
             # ===== Main Event Processing =====
 
-            # Handle insert command
-            $cmd = [PowerShell.MCP.Services.McpServerHost]::insertCommand
-            if ($cmd) {
-                [PowerShell.MCP.Services.McpServerHost]::insertCommand = $null
-                [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
-                [Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()
-                [Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)
+            # Handle insert command (Windows only - requires PSReadLine)
+            if ($IsWindows) {
+                $cmd = [PowerShell.MCP.Services.McpServerHost]::insertCommand
+                if ($cmd) {
+                    [PowerShell.MCP.Services.McpServerHost]::insertCommand = $null
+                    Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)'
+                    Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()'
+                    Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)'
 
-                [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady("Your pipeline has been inserted into the PS console.")
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady("Your pipeline has been inserted into the PS console.")
+                }
             }
 
             # Handle execute command
             $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
             if ($cmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
-                [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)
+                if ($IsWindows) { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' }
 
                 $mcpOutput = $null
                 try {
