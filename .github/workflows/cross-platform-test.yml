@@ -45,7 +45,12 @@ jobs:
       run: |
         # GitHub Actions has PowerShell 7.4 which uses .NET 8
         # PowerShell.MCP requires .NET 9, so we need PowerShell 7.5+
-        winget install --id Microsoft.PowerShell --source winget --accept-source-agreements --accept-package-agreements
+        $url = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.msi"
+        $msiPath = "$env:TEMP\PowerShell-7.5.4-win-x64.msi"
+        Invoke-WebRequest -Uri $url -OutFile $msiPath
+        Start-Process msiexec.exe -Wait -ArgumentList "/i $msiPath /quiet ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ENABLE_PSREMOTING=0 REGISTER_MANIFEST=1 USE_MU=0 ENABLE_MU=0 ADD_PATH=1"
+        # Verify installation
+        & "C:\Program Files\PowerShell\7\pwsh.exe" --version
       shell: pwsh
 
     - name: Install PowerShell (macOS)
