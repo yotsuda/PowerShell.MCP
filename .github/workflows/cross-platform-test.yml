@@ -447,12 +447,25 @@ jobs:
           if ($task.Wait($TimeoutMs)) {
             return $task.Result
           } else {
-            # On timeout, dump stderr for debugging
+            # On timeout, dump both Proxy and background pwsh stderr for debugging
             Write-Host "=== Proxy stderr (timeout debug) ===" -ForegroundColor Red
             while ($process.StandardError.Peek() -ge 0) {
               Write-Host ([char]$process.StandardError.Read()) -NoNewline
             }
             Write-Host ""
+            
+            Write-Host "=== Background pwsh stderr (timeout debug) ===" -ForegroundColor Red
+            # Kill bgProcess first to flush stderr
+            if (-not $bgProcess.HasExited) {
+              $bgProcess.Kill()
+              $bgProcess.WaitForExit(3000)
+            }
+            if ($bgStderrTask.Wait(3000)) {
+              Write-Host $bgStderrTask.Result
+            } else {
+              Write-Host "(stderr read timeout)"
+            }
+            
             throw "Timeout waiting for response"
           }
         }
