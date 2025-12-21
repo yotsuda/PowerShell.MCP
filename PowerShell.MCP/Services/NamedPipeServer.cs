@@ -64,23 +64,26 @@ public class NamedPipeServer : IDisposable
         }
     }
 
-    /// <summary>
-    /// Runs a server instance
-    /// </summary>
     private async Task RunServerInstanceAsync(CancellationToken cancellationToken)
     {
         Console.Error.WriteLine($"[DEBUG] RunServerInstanceAsync started on thread {Environment.CurrentManagedThreadId}");
+        Console.Error.Flush();
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 Console.Error.WriteLine("[DEBUG] Creating Named Pipe server...");
+                Console.Error.Flush();
                 using var pipeServer = CreateNamedPipeServer();
                 Console.Error.WriteLine($"[DEBUG] Named Pipe server created, waiting for connection...");
+                Console.Error.Flush();
                 
                 // Wait for client connection
+                Console.Error.WriteLine("[DEBUG] Before WaitForConnectionAsync");
+                Console.Error.Flush();
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
-                Console.Error.WriteLine("[DEBUG] Client connected to Named Pipe");
+                Console.Error.WriteLine("[DEBUG] After WaitForConnectionAsync - Client connected to Named Pipe");
+                Console.Error.Flush();
                 
                 // Handle communication with connected client
                 await HandleClientAsync(pipeServer, cancellationToken);
@@ -88,12 +91,14 @@ public class NamedPipeServer : IDisposable
             catch (OperationCanceledException)
             {
                 Console.Error.WriteLine("[DEBUG] Named Pipe server cancelled");
+                Console.Error.Flush();
                 break;
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[ERROR] Named Pipe Server instance error: {ex.GetType().Name}: {ex.Message}");
                 Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+                Console.Error.Flush();
                 
                 // Wait a moment before retrying on error
                 try
@@ -107,6 +112,7 @@ public class NamedPipeServer : IDisposable
             }
         }
         Console.Error.WriteLine("[DEBUG] RunServerInstanceAsync exiting");
+        Console.Error.Flush();
     }
 
     /// <summary>
@@ -138,16 +144,20 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     private static async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
+        Console.Error.WriteLine("[DEBUG] HandleClientAsync started");
         try
         {
             // Receive request
+            Console.Error.WriteLine("[DEBUG] Calling ReceiveMessageAsync...");
             var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
+            Console.Error.WriteLine($"[DEBUG] Received request: {requestJson.Substring(0, Math.Min(100, requestJson.Length))}...");
             
             // Parse JSON-RPC request
             using var requestDoc = JsonDocument.Parse(requestJson);
             var requestRoot = requestDoc.RootElement;
             
             var name = requestRoot.GetProperty("name").GetString();
+            Console.Error.WriteLine($"[DEBUG] Tool name: {name}");
 
             string? proxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement proxyVersionElement)
                 ? proxyVersionElement.GetString() : "Not detected";
@@ -256,10 +266,13 @@ LLM should prompt user to choose.";
     /// </summary>
     private static async Task<string> ReceiveMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
+        Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Reading length prefix...");
+        
         // Receive message length (4 bytes)
         var lengthBytes = new byte[4];
         await ReadExactAsync(pipeServer, lengthBytes, cancellationToken);
         var messageLength = BitConverter.ToInt32(lengthBytes, 0);
+        Console.Error.WriteLine($"[DEBUG] Server ReceiveMessageAsync: Message length = {messageLength}");
 
         if (messageLength <= 0)
         {
@@ -267,8 +280,10 @@ LLM should prompt user to choose.";
         }
 
         // Receive message body
+        Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Reading message body...");
         var messageBytes = new byte[messageLength];
         await ReadExactAsync(pipeServer, messageBytes, cancellationToken);
+        Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Complete");
 
         return Encoding.UTF8.GetString(messageBytes);
     }

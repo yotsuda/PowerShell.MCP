@@ -313,8 +313,11 @@ jobs:
           
           # Debug: List pipe-related files
           if (-not $IsWindows) {
-            Write-Host "=== /tmp pipe files ===" -ForegroundColor Yellow
+            Write-Host "=== /tmp pipe files (PowerShell) ===" -ForegroundColor Yellow
             Get-ChildItem /tmp -Filter "CoreFxPipe_*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+            Write-Host "=== /tmp (native ls) ===" -ForegroundColor Yellow
+            bash -c "ls -la /tmp/ | grep -i 'corefx\|pipe\|mcp' || echo 'No matching files'"
+            bash -c "ls -la /tmp/ | head -20"
           }
           
           # Kill process first, then read outputs
