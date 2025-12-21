@@ -27,7 +27,7 @@ public class NamedPipeClient
             try
             {
                 Console.Error.WriteLine("[DEBUG] Connecting to Named Pipe (3s timeout)...");
-                await pipeClient.ConnectAsync(1000 * 3); // 3 second timeout
+                await pipeClient.ConnectAsync(1000 * 3).ConfigureAwait(false); // 3 second timeout
                 Console.Error.WriteLine("[DEBUG] Connected to Named Pipe successfully");
             }
             catch (TimeoutException)
@@ -45,13 +45,13 @@ public class NamedPipeClient
             Console.Error.WriteLine($"[DEBUG] Sending length prefix: {messageBytes.Length}");
             
             // Send message length prefix + JSON message body
-            await pipeClient.WriteAsync(lengthBytes, 0, lengthBytes.Length);
-            await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length);
-            await pipeClient.FlushAsync();
+            await pipeClient.WriteAsync(lengthBytes, 0, lengthBytes.Length).ConfigureAwait(false);
+            await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length).ConfigureAwait(false);
+            await pipeClient.FlushAsync().ConfigureAwait(false);
             Console.Error.WriteLine("[DEBUG] Message sent, waiting for response...");
 
             // Receive response: proper length prefix handling
-            var response = await ReceiveMessageAsync(pipeClient);
+            var response = await ReceiveMessageAsync(pipeClient).ConfigureAwait(false);
             Console.Error.WriteLine($"[DEBUG] Response received, length: {response.Length}");
             return response;
         }
@@ -74,7 +74,7 @@ public class NamedPipeClient
         
         // 1. Read message length (4 bytes) reliably
         var lengthBuffer = new byte[4];
-        await ReadExactAsync(pipeClient, lengthBuffer, 4);
+        await ReadExactAsync(pipeClient, lengthBuffer, 4).ConfigureAwait(false);
         
         var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
         Console.Error.WriteLine($"[DEBUG] ReceiveMessageAsync: Message length = {messageLength}");
@@ -88,7 +88,7 @@ public class NamedPipeClient
         // 3. Read message body reliably
         Console.Error.WriteLine($"[DEBUG] ReceiveMessageAsync: Reading message body...");
         var messageBuffer = new byte[messageLength];
-        await ReadExactAsync(pipeClient, messageBuffer, messageLength);
+        await ReadExactAsync(pipeClient, messageBuffer, messageLength).ConfigureAwait(false);
         
         // 4. UTF-8 decode
         var result = Encoding.UTF8.GetString(messageBuffer);
@@ -102,7 +102,7 @@ public class NamedPipeClient
         
         while (totalBytesRead < count)
         {
-            var bytesRead = await pipeClient.ReadAsync(buffer, totalBytesRead, count - totalBytesRead);
+            var bytesRead = await pipeClient.ReadAsync(buffer, totalBytesRead, count - totalBytesRead).ConfigureAwait(false);
             
             if (bytesRead == 0)
             {
@@ -126,10 +126,10 @@ public class NamedPipeClient
             try
             {
                 using var testClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
-                await testClient.ConnectAsync(500); // 500ms timeout
+                await testClient.ConnectAsync(500).ConfigureAwait(false); // 500ms timeout
                 Console.Error.WriteLine($"[INFO] Named Pipe ready after {attempt} attempts");
                 // Give the server time to prepare for the next connection
-                await Task.Delay(500);
+                await Task.Delay(500).ConfigureAwait(false);
                 return true;
             }
             catch (TimeoutException)

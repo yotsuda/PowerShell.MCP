@@ -81,12 +81,12 @@ public class NamedPipeServer : IDisposable
                 // Wait for client connection
                 Console.Error.WriteLine("[DEBUG] Before WaitForConnectionAsync");
                 Console.Error.Flush();
-                await pipeServer.WaitForConnectionAsync(cancellationToken);
+                await pipeServer.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
                 Console.Error.WriteLine("[DEBUG] After WaitForConnectionAsync - Client connected to Named Pipe");
                 Console.Error.Flush();
                 
                 // Handle communication with connected client
-                await HandleClientAsync(pipeServer, cancellationToken);
+                await HandleClientAsync(pipeServer, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -103,7 +103,7 @@ public class NamedPipeServer : IDisposable
                 // Wait a moment before retrying on error
                 try
                 {
-                    await Task.Delay(1000, cancellationToken);
+                    await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -149,7 +149,7 @@ public class NamedPipeServer : IDisposable
         {
             // Receive request
             Console.Error.WriteLine("[DEBUG] Calling ReceiveMessageAsync...");
-            var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
+            var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken).ConfigureAwait(false);
             Console.Error.WriteLine($"[DEBUG] Received request: {requestJson.Substring(0, Math.Min(100, requestJson.Length))}...");
             
             // Parse JSON-RPC request
@@ -180,7 +180,7 @@ ACTION REQUIRED: Update your MCP client configuration
 
 Please provide how to update the MCP client configuration to the user.";
 
-                await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken);
+                await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -194,15 +194,15 @@ Please provide how to update the MCP client configuration to the user.";
 
 LLM should prompt user to choose.";
 
-                await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
+                await SendMessageAsync(pipeServer, busyResponse, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
             // Execute tool
-            var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
+            var result = await Task.Run(() => ExecuteTool(name!, requestRoot)).ConfigureAwait(false);
             
             // Send response
-            await SendMessageAsync(pipeServer, result, cancellationToken);
+            await SendMessageAsync(pipeServer, result, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -226,7 +226,7 @@ LLM should prompt user to choose.";
 
             try
             {
-                await SendMessageAsync(pipeServer, errorJson, cancellationToken);
+                await SendMessageAsync(pipeServer, errorJson, cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -270,7 +270,7 @@ LLM should prompt user to choose.";
         
         // Receive message length (4 bytes)
         var lengthBytes = new byte[4];
-        await ReadExactAsync(pipeServer, lengthBytes, cancellationToken);
+        await ReadExactAsync(pipeServer, lengthBytes, cancellationToken).ConfigureAwait(false);
         var messageLength = BitConverter.ToInt32(lengthBytes, 0);
         Console.Error.WriteLine($"[DEBUG] Server ReceiveMessageAsync: Message length = {messageLength}");
 
@@ -282,7 +282,7 @@ LLM should prompt user to choose.";
         // Receive message body
         Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Reading message body...");
         var messageBytes = new byte[messageLength];
-        await ReadExactAsync(pipeServer, messageBytes, cancellationToken);
+        await ReadExactAsync(pipeServer, messageBytes, cancellationToken).ConfigureAwait(false);
         Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Complete");
 
         return Encoding.UTF8.GetString(messageBytes);
@@ -297,11 +297,11 @@ LLM should prompt user to choose.";
         var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
 
         // Send message length (4 bytes)
-        await pipeServer.WriteAsync(lengthBytes, 0, 4, cancellationToken);
+        await pipeServer.WriteAsync(lengthBytes, 0, 4, cancellationToken).ConfigureAwait(false);
         
         // Send message body
-        await pipeServer.WriteAsync(messageBytes, 0, messageBytes.Length, cancellationToken);
-        await pipeServer.FlushAsync(cancellationToken);
+        await pipeServer.WriteAsync(messageBytes, 0, messageBytes.Length, cancellationToken).ConfigureAwait(false);
+        await pipeServer.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -312,7 +312,7 @@ LLM should prompt user to choose.";
         var totalBytesRead = 0;
         while (totalBytesRead < buffer.Length)
         {
-            var bytesRead = await stream.ReadAsync(buffer, totalBytesRead, buffer.Length - totalBytesRead, cancellationToken);
+            var bytesRead = await stream.ReadAsync(buffer, totalBytesRead, buffer.Length - totalBytesRead, cancellationToken).ConfigureAwait(false);
             if (bytesRead == 0)
             {
                 throw new IOException("Connection closed while reading data");
