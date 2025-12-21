@@ -1,0 +1,160 @@
+name: Cross-Platform Test
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [ main ]
+    paths:
+      - 'PowerShell.MCP/**'
+      - 'PowerShell.MCP.Proxy/**'
+      - 'Staging/**'
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            exe: PowerShell.MCP.Proxy.exe
+          - os: ubuntu-latest
+            rid: linux-x64
+            exe: PowerShell.MCP.Proxy
+          - os: macos-14
+            rid: osx-arm64
+            exe: PowerShell.MCP.Proxy
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+    
+    - name: Install PowerShell (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install powershell/tap/powershell
+    
+    - name: Install PowerShell (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        # Install PowerShell on Ubuntu
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https software-properties-common
+        source /etc/os-release
+        wget -q https://packages.microsoft.com/config/ubuntu/$VERSION_ID/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        rm packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell
+    
+    - name: Verify PowerShell
+      shell: pwsh
+      run: |
+        Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+        Write-Host "OS: $($PSVersionTable.OS)"
+    
+    - name: Build PowerShell.MCP module
+      run: |
+        dotnet build PowerShell.MCP -c Release --no-incremental
+    
+    - name: Build Proxy
+      run: |
+        dotnet publish PowerShell.MCP.Proxy -c Release -r ${{ matrix.rid }} --self-contained
+    
+    - name: Setup module directory (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $modulePath = "$env:USERPROFILE\Documents\PowerShell\Modules\PowerShell.MCP"
+        New-Item -Path "$modulePath\bin\${{ matrix.rid }}" -ItemType Directory -Force | Out-Null
+        
+        Copy-Item "PowerShell.MCP\bin\Release\net9.0\PowerShell.MCP.dll" -Destination $modulePath
+        Copy-Item "PowerShell.MCP\bin\Release\net9.0\Ude.NetStandard.dll" -Destination $modulePath
+        Copy-Item "Staging\PowerShell.MCP.psd1" -Destination $modulePath
+        Copy-Item "Staging\PowerShell.MCP.psm1" -Destination $modulePath
+        Copy-Item "PowerShell.MCP.Proxy\bin\Release\net9.0\${{ matrix.rid }}\publish\${{ matrix.exe }}" -Destination "$modulePath\bin\${{ matrix.rid }}"
+        
+        Write-Host "Module files:"
+        Get-ChildItem $modulePath -Recurse | Select-Object FullName
+    
+    - name: Setup module directory (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        MODULE_PATH="$HOME/.local/share/powershell/Modules/PowerShell.MCP"
+        mkdir -p "$MODULE_PATH/bin/${{ matrix.rid }}"
+        
+        cp PowerShell.MCP/bin/Release/net9.0/PowerShell.MCP.dll "$MODULE_PATH/"
+        cp PowerShell.MCP/bin/Release/net9.0/Ude.NetStandard.dll "$MODULE_PATH/"
+        cp Staging/PowerShell.MCP.psd1 "$MODULE_PATH/"
+        cp Staging/PowerShell.MCP.psm1 "$MODULE_PATH/"
+        cp "PowerShell.MCP.Proxy/bin/Release/net9.0/${{ matrix.rid }}/publish/${{ matrix.exe }}" "$MODULE_PATH/bin/${{ matrix.rid }}/"
+        chmod +x "$MODULE_PATH/bin/${{ matrix.rid }}/${{ matrix.exe }}"
+        
+        echo "Module files:"
+        ls -laR "$MODULE_PATH/"
+    
+    - name: Test module import
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        
+        Write-Host "=== Importing module ===" -ForegroundColor Cyan
+        Import-Module PowerShell.MCP -Verbose
+        
+        Write-Host "`n=== Module info ===" -ForegroundColor Cyan
+        Get-Module PowerShell.MCP | Format-List Name, Version, ModuleBase
+        
+        Write-Host "`n=== Get-MCPProxyPath ===" -ForegroundColor Cyan
+        $proxyPath = Get-MCPProxyPath
+        Write-Host "Proxy path: $proxyPath"
+        if (-not (Test-Path $proxyPath)) { throw "Proxy not found at $proxyPath" }
+        
+        Write-Host "`n=== Get-MCPProxyPath -Escape ===" -ForegroundColor Cyan
+        $escapedPath = Get-MCPProxyPath -Escape
+        Write-Host "Escaped path: $escapedPath"
+        
+        Write-Host "`n=== PSReadLine status ===" -ForegroundColor Cyan
+        $psrl = Get-Module PSReadLine
+        if ($IsWindows) {
+          if ($psrl) {
+            Write-Host "PSReadLine is loaded (expected on Windows)" -ForegroundColor Green
+          } else {
+            Write-Host "PSReadLine is NOT loaded (unexpected on Windows)" -ForegroundColor Yellow
+          }
+        } else {
+          if ($psrl) {
+            Write-Host "PSReadLine is loaded (unexpected on Linux/macOS)" -ForegroundColor Yellow
+          } else {
+            Write-Host "PSReadLine is NOT loaded (expected on Linux/macOS)" -ForegroundColor Green
+          }
+        }
+        
+        Write-Host "`n=== All tests passed ===" -ForegroundColor Green
+    
+    - name: Test Proxy startup
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        
+        Write-Host "=== Testing Proxy ===" -ForegroundColor Cyan
+        $proxyPath = Get-MCPProxyPath
+        
+        Write-Host "Starting Proxy..."
+        $process = Start-Process -FilePath $proxyPath -PassThru
+        
+        Start-Sleep -Seconds 2
+        
+        if ($process.HasExited) {
+          Write-Host "Proxy exited with code: $($process.ExitCode)" -ForegroundColor Red
+          throw "Proxy exited unexpectedly"
+        } else {
+          Write-Host "Proxy is running (PID: $($process.Id))" -ForegroundColor Green
+          Stop-Process -Id $process.Id -Force
+          Write-Host "Proxy stopped successfully" -ForegroundColor Green
+        }
