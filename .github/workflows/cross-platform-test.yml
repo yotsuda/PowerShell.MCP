@@ -317,15 +317,20 @@ jobs:
             Get-ChildItem /tmp -Filter "CoreFxPipe_*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
           }
           
+          # Kill process first, then read outputs
           if (-not $bgProcess.HasExited) {
-            Write-Host "=== Available stdout ===" -ForegroundColor Yellow
-            while ($bgProcess.StandardOutput.Peek() -ge 0) {
-              Write-Host ([char]$bgProcess.StandardOutput.Read()) -NoNewline
-            }
-            Write-Host ""
-            # Kill process to allow stderr task to complete
+            Write-Host "Killing background process..."
             $bgProcess.Kill()
             $bgProcess.WaitForExit(5000)
+          }
+          
+          # Now read stdout (sync, process is dead)
+          Write-Host "=== stdout ===" -ForegroundColor Yellow
+          $stdoutTask = $bgProcess.StandardOutput.ReadToEndAsync()
+          if ($stdoutTask.Wait(3000)) {
+            Write-Host $stdoutTask.Result
+          } else {
+            Write-Host "(stdout read timeout)"
           }
           
           # Wait for stderr task and display
