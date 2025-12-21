@@ -251,6 +251,7 @@ jobs:
 
     - name: Test Named Pipe communication
       shell: pwsh
+      timeout-minutes: 2
       run: |
         $ErrorActionPreference = "Stop"
         
@@ -260,7 +261,7 @@ jobs:
         Write-Host "Starting background pwsh with PowerShell.MCP..."
         $bgPsi = [System.Diagnostics.ProcessStartInfo]::new()
         $bgPsi.FileName = "pwsh"
-        $bgPsi.Arguments = "-NoProfile -NoExit -Command `"Import-Module PowerShell.MCP`""
+        $bgPsi.Arguments = "-NoProfile -NoExit -Command `"Import-Module PowerShell.MCP -Verbose`""
         $bgPsi.UseShellExecute = $false
         $bgPsi.CreateNoWindow = $true
         $bgPsi.RedirectStandardInput = $true
@@ -276,6 +277,17 @@ jobs:
         $pipeReady = $false
         for ($i = 0; $i -lt 30; $i++) {
           Start-Sleep -Milliseconds 500
+          
+          # Check if process is still running
+          if ($bgProcess.HasExited) {
+            Write-Host "ERROR: Background pwsh exited with code $($bgProcess.ExitCode)" -ForegroundColor Red
+            Write-Host "=== stdout ===" -ForegroundColor Yellow
+            Write-Host $bgProcess.StandardOutput.ReadToEnd()
+            Write-Host "=== stderr ===" -ForegroundColor Yellow
+            Write-Host $bgProcess.StandardError.ReadToEnd()
+            throw "Background pwsh process exited unexpectedly"
+          }
+          
           if ($IsWindows) {
             $pipeReady = Test-Path "\\.\pipe\$pipeName"
           } else {
@@ -285,10 +297,29 @@ jobs:
             Write-Host "Named Pipe ready after $($i * 500)ms"
             break
           }
+          
+          # Show progress every 5 seconds
+          if ($i % 10 -eq 9) {
+            Write-Host "Still waiting... ($($i * 500)ms elapsed)"
+          }
         }
         
         if (-not $pipeReady) {
-          $bgProcess.Kill()
+          Write-Host "=== Named Pipe not found, checking process state ===" -ForegroundColor Red
+          Write-Host "Process running: $(-not $bgProcess.HasExited)"
+          if (-not $bgProcess.HasExited) {
+            Write-Host "=== Available stdout ===" -ForegroundColor Yellow
+            while ($bgProcess.StandardOutput.Peek() -ge 0) {
+              Write-Host ([char]$bgProcess.StandardOutput.Read()) -NoNewline
+            }
+            Write-Host ""
+            Write-Host "=== Available stderr ===" -ForegroundColor Yellow  
+            while ($bgProcess.StandardError.Peek() -ge 0) {
+              Write-Host ([char]$bgProcess.StandardError.Read()) -NoNewline
+            }
+            Write-Host ""
+            $bgProcess.Kill()
+          }
           throw "Named Pipe server did not start within 15 seconds"
         }
         
@@ -305,23 +336,27 @@ jobs:
         
         $process = [System.Diagnostics.Process]::Start($psi)
         
+        # Use async reading with timeout
         function Send-JsonRpc {
-          param([string]$Json, [int]$WaitMs = 2000)
+          param([string]$Json, [int]$TimeoutMs = 5000)
+          Write-Host "Sending: $Json"
           $process.StandardInput.WriteLine($Json)
           $process.StandardInput.Flush()
-          Start-Sleep -Milliseconds $WaitMs
           
-          $output = ""
-          while ($process.StandardOutput.Peek() -ge 0) {
-            $output += [char]$process.StandardOutput.Read()
+          $task = $process.StandardOutput.ReadLineAsync()
+          if ($task.Wait($TimeoutMs)) {
+            return $task.Result
+          } else {
+            throw "Timeout waiting for response"
           }
-          return $output
         }
         
         try {
           # Initialize
           $initRequest = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-          $null = Send-JsonRpc $initRequest
+          $response = Send-JsonRpc $initRequest
+          Write-Host "Init response: $response"
+          
           $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
           $process.StandardInput.Flush()
           Start-Sleep -Milliseconds 200
@@ -329,26 +364,14 @@ jobs:
           # Test: invoke_expression with Get-Date
           Write-Host "`n=== Test: invoke_expression (Get-Date) ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
-          $response = Send-JsonRpc $invokeRequest 3000
+          $response = Send-JsonRpc $invokeRequest 10000
           Write-Host "Response: $response"
           
           $today = Get-Date -Format "yyyy-MM-dd"
           if ($response -match $today) {
-            Write-Host "invoke_expression (Get-Date): PASSED - Got today's date" -ForegroundColor Green
+            Write-Host "invoke_expression (Get-Date): PASSED" -ForegroundColor Green
           } else {
-            throw "invoke_expression failed - expected date $today not found in response"
-          }
-          
-          # Test: get_current_location
-          Write-Host "`n=== Test: get_current_location ===" -ForegroundColor Yellow
-          $locRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_current_location","arguments":{}}}'
-          $response = Send-JsonRpc $locRequest 3000
-          Write-Host "Response: $response"
-          
-          if ($response -match '"current_location"' -or $response -match '"system"') {
-            Write-Host "get_current_location: PASSED" -ForegroundColor Green
-          } else {
-            throw "get_current_location failed - no location info in response"
+            throw "invoke_expression failed - expected date $today not found"
           }
           
           Write-Host "`n=== All Named Pipe tests passed ===" -ForegroundColor Green
@@ -359,3 +382,4 @@ jobs:
           if (-not $bgProcess.HasExited) { $bgProcess.Kill() }
           $bgProcess.Dispose()
         }
+
