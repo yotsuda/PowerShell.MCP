@@ -267,10 +267,29 @@ jobs:
             Write-Host "  Killing PID $($_.Id)"
             $_ | Stop-Process -Force -ErrorAction SilentlyContinue 
           }
-          Start-Sleep -Seconds 1
+          Start-Sleep -Seconds 2
         } else {
           Write-Host "No other pwsh processes found"
         }
+        
+        # Clean up any existing Named Pipe socket files (Linux/macOS)
+        if (-not $IsWindows) {
+          $pipeFile = "/tmp/CoreFxPipe_PowerShell.MCP.Communication"
+          if (Test-Path $pipeFile) {
+            Write-Host "Removing existing Named Pipe socket: $pipeFile"
+            Remove-Item $pipeFile -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+          }
+        }
+        
+        # Verify Named Pipe is gone
+        $pipeName = "PowerShell.MCP.Communication"
+        if ($IsWindows) {
+          $pipeExists = Test-Path "\\.\pipe\$pipeName"
+        } else {
+          $pipeExists = Test-Path "/tmp/CoreFxPipe_$pipeName"
+        }
+        Write-Host "Named Pipe exists before starting background pwsh: $pipeExists"
         
         # Start a background pwsh process with PowerShell.MCP imported
         Write-Host "Starting background pwsh with PowerShell.MCP..."
