@@ -307,6 +307,13 @@ jobs:
         if (-not $pipeReady) {
           Write-Host "=== Named Pipe not found, checking process state ===" -ForegroundColor Red
           Write-Host "Process running: $(-not $bgProcess.HasExited)"
+          
+          # Debug: List pipe-related files
+          if (-not $IsWindows) {
+            Write-Host "=== /tmp pipe files ===" -ForegroundColor Yellow
+            Get-ChildItem /tmp -Filter "CoreFxPipe_*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+          }
+          
           if (-not $bgProcess.HasExited) {
             Write-Host "=== Available stdout ===" -ForegroundColor Yellow
             while ($bgProcess.StandardOutput.Peek() -ge 0) {
@@ -347,6 +354,12 @@ jobs:
           if ($task.Wait($TimeoutMs)) {
             return $task.Result
           } else {
+            # On timeout, dump stderr for debugging
+            Write-Host "=== Proxy stderr (timeout debug) ===" -ForegroundColor Red
+            while ($process.StandardError.Peek() -ge 0) {
+              Write-Host ([char]$process.StandardError.Read()) -NoNewline
+            }
+            Write-Host ""
             throw "Timeout waiting for response"
           }
         }
