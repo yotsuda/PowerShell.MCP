@@ -23,7 +23,7 @@ public static class ExecutionState
 public class NamedPipeServer : IDisposable
 {
     public const string PipeName = "PowerShell.MCP.Communication";
-    private const int MaxConcurrentConnections = 1; // Single pipe instance
+    private const int MaxConcurrentConnections = 2; // Two pipe instances
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
     private bool _disposed = false;
@@ -33,7 +33,6 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        Console.Error.WriteLine($"[DEBUG] NamedPipeServer.StartAsync called, MaxConcurrentConnections={MaxConcurrentConnections}");
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, _internalCancellation.Token);
 
@@ -42,68 +41,52 @@ public class NamedPipeServer : IDisposable
             // Start multiple server instances
             for (int i = 0; i < MaxConcurrentConnections; i++)
             {
-                Console.Error.WriteLine($"[DEBUG] Starting server instance {i + 1}/{MaxConcurrentConnections}");
                 var task = RunServerInstanceAsync(combinedCts.Token);
                 _serverTasks.Add(task);
             }
 
-            Console.Error.WriteLine("[DEBUG] All server instances started, waiting for completion...");
             // Wait for all server instances to complete
             await Task.WhenAll(_serverTasks);
-            Console.Error.WriteLine("[DEBUG] All server instances completed");
         }
         catch (OperationCanceledException)
         {
-            Console.Error.WriteLine("[DEBUG] StartAsync cancelled");
             // Cancellation is normal termination
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[ERROR] Named Pipe Server error: {ex.GetType().Name}: {ex.Message}");
-            Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+            Console.Error.WriteLine($"Named Pipe Server error: {ex.Message}");
         }
     }
 
+    /// <summary>
+    /// Runs a server instance
+    /// </summary>
     private async Task RunServerInstanceAsync(CancellationToken cancellationToken)
     {
-        Console.Error.WriteLine($"[DEBUG] RunServerInstanceAsync started on thread {Environment.CurrentManagedThreadId}");
-        Console.Error.Flush();
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                Console.Error.WriteLine("[DEBUG] Creating Named Pipe server...");
-                Console.Error.Flush();
                 using var pipeServer = CreateNamedPipeServer();
-                Console.Error.WriteLine($"[DEBUG] Named Pipe server created, waiting for connection...");
-                Console.Error.Flush();
                 
                 // Wait for client connection
-                Console.Error.WriteLine("[DEBUG] Before WaitForConnectionAsync");
-                Console.Error.Flush();
-                await pipeServer.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                Console.Error.WriteLine("[DEBUG] After WaitForConnectionAsync - Client connected to Named Pipe");
-                Console.Error.Flush();
+                await pipeServer.WaitForConnectionAsync(cancellationToken);
                 
                 // Handle communication with connected client
-                await HandleClientAsync(pipeServer, cancellationToken).ConfigureAwait(false);
+                await HandleClientAsync(pipeServer, cancellationToken);
             }
             catch (OperationCanceledException)
             {
-                Console.Error.WriteLine("[DEBUG] Named Pipe server cancelled");
-                Console.Error.Flush();
                 break;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[ERROR] Named Pipe Server instance error: {ex.GetType().Name}: {ex.Message}");
-                Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-                Console.Error.Flush();
+                Console.Error.WriteLine($"Named Pipe Server instance error: {ex.Message}");
                 
                 // Wait a moment before retrying on error
                 try
                 {
-                    await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                    await Task.Delay(1000, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -111,8 +94,6 @@ public class NamedPipeServer : IDisposable
                 }
             }
         }
-        Console.Error.WriteLine("[DEBUG] RunServerInstanceAsync exiting");
-        Console.Error.Flush();
     }
 
     /// <summary>
@@ -120,23 +101,12 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     private static NamedPipeServerStream CreateNamedPipeServer()
     {
-        Console.Error.WriteLine($"[DEBUG] CreateNamedPipeServer: PipeName={PipeName}");
-        try
-        {
-            var server = new NamedPipeServerStream(
-                PipeName,
-                PipeDirection.InOut,
-                NamedPipeServerStream.MaxAllowedServerInstances,
-                PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous);
-            Console.Error.WriteLine($"[DEBUG] NamedPipeServerStream created successfully");
-            return server;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[ERROR] Failed to create NamedPipeServerStream: {ex.GetType().Name}: {ex.Message}");
-            throw;
-        }
+        return new NamedPipeServerStream(
+            PipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous);
     }
 
     /// <summary>
@@ -144,20 +114,16 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     private static async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        Console.Error.WriteLine("[DEBUG] HandleClientAsync started");
         try
         {
             // Receive request
-            Console.Error.WriteLine("[DEBUG] Calling ReceiveMessageAsync...");
-            var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken).ConfigureAwait(false);
-            Console.Error.WriteLine($"[DEBUG] Received request: {requestJson.Substring(0, Math.Min(100, requestJson.Length))}...");
+            var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
             
             // Parse JSON-RPC request
             using var requestDoc = JsonDocument.Parse(requestJson);
             var requestRoot = requestDoc.RootElement;
             
             var name = requestRoot.GetProperty("name").GetString();
-            Console.Error.WriteLine($"[DEBUG] Tool name: {name}");
 
             string? proxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement proxyVersionElement)
                 ? proxyVersionElement.GetString() : "Not detected";
@@ -180,7 +146,7 @@ ACTION REQUIRED: Update your MCP client configuration
 
 Please provide how to update the MCP client configuration to the user.";
 
-                await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken).ConfigureAwait(false);
+                await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken);
                 return;
             }
 
@@ -194,15 +160,15 @@ Please provide how to update the MCP client configuration to the user.";
 
 LLM should prompt user to choose.";
 
-                await SendMessageAsync(pipeServer, busyResponse, cancellationToken).ConfigureAwait(false);
+                await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
                 return;
             }
 
             // Execute tool
-            var result = await Task.Run(() => ExecuteTool(name!, requestRoot)).ConfigureAwait(false);
+            var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
             
             // Send response
-            await SendMessageAsync(pipeServer, result, cancellationToken).ConfigureAwait(false);
+            await SendMessageAsync(pipeServer, result, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -226,7 +192,7 @@ LLM should prompt user to choose.";
 
             try
             {
-                await SendMessageAsync(pipeServer, errorJson, cancellationToken).ConfigureAwait(false);
+                await SendMessageAsync(pipeServer, errorJson, cancellationToken);
             }
             catch
             {
@@ -266,13 +232,10 @@ LLM should prompt user to choose.";
     /// </summary>
     private static async Task<string> ReceiveMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Reading length prefix...");
-        
         // Receive message length (4 bytes)
         var lengthBytes = new byte[4];
-        await ReadExactAsync(pipeServer, lengthBytes, cancellationToken).ConfigureAwait(false);
+        await ReadExactAsync(pipeServer, lengthBytes, cancellationToken);
         var messageLength = BitConverter.ToInt32(lengthBytes, 0);
-        Console.Error.WriteLine($"[DEBUG] Server ReceiveMessageAsync: Message length = {messageLength}");
 
         if (messageLength <= 0)
         {
@@ -280,10 +243,8 @@ LLM should prompt user to choose.";
         }
 
         // Receive message body
-        Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Reading message body...");
         var messageBytes = new byte[messageLength];
-        await ReadExactAsync(pipeServer, messageBytes, cancellationToken).ConfigureAwait(false);
-        Console.Error.WriteLine("[DEBUG] Server ReceiveMessageAsync: Complete");
+        await ReadExactAsync(pipeServer, messageBytes, cancellationToken);
 
         return Encoding.UTF8.GetString(messageBytes);
     }
@@ -297,11 +258,11 @@ LLM should prompt user to choose.";
         var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
 
         // Send message length (4 bytes)
-        await pipeServer.WriteAsync(lengthBytes, 0, 4, cancellationToken).ConfigureAwait(false);
+        await pipeServer.WriteAsync(lengthBytes, 0, 4, cancellationToken);
         
         // Send message body
-        await pipeServer.WriteAsync(messageBytes, 0, messageBytes.Length, cancellationToken).ConfigureAwait(false);
-        await pipeServer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        await pipeServer.WriteAsync(messageBytes, 0, messageBytes.Length, cancellationToken);
+        await pipeServer.FlushAsync(cancellationToken);
     }
 
     /// <summary>
@@ -312,7 +273,7 @@ LLM should prompt user to choose.";
         var totalBytesRead = 0;
         while (totalBytesRead < buffer.Length)
         {
-            var bytesRead = await stream.ReadAsync(buffer, totalBytesRead, buffer.Length - totalBytesRead, cancellationToken).ConfigureAwait(false);
+            var bytesRead = await stream.ReadAsync(buffer, totalBytesRead, buffer.Length - totalBytesRead, cancellationToken);
             if (bytesRead == 0)
             {
                 throw new IOException("Connection closed while reading data");

@@ -46,7 +46,6 @@ namespace PowerShell.MCP
                         using var testClient = new System.IO.Pipes.NamedPipeClientStream(".", NamedPipeServer.PipeName, System.IO.Pipes.PipeDirection.InOut);
                         testClient.Connect(100); // 100ms timeout
                         pipeExists = true;
-                        Console.Error.WriteLine($"[DEBUG] Named Pipe '{NamedPipeServer.PipeName}' already exists (connected successfully)");
                     }
                     catch (TimeoutException)
                     {
@@ -64,16 +63,10 @@ namespace PowerShell.MCP
                     // On Linux/macOS, check for the socket file
                     string pipePath = $"/tmp/CoreFxPipe_{NamedPipeServer.PipeName}";
                     pipeExists = File.Exists(pipePath);
-                    if (pipeExists)
-                    {
-                        Console.Error.WriteLine($"[DEBUG] Named Pipe socket exists at {pipePath}");
-                    }
                 }
                 
                 if (pipeExists)
                 {
-                    Console.Error.WriteLine("[DEBUG] Named Pipe already exists, skipping server start");
-                    
                     // Still load the polling script for other functionality
                     var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
                     using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
@@ -97,21 +90,16 @@ namespace PowerShell.MCP
                     ps.Invoke();
                 }
 
-                // Start Named Pipe Server with error handling
-                Console.Error.WriteLine("[DEBUG] Starting Named Pipe server task...");
+                // Start Named Pipe Server
                 Task.Run(async () =>
                 {
                     try
                     {
-                        Console.Error.WriteLine($"[DEBUG] Named Pipe server task started on thread {Environment.CurrentManagedThreadId}");
-                        Console.Error.WriteLine($"[DEBUG] Pipe name: {NamedPipeServer.PipeName}");
                         await _namedPipeServer.StartAsync(_tokenSource.Token);
-                        Console.Error.WriteLine("[DEBUG] Named Pipe server StartAsync completed");
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        Console.Error.WriteLine($"[ERROR] Named Pipe server failed: {ex.GetType().Name}: {ex.Message}");
-                        Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+                        // Silently ignore Named Pipe server errors
                     }
                 }, _tokenSource.Token);
 
