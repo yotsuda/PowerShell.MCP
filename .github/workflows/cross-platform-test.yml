@@ -273,7 +273,7 @@ jobs:
         
         # Wait for Named Pipe server to be ready
         Write-Host "Waiting for Named Pipe server..."
-        $pipeName = "PowerShell.MCP.$($bgProcess.Id)"
+        $pipeName = "PowerShell.MCP.Communication"
         $pipeReady = $false
         for ($i = 0; $i -lt 30; $i++) {
           Start-Sleep -Milliseconds 500
