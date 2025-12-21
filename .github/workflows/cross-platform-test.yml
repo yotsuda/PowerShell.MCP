@@ -258,6 +258,17 @@ jobs:
         
         Write-Host "=== Testing Named Pipe Communication ===" -ForegroundColor Cyan
         
+        # Clean up any existing Named Pipe socket files (Linux/macOS)
+        $pipeName = "PowerShell.MCP.Communication"
+        if (-not $IsWindows) {
+          $pipeFile = "/tmp/CoreFxPipe_$pipeName"
+          if (Test-Path $pipeFile) {
+            Write-Host "Removing existing Named Pipe socket: $pipeFile"
+            Remove-Item $pipeFile -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+          }
+        }
+        
         # Start a background pwsh process with PowerShell.MCP imported
         Write-Host "Starting background pwsh with PowerShell.MCP..."
         $bgPsi = [System.Diagnostics.ProcessStartInfo]::new()
