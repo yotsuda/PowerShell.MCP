@@ -310,14 +310,19 @@ jobs:
         if (-not $pipeReady) {
           Write-Host "=== Named Pipe not found, checking process state ===" -ForegroundColor Red
           Write-Host "Process running: $(-not $bgProcess.HasExited)"
+          Write-Host "Background pwsh PID: $($bgProcess.Id)"
           
-          # Debug: List pipe-related files
+          # Debug: List pipe-related files and sockets
           if (-not $IsWindows) {
             Write-Host "=== /tmp pipe files (PowerShell) ===" -ForegroundColor Yellow
             Get-ChildItem /tmp -Filter "CoreFxPipe_*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
             Write-Host "=== /tmp (native ls) ===" -ForegroundColor Yellow
-            bash -c "ls -la /tmp/ | grep -i 'corefx\|pipe\|mcp' || echo 'No matching files'"
+            bash -c "ls -la /tmp/ | grep -i 'corefx\|pipe\|mcp\|communication' || echo 'No matching files'"
             bash -c "ls -la /tmp/ | head -20"
+            Write-Host "=== lsof for background pwsh ===" -ForegroundColor Yellow
+            bash -c "lsof -p $($bgProcess.Id) 2>/dev/null | grep -i 'unix\|pipe\|socket' | head -20 || echo 'No sockets found'"
+            Write-Host "=== All CoreFx sockets (find) ===" -ForegroundColor Yellow
+            bash -c "find /tmp /var/folders -name '*CoreFx*' -o -name '*PowerShell*' 2>/dev/null | head -10 || echo 'None found'"
           }
           
           # Kill process first, then read outputs
