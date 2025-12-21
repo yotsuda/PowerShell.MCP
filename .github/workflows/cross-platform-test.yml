@@ -324,9 +324,16 @@ jobs:
           throw "Named Pipe server did not start within 15 seconds"
         }
         
-        # Start Proxy
+        # Start Proxy (build path directly to avoid importing PowerShell.MCP in test script)
         Write-Host "Starting Proxy..."
-        $proxyPath = Get-MCPProxyPath
+        if ($IsWindows) {
+          $proxyPath = "$env:USERPROFILE\Documents\PowerShell\Modules\PowerShell.MCP\bin\win-x64\PowerShell.MCP.Proxy.exe"
+        } elseif ($IsMacOS) {
+          $proxyPath = "$HOME/.local/share/powershell/Modules/PowerShell.MCP/bin/osx-arm64/PowerShell.MCP.Proxy"
+        } else {
+          $proxyPath = "$HOME/.local/share/powershell/Modules/PowerShell.MCP/bin/linux-x64/PowerShell.MCP.Proxy"
+        }
+        Write-Host "Proxy path: $proxyPath"
         $psi = [System.Diagnostics.ProcessStartInfo]::new()
         $psi.FileName = $proxyPath
         $psi.RedirectStandardInput = $true
