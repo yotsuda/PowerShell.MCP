@@ -30,6 +30,7 @@ jobs:
             exe: PowerShell.MCP.Proxy
     
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     
     steps:
     - uses: actions/checkout@v4
@@ -39,6 +40,14 @@ jobs:
       with:
         dotnet-version: '9.0.x'
     
+    - name: Install PowerShell 7.5 (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        # GitHub Actions has PowerShell 7.4 which uses .NET 8
+        # PowerShell.MCP requires .NET 9, so we need PowerShell 7.5+
+        winget install --id Microsoft.PowerShell --source winget --accept-source-agreements --accept-package-agreements
+      shell: pwsh
+
     - name: Install PowerShell (macOS)
       if: runner.os == 'macOS'
       run: |
