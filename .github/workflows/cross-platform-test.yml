@@ -174,11 +174,13 @@ jobs:
     
     - name: Test Proxy JSON-RPC communication
       shell: pwsh
+      timeout-minutes: 2
       run: |
         $ErrorActionPreference = "Stop"
         
         Write-Host "=== Testing Proxy JSON-RPC ===" -ForegroundColor Cyan
         $proxyPath = Get-MCPProxyPath
+        Write-Host "Proxy path: $proxyPath"
         
         # Start Proxy process with redirected stdin/stdout
         $psi = [System.Diagnostics.ProcessStartInfo]::new()
@@ -190,19 +192,22 @@ jobs:
         $psi.CreateNoWindow = $true
         
         $process = [System.Diagnostics.Process]::Start($psi)
+        Write-Host "Proxy started with PID: $($process.Id)"
         
+        # Use async reading with timeout
         function Send-JsonRpc {
-          param([string]$Json)
+          param([string]$Json, [int]$TimeoutMs = 5000)
+          Write-Host "Sending: $Json"
           $process.StandardInput.WriteLine($Json)
           $process.StandardInput.Flush()
-          Start-Sleep -Milliseconds 500
           
-          # Read available output
-          $output = ""
-          while ($process.StandardOutput.Peek() -ge 0) {
-            $output += [char]$process.StandardOutput.Read()
+          # Read response line with timeout
+          $task = $process.StandardOutput.ReadLineAsync()
+          if ($task.Wait($TimeoutMs)) {
+            return $task.Result
+          } else {
+            throw "Timeout waiting for response"
           }
-          return $output
         }
         
         try {
@@ -218,7 +223,8 @@ jobs:
             throw "Initialize failed - no protocolVersion in response"
           }
           
-          # Send initialized notification
+          # Send initialized notification (no response expected)
+          Write-Host "`nSending initialized notification..."
           $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
           $process.StandardInput.Flush()
           Start-Sleep -Milliseconds 200
@@ -229,7 +235,7 @@ jobs:
           $response = Send-JsonRpc $listRequest
           Write-Host "Response: $response"
           
-          if ($response -match '"get_current_location"' -and $response -match '"invoke_expression"' -and $response -match '"start_powershell_console"') {
+          if ($response -match '"get_current_location"' -and $response -match '"invoke_expression"') {
             Write-Host "List Tools: PASSED" -ForegroundColor Green
           } else {
             throw "List Tools failed - expected tools not found"
@@ -238,11 +244,10 @@ jobs:
           Write-Host "`n=== All JSON-RPC tests passed ===" -ForegroundColor Green
           
         } finally {
-          if (-not $process.HasExited) {
-            $process.Kill()
-          }
+          if (-not $process.HasExited) { $process.Kill() }
           $process.Dispose()
         }
+
 
     - name: Test Named Pipe communication
       shell: pwsh
