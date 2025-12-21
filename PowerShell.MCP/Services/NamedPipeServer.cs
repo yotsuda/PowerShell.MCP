@@ -23,7 +23,7 @@ public static class ExecutionState
 public class NamedPipeServer : IDisposable
 {
     public const string PipeName = "PowerShell.MCP.Communication";
-    private const int MaxConcurrentConnections = 2; // Two pipe instances
+    private const int MaxConcurrentConnections = 1; // Single pipe instance
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
     private bool _disposed = false;
