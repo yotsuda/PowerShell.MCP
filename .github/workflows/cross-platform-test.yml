@@ -271,6 +271,10 @@ jobs:
         $bgProcess = [System.Diagnostics.Process]::Start($bgPsi)
         Write-Host "Background pwsh PID: $($bgProcess.Id)"
         
+        # Start async stderr reading to capture debug output
+        $bgStderrBuilder = [System.Text.StringBuilder]::new()
+        $bgStderrTask = $bgProcess.StandardError.ReadToEndAsync()
+        
         # Wait for Named Pipe server to be ready
         Write-Host "Waiting for Named Pipe server..."
         $pipeName = "PowerShell.MCP.Communication"
@@ -284,10 +288,9 @@ jobs:
             Write-Host "=== stdout ===" -ForegroundColor Yellow
             Write-Host $bgProcess.StandardOutput.ReadToEnd()
             Write-Host "=== stderr ===" -ForegroundColor Yellow
-            Write-Host $bgProcess.StandardError.ReadToEnd()
+            if ($bgStderrTask.IsCompleted) { Write-Host $bgStderrTask.Result }
             throw "Background pwsh process exited unexpectedly"
           }
-          
           if ($IsWindows) {
             $pipeReady = Test-Path "\\.\pipe\$pipeName"
           } else {
@@ -320,13 +323,19 @@ jobs:
               Write-Host ([char]$bgProcess.StandardOutput.Read()) -NoNewline
             }
             Write-Host ""
-            Write-Host "=== Available stderr ===" -ForegroundColor Yellow  
-            while ($bgProcess.StandardError.Peek() -ge 0) {
-              Write-Host ([char]$bgProcess.StandardError.Read()) -NoNewline
-            }
-            Write-Host ""
+            # Kill process to allow stderr task to complete
             $bgProcess.Kill()
+            $bgProcess.WaitForExit(5000)
           }
+          
+          # Wait for stderr task and display
+          Write-Host "=== stderr (debug output) ===" -ForegroundColor Yellow
+          if ($bgStderrTask.Wait(3000)) {
+            Write-Host $bgStderrTask.Result
+          } else {
+            Write-Host "(stderr read timeout)"
+          }
+          
           throw "Named Pipe server did not start within 15 seconds"
         }
         
@@ -390,9 +399,18 @@ jobs:
           Write-Host "`n=== All Named Pipe tests passed ===" -ForegroundColor Green
           
         } finally {
+          # Dump bgProcess stderr for debugging before cleanup
+          Write-Host "=== Background pwsh stderr ===" -ForegroundColor Cyan
+          if (-not $bgProcess.HasExited) { 
+            $bgProcess.Kill()
+            $bgProcess.WaitForExit(5000)
+          }
+          if ($bgStderrTask.Wait(3000)) {
+            Write-Host $bgStderrTask.Result
+          }
+          
           if (-not $process.HasExited) { $process.Kill() }
           $process.Dispose()
-          if (-not $bgProcess.HasExited) { $bgProcess.Kill() }
           $bgProcess.Dispose()
         }
 

@@ -51,10 +51,22 @@ namespace PowerShell.MCP
                     ps.Invoke();
                 }
 
-                // Start Named Pipe Server
+                // Start Named Pipe Server with error handling
+                Console.Error.WriteLine("[DEBUG] Starting Named Pipe server task...");
                 Task.Run(async () =>
                 {
-                    await _namedPipeServer.StartAsync(_tokenSource.Token);
+                    try
+                    {
+                        Console.Error.WriteLine($"[DEBUG] Named Pipe server task started on thread {Environment.CurrentManagedThreadId}");
+                        Console.Error.WriteLine($"[DEBUG] Pipe name: {NamedPipeServer.PipeName}");
+                        await _namedPipeServer.StartAsync(_tokenSource.Token);
+                        Console.Error.WriteLine("[DEBUG] Named Pipe server StartAsync completed");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[ERROR] Named Pipe server failed: {ex.GetType().Name}: {ex.Message}");
+                        Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+                    }
                 }, _tokenSource.Token);
 
                 // Output information message

@@ -33,6 +33,7 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        Console.Error.WriteLine($"[DEBUG] NamedPipeServer.StartAsync called, MaxConcurrentConnections={MaxConcurrentConnections}");
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, _internalCancellation.Token);
 
@@ -41,20 +42,25 @@ public class NamedPipeServer : IDisposable
             // Start multiple server instances
             for (int i = 0; i < MaxConcurrentConnections; i++)
             {
+                Console.Error.WriteLine($"[DEBUG] Starting server instance {i + 1}/{MaxConcurrentConnections}");
                 var task = RunServerInstanceAsync(combinedCts.Token);
                 _serverTasks.Add(task);
             }
 
+            Console.Error.WriteLine("[DEBUG] All server instances started, waiting for completion...");
             // Wait for all server instances to complete
             await Task.WhenAll(_serverTasks);
+            Console.Error.WriteLine("[DEBUG] All server instances completed");
         }
         catch (OperationCanceledException)
         {
+            Console.Error.WriteLine("[DEBUG] StartAsync cancelled");
             // Cancellation is normal termination
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Named Pipe Server error: {ex.Message}");
+            Console.Error.WriteLine($"[ERROR] Named Pipe Server error: {ex.GetType().Name}: {ex.Message}");
+            Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
         }
     }
 
@@ -63,25 +69,31 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     private async Task RunServerInstanceAsync(CancellationToken cancellationToken)
     {
+        Console.Error.WriteLine($"[DEBUG] RunServerInstanceAsync started on thread {Environment.CurrentManagedThreadId}");
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
+                Console.Error.WriteLine("[DEBUG] Creating Named Pipe server...");
                 using var pipeServer = CreateNamedPipeServer();
+                Console.Error.WriteLine($"[DEBUG] Named Pipe server created, waiting for connection...");
                 
                 // Wait for client connection
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
+                Console.Error.WriteLine("[DEBUG] Client connected to Named Pipe");
                 
                 // Handle communication with connected client
                 await HandleClientAsync(pipeServer, cancellationToken);
             }
             catch (OperationCanceledException)
             {
+                Console.Error.WriteLine("[DEBUG] Named Pipe server cancelled");
                 break;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Named Pipe Server instance error: {ex.Message}");
+                Console.Error.WriteLine($"[ERROR] Named Pipe Server instance error: {ex.GetType().Name}: {ex.Message}");
+                Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
                 
                 // Wait a moment before retrying on error
                 try
@@ -94,6 +106,7 @@ public class NamedPipeServer : IDisposable
                 }
             }
         }
+        Console.Error.WriteLine("[DEBUG] RunServerInstanceAsync exiting");
     }
 
     /// <summary>
@@ -101,12 +114,23 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     private static NamedPipeServerStream CreateNamedPipeServer()
     {
-        return new NamedPipeServerStream(
-            PipeName,
-            PipeDirection.InOut,
-            NamedPipeServerStream.MaxAllowedServerInstances,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous);
+        Console.Error.WriteLine($"[DEBUG] CreateNamedPipeServer: PipeName={PipeName}");
+        try
+        {
+            var server = new NamedPipeServerStream(
+                PipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous);
+            Console.Error.WriteLine($"[DEBUG] NamedPipeServerStream created successfully");
+            return server;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[ERROR] Failed to create NamedPipeServerStream: {ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
     }
 
     /// <summary>
