@@ -335,6 +335,10 @@ jobs:
           if ($pipeReady) {
             Write-Host "Named Pipe ready after $($i * 500)ms"
             
+            # Wait additional time to ensure server is fully ready for connections
+            Write-Host "Waiting additional 2 seconds for server to be ready..."
+            Start-Sleep -Seconds 2
+            
             # Debug: Show pipe details
             if ($IsWindows) {
               Write-Host "=== Windows Named Pipes matching pattern ===" -ForegroundColor Cyan
