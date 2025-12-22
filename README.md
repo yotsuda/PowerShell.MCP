@@ -1,6 +1,7 @@
 # PowerShell.MCP
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-7.2+-blue.svg)](https://github.com/PowerShell/PowerShell)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen.svg)](#prerequisites)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -95,43 +96,136 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 ## Quick Start
 
 ### Prerequisites
-- Windows 10/11 or Windows Server 2016+
-- Claude Desktop ([download](https://claude.ai/download)) or any MCP clients
-  - **Note: Claude Desktop is strongly recommended** as other clients may not deliver optimal performance
-- PowerShell 7.2 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5))
-- PSReadLine 2.3.4 or higher ([auto-installed](https://www.powershellgallery.com/packages/PSReadLine))
 
-### 1. Open PowerShell 7
-- Press `Win + R`, type `pwsh`, press `Enter`
-- Verify PowerShell 7.x is running (not Windows PowerShell 5.x)
+| Platform | Requirements |
+|----------|-------------|
+| **Windows** | Windows 10/11 or Windows Server 2016+ |
+| **Linux** | Ubuntu 22.04+, Debian 11+, RHEL 8+, or other distributions with GUI desktop |
+| **macOS** | macOS 12 (Monterey) or later, Intel or Apple Silicon |
 
-### 2. Install PowerShell.MCP
+**All platforms require:**
+- PowerShell 7.2 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
+- Claude Desktop ([download](https://claude.ai/download)), Claude Code, or any MCP client
+
+> **Note:** Claude Desktop is strongly recommended as other clients may not deliver optimal performance.
+
+---
+
+### Windows Setup
+
+#### 1. Open PowerShell 7
+Press `Win + R`, type `pwsh`, press `Enter`
+
+#### 2. Install PowerShell.MCP
 ```powershell
 Install-Module PowerShell.MCP
 Import-Module PowerShell.MCP
 ```
 
-### 3. Get your module path
+#### 3. Get your Proxy path
 ```powershell
-(Get-Module PowerShell.MCP).ModuleBase
-# Example output: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.3.9
+Get-MCPProxyPath
+# Example: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.4.0\bin\win-x64\PowerShell.MCP.Proxy.exe
 ```
 
-### 4. Configure Claude Desktop
-Add to your Claude Desktop configuration:
+#### 4. Configure Claude Desktop
+Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.3.9\\bin\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.4.0\\bin\\win-x64\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
 ```
 
-### 5. Restart Claude Desktop and test
-- Restart Claude Desktop to activate the integration
-- See the **First-Time Demo** section below for your first demo!
+#### 5. Restart Claude Desktop
+
+---
+
+### Linux Setup
+
+#### 1. Install PowerShell 7
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y wget apt-transport-https software-properties-common
+source /etc/os-release
+wget -q https://packages.microsoft.com/config/ubuntu/$VERSION_ID/packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+sudo apt-get update
+sudo apt-get install -y powershell
+```
+
+#### 2. Install PowerShell.MCP
+```bash
+pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
+```
+
+#### 3. Get your Proxy path
+```bash
+pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
+# Example: /home/username/.local/share/powershell/Modules/PowerShell.MCP/1.4.0/bin/linux-x64/PowerShell.MCP.Proxy
+```
+
+#### 4. Set execute permission
+```bash
+chmod +x /path/to/PowerShell.MCP.Proxy
+```
+
+#### 5. Configure Claude Code
+```bash
+claude mcp add powershell-mcp -- /path/to/PowerShell.MCP.Proxy
+```
+
+Or edit `~/.claude.json` manually.
+
+---
+
+### macOS Setup
+
+#### 1. Install PowerShell 7
+```bash
+# Using Homebrew
+brew install powershell/tap/powershell
+
+# Or download the official pkg installer from:
+# https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-macos
+```
+
+#### 2. Install PowerShell.MCP
+```bash
+pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
+```
+
+#### 3. Get your Proxy path
+```bash
+pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
+# Apple Silicon: ~/.local/share/powershell/Modules/PowerShell.MCP/1.4.0/bin/osx-arm64/PowerShell.MCP.Proxy
+# Intel Mac: ~/.local/share/powershell/Modules/PowerShell.MCP/1.4.0/bin/osx-x64/PowerShell.MCP.Proxy
+```
+
+#### 4. Set execute permission
+```bash
+chmod +x /path/to/PowerShell.MCP.Proxy
+```
+
+#### 5. Configure Claude Desktop
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "PowerShell": {
+      "command": "/Users/YourName/.local/share/powershell/Modules/PowerShell.MCP/1.4.0/bin/osx-arm64/PowerShell.MCP.Proxy"
+    }
+  }
+}
+```
+
+#### 6. Restart Claude Desktop
+
+---
 
 ## First-Time Demo
 🎨 Experience PowerShell.MCP's capabilities with these engaging demonstrations:
@@ -283,6 +377,24 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
     </tr>
   </table>
 </div>
+
+---
+
+## Platform Notes
+
+### Windows
+- PSReadLine module is automatically loaded for enhanced console experience
+- Full color support for PowerShell output
+
+### Linux
+- Requires a GUI desktop environment (GNOME, KDE, XFCE, etc.)
+- Supported terminal emulators: gnome-terminal, konsole, xfce4-terminal, xterm, lxterminal, mate-terminal, terminator, tilix, alacritty, kitty
+- PSReadLine is automatically removed (not supported on Linux)
+
+### macOS
+- Works with Terminal.app (default)
+- PSReadLine is automatically removed (not supported on macOS)
+- Both Apple Silicon (M1/M2/M3/M4) and Intel Macs are supported
 
 ---
 
