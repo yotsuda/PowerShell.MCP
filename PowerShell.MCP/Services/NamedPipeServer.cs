@@ -1,5 +1,6 @@
-﻿using System.IO.Pipes;
+using System.IO.Pipes;
 using System.Text;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace PowerShell.MCP.Services;
@@ -133,7 +134,13 @@ public class NamedPipeServer : IDisposable
                 string output = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath");
                 string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
 
-                var versionErrorResponse =
+                string versionErrorResponse;
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    string escapedPath = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath -Escape");
+                    escapedPath = escapedPath[(escapedPath.LastIndexOfAny(['\r', '\n']) + 1)..];
+
+                    versionErrorResponse =
 $@"PowerShell MCP Configuration Error
 
 ISSUE: PowerShell.MCP.Proxy version is outdated.
@@ -142,9 +149,28 @@ ISSUE: PowerShell.MCP.Proxy version is outdated.
 
 ACTION REQUIRED: Update your MCP client configuration
 - Executable path: {proxyExePath}
-- JSON config example: ""PowerShell"": {{ ""command"": ""{proxyExePath.Replace("\\", "\\\\")}"" }}
+- For JSON config, use escaped path: {escapedPath}
+
+TIP: Run 'Get-MCPProxyPath -Escape' in PowerShell to get the properly escaped path for JSON configuration.
 
 Please provide how to update the MCP client configuration to the user.";
+                }
+                else
+                {
+                    versionErrorResponse =
+$@"PowerShell MCP Configuration Error
+
+ISSUE: PowerShell.MCP.Proxy version is outdated.
+- PowerShell.MCP module version: {MCPModuleInitializer.ServerVersion}
+- Proxy executable version: {proxyVersion}
+
+ACTION REQUIRED: Update your MCP client configuration
+- Executable path: {proxyExePath}
+
+TIP: Run 'Get-MCPProxyPath' in PowerShell to get the path for MCP client configuration.
+
+Please provide how to update the MCP client configuration to the user.";
+                }
 
                 await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken);
                 return;
