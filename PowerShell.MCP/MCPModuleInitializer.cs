@@ -1,4 +1,4 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 using System.Reflection;
 using PowerShell.MCP.Services;
 
@@ -33,6 +33,39 @@ namespace PowerShell.MCP
 
         public void OnImport()
         {
+            // Check if Named Pipe already exists (another pwsh session is running)
+            bool pipeExists = false;
+
+            if (OperatingSystem.IsWindows())
+            {
+                // On Windows, try to connect briefly to check if pipe exists
+                try
+                {
+                    using var testClient = new System.IO.Pipes.NamedPipeClientStream(".", NamedPipeServer.PipeName, System.IO.Pipes.PipeDirection.InOut);
+                    testClient.Connect(100); // 100ms timeout
+                    pipeExists = true;
+                }
+                catch (TimeoutException)
+                {
+                    // Pipe exists but no server is listening yet - this is OK, we can try to be the server
+                }
+                catch (System.IO.IOException)
+                {
+                    // Pipe doesn't exist or connection failed
+                }
+            }
+            else
+            {
+                // On Linux/macOS, check for the socket file
+                string pipePath = $"/tmp/CoreFxPipe_{NamedPipeServer.PipeName}";
+                pipeExists = File.Exists(pipePath);
+            }
+
+            if (pipeExists)
+            {
+                throw new InvalidOperationException("Another PowerShell.MCP server is already running. Only one instance is allowed per machine.");
+            }
+
             try
             {
                 _tokenSource = new CancellationTokenSource();
@@ -40,7 +73,7 @@ namespace PowerShell.MCP
 
                 // Load and execute MCP polling engine script
                 var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
-                
+
                 // Execute as ScriptBlock for PowerShell execution
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
                 {
