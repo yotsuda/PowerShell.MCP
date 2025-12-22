@@ -189,11 +189,6 @@ public static class PwshLauncherMacOS
 
     public static void LaunchPwsh()
     {
-        // Get essential environment variables
-        var home = Environment.GetEnvironmentVariable("HOME") ?? "";
-        var user = Environment.GetEnvironmentVariable("USER") ?? "";
-        var path = "/usr/local/bin:/usr/bin:/bin";
-
         // Use osascript with stdin to avoid shell quoting issues
         var psi = new ProcessStartInfo
         {
@@ -206,11 +201,12 @@ public static class PwshLauncherMacOS
         using var process = Process.Start(psi);
         if (process != null)
         {
-            // Send AppleScript via stdin to avoid escaping issues
-            // Use env -i to launch pwsh with clean environment
+            // Terminal.app opens a new window with a login shell (typically zsh)
+            // which reads ~/.zprofile and sets up the user's environment including PATH
+            // This ensures pwsh is found regardless of installation method (Homebrew, pkg, etc.)
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"env -i HOME='{home}' USER='{user}' TERM=xterm-256color PATH='{path}' pwsh -NoExit -Command '{PwshInitCommand}'\"");
+            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -Command '{PwshInitCommand}'\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
@@ -280,14 +276,13 @@ public static class PwshLauncherLinux
                 return false;
             }
 
-            // Launch terminal via setsid with clean environment
-            // env -i clears inherited environment, we pass only essential variables
-            var home = Environment.GetEnvironmentVariable("HOME") ?? "";
-            var user = Environment.GetEnvironmentVariable("USER") ?? "";
-            var display = Environment.GetEnvironmentVariable("DISPLAY") ?? ":0";
-            var dbusAddress = Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS") ?? "";
-            var path = "/usr/local/bin:/usr/bin:/bin";
+            // Get user's default shell
+            var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
 
+            // Launch terminal via setsid to detach from parent process
+            // We use the user's login shell to ensure ~/.bash_profile or ~/.zprofile is loaded,
+            // which sets up PATH and other environment variables correctly.
+            // This mimics what happens when a user manually opens a terminal and types 'pwsh'.
             var psi = new ProcessStartInfo
             {
                 FileName = "setsid",
@@ -295,47 +290,39 @@ public static class PwshLauncherLinux
                 CreateNoWindow = true
             };
             
-            // setsid env -i HOME=... USER=... DISPLAY=... DBUS_SESSION_BUS_ADDRESS=... TERM=xterm-256color PATH=... <terminal> ...
-            psi.ArgumentList.Add("env");
-            psi.ArgumentList.Add("-i");
-            psi.ArgumentList.Add($"HOME={home}");
-            psi.ArgumentList.Add($"USER={user}");
-            psi.ArgumentList.Add($"DISPLAY={display}");
-            if (!string.IsNullOrEmpty(dbusAddress))
-            {
-                psi.ArgumentList.Add($"DBUS_SESSION_BUS_ADDRESS={dbusAddress}");
-            }
-            psi.ArgumentList.Add("TERM=xterm-256color");
-            psi.ArgumentList.Add($"PATH={path}");
+            // Command to launch pwsh with proper initialization via login shell
+            // exec replaces the shell with pwsh to keep the process tree clean
+            var pwshCommand = $"exec pwsh -NoExit -Command '{PwshInitCommand}'";
+
+            // setsid <terminal> ... <shell> -l -c '<pwshCommand>'
             psi.ArgumentList.Add(terminal);
 
             // Configure arguments based on terminal type
-            // Using ArgumentList avoids shell quoting issues
             switch (terminal)
             {
                 case "gnome-terminal":
                     psi.ArgumentList.Add("--");
-                    psi.ArgumentList.Add("pwsh");
-                    psi.ArgumentList.Add("-NoExit");
-                    psi.ArgumentList.Add("-Command");
-                    psi.ArgumentList.Add(PwshInitCommand);
+                    psi.ArgumentList.Add(shell);
+                    psi.ArgumentList.Add("-l");
+                    psi.ArgumentList.Add("-c");
+                    psi.ArgumentList.Add(pwshCommand);
                     break;
 
                 case "konsole":
                     psi.ArgumentList.Add("-e");
-                    psi.ArgumentList.Add("pwsh");
-                    psi.ArgumentList.Add("-NoExit");
-                    psi.ArgumentList.Add("-Command");
-                    psi.ArgumentList.Add(PwshInitCommand);
+                    psi.ArgumentList.Add(shell);
+                    psi.ArgumentList.Add("-l");
+                    psi.ArgumentList.Add("-c");
+                    psi.ArgumentList.Add(pwshCommand);
                     break;
 
                 case "xterm":
                 case "lxterminal":
                     psi.ArgumentList.Add("-e");
-                    psi.ArgumentList.Add("pwsh");
-                    psi.ArgumentList.Add("-NoExit");
-                    psi.ArgumentList.Add("-Command");
-                    psi.ArgumentList.Add(PwshInitCommand);
+                    psi.ArgumentList.Add(shell);
+                    psi.ArgumentList.Add("-l");
+                    psi.ArgumentList.Add("-c");
+                    psi.ArgumentList.Add(pwshCommand);
                     break;
 
                 case "xfce4-terminal":
@@ -344,22 +331,22 @@ public static class PwshLauncherLinux
                 case "tilix":
                     // These terminals expect -e with a single command string
                     psi.ArgumentList.Add("-e");
-                    psi.ArgumentList.Add($"pwsh -NoExit -Command \"{PwshInitCommand}\"");
+                    psi.ArgumentList.Add($"{shell} -l -c '{pwshCommand}'");
                     break;
 
                 case "alacritty":
                     psi.ArgumentList.Add("-e");
-                    psi.ArgumentList.Add("pwsh");
-                    psi.ArgumentList.Add("-NoExit");
-                    psi.ArgumentList.Add("-Command");
-                    psi.ArgumentList.Add(PwshInitCommand);
+                    psi.ArgumentList.Add(shell);
+                    psi.ArgumentList.Add("-l");
+                    psi.ArgumentList.Add("-c");
+                    psi.ArgumentList.Add(pwshCommand);
                     break;
 
                 case "kitty":
-                    psi.ArgumentList.Add("pwsh");
-                    psi.ArgumentList.Add("-NoExit");
-                    psi.ArgumentList.Add("-Command");
-                    psi.ArgumentList.Add(PwshInitCommand);
+                    psi.ArgumentList.Add(shell);
+                    psi.ArgumentList.Add("-l");
+                    psi.ArgumentList.Add("-c");
+                    psi.ArgumentList.Add(pwshCommand);
                     break;
 
                 default:
