@@ -206,7 +206,7 @@ public static class PwshLauncherMacOS
             // This ensures pwsh is found regardless of installation method (Homebrew, pkg, etc.)
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -Command '{PwshInitCommand}'\"");
+            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -WorkingDirectory ~ -Command '{PwshInitCommand}'\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
@@ -292,7 +292,7 @@ public static class PwshLauncherLinux
             
             // Command to launch pwsh with proper initialization via login shell
             // exec replaces the shell with pwsh to keep the process tree clean
-            var pwshCommand = $"exec pwsh -NoExit -Command '{PwshInitCommand}'";
+            var pwshCommand = $"exec pwsh -NoExit -WorkingDirectory ~ -Command '{PwshInitCommand}'";
 
             // setsid <terminal> ... <shell> -l -c '<pwshCommand>'
             psi.ArgumentList.Add(terminal);
