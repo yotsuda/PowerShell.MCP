@@ -122,15 +122,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Default ANSI colors (matching PSReadLine defaults)
                     $defaultColors = @{
-                        'Command' = "`e[93m"  # Yellow
-                        'Parameter' = "`e[90m"  # DarkGray
-                        'String' = "`e[36m"  # DarkCyan
-                        'Variable' = "`e[92m"  # Green
-                        'Number' = "`e[97m"  # White
-                        'Operator' = "`e[90m"  # DarkGray
-                        'Keyword' = "`e[93m"  # Yellow
-                        'Member' = "`e[97m"  # White
-                        'Default' = "`e[97m"  # White
+                        'Command'   = "`e[93m" # Yellow
+                        'Parameter' = "`e[90m" # DarkGray
+                        'String'    = "`e[36m" # DarkCyan
+                        'Variable'  = "`e[92m" # Green
+                        'Number'    = "`e[97m" # White
+                        'Operator'  = "`e[90m" # DarkGray
+                        'Keyword'   = "`e[92m" # Green
+                        'Comment'   = "`e[32m" # DarkGreen
+                        'Member'    = "`e[37m" # Gray
+                        'Default'   = "`e[37m" # Gray
                     }
 
                     $tokens = [System.Management.Automation.PSParser]::Tokenize($Command, [ref]$null)
@@ -173,6 +174,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             }
                             'Keyword' {
                                 if ($psReadLineOptions.KeywordColor) { $psReadLineOptions.KeywordColor } else { $defaultColors['Keyword'] }
+                            }
+                            'Comment' {
+                                if ($psReadLineOptions.CommentColor) { $psReadLineOptions.CommentColor } else { $defaultColors['Comment'] }
                             }
                             default {
                                 if ($psReadLineOptions.DefaultTokenColor) { $psReadLineOptions.DefaultTokenColor } else { $defaultColors['Default'] }
