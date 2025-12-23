@@ -33,32 +33,22 @@ namespace PowerShell.MCP
 
         public void OnImport()
         {
-            // Check if Named Pipe already exists (another pwsh session is running)
+            // Check if another PowerShell.MCP server is already running
+            // Try to connect to existing server - if successful, another instance is running
             bool pipeExists = false;
-
-            if (OperatingSystem.IsWindows())
+            try
             {
-                // On Windows, try to connect briefly to check if pipe exists
-                try
-                {
-                    using var testClient = new System.IO.Pipes.NamedPipeClientStream(".", NamedPipeServer.PipeName, System.IO.Pipes.PipeDirection.InOut);
-                    testClient.Connect(100); // 100ms timeout
-                    pipeExists = true;
-                }
-                catch (TimeoutException)
-                {
-                    // Pipe exists but no server is listening yet - this is OK, we can try to be the server
-                }
-                catch (System.IO.IOException)
-                {
-                    // Pipe doesn't exist or connection failed
-                }
+                using var testClient = new System.IO.Pipes.NamedPipeClientStream(".", NamedPipeServer.PipeName, System.IO.Pipes.PipeDirection.InOut);
+                testClient.Connect(100); // 100ms timeout
+                pipeExists = true;
             }
-            else
+            catch (TimeoutException)
             {
-                // On Linux/macOS, check for the socket file
-                string pipePath = $"/tmp/CoreFxPipe_{NamedPipeServer.PipeName}";
-                pipeExists = File.Exists(pipePath);
+                // No server listening - OK to start
+            }
+            catch (System.IO.IOException)
+            {
+                // Pipe/socket doesn't exist or connection failed - OK to start
             }
 
             if (pipeExists)
