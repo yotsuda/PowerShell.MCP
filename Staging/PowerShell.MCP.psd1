@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.4.0'
+ModuleVersion = '1.4.1'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -30,7 +30,7 @@ CompanyName = 'Yoshifumi Tsuda'
 Copyright = '(c) Yoshifumi Tsuda. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Enables PowerShell console to function as an MCP server for Claude Desktop.'
+Description = 'Enables AI assistants (such as Claude Desktop) to execute PowerShell commands and CLI tools within a persistent PowerShell console. Supports Windows, Linux, and macOS.'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '7.2'
@@ -101,7 +101,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = 'MCP','AI','Assistant','PowerShell','Automation','Enterprise'
+        Tags = 'MCP','AI','Assistant','PowerShell','Automation','Enterprise','Windows','Linux','macOS','Cross-Platform'
 
         # A URL to the license for this module.
         LicenseUri = 'https://github.com/yotsuda/PowerShell.MCP/blob/main/LICENSE'
@@ -115,7 +115,13 @@ PrivateData = @{
         Platforms = @('Windows', 'Linux', 'macOS')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.4.0 - Enterprise-Ready MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.4.1 - Cross-Platform MCP Server
+
+=== Cross-Platform Support ===
+Now available on Windows, Linux, and macOS!
+• Windows: x64
+• Linux: x64 (gnome-terminal, konsole, xfce4-terminal, xterm, and more)
+• macOS: x64 (Intel), arm64 (Apple Silicon)
 
 === Key Features ===
 • 🤝 Shared Console Experience
@@ -144,31 +150,39 @@ PrivateData = @{
 • "Export installed programs to CSV and open in Excel"
 • "Review code files and generate development documentation"
 
-=== Quick Setup ===
-1. Install PowerShell 7.2 or later (if not installed)
-   Refer: https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows
+=== Quick Setup (Windows) ===
+1. Install PowerShell 7.2+
 2. Install-Module PowerShell.MCP
-3. Import-Module PowerShell.MCP
-4. Install Claude Desktop (recommended for optimal performance)
-   Refer: https://claude.ai/download
-5. Configure Claude Desktop
-   From top-left menu: File -> Settings -> Developer -> Edit Config
-
-   Add to Claude Desktop config (%APPDATA%\Claude\claude_desktop_config.json):
+3. Get proxy path: Get-MCPProxyPath -Escape
+4. Add to Claude Desktop config (%APPDATA%\Claude\claude_desktop_config.json):
    {
      "mcpServers": {
        "PowerShell": {
-         "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.4.0\\bin\\win-x64\\PowerShell.MCP.Proxy.exe"
+         "command": "C:\\Users\\YourName\\...\\PowerShell.MCP.Proxy.exe"
        }
      }
    }
+   Replace "command" value with output from step 3.
+5. Restart Claude Desktop
 
-   Find ModuleBase: PS> (Get-Module PowerShell.MCP).ModuleBase
-
-6. Restart Claude Desktop to activate
+=== Quick Setup (Linux / macOS) ===
+1. Install PowerShell 7.2+
+2. pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser -Force"
+3. chmod +x $(pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath")
+4. Get proxy path: Get-MCPProxyPath
+5. Add to Claude Desktop config (~/.config/Claude/claude_desktop_config.json):
+   {
+     "mcpServers": {
+       "PowerShell": {
+         "command": "/home/yourname/.local/.../PowerShell.MCP.Proxy"
+       }
+     }
+   }
+   Replace "command" value with output from step 4.
+6. Restart Claude Desktop
 
 === Requirements ===
-Windows 10/11, PowerShell 7.2+, PSReadLine 2.3.4+ (auto-loaded)
+PowerShell 7.2+, PSReadLine 2.3.4+ (Windows only, auto-loaded)
 
 === Documentation ===
 Full examples & setup guide: https://github.com/yotsuda/PowerShell.MCP#examples

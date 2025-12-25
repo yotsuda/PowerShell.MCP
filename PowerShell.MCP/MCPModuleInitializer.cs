@@ -84,12 +84,6 @@ namespace PowerShell.MCP
                     }
                 }, _tokenSource.Token);
 
-                // Output information message
-                using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
-                {
-                    ps.AddScript("Write-Information '[PowerShell.MCP] MCP server started' -Tags 'PowerShell.MCP','ServerStart'");
-                    ps.Invoke();
-                }
             }
             catch (Exception ex)
             {

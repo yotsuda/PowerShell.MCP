@@ -26,7 +26,7 @@ public class PowerShellTools
             Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
             
             // Automatically execute start_powershell_console
-            return await StartPowershellConsole(powerShellService, cancellationToken);
+            return await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
         }
         
         // Do not auto-start if module is not imported (respect user choice)
@@ -107,7 +107,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
             
             // Auto-start console (location info will also be retrieved)
-            var startResult = await StartPowershellConsole(powerShellService, cancellationToken);
+            var startResult = await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
             
             // Do not execute pipeline. Prompt AI for confirmation (important info first)
             return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
@@ -122,6 +122,8 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     [Description("Launch a new PowerShell console window with PowerShell.MCP module imported. This tool should only be executed when explicitly requested by the user or when other tool executions fail.")]
     public static async Task<string> StartPowershellConsole(
         IPowerShellService powerShellService,
+        [Description("Message displayed at console startup (e.g. greeting, joke, fun fact). Be creative and make the user smile!")]
+        string? banner = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -159,7 +161,7 @@ Note that commands executed via invoke_expression cannot be cancelled with Ctrl+
                 }
             }
 
-            bool success = await PowerShellProcessManager.StartPowerShellWithModuleAsync();
+            bool success = await PowerShellProcessManager.StartPowerShellWithModuleAsync(banner);
             
             if (!success)
             {

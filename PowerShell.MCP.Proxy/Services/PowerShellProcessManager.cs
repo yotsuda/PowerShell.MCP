@@ -37,20 +37,21 @@ public class PowerShellProcessManager
     /// <summary>
     /// Starts PowerShell process with PowerShell.MCP module imported
     /// </summary>
+    /// <param name="startupMessage">Optional message to display before module import</param>
     /// <returns>true if startup succeeded</returns>
-    public static async Task<bool> StartPowerShellWithModuleAsync()
+    public static async Task<bool> StartPowerShellWithModuleAsync(string? startupMessage = null)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            PwshLauncherWindows.LaunchPwsh();
+            PwshLauncherWindows.LaunchPwsh(startupMessage);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            PwshLauncherMacOS.LaunchPwsh();
+            PwshLauncherMacOS.LaunchPwsh(startupMessage);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            PwshLauncherLinux.LaunchPwsh();
+            PwshLauncherLinux.LaunchPwsh(startupMessage);
         }
         else
         {
@@ -121,7 +122,7 @@ public static class PwshLauncherWindows
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint CREATE_NEW_CONSOLE = 0x00000010;
 
-    public static void LaunchPwsh()
+    public static void LaunchPwsh(string? startupMessage = null)
     {
         IntPtr hToken = IntPtr.Zero;
         IntPtr env = IntPtr.Zero;
@@ -143,7 +144,19 @@ public static class PwshLauncherWindows
             var si = new STARTUPINFOW { cb = (uint)Marshal.SizeOf<STARTUPINFOW>() };
             var pi = new PROCESS_INFORMATION();
 
-            string commandLine = "pwsh.exe -NoExit -Command \"Import-Module PSReadLine,PowerShell.MCP\"";
+            // Build command with optional startup message
+            string command;
+            if (!string.IsNullOrEmpty(startupMessage))
+            {
+                // Escape single quotes for PowerShell
+                var escaped = startupMessage.Replace("'", "''");
+                command = $"Write-Host '{escaped}' -ForegroundColor Green; Import-Module PowerShell.MCP,PSReadLine";
+            }
+            else
+            {
+                command = "Import-Module PowerShell.MCP,PSReadLine";
+            }
+            string commandLine = $"pwsh.exe -NoExit -Command \"{command}\"";
 
             bool ok = CreateProcessW(
                 null,
@@ -184,10 +197,7 @@ public static class PwshLauncherWindows
 /// </summary>
 public static class PwshLauncherMacOS
 {
-    // Command to initialize PowerShell.MCP and remove PSReadLine (not supported on Linux/macOS)
-    private const string PwshInitCommand = "Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
-
-    public static void LaunchPwsh()
+    public static void LaunchPwsh(string? startupMessage = null)
     {
         // Use osascript with stdin to avoid shell quoting issues
         var psi = new ProcessStartInfo
@@ -198,6 +208,19 @@ public static class PwshLauncherMacOS
             CreateNoWindow = true
         };
 
+        // Build command with optional startup message
+        string command;
+        if (!string.IsNullOrEmpty(startupMessage))
+        {
+            // Escape single quotes for PowerShell (doubled for AppleScript string)
+            var escaped = startupMessage.Replace("'", "''");
+            command = $"Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+        }
+        else
+        {
+            command = "Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+        }
+
         using var process = Process.Start(psi);
         if (process != null)
         {
@@ -206,7 +229,7 @@ public static class PwshLauncherMacOS
             // This ensures pwsh is found regardless of installation method (Homebrew, pkg, etc.)
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -WorkingDirectory ~ -Command '{PwshInitCommand}'\"");
+            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -WorkingDirectory ~ -Command '{command}'\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
@@ -235,15 +258,11 @@ public static class PwshLauncherLinux
         "kitty",
     ];
 
-    // Command to initialize PowerShell.MCP and remove PSReadLine (not supported on Linux/macOS)
-    private const string PwshInitCommand = "Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
-
-
-    public static void LaunchPwsh()
+    public static void LaunchPwsh(string? startupMessage = null)
     {
         foreach (var terminal in SupportedTerminals)
         {
-            if (TryLaunchTerminal(terminal))
+            if (TryLaunchTerminal(terminal, startupMessage))
             {
                 return;
             }
@@ -254,7 +273,7 @@ public static class PwshLauncherLinux
             string.Join(", ", SupportedTerminals));
     }
 
-    private static bool TryLaunchTerminal(string terminal)
+    private static bool TryLaunchTerminal(string terminal, string? startupMessage)
     {
         try
         {
@@ -290,9 +309,22 @@ public static class PwshLauncherLinux
                 CreateNoWindow = true
             };
             
+            // Build command with optional startup message
+            string initCommand;
+            if (!string.IsNullOrEmpty(startupMessage))
+            {
+                // Escape single quotes for PowerShell (doubled for shell string)
+                var escaped = startupMessage.Replace("'", "''");
+                initCommand = $"Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+            }
+            else
+            {
+                initCommand = "Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+            }
+
             // Command to launch pwsh with proper initialization via login shell
             // exec replaces the shell with pwsh to keep the process tree clean
-            var pwshCommand = $"exec pwsh -NoExit -WorkingDirectory ~ -Command '{PwshInitCommand}'";
+            var pwshCommand = $"exec pwsh -NoExit -WorkingDirectory ~ -Command ''{initCommand}''";
 
             // setsid <terminal> ... <shell> -l -c '<pwshCommand>'
             psi.ArgumentList.Add(terminal);
