@@ -446,3 +446,5 @@ deployRelease.bat
 
 # PlatyPS auto-generated module help file
 PowerShell.MCP/PlatyPS/en-US/PowerShell.MCP.md
+
+slack*.txt
