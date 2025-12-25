@@ -3,11 +3,28 @@
 
 [CmdletBinding()]
 param(
+    [Parameter(Position = 0)]
+    [ValidateSet('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')]
+    [string[]]$Target,
     [string]$Configuration = 'Release',
     [string]$OutputBase
 )
 
 $ErrorActionPreference = 'Stop'
+
+# If no target specified, build all
+$allTargets = @('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')
+if (-not $Target) {
+    $Target = $allTargets
+}
+
+# Map target names to RIDs
+$ridMap = @{
+    'WinX64'   = 'win-x64'
+    'LinuxX64' = 'linux-x64'
+    'OsxX64'   = 'osx-x64'
+    'OsxArm64' = 'osx-arm64'
+}
 
 # Determine output base from installed module if not specified
 if (-not $OutputBase) {
@@ -23,140 +40,130 @@ if (-not $OutputBase) {
 $moduleProjectPath = Join-Path $PSScriptRoot 'PowerShell.MCP'
 $proxyProjectPath = Join-Path $PSScriptRoot 'PowerShell.MCP.Proxy'
 $stagingPath = Join-Path $PSScriptRoot 'Staging'
-$helpSourcePath = Join-Path $PSScriptRoot 'PowerShell.MCP\PlatyPS\en-US'
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "PowerShell.MCP Build Script" -ForegroundColor Cyan
 Write-Host "Output: $OutputBase" -ForegroundColor Cyan
+Write-Host "Target: $($Target -join ', ')" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # =============================================================================
-# Step 1: Build PowerShell.MCP.dll
+# Build PowerShell.MCP.dll (if Dll target specified)
 # =============================================================================
-Write-Host "[1/4] Building PowerShell.MCP.dll..." -ForegroundColor Yellow
+if ('Dll' -in $Target) {
+    Write-Host "[Dll] Building PowerShell.MCP.dll..." -ForegroundColor Yellow
 
-$buildArgs = @(
-    'build'
-    $moduleProjectPath
-    '-c', $Configuration
-    '--no-incremental'
-    '--source', 'https://api.nuget.org/v3/index.json'
-)
-
-& dotnet @buildArgs
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "PowerShell.MCP.dll build failed!"
-    exit 1
-}
-
-Write-Host "  Build completed" -ForegroundColor Green
-Write-Host ""
-
-# =============================================================================
-# Step 2: Copy required files to OutputBase
-# =============================================================================
-Write-Host "[2/4] Copying module files..." -ForegroundColor Yellow
-
-# Source paths
-$buildOutputPath = Join-Path $moduleProjectPath "bin\$Configuration\net9.0"
-
-# Copy DLLs from build output
-Copy-Item (Join-Path $buildOutputPath 'PowerShell.MCP.dll') -Destination $OutputBase -Force
-Copy-Item (Join-Path $buildOutputPath 'Ude.NetStandard.dll') -Destination $OutputBase -Force
-Write-Host "  Copied: PowerShell.MCP.dll" -ForegroundColor Green
-Write-Host "  Copied: Ude.NetStandard.dll" -ForegroundColor Green
-
-# Copy manifest and script from Staging
-Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psd1') -Destination $OutputBase -Force
-Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psm1') -Destination $OutputBase -Force
-Write-Host "  Copied: PowerShell.MCP.psd1" -ForegroundColor Green
-Write-Host "  Copied: PowerShell.MCP.psm1" -ForegroundColor Green
-
-# Copy help file
-$helpDestPath = Join-Path $OutputBase 'en-US'
-if (-not (Test-Path $helpDestPath)) {
-    New-Item -Path $helpDestPath -ItemType Directory -Force | Out-Null
-}
-$helpFile = Join-Path $helpSourcePath 'PowerShell.MCP.dll-Help.xml'
-if (Test-Path $helpFile) {
-    Copy-Item $helpFile -Destination $helpDestPath -Force
-    Write-Host "  Copied: en-US\PowerShell.MCP.dll-Help.xml" -ForegroundColor Green
-} else {
-    Write-Warning "  Help file not found: $helpFile"
-}
-
-Write-Host ""
-
-# =============================================================================
-# Step 3: Build PowerShell.MCP.Proxy for all platforms
-# =============================================================================
-Write-Host "[3/4] Building PowerShell.MCP.Proxy for all platforms..." -ForegroundColor Yellow
-
-$rids = @(
-    'win-x64',
-    'linux-x64',
-    'osx-x64',
-    'osx-arm64'
-)
-
-$binBase = Join-Path $OutputBase 'bin'
-
-foreach ($rid in $rids) {
-    Write-Host "  [$rid] Publishing..." -ForegroundColor Gray
-    
-    $outputDir = Join-Path $binBase $rid
-    
-    if (-not (Test-Path $outputDir)) {
-        New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
-    }
-    
-    $publishArgs = @(
-        'publish'
-        $proxyProjectPath
+    $buildArgs = @(
+        'build'
+        $moduleProjectPath
         '-c', $Configuration
-        '-r', $rid
-        '-o', $outputDir
+        '--no-incremental'
         '--source', 'https://api.nuget.org/v3/index.json'
     )
-    
-    & dotnet @publishArgs
-    
+
+    & dotnet @buildArgs
+
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "[$rid] Build failed!"
+        Write-Error "PowerShell.MCP.dll build failed!"
         exit 1
     }
-    
-    $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
-    $exePath = Join-Path $outputDir $exeName
-    
-    if (Test-Path $exePath) {
-        $size = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
-        Write-Host "  [$rid] Success ($size MB)" -ForegroundColor Green
-    } else {
-        Write-Warning "  [$rid] Executable not found at expected path"
-    }
+
+    Write-Host "  Build completed" -ForegroundColor Green
+
+    # Copy required files to OutputBase
+    Write-Host "  Copying module files..." -ForegroundColor Gray
+
+    # Source paths
+    $buildOutputPath = Join-Path $moduleProjectPath "bin\$Configuration\net9.0"
+
+    # Copy DLLs from build output
+    Copy-Item (Join-Path $buildOutputPath 'PowerShell.MCP.dll') -Destination $OutputBase -Force
+    Copy-Item (Join-Path $buildOutputPath 'Ude.NetStandard.dll') -Destination $OutputBase -Force
+    Write-Host "  Copied: PowerShell.MCP.dll" -ForegroundColor Green
+    Write-Host "  Copied: Ude.NetStandard.dll" -ForegroundColor Green
+
+    # Copy manifest and script from Staging
+    Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psd1') -Destination $OutputBase -Force
+    Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psm1') -Destination $OutputBase -Force
+    Write-Host "  Copied: PowerShell.MCP.psd1" -ForegroundColor Green
+    Write-Host "  Copied: PowerShell.MCP.psm1" -ForegroundColor Green
+
+
+    Write-Host ""
 }
 
-Write-Host ""
+# =============================================================================
+# Build PowerShell.MCP.Proxy (for specified platforms)
+# =============================================================================
+$proxyTargets = $Target | Where-Object { $_ -ne 'Dll' }
+
+if ($proxyTargets) {
+    Write-Host "[Proxy] Building PowerShell.MCP.Proxy..." -ForegroundColor Yellow
+
+    $binBase = Join-Path $OutputBase 'bin'
+
+    foreach ($t in $proxyTargets) {
+        $rid = $ridMap[$t]
+        Write-Host "  [$rid] Publishing..." -ForegroundColor Gray
+        
+        $outputDir = Join-Path $binBase $rid
+        
+        if (-not (Test-Path $outputDir)) {
+            New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
+        }
+        
+        $publishArgs = @(
+            'publish'
+            $proxyProjectPath
+            '-c', $Configuration
+            '-r', $rid
+            '-o', $outputDir
+            '--source', 'https://api.nuget.org/v3/index.json'
+        )
+        
+        & dotnet @publishArgs
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "[$rid] Build failed!"
+            exit 1
+        }
+        
+        $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
+        $exePath = Join-Path $outputDir $exeName
+        
+        if (Test-Path $exePath) {
+            $size = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
+            Write-Host "  [$rid] Success ($size MB)" -ForegroundColor Green
+        } else {
+            Write-Warning "  [$rid] Executable not found at expected path"
+        }
+    }
+
+    Write-Host ""
+}
 
 # =============================================================================
-# Step 4: Summary
+# Summary: Verify built files
 # =============================================================================
-Write-Host "[4/4] Verifying output..." -ForegroundColor Yellow
+Write-Host "[Summary] Verifying output..." -ForegroundColor Yellow
 
-$expectedFiles = @(
-    'PowerShell.MCP.dll',
-    'PowerShell.MCP.psd1',
-    'PowerShell.MCP.psm1',
-    'Ude.NetStandard.dll',
-    'en-US\PowerShell.MCP.dll-Help.xml',
-    'bin\win-x64\PowerShell.MCP.Proxy.exe',
-    'bin\linux-x64\PowerShell.MCP.Proxy',
-    'bin\osx-x64\PowerShell.MCP.Proxy',
-    'bin\osx-arm64\PowerShell.MCP.Proxy'
-)
+$expectedFiles = @()
+
+if ('Dll' -in $Target) {
+    $expectedFiles += @(
+        'PowerShell.MCP.dll',
+        'PowerShell.MCP.psd1',
+        'PowerShell.MCP.psm1',
+        'Ude.NetStandard.dll'
+    )
+}
+
+foreach ($t in ($Target | Where-Object { $_ -ne 'Dll' })) {
+    $rid = $ridMap[$t]
+    $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
+    $expectedFiles += "bin\$rid\$exeName"
+}
 
 $allPresent = $true
 foreach ($file in $expectedFiles) {
@@ -167,13 +174,11 @@ foreach ($file in $expectedFiles) {
     }
 }
 
-if ($allPresent) {
-    Write-Host "  All required files present" -ForegroundColor Green
+if ($allPresent -and $expectedFiles.Count -gt 0) {
+    Write-Host "  All built files present" -ForegroundColor Green
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Build completed successfully!" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Verify with: Get-MCPProxyPath" -ForegroundColor Gray
