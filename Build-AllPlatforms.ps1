@@ -178,6 +178,83 @@ if ($allPresent -and $expectedFiles.Count -gt 0) {
     Write-Host "  All built files present" -ForegroundColor Green
 }
 
+# =============================================================================
+# Check for unexpected files in output directory
+# =============================================================================
+Write-Host "[Cleanup] Checking for unexpected files..." -ForegroundColor Yellow
+
+$allowedFiles = @(
+    'PowerShell.MCP.dll',
+    'PowerShell.MCP.psd1',
+    'PowerShell.MCP.psm1',
+    'Ude.NetStandard.dll'
+)
+
+$allowedDirs = @(
+    'bin',
+    'en-US'
+)
+
+$unexpectedItems = @()
+
+# Check root level files
+Get-ChildItem $OutputBase -File | ForEach-Object {
+    if ($_.Name -notin $allowedFiles) {
+        $unexpectedItems += $_.Name
+    }
+}
+
+# Check root level directories
+Get-ChildItem $OutputBase -Directory | ForEach-Object {
+    if ($_.Name -notin $allowedDirs) {
+        $unexpectedItems += "$($_.Name)\"
+    }
+}
+
+# Check bin directory structure
+$binPath = Join-Path $OutputBase 'bin'
+if (Test-Path $binPath) {
+    $allowedPlatforms = @('win-x64', 'linux-x64', 'osx-x64', 'osx-arm64')
+    
+    Get-ChildItem $binPath -Directory | ForEach-Object {
+        if ($_.Name -notin $allowedPlatforms) {
+            $unexpectedItems += "bin\$($_.Name)\"
+        }
+    }
+    
+    # Check each platform directory
+    foreach ($platform in $allowedPlatforms) {
+        $platformPath = Join-Path $binPath $platform
+        if (Test-Path $platformPath) {
+            $expectedExe = if ($platform -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
+            Get-ChildItem $platformPath -File | ForEach-Object {
+                if ($_.Name -ne $expectedExe) {
+                    $unexpectedItems += "bin\$platform\$($_.Name)"
+                }
+            }
+        }
+    }
+}
+
+# Check en-US directory
+$enUSPath = Join-Path $OutputBase 'en-US'
+if (Test-Path $enUSPath) {
+    Get-ChildItem $enUSPath -File | ForEach-Object {
+        if ($_.Name -ne 'PowerShell.MCP.dll-Help.xml') {
+            $unexpectedItems += "en-US\$($_.Name)"
+        }
+    }
+}
+
+if ($unexpectedItems.Count -gt 0) {
+    Write-Warning "  Unexpected files found in output directory:"
+    foreach ($item in $unexpectedItems) {
+        Write-Warning "    - $item"
+    }
+    Write-Host "  Consider removing these before publishing." -ForegroundColor Yellow
+} else {
+    Write-Host "  No unexpected files found" -ForegroundColor Green
+}
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Build completed successfully!" -ForegroundColor Cyan
