@@ -41,24 +41,60 @@ public class PowerShellProcessManager
     /// <returns>true if startup succeeded</returns>
     public static async Task<bool> StartPowerShellWithModuleAsync(string? startupMessage = null)
     {
+        var (success, _) = await StartPowerShellWithModuleAndPidAsync(startupMessage);
+        return success;
+    }
+
+    /// <summary>
+    /// Starts PowerShell process with PowerShell.MCP module imported and returns PID
+    /// </summary>
+    /// <param name="startupMessage">Optional message to display before module import</param>
+    /// <returns>Tuple of (success, pid)</returns>
+    public static async Task<(bool Success, int Pid)> StartPowerShellWithModuleAndPidAsync(string? startupMessage = null)
+    {
+        int pid = 0;
+        
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            PwshLauncherWindows.LaunchPwsh(startupMessage);
+            pid = PwshLauncherWindows.LaunchPwsh(startupMessage);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             PwshLauncherMacOS.LaunchPwsh(startupMessage);
+            // macOS: PID will be registered by PS module via RegistrationPipeServer
+            pid = 0;
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             PwshLauncherLinux.LaunchPwsh(startupMessage);
+            // Linux: PID will be registered by PS module via RegistrationPipeServer
+            pid = 0;
         }
         else
         {
             throw new PlatformNotSupportedException("Unsupported operating system");
         }
 
-        return await NamedPipeClient.WaitForPipeReadyAsync();
+        // Wait for Named Pipe to be ready
+        // PS module will register itself via RegistrationPipeServer
+        string pipeName;
+        if (pid != 0)
+        {
+            // Windows: We know the PID, wait for specific pipe
+            pipeName = ConsoleSessionManager.GetPipeNameForPid(pid);
+        }
+        else
+        {
+            // macOS/Linux: Wait for registration, then use the active pipe
+            // For now, wait a bit and check if any console was registered
+            await Task.Delay(500);
+            pipeName = ConsoleSessionManager.Instance.ActivePipeName 
+                ?? ConsoleSessionManager.DefaultPipeName;
+        }
+        
+        var success = await NamedPipeClient.WaitForPipeReadyAsync(pipeName);
+        
+        return (success, pid);
     }
 }
 
@@ -122,12 +158,13 @@ public static class PwshLauncherWindows
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint CREATE_NEW_CONSOLE = 0x00000010;
 
-    public static void LaunchPwsh(string? startupMessage = null)
+    public static int LaunchPwsh(string? startupMessage = null)
     {
         IntPtr hToken = IntPtr.Zero;
         IntPtr env = IntPtr.Zero;
         IntPtr hProcess = IntPtr.Zero;
         IntPtr hThread = IntPtr.Zero;
+        int pid = 0;
 
         try
         {
@@ -172,6 +209,7 @@ public static class PwshLauncherWindows
 
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
 
+            pid = (int)pi.dwProcessId;
             hProcess = pi.hProcess;
             hThread = pi.hThread;
         }
@@ -189,6 +227,8 @@ public static class PwshLauncherWindows
             if (hThread != IntPtr.Zero)
                 CloseHandle(hThread);
         }
+        
+        return pid;
     }
 }
 

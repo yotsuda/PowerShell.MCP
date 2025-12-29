@@ -1,5 +1,7 @@
 using System.Management.Automation;
 using System.Reflection;
+using System.IO.Pipes;
+using System.Text;
 using PowerShell.MCP.Services;
 
 namespace PowerShell.MCP
@@ -27,39 +29,46 @@ namespace PowerShell.MCP
     /// </summary>
     public class MCPModuleInitializer : IModuleAssemblyInitializer
     {
+        private const string RegistrationPipeName = "PowerShell.MCP.Registration";
+        
         private static CancellationTokenSource? _tokenSource;
         private static NamedPipeServer? _namedPipeServer;
         public static readonly string ServerVersion = Assembly.GetExecutingAssembly().GetName().Version!.ToString();
 
         public void OnImport()
         {
-            // Check if another PowerShell.MCP server is already running
-            // Try to connect to existing server - if successful, another instance is running
-            bool pipeExists = false;
             try
             {
-                using var testClient = new System.IO.Pipes.NamedPipeClientStream(".", NamedPipeServer.PipeName, System.IO.Pipes.PipeDirection.InOut);
-                testClient.Connect(100); // 100ms timeout
-                pipeExists = true;
-            }
-            catch (TimeoutException)
-            {
-                // No server listening - OK to start
-            }
-            catch (System.IO.IOException)
-            {
-                // Pipe/socket doesn't exist or connection failed - OK to start
-            }
+                // First, try to register with Proxy to determine pipe name
+                bool registeredWithProxy = TryRegisterWithProxy();
+                
+                // Determine pipe name based on registration result
+                // If registered with proxy, use PID suffix; otherwise use default name
+                _namedPipeServer = new NamedPipeServer(usePidSuffix: registeredWithProxy);
+                
+                // Check if another PowerShell.MCP server is already running with the same pipe name
+                bool pipeExists = false;
+                try
+                {
+                    using var testClient = new NamedPipeClientStream(".", _namedPipeServer.PipeName, PipeDirection.InOut);
+                    testClient.Connect(100); // 100ms timeout
+                    pipeExists = true;
+                }
+                catch (TimeoutException)
+                {
+                    // No server listening - OK to start
+                }
+                catch (IOException)
+                {
+                    // Pipe/socket doesn't exist or connection failed - OK to start
+                }
 
-            if (pipeExists)
-            {
-                throw new InvalidOperationException("Another PowerShell.MCP server is already running. Only one instance is allowed per machine.");
-            }
+                if (pipeExists)
+                {
+                    throw new InvalidOperationException("Another PowerShell.MCP server is already running. Only one instance is allowed per machine.");
+                }
 
-            try
-            {
                 _tokenSource = new CancellationTokenSource();
-                _namedPipeServer = new NamedPipeServer();
 
                 // Load and execute MCP polling engine script
                 var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
@@ -83,7 +92,6 @@ namespace PowerShell.MCP
                         // Silently ignore Named Pipe server errors
                     }
                 }, _tokenSource.Token);
-
             }
             catch (Exception ex)
             {
@@ -93,6 +101,61 @@ namespace PowerShell.MCP
                     ps.AddScript($"Write-Warning '[PowerShell.MCP] Failed to start: {ex.Message}'");
                     ps.Invoke();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Tries to register this PS module instance with the Proxy
+        /// </summary>
+        /// <returns>True if registration succeeded, false if proxy is not available</returns>
+        private static bool TryRegisterWithProxy()
+        {
+            try
+            {
+                using var pipeClient = new NamedPipeClientStream(".", RegistrationPipeName, PipeDirection.InOut);
+                
+                // Try to connect with short timeout - proxy may not be running
+                try
+                {
+                    pipeClient.Connect(1000); // 1 second timeout
+                }
+                catch (TimeoutException)
+                {
+                    // Proxy registration server not available
+                    // User may have imported module manually without proxy
+                    return false;
+                }
+                
+                // Send registration message: "REGISTER:<PID>"
+                var pid = Environment.ProcessId;
+                var message = $"REGISTER:{pid}";
+                var messageBytes = Encoding.UTF8.GetBytes(message);
+                var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
+                
+                pipeClient.Write(lengthBytes, 0, lengthBytes.Length);
+                pipeClient.Write(messageBytes, 0, messageBytes.Length);
+                pipeClient.Flush();
+                
+                // Wait for acknowledgment
+                var ackLengthBuffer = new byte[4];
+                if (pipeClient.Read(ackLengthBuffer, 0, 4) == 4)
+                {
+                    var ackLength = BitConverter.ToInt32(ackLengthBuffer, 0);
+                    if (ackLength > 0 && ackLength < 100)
+                    {
+                        var ackBuffer = new byte[ackLength];
+                        pipeClient.Read(ackBuffer, 0, ackLength);
+                        var ack = Encoding.UTF8.GetString(ackBuffer);
+                        return ack == "OK";
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception)
+            {
+                // Silently ignore registration errors
+                return false;
             }
         }
 

@@ -205,7 +205,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 param(
                     [hashtable]$StreamResults,
                     [string]$LocationInfo,
-                    [double]$Duration
+                    [double]$Duration,
+                    [string]$Status = "Ready",
+                    [string]$Pipeline = ""
                 )
 
                 # Process each stream type
@@ -269,12 +271,32 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $infoCount = $outputStreams.Information.Count
                 $hasErrors = $errorCount -gt 0
 
+                # Truncate pipeline for status line
+                # Split by newline, pipe character, and limit to 30 chars
+                $pipelineSummary = ""
+                if ($Pipeline) {
+                    # Split by newline first, take first line
+                    $firstPart = ($Pipeline -split "[\r\n]")[0].Trim()
+                    # Split by pipe character, take first segment
+                    $firstPart = ($firstPart -split "\|")[0].Trim()
+                    # Truncate to 30 chars if needed
+                    if ($firstPart.Length -gt 30) {
+                        $pipelineSummary = $firstPart.Substring(0, 27) + "..."
+                    } elseif ($firstPart.Length -lt $Pipeline.TrimEnd().Length) {
+                        # Was truncated by newline or pipe
+                        $pipelineSummary = $firstPart + "..."
+                    } else {
+                        $pipelineSummary = $firstPart
+                    }
+                }
+
                 # Generate status line
                 $statusIcon = if ($hasErrors) { "✗" } else { "✓" }
                 $statusText = if ($hasErrors) { "executed with errors" } else { "executed successfully" }
                 $durationText = "{0:F2}s" -f $Duration
-
-                $statusLine = "$statusIcon Pipeline $statusText | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
+                
+                $pipelineInfo = if ($pipelineSummary) { " | Pipeline: $pipelineSummary" } else { "" }
+                $statusLine = "$statusIcon Pipeline $statusText | PID: $PID | Status: $Status$pipelineInfo | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
 
                 # Generate structured output strings
                 $structuredOutput = @{
@@ -383,14 +405,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     Write-ColoredCommand $cmd
 
-                    # Measure execution time
-                    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
                     # Execute command with clean stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $cmd
 
-                    $stopwatch.Stop()
-                    $duration = $stopwatch.Elapsed.TotalSeconds
+                    # Get duration from C# ExecutionState (managed by WaitForResult)
+                    $duration = [PowerShell.MCP.Services.ExecutionState]::ElapsedSeconds
 
                     # Display results in console
                     $streamResults.Success | Out-Default
@@ -437,7 +456,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
 
                     # Generate MCP formatted output with duration
-                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
+                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration -Pipeline $cmd
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
@@ -460,14 +479,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 $mcpOutput = $null
                 try {
-                    # Measure execution time
-                    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
                     # Execute command with stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $silentCmd
 
-                    $stopwatch.Stop()
-                    $duration = $stopwatch.Elapsed.TotalSeconds
+                    # Get duration from C# ExecutionState (managed by WaitForResult)
+                    $duration = [PowerShell.MCP.Services.ExecutionState]::ElapsedSeconds
 
                     # Get current location info
                     $currentLocation = @{
@@ -479,7 +495,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $locationInfo = "Location [$($currentLocation.provider)]: $($currentLocation.currentPath)"
 
                     # Generate MCP formatted output with duration
-                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration
+                    $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration -Pipeline $silentCmd
                 }
                 catch {
                     $currentLocation = @{

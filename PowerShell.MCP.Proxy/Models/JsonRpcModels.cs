@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace PowerShell.MCP.Proxy.Models;
 
-
 public abstract class PowerShellMcpParams
 {
     [JsonPropertyName("proxy_version")]

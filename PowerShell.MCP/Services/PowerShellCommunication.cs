@@ -29,30 +29,19 @@ public static class PowerShellCommunication
         _currentResult = null;
         _resultReadyEvent.Reset();
         
-        // Set execution state to Busy
-        ExecutionState.SetBusy();
+        var remainingTime = endTime - DateTime.UtcNow;
+        var timeoutMs = (int)Math.Max(0, remainingTime.TotalMilliseconds);
         
-        try
+        // Block waiting with ManualResetEvent
+        bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
+        
+        if (signaled)
         {
-            var remainingTime = endTime - DateTime.UtcNow;
-            var timeoutMs = (int)Math.Max(0, remainingTime.TotalMilliseconds);
-            
-            // Block waiting with ManualResetEvent
-            bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
-            
-            if (signaled)
-            {
-                return _currentResult ?? "No result available";
-            }
-            else
-            {
-                return "Command execution timed out (4 minutes 50 seconds). Your command is still running. Consider restarting the PowerShell console.";
-            }
+            return _currentResult ?? "No result available";
         }
-        finally
+        else
         {
-            // Always return to Idle after execution completes
-            ExecutionState.SetIdle();
+            return "Command execution timed out (4 minutes 50 seconds). Your command is still running. Consider restarting the PowerShell console.";
         }
     }
 }

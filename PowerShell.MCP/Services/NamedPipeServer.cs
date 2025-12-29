@@ -1,7 +1,8 @@
-using System.IO.Pipes;
+﻿using System.IO.Pipes;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Diagnostics;
 
 namespace PowerShell.MCP.Services;
 
@@ -10,11 +11,31 @@ namespace PowerShell.MCP.Services;
 /// </summary>
 public static class ExecutionState
 {
-    private static volatile string _status = "idle";
+    private static string _status = "idle";
+    private static readonly Stopwatch _stopwatch = new();
+    private static string _currentPipeline = "";
     
     public static string Status => _status;
-    public static void SetBusy() => _status = "busy";
-    public static void SetIdle() => _status = "idle";
+    public static string CurrentPipeline => _currentPipeline;
+    
+    /// <summary>
+    /// Gets the elapsed time in seconds since execution started
+    /// </summary>
+    public static double ElapsedSeconds => _stopwatch.Elapsed.TotalSeconds;
+    
+    public static void SetBusy(string pipeline)
+    {
+        _stopwatch.Restart();
+        _currentPipeline = pipeline;
+        _status = "busy";
+    }
+    
+    public static void SetIdle()
+    {
+        _stopwatch.Stop();
+        _currentPipeline = "";
+        _status = "idle";
+    }
 }
 
 /// <summary>
@@ -23,11 +44,28 @@ public static class ExecutionState
 /// </summary>
 public class NamedPipeServer : IDisposable
 {
-    public const string PipeName = "PowerShell.MCP.Communication";
+    public const string BasePipeName = "PowerShell.MCP.Communication";
     private const int MaxConcurrentConnections = 2; // Two pipe instances
+    
+    /// <summary>
+    /// Gets the pipe name (with or without PID suffix depending on registration)
+    /// </summary>
+    public string PipeName { get; }
+    
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
     private bool _disposed = false;
+
+    /// <summary>
+    /// Creates a new Named Pipe server with the specified pipe name
+    /// </summary>
+    /// <param name="usePidSuffix">If true, append PID to pipe name</param>
+    public NamedPipeServer(bool usePidSuffix)
+    {
+        PipeName = usePidSuffix 
+            ? $"{BasePipeName}.{Environment.ProcessId}" 
+            : BasePipeName;
+    }
 
     /// <summary>
     /// Starts the Named Pipe server
@@ -96,11 +134,10 @@ public class NamedPipeServer : IDisposable
             }
         }
     }
-
     /// <summary>
     /// Creates a Named Pipe server
     /// </summary>
-    private static NamedPipeServerStream CreateNamedPipeServer()
+    private NamedPipeServerStream CreateNamedPipeServer()
     {
         return new NamedPipeServerStream(
             PipeName,
@@ -179,22 +216,39 @@ Please provide how to update the MCP client configuration to the user.";
             // Check execution state
             if (ExecutionState.Status == "busy")
             {
-                // Return busy response
-                var busyResponse = @"Cannot execute new pipeline while previous pipeline is running (cannot be cancelled with Ctrl+C). Options:
-1. Wait for completion
-2. Manually terminate console (LLM will then restart automatically)
-
-LLM should prompt user to choose.";
+                // Return busy response with status line including running pipeline
+                var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                var elapsed = ExecutionState.ElapsedSeconds;
+                var runningPipeline = TruncatePipeline(ExecutionState.CurrentPipeline);
+                var busyResponse = $"⧗ Previous pipeline running | PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s";
 
                 await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
                 return;
             }
 
-            // Execute tool
-            var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
+            // Get pipeline for invoke_expression
+            string pipeline = "";
+            if (name == "invoke_expression" && requestRoot.TryGetProperty("pipeline", out JsonElement pipelineElement))
+            {
+                pipeline = pipelineElement.GetString() ?? "";
+            }
+
+            // Set busy state before execution
+            ExecutionState.SetBusy(pipeline);
             
-            // Send response
-            await SendMessageAsync(pipeServer, result, cancellationToken);
+            try
+            {
+                // Execute tool
+                var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
+                
+                // Send response
+                await SendMessageAsync(pipeServer, result, cancellationToken);
+            }
+            finally
+            {
+                // Always return to idle after execution
+                ExecutionState.SetIdle();
+            }
         }
         catch (Exception ex)
         {
@@ -306,6 +360,32 @@ LLM should prompt user to choose.";
             }
             totalBytesRead += bytesRead;
         }
+    }
+
+    /// <summary>
+    /// Truncates pipeline string for status display
+    /// </summary>
+    private static string TruncatePipeline(string pipeline)
+    {
+        if (string.IsNullOrEmpty(pipeline))
+            return "";
+        
+        // Take first line
+        var firstLine = pipeline.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? pipeline;
+        
+        // Take first pipe segment
+        var firstSegment = firstLine.Split('|').FirstOrDefault()?.Trim() ?? firstLine;
+        
+        // Truncate if too long
+        const int maxLength = 30;
+        if (firstSegment.Length > maxLength)
+            return firstSegment[..(maxLength - 3)] + "...";
+        
+        // Add "..." if truncated by newline or pipe
+        if (firstSegment != pipeline)
+            return firstSegment + "...";
+        
+        return firstSegment;
     }
 
     public void Dispose()

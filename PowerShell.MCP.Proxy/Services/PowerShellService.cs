@@ -30,6 +30,21 @@ public class PowerShellService : IPowerShellService
         return response;
     }
 
+    public async Task<string> GetCurrentLocationFromPipeAsync(string pipeName, CancellationToken cancellationToken = default)
+    {
+        var requestParams = new GetCurrentLocationParams();
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetCurrentLocationParams);
+
+        var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+        
+        if (string.IsNullOrEmpty(response))
+        {
+            throw new InvalidOperationException($"PowerShell.MCP module communication to pipe '{pipeName}' failed - no response received");
+        }
+
+        return response;
+    }
+
     public async Task<string> InvokeExpressionAsync(string pipeline, bool execute_immediately, CancellationToken cancellationToken = default)
     {
         // Use type-safe parameters
