@@ -109,48 +109,48 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Discovers all PowerShell.MCP Named Pipes by scanning the file system
+    /// Enumerates PowerShell.MCP Named Pipes lazily by scanning the file system.
+    /// Uses yield return for lazy evaluation - stops scanning when caller stops iterating.
     /// Windows: \\.\pipe\PowerShell.MCP.Communication.*
     /// Linux/macOS: /tmp/CoreFxPipe_PowerShell.MCP.Communication.*
     /// </summary>
-    public List<string> DiscoverAllPipes()
+    public IEnumerable<string> EnumeratePipes()
     {
-        var discoveredPipes = new List<string>();
+        IEnumerable<string> paths;
+        bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         
         try
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (isWindows)
             {
                 // Windows: Named Pipes appear in \\.\pipe\
-                var pipeDirectory = @"\\.\pipe\";
-                var pipePrefix = DefaultPipeName;
-                
-                foreach (var pipePath in Directory.GetFiles(pipeDirectory, $"{pipePrefix}*"))
-                {
-                    var pipeName = Path.GetFileName(pipePath);
-                    discoveredPipes.Add(pipeName);
-                }
+                paths = Directory.EnumerateFiles(@"\\.\pipe\", $"{DefaultPipeName}*");
             }
             else
             {
                 // Linux/macOS: .NET Named Pipes use Unix Domain Sockets at /tmp/CoreFxPipe_*
-                var socketDirectory = "/tmp";
-                var socketPrefix = $"CoreFxPipe_{DefaultPipeName}";
-                
-                foreach (var socketPath in Directory.GetFiles(socketDirectory, $"{socketPrefix}*"))
-                {
-                    var socketName = Path.GetFileName(socketPath);
-                    // Remove the CoreFxPipe_ prefix to get the pipe name
-                    var pipeName = socketName["CoreFxPipe_".Length..];
-                    discoveredPipes.Add(pipeName);
-                }
+                paths = Directory.EnumerateFiles("/tmp", $"CoreFxPipe_{DefaultPipeName}*");
             }
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[WARN] DiscoverAllPipes: Failed to scan pipes: {ex.Message}");
+            Console.Error.WriteLine($"[WARN] EnumeratePipes: Failed to scan pipes: {ex.Message}");
+            yield break;
         }
         
-        return discoveredPipes;
+        foreach (var path in paths)
+        {
+            var fileName = Path.GetFileName(path);
+            
+            if (isWindows)
+            {
+                yield return fileName;
+            }
+            else
+            {
+                // Remove the CoreFxPipe_ prefix to get the pipe name
+                yield return fileName["CoreFxPipe_".Length..];
+            }
+        }
     }
 }

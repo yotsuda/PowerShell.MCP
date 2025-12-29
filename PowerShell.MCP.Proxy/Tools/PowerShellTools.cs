@@ -1,4 +1,4 @@
-using ModelContextProtocol.Server;
+﻿using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text;
 using PowerShell.MCP.Proxy.Services;
@@ -13,7 +13,6 @@ public class PowerShellTools
     // Error message constant definitions
     private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";
     private const string ERROR_MODULE_NOT_IMPORTED = "PowerShell.MCP module is not imported in existing pwsh.";
-    
     /// <summary>
     /// Finds a ready pipe using cached state, with minimal queries.
     /// Returns (readyPipeName, statusInfo for busy/completed pipes)
@@ -24,39 +23,10 @@ public class PowerShellTools
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var statusInfo = new StringBuilder();
+        var readyCandidates = new List<string>();
         
-        // Step 1: Try ActivePipeName first (most common case)
-        var activePipe = sessionManager.ActivePipeName;
-        if (activePipe != null)
-        {
-            var status = await powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
-            
-            if (status == null)
-            {
-                // Dead pipe
-                sessionManager.ClearDeadPipe(activePipe);
-            }
-            else if (status.Status == "standby")
-            {
-                // Ready to use
-                return (activePipe, statusInfo);
-            }
-            else if (status.Status == "completed")
-            {
-                // Has unreported output - collect it and use this pipe
-                AppendCompletedStatus(statusInfo, status);
-                return (activePipe, statusInfo);
-            }
-            else // busy
-            {
-                // Mark as busy and continue searching
-                var busyInfo = FormatBusyStatus(status);
-                sessionManager.MarkPipeBusy(activePipe, busyInfo);
-                statusInfo.AppendLine(busyInfo);
-            }
-        }
-        
-        // Step 2: Check known busy pipes (they might be standby now)
+        // Step 1: Check known busy pipes FIRST (they might be standby now)
+        // Collect ready candidates before checking ActivePipeName
         var busyPipes = sessionManager.GetBusyPipes();
         foreach (var (pipeName, _) in busyPipes)
         {
@@ -69,38 +39,73 @@ public class PowerShellTools
             }
             else if (status.Status == "standby")
             {
-                // Now ready
-                sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, statusInfo);
+                // Now ready - add to candidates
+                sessionManager.RemoveFromBusy(pipeName);
+                readyCandidates.Add(pipeName);
             }
             else if (status.Status == "completed")
             {
-                // Has unreported output
+                // Has unreported output - add to candidates with output collected
                 AppendCompletedStatus(statusInfo, status);
-                sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, statusInfo);
+                sessionManager.RemoveFromBusy(pipeName);
+                readyCandidates.Add(pipeName);
             }
             else // still busy
             {
                 var busyInfo = FormatBusyStatus(status);
                 sessionManager.MarkPipeBusy(pipeName, busyInfo);
-                // Update status info if not already there
-                if (!statusInfo.ToString().Contains($"PID: {status.Pid}"))
-                {
-                    statusInfo.AppendLine(busyInfo);
-                }
+                statusInfo.AppendLine(busyInfo);
             }
         }
         
-        // Step 3: Discover new pipes
-        var allPipes = sessionManager.DiscoverAllPipes();
+        // Step 2: Check ActivePipeName (if not already checked in Step 1)
+        var activePipe = sessionManager.ActivePipeName;
+        if (activePipe != null && !busyPipes.ContainsKey(activePipe))
+        {
+            var status = await powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
+            
+            if (status == null)
+            {
+                // Dead pipe - try candidates
+                sessionManager.ClearDeadPipe(activePipe);
+            }
+            else if (status.Status == "standby")
+            {
+                // Ready to use
+                return (activePipe, statusInfo);
+            }
+            else if (status.Status == "completed")
+            {
+                // Has unreported output - use this pipe
+                AppendCompletedStatus(statusInfo, status);
+                return (activePipe, statusInfo);
+            }
+            else // busy
+            {
+                // Mark as busy - use candidates if available
+                var busyInfo = FormatBusyStatus(status);
+                sessionManager.MarkPipeBusy(activePipe, busyInfo);
+                statusInfo.AppendLine(busyInfo);
+            }
+        }
+        
+        // Step 3: Use ready candidate if available
+        if (readyCandidates.Count > 0)
+        {
+            var candidatePipe = readyCandidates[0];
+            sessionManager.SetActivePipeName(candidatePipe);
+            return (candidatePipe, statusInfo);
+        }
+        
+        // Step 4: Discover new pipes (last resort) - lazy evaluation stops at first standby
         var knownPipes = new HashSet<string>(busyPipes.Keys);
         if (activePipe != null) knownPipes.Add(activePipe);
         
-        foreach (var pipeName in allPipes)
+        var unknownPipes = sessionManager.EnumeratePipes()
+            .Where(p => !knownPipes.Contains(p));
+        
+        foreach (var pipeName in unknownPipes)
         {
-            if (knownPipes.Contains(pipeName)) continue; // Already checked
-            
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
             
             if (status == null)
@@ -108,23 +113,24 @@ public class PowerShellTools
                 // Dead pipe - skip
                 continue;
             }
-            else if (status.Status == "standby")
+            
+            if (status.Status == "standby")
             {
                 sessionManager.SetActivePipeName(pipeName);
                 return (pipeName, statusInfo);
             }
-            else if (status.Status == "completed")
+            
+            if (status.Status == "completed")
             {
                 AppendCompletedStatus(statusInfo, status);
                 sessionManager.SetActivePipeName(pipeName);
                 return (pipeName, statusInfo);
             }
-            else // busy
-            {
-                var busyInfo = FormatBusyStatus(status);
-                sessionManager.MarkPipeBusy(pipeName, busyInfo);
-                statusInfo.AppendLine(busyInfo);
-            }
+            
+            // busy
+            var busyInfo = FormatBusyStatus(status);
+            sessionManager.MarkPipeBusy(pipeName, busyInfo);
+            statusInfo.AppendLine(busyInfo);
         }
         
         // No ready pipe found
