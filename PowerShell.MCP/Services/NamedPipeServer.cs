@@ -16,10 +16,13 @@ public static class ExecutionState
     private static readonly Stopwatch _stopwatch = new();
     private static string _currentPipeline = "";
     
-    // Unreported output (when pipe error occurs during result delivery)
+    // Unreported output (when result should be cached for later retrieval)
     private static string? _unreportedOutput = null;
     private static string? _unreportedPipeline = null;
     private static double _unreportedDuration = 0;
+    
+    // Flag: should cache output on completion (set when busy response is sent)
+    private static bool _shouldCacheOutput = false;
     
     public static string Status => _status;
     public static string CurrentPipeline => _currentPipeline;
@@ -34,11 +37,26 @@ public static class ExecutionState
     /// </summary>
     public static bool HasUnreportedOutput => _unreportedOutput != null;
     
+    /// <summary>
+    /// Checks if output should be cached on completion
+    /// </summary>
+    public static bool ShouldCacheOutput => _shouldCacheOutput;
+    
     public static void SetBusy(string pipeline)
     {
         _stopwatch.Restart();
         _currentPipeline = pipeline;
+        _shouldCacheOutput = false;  // Reset flag
         _status = "busy";
+    }
+    
+    /// <summary>
+    /// Marks that the output should be cached on completion.
+    /// Called when a busy response is sent to another request.
+    /// </summary>
+    public static void MarkForCaching()
+    {
+        _shouldCacheOutput = true;
     }
     
     /// <summary>
@@ -48,11 +66,12 @@ public static class ExecutionState
     {
         _stopwatch.Stop();
         _currentPipeline = "";
+        _shouldCacheOutput = false;
         _status = "standby";
     }
     
     /// <summary>
-    /// Sets status to completed with unreported output (pipe error during delivery)
+    /// Sets status to completed with unreported output
     /// </summary>
     public static void SetCompleted(string output)
     {
@@ -61,6 +80,7 @@ public static class ExecutionState
         _unreportedDuration = _stopwatch.Elapsed.TotalSeconds;
         _stopwatch.Stop();
         _currentPipeline = "";
+        _shouldCacheOutput = false;
         _status = "completed";
     }
     
@@ -216,6 +236,9 @@ public class NamedPipeServer : IDisposable
                 string statusResponse;
                 if (status == "busy")
                 {
+                    // Mark for caching - Proxy will use another pipe, so result won't be received
+                    ExecutionState.MarkForCaching();
+                    
                     var elapsed = ExecutionState.ElapsedSeconds;
                     var runningPipeline = ExecutionState.CurrentPipeline;
                     statusResponse = JsonSerializer.Serialize(new
@@ -310,6 +333,10 @@ Please provide how to update the MCP client configuration to the user.";
             // Check execution state
             if (ExecutionState.Status == "busy")
             {
+                // Mark that the running command's output should be cached
+                // (because Proxy won't receive it - it's sending a new request)
+                ExecutionState.MarkForCaching();
+                
                 // Return busy response with status line including running pipeline
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var elapsed = ExecutionState.ElapsedSeconds;
@@ -331,11 +358,23 @@ Please provide how to update the MCP client configuration to the user.";
                 {
                     var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
                     
+                    // Check if output should be cached (busy response was sent to another request)
+                    var shouldCache = ExecutionState.ShouldCacheOutput;
+                    
                     // Try to send response
                     try
                     {
                         await SendMessageAsync(pipeServer, result, cancellationToken);
-                        ExecutionState.SetStandby();
+                        
+                        if (shouldCache)
+                        {
+                            // Proxy sent another request while we were busy, cache the result
+                            ExecutionState.SetCompleted(result);
+                        }
+                        else
+                        {
+                            ExecutionState.SetStandby();
+                        }
                     }
                     catch
                     {

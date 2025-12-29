@@ -145,8 +145,7 @@ public class PowerShellTools
 
     private static void AppendCompletedStatus(StringBuilder statusInfo, GetStatusResponse status)
     {
-        var truncatedPipeline = TruncatePipeline(status.Pipeline ?? "");
-        statusInfo.AppendLine($"✓ | PID: {status.Pid} | Completed | Pipeline: {truncatedPipeline} | Duration: {status.Duration:F2}s");
+        // Output already contains the summary line, just append it directly
         statusInfo.AppendLine(status.Output);
         statusInfo.AppendLine();
     }
