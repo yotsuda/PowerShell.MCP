@@ -8,12 +8,18 @@ namespace PowerShell.MCP.Services;
 
 /// <summary>
 /// Static class for managing execution state
+/// Status: standby / busy / completed
 /// </summary>
 public static class ExecutionState
 {
-    private static string _status = "idle";
+    private static string _status = "standby";
     private static readonly Stopwatch _stopwatch = new();
     private static string _currentPipeline = "";
+    
+    // Unreported output (when pipe error occurs during result delivery)
+    private static string? _unreportedOutput = null;
+    private static string? _unreportedPipeline = null;
+    private static double _unreportedDuration = 0;
     
     public static string Status => _status;
     public static string CurrentPipeline => _currentPipeline;
@@ -23,6 +29,11 @@ public static class ExecutionState
     /// </summary>
     public static double ElapsedSeconds => _stopwatch.Elapsed.TotalSeconds;
     
+    /// <summary>
+    /// Checks if there is unreported output
+    /// </summary>
+    public static bool HasUnreportedOutput => _unreportedOutput != null;
+    
     public static void SetBusy(string pipeline)
     {
         _stopwatch.Restart();
@@ -30,11 +41,43 @@ public static class ExecutionState
         _status = "busy";
     }
     
-    public static void SetIdle()
+    /// <summary>
+    /// Sets status to standby (command completed, result delivered successfully)
+    /// </summary>
+    public static void SetStandby()
     {
         _stopwatch.Stop();
         _currentPipeline = "";
-        _status = "idle";
+        _status = "standby";
+    }
+    
+    /// <summary>
+    /// Sets status to completed with unreported output (pipe error during delivery)
+    /// </summary>
+    public static void SetCompleted(string output)
+    {
+        _unreportedOutput = output;
+        _unreportedPipeline = _currentPipeline;
+        _unreportedDuration = _stopwatch.Elapsed.TotalSeconds;
+        _stopwatch.Stop();
+        _currentPipeline = "";
+        _status = "completed";
+    }
+    
+    /// <summary>
+    /// Consumes unreported output (returns and clears it, transitions to standby)
+    /// </summary>
+    public static (string Output, string Pipeline, double Duration)? ConsumeUnreportedOutput()
+    {
+        if (_unreportedOutput == null)
+            return null;
+        
+        var result = (_unreportedOutput, _unreportedPipeline ?? "", _unreportedDuration);
+        _unreportedOutput = null;
+        _unreportedPipeline = null;
+        _unreportedDuration = 0;
+        _status = "standby";
+        return result;
     }
 }
 
@@ -168,14 +211,46 @@ public class NamedPipeServer : IDisposable
             if (name == "get_status")
             {
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
-                var status = ExecutionState.Status == "busy" ? "Busy" : "Ready";
-                var statusResponse = $"| PID: {pid} | Status: {status} |";
+                var status = ExecutionState.Status;
                 
-                if (ExecutionState.Status == "busy")
+                string statusResponse;
+                if (status == "busy")
                 {
                     var elapsed = ExecutionState.ElapsedSeconds;
-                    var runningPipeline = TruncatePipeline(ExecutionState.CurrentPipeline);
-                    statusResponse = $"⧗ | PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s";
+                    var runningPipeline = ExecutionState.CurrentPipeline;
+                    statusResponse = JsonSerializer.Serialize(new
+                    {
+                        pid,
+                        status = "busy",
+                        pipeline = runningPipeline,
+                        duration = Math.Round(elapsed, 2)
+                    });
+                }
+                else if (status == "completed")
+                {
+                    // Consume unreported output (returns and clears it)
+                    var unreported = ExecutionState.ConsumeUnreportedOutput();
+                    if (unreported.HasValue)
+                    {
+                        statusResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "completed",
+                            pipeline = unreported.Value.Pipeline,
+                            duration = Math.Round(unreported.Value.Duration, 2),
+                            output = unreported.Value.Output
+                        });
+                    }
+                    else
+                    {
+                        // Should not happen, but fallback to standby
+                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby" });
+                    }
+                }
+                else
+                {
+                    // standby
+                    statusResponse = JsonSerializer.Serialize(new { pid, status = "standby" });
                 }
                 
                 await SendMessageAsync(pipeServer, statusResponse, cancellationToken);
@@ -245,11 +320,42 @@ Please provide how to update the MCP client configuration to the user.";
                 return;
             }
 
-            // Execute tool
-            var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
-            
-            // Send response
-            await SendMessageAsync(pipeServer, result, cancellationToken);
+            // Execute tool with state management for invoke_expression
+            if (name == "invoke_expression")
+            {
+                var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement) 
+                    ? pipelineElement.GetString() ?? "" : "";
+                ExecutionState.SetBusy(pipeline);
+                
+                try
+                {
+                    var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
+                    
+                    // Try to send response
+                    try
+                    {
+                        await SendMessageAsync(pipeServer, result, cancellationToken);
+                        ExecutionState.SetStandby();
+                    }
+                    catch
+                    {
+                        // Pipe error - save as unreported output
+                        ExecutionState.SetCompleted(result);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Execution error - still need to return to standby
+                    ExecutionState.SetStandby();
+                    throw;
+                }
+            }
+            else
+            {
+                // Other tools (get_current_location) - no state management needed
+                var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
+                await SendMessageAsync(pipeServer, result, cancellationToken);
+            }
         }
         catch (Exception ex)
         {

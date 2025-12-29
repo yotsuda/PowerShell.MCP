@@ -1,4 +1,4 @@
-﻿using System.IO.Pipes;
+using System.IO.Pipes;
 using System.Text;
 
 namespace PowerShell.MCP.Proxy.Services;
@@ -11,10 +11,6 @@ public class NamedPipeClient
     {
         try
         {
-            // Cleanup dead consoles and discover existing ones
-            _sessionManager.CleanupDeadConsoles();
-            _sessionManager.DiscoverExistingConsole();
-
             // Check if any PowerShell process is running
             if (!PowerShellProcessManager.IsPowerShellProcessRunning())
             {
@@ -26,45 +22,10 @@ public class NamedPipeClient
             
             if (pipeName == null)
             {
-                // No registered console, try default pipe (user-imported module)
-                if (_sessionManager.CanConnect(ConsoleSessionManager.DefaultPipeName))
-                {
-                    _sessionManager.RegisterConsole(ConsoleSessionManager.DefaultPipeName, setAsActive: true);
-                    pipeName = ConsoleSessionManager.DefaultPipeName;
-                }
-                else
-                {
-                    return "PowerShell.MCP module is not imported in existing pwsh.";
-                }
-            }
-            
-            using var pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
-
-            // Attempt Named Pipe connection
-            try
-            {
-                await pipeClient.ConnectAsync(1000 * 3); // 3 second timeout
-            }
-            catch (TimeoutException)
-            {
-                // Pipe was registered but now unavailable
-                _sessionManager.UnregisterConsole(pipeName);
                 return "PowerShell.MCP module is not imported in existing pwsh.";
             }
- 
-            // Convert JSON message to UTF-8 bytes
-            var messageBytes = Encoding.UTF8.GetBytes(arguments);
             
-            // Create 4-byte Little Endian message length
-            var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
-            
-            // Send message length prefix + JSON message body
-            await pipeClient.WriteAsync(lengthBytes, 0, lengthBytes.Length);
-            await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length);
-
-            // Receive response: proper length prefix handling
-            var response = await ReceiveMessageAsync(pipeClient);
-            return response;
+            return await SendRequestToAsync(pipeName, arguments);
         }
         catch (TimeoutException)
         {
@@ -93,7 +54,6 @@ public class NamedPipeClient
             }
             catch (TimeoutException)
             {
-                _sessionManager.UnregisterConsole(pipeName);
                 return string.Empty;
             }
 

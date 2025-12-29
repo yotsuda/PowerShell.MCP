@@ -1,7 +1,8 @@
-﻿using ModelContextProtocol.Server;
+using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text;
 using PowerShell.MCP.Proxy.Services;
+using PowerShell.MCP.Proxy.Models;
 using System.Runtime.InteropServices;
 
 namespace PowerShell.MCP.Proxy.Tools;
@@ -13,27 +14,190 @@ public class PowerShellTools
     private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";
     private const string ERROR_MODULE_NOT_IMPORTED = "PowerShell.MCP module is not imported in existing pwsh.";
     
+    /// <summary>
+    /// Finds a ready pipe using cached state, with minimal queries.
+    /// Returns (readyPipeName, statusInfo for busy/completed pipes)
+    /// </summary>
+    private static async Task<(string? readyPipeName, StringBuilder statusInfo)> FindReadyPipeAsync(
+        IPowerShellService powerShellService,
+        CancellationToken cancellationToken)
+    {
+        var sessionManager = ConsoleSessionManager.Instance;
+        var statusInfo = new StringBuilder();
+        
+        // Step 1: Try ActivePipeName first (most common case)
+        var activePipe = sessionManager.ActivePipeName;
+        if (activePipe != null)
+        {
+            var status = await powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
+            
+            if (status == null)
+            {
+                // Dead pipe
+                sessionManager.ClearDeadPipe(activePipe);
+            }
+            else if (status.Status == "standby")
+            {
+                // Ready to use
+                return (activePipe, statusInfo);
+            }
+            else if (status.Status == "completed")
+            {
+                // Has unreported output - collect it and use this pipe
+                AppendCompletedStatus(statusInfo, status);
+                return (activePipe, statusInfo);
+            }
+            else // busy
+            {
+                // Mark as busy and continue searching
+                var busyInfo = FormatBusyStatus(status);
+                sessionManager.MarkPipeBusy(activePipe, busyInfo);
+                statusInfo.AppendLine(busyInfo);
+            }
+        }
+        
+        // Step 2: Check known busy pipes (they might be standby now)
+        var busyPipes = sessionManager.GetBusyPipes();
+        foreach (var (pipeName, _) in busyPipes)
+        {
+            var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+            
+            if (status == null)
+            {
+                // Dead pipe
+                sessionManager.ClearDeadPipe(pipeName);
+            }
+            else if (status.Status == "standby")
+            {
+                // Now ready
+                sessionManager.SetActivePipeName(pipeName);
+                return (pipeName, statusInfo);
+            }
+            else if (status.Status == "completed")
+            {
+                // Has unreported output
+                AppendCompletedStatus(statusInfo, status);
+                sessionManager.SetActivePipeName(pipeName);
+                return (pipeName, statusInfo);
+            }
+            else // still busy
+            {
+                var busyInfo = FormatBusyStatus(status);
+                sessionManager.MarkPipeBusy(pipeName, busyInfo);
+                // Update status info if not already there
+                if (!statusInfo.ToString().Contains($"PID: {status.Pid}"))
+                {
+                    statusInfo.AppendLine(busyInfo);
+                }
+            }
+        }
+        
+        // Step 3: Discover new pipes
+        var allPipes = sessionManager.DiscoverAllPipes();
+        var knownPipes = new HashSet<string>(busyPipes.Keys);
+        if (activePipe != null) knownPipes.Add(activePipe);
+        
+        foreach (var pipeName in allPipes)
+        {
+            if (knownPipes.Contains(pipeName)) continue; // Already checked
+            
+            var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+            
+            if (status == null)
+            {
+                // Dead pipe - skip
+                continue;
+            }
+            else if (status.Status == "standby")
+            {
+                sessionManager.SetActivePipeName(pipeName);
+                return (pipeName, statusInfo);
+            }
+            else if (status.Status == "completed")
+            {
+                AppendCompletedStatus(statusInfo, status);
+                sessionManager.SetActivePipeName(pipeName);
+                return (pipeName, statusInfo);
+            }
+            else // busy
+            {
+                var busyInfo = FormatBusyStatus(status);
+                sessionManager.MarkPipeBusy(pipeName, busyInfo);
+                statusInfo.AppendLine(busyInfo);
+            }
+        }
+        
+        // No ready pipe found
+        return (null, statusInfo);
+    }
+
+    private static string FormatBusyStatus(GetStatusResponse status)
+    {
+        var truncatedPipeline = TruncatePipeline(status.Pipeline ?? "");
+        return $"⧗ | PID: {status.Pid} | Status: Busy | Pipeline: {truncatedPipeline} | Duration: {status.Duration:F2}s";
+    }
+
+    private static void AppendCompletedStatus(StringBuilder statusInfo, GetStatusResponse status)
+    {
+        var truncatedPipeline = TruncatePipeline(status.Pipeline ?? "");
+        statusInfo.AppendLine($"✓ | PID: {status.Pid} | Completed | Pipeline: {truncatedPipeline} | Duration: {status.Duration:F2}s");
+        statusInfo.AppendLine(status.Output);
+        statusInfo.AppendLine();
+    }
+
+    private static string TruncatePipeline(string pipeline, int maxLength = 30)
+    {
+        if (string.IsNullOrEmpty(pipeline)) return "";
+        
+        // Normalize whitespace
+        var normalized = string.Join(" ", pipeline.Split(default(char[]), StringSplitOptions.RemoveEmptyEntries));
+        
+        if (normalized.Length <= maxLength)
+            return normalized;
+        
+        return normalized[..(maxLength - 3)] + "...";
+    }
+
     [McpServerTool]
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
         CancellationToken cancellationToken = default)
     {
-        var result = await powerShellService.GetCurrentLocationAsync(cancellationToken);
+        var sessionManager = ConsoleSessionManager.Instance;
         
-        // Check if error message (when PowerShell is not running)
-        // Use StartsWith to check only the beginning of error message
-        if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
+        // Find a ready pipe using cached state
+        var (readyPipeName, statusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+        
+        if (readyPipeName == null)
         {
-            Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
+            // No ready pipe - auto-start
+            Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
+            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
             
-            // Automatically execute start_powershell_console
-            return await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
+            if (statusInfo.Length > 0)
+            {
+                return $"{statusInfo}\n{startResult}";
+            }
+            return startResult;
         }
         
-        // Do not auto-start if module is not imported (respect user choice)
-        // Return normal result or other error message as-is
-        return result;
+        try
+        {
+            var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
+            
+            if (statusInfo.Length > 0)
+            {
+                return $"{statusInfo}\n{result}";
+            }
+            return result;
+        }
+        catch
+        {
+            // Failed - try to start new console
+            Console.Error.WriteLine("[INFO] Failed to get location, auto-starting new console...");
+            return await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
+        }
     }
 
     [McpServerTool]
@@ -94,7 +258,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         CancellationToken cancellationToken = default)
     {
         // Linux/macOS does not support execute_immediately=false (insert mode)
-        // because PSReadLine is not available
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && !execute_immediately)
         {
             return "execute_immediately=false (insert mode) is not supported on Linux/macOS. Please use execute_immediately=true or omit the parameter.";
@@ -102,121 +265,60 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         var sessionManager = ConsoleSessionManager.Instance;
         
-        // First check if active console is busy using get_status (lightweight, fixed format response)
-        var (isBusy, busyStatusResponse) = await powerShellService.GetStatusAsync(cancellationToken);
+        // Find a ready pipe using cached state
+        var (readyPipeName, statusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
         
-        if (isBusy)
+        if (readyPipeName == null)
         {
-            Console.Error.WriteLine("[INFO] Current console is busy, trying standby consoles...");
-            var busyPipeName = sessionManager.ActivePipeName;
-            
-            // Mark the console as busy
-            if (busyPipeName != null)
-            {
-                sessionManager.SetConsoleBusy(busyPipeName, busyStatusResponse);
-            }
-            
-            // Try to find a standby console (not the active one)
-            var allPipes = sessionManager.GetAllPipeNames();
-            foreach (var pipeName in allPipes)
-            {
-                if (pipeName == busyPipeName) continue; // Skip the busy one
-                
-                try
-                {
-                    // Try to get status from this console
-                    var (standbyIsBusy, _) = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
-                    
-                    if (!standbyIsBusy)
-                    {
-                        // Found a ready standby console - switch to it
-                        sessionManager.RegisterConsole(pipeName, setAsActive: true);
-                        Console.Error.WriteLine($"[INFO] Switched to standby console: {pipeName}");
-                        
-                        // Get location info from the standby console
-                        var locationResult = await powerShellService.GetCurrentLocationAsync(cancellationToken);
-                        
-                        return $"{busyStatusResponse}\n\nSwitched to a standby console. Verify current location and re-execute the pipeline if appropriate.\n\n{locationResult}";
-                    }
-                }
-                catch
-                {
-                    // Console not available, continue checking others
-                    sessionManager.UnregisterConsole(pipeName);
-                }
-            }
-            
-            // No standby console available, start a new one
-            Console.Error.WriteLine("[INFO] No standby console available, starting new console...");
+            // No ready pipe - auto-start
+            Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
             var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
             
-            return $"{busyStatusResponse}\n\nStarted a new console. Verify current location and re-execute the pipeline if appropriate.\n\n{startResult}";
-        }
-
-        // Console is ready, execute the command
-        var result = await powerShellService.InvokeExpressionAsync(pipeline, execute_immediately, cancellationToken);
-        
-        // Check if error message (when PowerShell is not running)
-        if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
-        {
-            Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
-            
-            // Auto-start console (location info will also be retrieved)
-            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
-            
-            // Do not execute pipeline. Prompt AI for confirmation (important info first)
-            return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
-        }
-        
-        // Check if pwsh is running but module is not imported
-        if (result == ERROR_MODULE_NOT_IMPORTED)
-        {
-            Console.Error.WriteLine("[INFO] PowerShell.MCP module not imported, starting new console...");
-            
-            // Auto-start new console with module imported
-            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
-            
-            // Do not execute pipeline. Prompt AI for confirmation
-            return $"[LLM] Pipeline NOT executed - verify location and re-execute.\n\n[Inform user] Existing PowerShell window did not have PowerShell.MCP module imported, so a new console was opened. Original pwsh remains unchanged.\n\n{startResult}";
-        }
-        
-        // Check for busy consoles and append their status to the result
-        var busyStatusBuilder = new StringBuilder();
-        var busyConsoles = sessionManager.GetBusyConsoles();
-        
-        foreach (var (pipeName, _) in busyConsoles)
-        {
-            try
+            var response = new StringBuilder();
+            if (statusInfo.Length > 0)
             {
-                var (stillBusy, statusResponse) = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
-                
-                if (stillBusy)
-                {
-                    // Still busy, append status
-                    busyStatusBuilder.AppendLine(statusResponse);
-                }
-                else
-                {
-                    // No longer busy, clear from cache
-                    sessionManager.ClearConsoleBusy(pipeName);
-                }
+                response.AppendLine(statusInfo.ToString());
             }
-            catch
-            {
-                // Console no longer available
-                sessionManager.ClearConsoleBusy(pipeName);
-                sessionManager.UnregisterConsole(pipeName);
-            }
+            response.AppendLine(startResult);
+            response.AppendLine();
+            response.AppendLine("[LLM] Pipeline NOT executed - verify location and re-execute.");
+            return response.ToString();
         }
         
-        // Append busy status if any
-        if (busyStatusBuilder.Length > 0)
+        // Execute the command
+        try
         {
-            return $"{busyStatusBuilder}\n{result}";
+            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, execute_immediately, cancellationToken);
+            
+            // Check for error messages
+            if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
+                var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+                return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
+            }
+            
+            if (result == ERROR_MODULE_NOT_IMPORTED)
+            {
+                Console.Error.WriteLine("[INFO] PowerShell.MCP module not imported, starting new console...");
+                var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+                return $"[LLM] Pipeline NOT executed - verify location and re-execute.\n\n[Inform user] Existing PowerShell window did not have PowerShell.MCP module imported, so a new console was opened. Original pwsh remains unchanged.\n\n{startResult}";
+            }
+            
+            if (statusInfo.Length > 0)
+            {
+                return $"{statusInfo}\n{result}";
+            }
+            return result;
         }
-        
-        // Return normal result
-        return result;
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[ERROR] InvokeExpression failed: {ex.Message}");
+            
+            // Try to start new console
+            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+            return $"Command execution failed. A new console has been started.\n\n{startResult}\n\n[LLM] Pipeline NOT executed - verify location and re-execute.";
+        }
     }
 
     [McpServerTool]
@@ -233,7 +335,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     /// <summary>
     /// Internal method to start PowerShell console
     /// </summary>
-    /// <param name="forceNew">If true, force start a new console even if one is available (used when current console is busy)</param>
     private static async Task<string> StartPowershellConsoleInternal(
         IPowerShellService powerShellService,
         bool forceNew,
@@ -249,34 +350,24 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             // If not forcing new console, check for existing available console
             if (!forceNew)
             {
-                // Cleanup dead consoles first
-                sessionManager.CleanupDeadConsoles();
+                var (readyPipeName, statusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
                 
-                if (PowerShellProcessManager.IsPowerShellProcessRunning())
+                if (readyPipeName != null)
                 {
-                    // Check status using get_status (lightweight, no risk of text content confusion)
-                    var (isBusy, statusResponse) = await powerShellService.GetStatusAsync(cancellationToken);
-                    
-                    if (string.IsNullOrEmpty(statusResponse))
+                    try
                     {
-                        // No response - module not imported
-                        return @"A pwsh instance is already running and the existing session will continue to be used. However, the PowerShell.MCP module may not be imported in the existing session.
-Please guide the user to run 'Import-Module PowerShell.MCP' to import the module.
-Note LLM cannot import the module automatically.";
+                        var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
+                        var msg = "Since pwsh with the PowerShell.MCP module imported is already running, the existing session will continue to be used.\n\n";
+                        
+                        if (statusInfo.Length > 0)
+                        {
+                            return $"{statusInfo}\n{msg}{locationResult}";
+                        }
+                        return msg + locationResult;
                     }
-                    else if (isBusy)
+                    catch
                     {
-                        return @"Since pwsh with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
-However, the existing pwsh is currently executing a pipeline from the previous invoke_expression call, so it cannot accept a new command.
-Please guide the user to either wait for the command to complete or close the existing PowerShell console.
-Note that commands executed via invoke_expression cannot be cancelled with Ctrl+C and must complete naturally.";
-                    }
-                    else
-                    {
-                        var msg = @"Since pwsh with the PowerShell.MCP module imported is already running, the existing session will continue to be used.
-
-";
-                        return msg + await powerShellService.GetCurrentLocationAsync(cancellationToken);
+                        // Fall through to start new console
                     }
                 }
             }
@@ -289,16 +380,18 @@ Note that commands executed via invoke_expression cannot be cancelled with Ctrl+
                 return "Failed to start PowerShell console or establish Named Pipe connection.\n\nPossible causes:\n- No supported terminal emulator found (gnome-terminal, konsole, xfce4-terminal, xterm, etc.)\n- Terminal emulator failed to start\n- PowerShell.MCP module failed to initialize\n\nPlease ensure a terminal emulator is installed and try again.";
             }
             
-            // Console is registered via RegistrationPipeServer with setAsActive=true
-            // This works for all platforms (Windows/Linux/macOS)
-            Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={sessionManager.ActivePipeName}), getting current location...");
+            // Register the new console with PID-based pipe name
+            var pipeName = ConsoleSessionManager.GetPipeNameForPid(pid);
+            sessionManager.SetActivePipeName(pipeName);
+            
+            Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), getting current location...");
             
             // Get current location from new console
-            var locationResult = await powerShellService.GetCurrentLocationAsync(cancellationToken);
+            var newLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);
             
             Console.Error.WriteLine("[INFO] PowerShell console startup completed");
             
-            return $"PowerShell console started successfully with PowerShell.MCP module imported.\n\n{locationResult}";
+            return $"PowerShell console started successfully with PowerShell.MCP module imported.\n\n{newLocationResult}";
         }
         catch (Exception ex)
         {

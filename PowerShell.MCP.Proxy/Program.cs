@@ -27,8 +27,7 @@ namespace PowerShell.MCP.Proxy
 
             builder.Services
                 .AddSingleton<NamedPipeClient>()
-                .AddSingleton<IPowerShellService, PowerShellService>()
-                .AddSingleton<RegistrationPipeServer>();
+                .AddSingleton<IPowerShellService, PowerShellService>();
 
             builder.Services
                 .AddMcpServer()
@@ -37,10 +36,6 @@ namespace PowerShell.MCP.Proxy
                 .WithLocalizedPrompts<PowerShellPrompts>();
 
             var host = builder.Build();
-            
-            // Start registration server
-            var registrationServer = host.Services.GetRequiredService<RegistrationPipeServer>();
-            registrationServer.Start();
             
             await host.RunAsync();
         }

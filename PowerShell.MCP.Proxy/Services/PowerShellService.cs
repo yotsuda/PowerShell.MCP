@@ -1,4 +1,4 @@
-﻿using PowerShell.MCP.Proxy.Models;
+using PowerShell.MCP.Proxy.Models;
 using System.Text.Json;
 
 namespace PowerShell.MCP.Proxy.Services;
@@ -14,10 +14,7 @@ public class PowerShellService : IPowerShellService
 
     public async Task<string> GetCurrentLocationAsync(CancellationToken cancellationToken = default)
     {
-        // Use type-safe parameters
         var requestParams = new GetCurrentLocationParams();
-
-        // Serialize without reflection using Source Generator
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetCurrentLocationParams);
 
         var response = await _namedPipeClient.SendRequestAsync(jsonRequest);
@@ -45,9 +42,7 @@ public class PowerShellService : IPowerShellService
         return response;
     }
 
-    private const string STATUS_BUSY = "| Status: Busy |";
-
-    public async Task<(bool isBusy, string response)> GetStatusAsync(CancellationToken cancellationToken = default)
+    public async Task<GetStatusResponse?> GetStatusAsync(CancellationToken cancellationToken = default)
     {
         var requestParams = new GetStatusParams();
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetStatusParams);
@@ -56,16 +51,21 @@ public class PowerShellService : IPowerShellService
         
         if (string.IsNullOrEmpty(response))
         {
-            // No response - treat as unavailable (not busy, just dead)
-            return (false, string.Empty);
+            return null;
         }
 
-        // get_status response is short and fixed format, safe to check for STATUS_BUSY
-        var isBusy = response.Contains(STATUS_BUSY);
-        return (isBusy, response);
+        try
+        {
+            return JsonSerializer.Deserialize(response, GetStatusResponseContext.Default.GetStatusResponse);
+        }
+        catch
+        {
+            // Failed to parse - return null
+            return null;
+        }
     }
 
-    public async Task<(bool isBusy, string response)> GetStatusFromPipeAsync(string pipeName, CancellationToken cancellationToken = default)
+    public async Task<GetStatusResponse?> GetStatusFromPipeAsync(string pipeName, CancellationToken cancellationToken = default)
     {
         var requestParams = new GetStatusParams();
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetStatusParams);
@@ -74,24 +74,27 @@ public class PowerShellService : IPowerShellService
         
         if (string.IsNullOrEmpty(response))
         {
-            // No response - treat as unavailable (not busy, just dead)
-            return (false, string.Empty);
+            return null;
         }
 
-        var isBusy = response.Contains(STATUS_BUSY);
-        return (isBusy, response);
+        try
+        {
+            return JsonSerializer.Deserialize(response, GetStatusResponseContext.Default.GetStatusResponse);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<string> InvokeExpressionAsync(string pipeline, bool execute_immediately, CancellationToken cancellationToken = default)
     {
-        // Use type-safe parameters
         var requestParams = new InvokeExpressionParams
         {
             Pipeline = pipeline,
             ExecuteImmediately = execute_immediately
         };
 
-        // Serialize without reflection using Source Generator
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.InvokeExpressionParams);
 
         var response = await _namedPipeClient.SendRequestAsync(jsonRequest);
@@ -104,12 +107,29 @@ public class PowerShellService : IPowerShellService
         return response;
     }
 
+    public async Task<string> InvokeExpressionToPipeAsync(string pipeName, string pipeline, bool execute_immediately, CancellationToken cancellationToken = default)
+    {
+        var requestParams = new InvokeExpressionParams
+        {
+            Pipeline = pipeline,
+            ExecuteImmediately = execute_immediately
+        };
+
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.InvokeExpressionParams);
+
+        var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+
+        if (string.IsNullOrEmpty(response))
+        {
+            throw new InvalidOperationException($"PowerShell.MCP module communication to pipe '{pipeName}' failed for command: {pipeline}");
+        }
+
+        return response;
+    }
+
     public async Task<string> StartNewConsoleAsync(CancellationToken cancellationToken = default)
     {
-        // Use type-safe parameters
         var requestParams = new StartPowerShellConsoleParams();
-
-        // Serialize without reflection using Source Generator
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.StartPowerShellConsoleParams);
 
         var response = await _namedPipeClient.SendRequestAsync(jsonRequest);

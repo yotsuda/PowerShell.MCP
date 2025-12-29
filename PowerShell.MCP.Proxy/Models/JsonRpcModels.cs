@@ -41,3 +41,25 @@ public class GetStatusParams : PowerShellMcpParams
     [JsonPropertyName("name")]
     public override string Name { get; } = "get_status";
 }
+
+// Response type for get_status
+public class GetStatusResponse
+{
+    [JsonPropertyName("pid")]
+    public int Pid { get; set; }
+    
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "standby";
+    
+    [JsonPropertyName("pipeline")]
+    public string? Pipeline { get; set; }
+    
+    [JsonPropertyName("duration")]
+    public double? Duration { get; set; }
+    
+    [JsonPropertyName("output")]
+    public string? Output { get; set; }
+}
+
+[JsonSerializable(typeof(GetStatusResponse))]
+public partial class GetStatusResponseContext : JsonSerializerContext { }

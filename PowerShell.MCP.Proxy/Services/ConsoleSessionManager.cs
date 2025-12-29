@@ -1,9 +1,9 @@
-using System.IO.Pipes;
+using System.Runtime.InteropServices;
 
 namespace PowerShell.MCP.Proxy.Services;
 
 /// <summary>
-/// Manages multiple PowerShell console sessions and their Named Pipes
+/// Manages PowerShell console sessions with caching for efficiency
 /// </summary>
 public class ConsoleSessionManager
 {
@@ -13,29 +13,19 @@ public class ConsoleSessionManager
     private readonly object _lock = new();
     
     /// <summary>
-    /// Default pipe name for user-imported module
+    /// Base pipe name prefix for PowerShell.MCP
     /// </summary>
     public const string DefaultPipeName = "PowerShell.MCP.Communication";
     
     /// <summary>
-    /// Registered Named Pipe names
-    /// </summary>
-    private readonly List<string> _pipeNames = new();
-    
-    /// <summary>
-    /// Currently active Named Pipe name
+    /// Currently active (ready) Named Pipe name
     /// </summary>
     public string? ActivePipeName { get; private set; }
     
     /// <summary>
-    /// Unreported outputs from sessions (pipeName -> output)
+    /// Known busy pipes (pipe name -> last known status info)
     /// </summary>
-    private readonly Dictionary<string, string> _unreportedOutputs = new();
-
-    /// <summary>
-    /// Busy consoles (pipeName -> last busy status string)
-    /// </summary>
-    private readonly Dictionary<string, string> _busyConsoles = new();
+    private readonly Dictionary<string, string> _busyPipes = new();
 
     private ConsoleSessionManager() { }
 
@@ -45,206 +35,122 @@ public class ConsoleSessionManager
     public static string GetPipeNameForPid(int pid) => $"{DefaultPipeName}.{pid}";
 
     /// <summary>
-    /// Registers a new console session
+    /// Sets the active pipe name
     /// </summary>
-    public void RegisterConsole(string pipeName, bool setAsActive = true)
+    public void SetActivePipeName(string? pipeName)
     {
         lock (_lock)
         {
-            if (!_pipeNames.Contains(pipeName))
+            ActivePipeName = pipeName;
+            if (pipeName != null)
             {
-                _pipeNames.Add(pipeName);
-                Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Registered pipe '{pipeName}'");
-            }
-            
-            if (setAsActive)
-            {
-                ActivePipeName = pipeName;
+                // Remove from busy list if it was there
+                _busyPipes.Remove(pipeName);
                 Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Active pipe set to '{pipeName}'");
             }
         }
     }
 
     /// <summary>
-    /// Stores unreported output for a session
+    /// Marks a pipe as busy with its status info
     /// </summary>
-    public void SetUnreportedOutput(string pipeName, string output)
+    public void MarkPipeBusy(string pipeName, string statusInfo)
     {
         lock (_lock)
         {
-            _unreportedOutputs[pipeName] = output;
-            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Stored unreported output for pipe '{pipeName}'");
-        }
-    }
-
-    /// <summary>
-    /// Consumes all unreported outputs and returns them
-    /// Also transitions those sessions to Standby
-    /// </summary>
-    public List<(string PipeName, string Output)> ConsumeUnreportedOutputs()
-    {
-        lock (_lock)
-        {
-            var outputs = _unreportedOutputs.Select(kv => (kv.Key, kv.Value)).ToList();
-            _unreportedOutputs.Clear();
-            return outputs;
-        }
-    }
-
-    /// <summary>
-    /// Unregisters a console session (when closed or connection lost)
-    /// </summary>
-    public void UnregisterConsole(string pipeName)
-    {
-        lock (_lock)
-        {
-            _pipeNames.Remove(pipeName);
-            _unreportedOutputs.Remove(pipeName);
-            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Unregistered pipe '{pipeName}'");
+            _busyPipes[pipeName] = statusInfo;
             
+            // If this was the active pipe, clear it
             if (ActivePipeName == pipeName)
             {
-                ActivePipeName = _pipeNames.LastOrDefault();
-                Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Active pipe changed to '{ActivePipeName ?? "none"}'");
-            }
-        }
-    }
-
-    /// <summary>
-    /// Checks if a Named Pipe is connectable
-    /// </summary>
-    public bool CanConnect(string pipeName)
-    {
-        try
-        {
-            using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
-            client.Connect(500); // 500ms timeout
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Cleans up dead consoles (called on MCP request)
-    /// </summary>
-    public void CleanupDeadConsoles()
-    {
-        lock (_lock)
-        {
-            foreach (var pipeName in _pipeNames.ToList())
-            {
-                if (!CanConnect(pipeName))
-                {
-                    Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Pipe '{pipeName}' is not connectable, removing");
-                    UnregisterConsole(pipeName);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Discovers and registers existing console with default pipe name (user-imported)
-    /// </summary>
-    public void DiscoverExistingConsole()
-    {
-        lock (_lock)
-        {
-            if (!_pipeNames.Contains(DefaultPipeName) && CanConnect(DefaultPipeName))
-            {
-                RegisterConsole(DefaultPipeName, setAsActive: true);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Gets an available (non-busy) console pipe name, or null if none available
-    /// </summary>
-    public string? GetAvailableConsolePipeName()
-    {
-        lock (_lock)
-        {
-            // First try active pipe
-            if (ActivePipeName != null && CanConnect(ActivePipeName))
-            {
-                return ActivePipeName;
+                ActivePipeName = null;
             }
             
-            // Try other pipes
-            foreach (var pipeName in _pipeNames.ToList())
-            {
-                if (CanConnect(pipeName))
-                {
-                    return pipeName;
-                }
-                else
-                {
-                    UnregisterConsole(pipeName);
-                }
-            }
-            
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Gets all registered pipe names
-    /// </summary>
-    public List<string> GetAllPipeNames()
-    {
-        lock (_lock)
-        {
-            return _pipeNames.ToList();
-        }
-    }
-
-    /// <summary>
-    /// Checks if there are any registered consoles
-    /// </summary>
-    public bool HasRegisteredConsoles()
-    {
-        lock (_lock)
-        {
-            return _pipeNames.Count > 0;
-        }
-    }
-
-    /// <summary>
-    /// Marks a console as busy with its status string
-    /// </summary>
-    public void SetConsoleBusy(string pipeName, string busyStatus)
-    {
-        lock (_lock)
-        {
-            _busyConsoles[pipeName] = busyStatus;
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Marked pipe '{pipeName}' as busy");
         }
     }
 
     /// <summary>
-    /// Clears the busy status for a console
+    /// Gets all known busy pipes and their status info
     /// </summary>
-    public void ClearConsoleBusy(string pipeName)
+    public Dictionary<string, string> GetBusyPipes()
     {
         lock (_lock)
         {
-            if (_busyConsoles.Remove(pipeName))
-            {
-                Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared busy status for pipe '{pipeName}'");
-            }
+            return new Dictionary<string, string>(_busyPipes);
         }
     }
 
     /// <summary>
-    /// Gets all busy consoles (pipeName -> status)
+    /// Removes a pipe from the busy list (when it becomes standby or dead)
     /// </summary>
-    public Dictionary<string, string> GetBusyConsoles()
+    public void RemoveFromBusy(string pipeName)
     {
         lock (_lock)
         {
-            return new Dictionary<string, string>(_busyConsoles);
+            _busyPipes.Remove(pipeName);
         }
+    }
+
+    /// <summary>
+    /// Clears a dead pipe from all caches
+    /// </summary>
+    public void ClearDeadPipe(string pipeName)
+    {
+        lock (_lock)
+        {
+            _busyPipes.Remove(pipeName);
+            if (ActivePipeName == pipeName)
+            {
+                ActivePipeName = null;
+            }
+            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}'");
+        }
+    }
+
+    /// <summary>
+    /// Discovers all PowerShell.MCP Named Pipes by scanning the file system
+    /// Windows: \\.\pipe\PowerShell.MCP.Communication.*
+    /// Linux/macOS: /tmp/CoreFxPipe_PowerShell.MCP.Communication.*
+    /// </summary>
+    public List<string> DiscoverAllPipes()
+    {
+        var discoveredPipes = new List<string>();
+        
+        try
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Windows: Named Pipes appear in \\.\pipe\
+                var pipeDirectory = @"\\.\pipe\";
+                var pipePrefix = DefaultPipeName;
+                
+                foreach (var pipePath in Directory.GetFiles(pipeDirectory, $"{pipePrefix}*"))
+                {
+                    var pipeName = Path.GetFileName(pipePath);
+                    discoveredPipes.Add(pipeName);
+                }
+            }
+            else
+            {
+                // Linux/macOS: .NET Named Pipes use Unix Domain Sockets at /tmp/CoreFxPipe_*
+                var socketDirectory = "/tmp";
+                var socketPrefix = $"CoreFxPipe_{DefaultPipeName}";
+                
+                foreach (var socketPath in Directory.GetFiles(socketDirectory, $"{socketPrefix}*"))
+                {
+                    var socketName = Path.GetFileName(socketPath);
+                    // Remove the CoreFxPipe_ prefix to get the pipe name
+                    var pipeName = socketName["CoreFxPipe_".Length..];
+                    discoveredPipes.Add(pipeName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[WARN] DiscoverAllPipes: Failed to scan pipes: {ex.Message}");
+        }
+        
+        return discoveredPipes;
     }
 }

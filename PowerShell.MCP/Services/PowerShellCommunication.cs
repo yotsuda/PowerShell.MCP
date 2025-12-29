@@ -56,13 +56,10 @@ public static class McpServerHost
     public static volatile string? insertCommand;
     public static volatile string? executeCommandSilent;
     /// <summary>
-    /// Command execution
+    /// Command execution (state management is handled by NamedPipeServer)
     /// </summary>
     public static string ExecuteCommand(string command, bool executeImmediately = true)
     {
-        // Set busy state before execution
-        ExecutionState.SetBusy(command);
-        
         try
         {
             if (executeImmediately)
@@ -74,17 +71,12 @@ public static class McpServerHost
                 insertCommand = command;
             }
 
-            // Wait for result with state management
+            // Wait for result
             return PowerShellCommunication.WaitForResult();
         }
         catch (Exception ex)
         {
             return $"Error executing command: {ex.Message}";
-        }
-        finally
-        {
-            // Always return to idle after execution
-            ExecutionState.SetIdle();
         }
     }
     
