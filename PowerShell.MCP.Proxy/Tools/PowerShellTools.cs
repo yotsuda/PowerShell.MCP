@@ -11,6 +11,7 @@ public class PowerShellTools
 {
     // Error message constant definitions
     private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";
+    private const string ERROR_MODULE_NOT_IMPORTED = "PowerShell.MCP module is not imported in existing pwsh.";
     private const string STATUS_BUSY = "| Status: Busy |";
     
     [McpServerTool]
@@ -108,10 +109,22 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
             
             // Auto-start console (location info will also be retrieved)
-            var startResult = await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
+            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
             
             // Do not execute pipeline. Prompt AI for confirmation (important info first)
             return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
+        }
+        
+        // Check if pwsh is running but module is not imported
+        if (result == ERROR_MODULE_NOT_IMPORTED)
+        {
+            Console.Error.WriteLine("[INFO] PowerShell.MCP module not imported, starting new console...");
+            
+            // Auto-start new console with module imported
+            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+            
+            // Do not execute pipeline. Prompt AI for confirmation
+            return $"[LLM] Pipeline NOT executed - verify location and re-execute.\n\n[Inform user] Existing PowerShell window did not have PowerShell.MCP module imported, so a new console was opened. Original pwsh remains unchanged.\n\n{startResult}";
         }
         
         // Check if current console is busy - try other consoles or start new one
@@ -271,10 +284,9 @@ Note that commands executed via invoke_expression cannot be cancelled with Ctrl+
                 return "Failed to start PowerShell console or establish Named Pipe connection.\n\nPossible causes:\n- No supported terminal emulator found (gnome-terminal, konsole, xfce4-terminal, xterm, etc.)\n- Terminal emulator failed to start\n- PowerShell.MCP module failed to initialize\n\nPlease ensure a terminal emulator is installed and try again.";
             }
             
-            // Console is registered by PS module via RegistrationPipeServer
-            // Just get the active pipe name for logging
-            var activePipe = sessionManager.ActivePipeName ?? "unknown";
-            Console.Error.WriteLine($"[INFO] PowerShell console started successfully (PID={pid}, pipe={activePipe}), getting current location...");
+            // Console is registered via RegistrationPipeServer with setAsActive=true
+            // This works for all platforms (Windows/Linux/macOS)
+            Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={sessionManager.ActivePipeName}), getting current location...");
             
             // Get current location from new console
             var locationResult = await powerShellService.GetCurrentLocationAsync(cancellationToken);

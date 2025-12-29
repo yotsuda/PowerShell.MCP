@@ -163,6 +163,25 @@ public class NamedPipeServer : IDisposable
             
             var name = requestRoot.GetProperty("name").GetString();
 
+            // Handle get_status request FIRST - returns immediately without using main runspace
+            // Must be before version check because version check uses ExecuteSilentCommand which requires main runspace
+            if (name == "get_status")
+            {
+                var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                var status = ExecutionState.Status == "busy" ? "Busy" : "Ready";
+                var statusResponse = $"| PID: {pid} | Status: {status} |";
+                
+                if (ExecutionState.Status == "busy")
+                {
+                    var elapsed = ExecutionState.ElapsedSeconds;
+                    var runningPipeline = TruncatePipeline(ExecutionState.CurrentPipeline);
+                    statusResponse = $"⧗ | PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s";
+                }
+                
+                await SendMessageAsync(pipeServer, statusResponse, cancellationToken);
+                return;
+            }
+
             string? proxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement proxyVersionElement)
                 ? proxyVersionElement.GetString() : "Not detected";
 
@@ -226,29 +245,11 @@ Please provide how to update the MCP client configuration to the user.";
                 return;
             }
 
-            // Get pipeline for invoke_expression
-            string pipeline = "";
-            if (name == "invoke_expression" && requestRoot.TryGetProperty("pipeline", out JsonElement pipelineElement))
-            {
-                pipeline = pipelineElement.GetString() ?? "";
-            }
-
-            // Set busy state before execution
-            ExecutionState.SetBusy(pipeline);
+            // Execute tool
+            var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
             
-            try
-            {
-                // Execute tool
-                var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
-                
-                // Send response
-                await SendMessageAsync(pipeServer, result, cancellationToken);
-            }
-            finally
-            {
-                // Always return to idle after execution
-                ExecutionState.SetIdle();
-            }
+            // Send response
+            await SendMessageAsync(pipeServer, result, cancellationToken);
         }
         catch (Exception ex)
         {

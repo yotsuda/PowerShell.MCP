@@ -60,6 +60,9 @@ public static class McpServerHost
     /// </summary>
     public static string ExecuteCommand(string command, bool executeImmediately = true)
     {
+        // Set busy state before execution
+        ExecutionState.SetBusy(command);
+        
         try
         {
             if (executeImmediately)
@@ -78,6 +81,11 @@ public static class McpServerHost
         {
             return $"Error executing command: {ex.Message}";
         }
+        finally
+        {
+            // Always return to idle after execution
+            ExecutionState.SetIdle();
+        }
     }
     
     /// <summary>
@@ -85,6 +93,8 @@ public static class McpServerHost
     /// </summary>
     public static string ExecuteSilentCommand(string command)
     {
+        // Note: Busy check is done at Named Pipe level (HandleClientAsync)
+        // No need to check here - would block ourselves
         try
         {
             executeCommandSilent = command;

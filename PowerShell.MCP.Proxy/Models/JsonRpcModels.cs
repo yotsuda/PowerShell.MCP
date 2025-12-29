@@ -35,3 +35,9 @@ public class StartPowerShellConsoleParams : PowerShellMcpParams
     [JsonPropertyName("name")]
     public override string Name { get; } = "start_powershell_console";
 }
+
+public class GetStatusParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "get_status";
+}

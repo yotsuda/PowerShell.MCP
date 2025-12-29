@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text;
-
+using System.Text.Json;
+using PowerShell.MCP.Proxy.Models;
 namespace PowerShell.MCP.Proxy.Services;
 
 /// <summary>
@@ -84,9 +85,25 @@ public class RegistrationPipeServer : IDisposable
             // Parse PID from message (format: "REGISTER:<PID>")
             if (message.StartsWith("REGISTER:") && int.TryParse(message.Substring(9), out var pid))
             {
+                var sessionManager = ConsoleSessionManager.Instance;
+                
+                // Check if any existing console is Ready (not Busy)
+                if (await HasReadyConsoleAsync(sessionManager, cancellationToken))
+                {
+                    // Send rejection
+                    var rejectBytes = Encoding.UTF8.GetBytes("REJECT");
+                    var rejectLengthBytes = BitConverter.GetBytes(rejectBytes.Length);
+                    await pipeServer.WriteAsync(rejectLengthBytes, cancellationToken);
+                    await pipeServer.WriteAsync(rejectBytes, cancellationToken);
+                    await pipeServer.FlushAsync(cancellationToken);
+                    return;
+                }
+                
+                // No Ready console, register this one and set as active
                 var pipeName = ConsoleSessionManager.GetPipeNameForPid(pid);
-                ConsoleSessionManager.Instance.RegisterConsole(pipeName, setAsActive: true);
-                Console.Error.WriteLine($"[INFO] Registered console PID={pid}, pipe={pipeName}");
+                // Since HasReadyConsoleAsync returned false, all existing consoles are busy or dead
+                // So this new console should be the active one
+                sessionManager.RegisterConsole(pipeName, setAsActive: true);
                 
                 // Send acknowledgment
                 var ackBytes = Encoding.UTF8.GetBytes("OK");
@@ -103,6 +120,71 @@ public class RegistrationPipeServer : IDisposable
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ERROR] HandleRegistrationAsync error: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Checks if any registered console is Ready (not Busy)
+    /// </summary>
+    private static async Task<bool> HasReadyConsoleAsync(ConsoleSessionManager sessionManager, CancellationToken cancellationToken)
+    {
+        var allPipes = sessionManager.GetAllPipeNames();
+        
+        foreach (var pipeName in allPipes)
+        {
+            try
+            {
+                using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
+                await client.ConnectAsync(500, cancellationToken); // 500ms timeout
+                
+                // Send get_status request with proxy_version (lightweight, doesn't use main runspace)
+                var requestParams = new GetStatusParams();
+                var request = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetStatusParams);
+                var requestBytes = Encoding.UTF8.GetBytes(request);
+                var lengthBytes = BitConverter.GetBytes(requestBytes.Length);
+                
+                await client.WriteAsync(lengthBytes, cancellationToken);
+                await client.WriteAsync(requestBytes, cancellationToken);
+                await client.FlushAsync(cancellationToken);
+                
+                // Read response length
+                var responseLengthBuffer = new byte[4];
+                await ReadExactAsync(client, responseLengthBuffer, cancellationToken);
+                var responseLength = BitConverter.ToInt32(responseLengthBuffer, 0);
+                
+                if (responseLength > 0 && responseLength < 1000)
+                {
+                    var responseBuffer = new byte[responseLength];
+                    await ReadExactAsync(client, responseBuffer, cancellationToken);
+                    var response = Encoding.UTF8.GetString(responseBuffer);
+                    
+                    // If NOT Busy, this is a Ready console
+                    if (!response.Contains("| Status: Busy |"))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Console might be dead, continue checking others
+            }
+        }
+        
+        return false;
+    }
+    
+    private static async Task ReadExactAsync(NamedPipeClientStream stream, byte[] buffer, CancellationToken cancellationToken)
+    {
+        int totalBytesRead = 0;
+        while (totalBytesRead < buffer.Length)
+        {
+            var bytesRead = await stream.ReadAsync(buffer.AsMemory(totalBytesRead, buffer.Length - totalBytesRead), cancellationToken);
+            if (bytesRead == 0)
+            {
+                throw new IOException("Connection closed while reading data");
+            }
+            totalBytesRead += bytesRead;
         }
     }
     

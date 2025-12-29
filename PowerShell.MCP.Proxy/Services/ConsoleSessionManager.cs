@@ -118,7 +118,7 @@ public class ConsoleSessionManager
         try
         {
             using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
-            client.Connect(100);
+            client.Connect(500); // 500ms timeout
             return true;
         }
         catch
