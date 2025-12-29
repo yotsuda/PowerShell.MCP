@@ -12,6 +12,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Kill all Claude.exe processes to release file locks
+Get-Process -Name 'Claude' -ErrorAction SilentlyContinue | Stop-Process -Force
+
 # If no target specified, build all
 $allTargets = @('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')
 if (-not $Target) {
