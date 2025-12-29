@@ -45,6 +45,43 @@ public class PowerShellService : IPowerShellService
         return response;
     }
 
+    private const string STATUS_BUSY = "| Status: Busy |";
+
+    public async Task<(bool isBusy, string response)> GetStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var requestParams = new GetStatusParams();
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetStatusParams);
+
+        var response = await _namedPipeClient.SendRequestAsync(jsonRequest);
+        
+        if (string.IsNullOrEmpty(response))
+        {
+            // No response - treat as unavailable (not busy, just dead)
+            return (false, string.Empty);
+        }
+
+        // get_status response is short and fixed format, safe to check for STATUS_BUSY
+        var isBusy = response.Contains(STATUS_BUSY);
+        return (isBusy, response);
+    }
+
+    public async Task<(bool isBusy, string response)> GetStatusFromPipeAsync(string pipeName, CancellationToken cancellationToken = default)
+    {
+        var requestParams = new GetStatusParams();
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetStatusParams);
+
+        var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+        
+        if (string.IsNullOrEmpty(response))
+        {
+            // No response - treat as unavailable (not busy, just dead)
+            return (false, string.Empty);
+        }
+
+        var isBusy = response.Contains(STATUS_BUSY);
+        return (isBusy, response);
+    }
+
     public async Task<string> InvokeExpressionAsync(string pipeline, bool execute_immediately, CancellationToken cancellationToken = default)
     {
         // Use type-safe parameters
