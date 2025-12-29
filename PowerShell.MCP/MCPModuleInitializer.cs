@@ -1,6 +1,5 @@
 using System.Management.Automation;
 using System.Reflection;
-using System.IO.Pipes;
 using PowerShell.MCP.Services;
 
 namespace PowerShell.MCP
@@ -38,28 +37,6 @@ namespace PowerShell.MCP
             {
                 // Create Named Pipe server with PID suffix (always use PID for uniqueness)
                 _namedPipeServer = new NamedPipeServer(usePidSuffix: true);
-                
-                // Check if another PowerShell.MCP server is already running with the same pipe name
-                bool pipeExists = false;
-                try
-                {
-                    using var testClient = new NamedPipeClientStream(".", _namedPipeServer.PipeName, PipeDirection.InOut);
-                    testClient.Connect(100); // 100ms timeout
-                    pipeExists = true;
-                }
-                catch (TimeoutException)
-                {
-                    // No server listening - OK to start
-                }
-                catch (IOException)
-                {
-                    // Pipe/socket doesn't exist or connection failed - OK to start
-                }
-
-                if (pipeExists)
-                {
-                    throw new InvalidOperationException("Another PowerShell.MCP server is already running with the same pipe name.");
-                }
                 _tokenSource = new CancellationTokenSource();
 
                 // Load and execute MCP polling engine script
