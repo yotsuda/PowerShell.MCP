@@ -127,10 +127,10 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             return $"[LLM] Pipeline NOT executed - verify location and re-execute.\n\n[Inform user] Existing PowerShell window did not have PowerShell.MCP module imported, so a new console was opened. Original pwsh remains unchanged.\n\n{startResult}";
         }
         
-        // Check if current console is busy - try other consoles or start new one
+        // Check if current console is busy - try standby console first, then start new
         if (result.Contains(STATUS_BUSY))
         {
-            Console.Error.WriteLine("[INFO] Current console is busy, trying other consoles...");
+            Console.Error.WriteLine("[INFO] Current console is busy, trying standby consoles...");
             var sessionManager = ConsoleSessionManager.Instance;
             var busyResult = result; // Save the busy status from original console
             var busyPipeName = sessionManager.ActivePipeName;
@@ -141,38 +141,35 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 sessionManager.SetConsoleBusy(busyPipeName, busyResult);
             }
             
-            // Try other registered consoles in reverse order (newest first)
+            // Try to find a standby console (not the active one)
             var allPipes = sessionManager.GetAllPipeNames();
-            allPipes.Reverse();
-            
             foreach (var pipeName in allPipes)
             {
-                if (pipeName == busyPipeName)
-                    continue; // Skip the busy one
+                if (pipeName == busyPipeName) continue; // Skip the busy one
                 
                 try
                 {
-                    Console.Error.WriteLine($"[INFO] Trying standby console pipe '{pipeName}'...");
-                    var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);
+                    // Try to get status from this console
+                    var statusResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);
                     
-                    if (!locationResult.Contains(STATUS_BUSY))
+                    if (!statusResult.Contains(STATUS_BUSY))
                     {
-                        // Found a standby console, update active pipe and return location
+                        // Found a ready standby console - switch to it
                         sessionManager.RegisterConsole(pipeName, setAsActive: true);
-                        Console.Error.WriteLine($"[INFO] Switched to standby console pipe '{pipeName}'");
+                        Console.Error.WriteLine($"[INFO] Switched to standby console: {pipeName}");
                         
-                        return $"{busyResult}\n\nSwitched to a standby console. Verify current location and re-execute the pipeline if appropriate.\n\n{locationResult}";
+                        return $"{busyResult}\n\nSwitched to a standby console. Verify current location and re-execute the pipeline if appropriate.\n\n{statusResult}";
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    Console.Error.WriteLine($"[WARNING] Failed to connect to pipe '{pipeName}': {ex.Message}");
+                    // Console not available, continue checking others
                     sessionManager.UnregisterConsole(pipeName);
                 }
             }
             
-            // All consoles are busy or unavailable, start a new one
-            Console.Error.WriteLine("[INFO] All consoles are busy, starting new console...");
+            // No standby console available, start a new one
+            Console.Error.WriteLine("[INFO] No standby console available, starting new console...");
             var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
             
             return $"{busyResult}\n\nStarted a new console. Verify current location and re-execute the pipeline if appropriate.\n\n{startResult}";
