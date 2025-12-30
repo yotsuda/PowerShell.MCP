@@ -190,7 +190,7 @@ public class PowerShellTools
         {
             // No ready pipe - auto-start
             Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
-            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+            var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
 
             if (statusInfo.Length > 0)
             {
@@ -287,7 +287,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             // No ready pipe - auto-start
             Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
-            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+            var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
 
             // Extract JSON from startResult (skip first paragraph)
             var separatorIndex = startResult.IndexOf("\n\n");
@@ -315,14 +315,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
             {
                 Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
-                var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+                var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
                 return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
             }
 
             if (result == ConsoleSessionManager.ErrorModuleNotImported)
             {
                 Console.Error.WriteLine("[INFO] PowerShell.MCP module not imported, starting new console...");
-                var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+                var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
                 return $"[LLM] Pipeline NOT executed - verify location and re-execute.\n\n[Inform user] Existing PowerShell window did not have PowerShell.MCP module imported, so a new console was opened. Original pwsh remains unchanged.\n\n{startResult}";
             }
 
@@ -337,7 +337,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             Console.Error.WriteLine($"[ERROR] InvokeExpression failed: {ex.Message}");
 
             // Try to start new console
-            var startResult = await StartPowershellConsoleInternal(powerShellService, forceNew: true, banner: null, cancellationToken);
+            var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
             return $"Command execution failed. A new console has been started.\n\n{startResult}\n\n[LLM] Pipeline NOT executed - verify location and re-execute.";
         }
     }
@@ -350,7 +350,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         string? banner = null,
         CancellationToken cancellationToken = default)
     {
-        return await StartPowershellConsoleInternal(powerShellService, forceNew: false, banner, cancellationToken);
+        return await StartPowershellConsoleInternal(powerShellService, banner, cancellationToken);
     }
 
     /// <summary>
@@ -358,7 +358,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     /// </summary>
     private static async Task<string> StartPowershellConsoleInternal(
         IPowerShellService powerShellService,
-        bool forceNew,
         string? banner,
         CancellationToken cancellationToken)
     {
@@ -366,32 +365,10 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             var sessionManager = ConsoleSessionManager.Instance;
 
-            Console.Error.WriteLine($"[INFO] Starting PowerShell console (forceNew={forceNew})...");
+            // Check existing consoles and cache their status before starting new one
+            var (_, statusInfo, _) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
-            // If not forcing new console, check for existing available console
-            if (!forceNew)
-            {
-                var (readyPipeName, statusInfo, _) = await FindReadyPipeAsync(powerShellService, cancellationToken);
-
-                if (readyPipeName != null)
-                {
-                    try
-                    {
-                        var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
-                        var msg = "Since pwsh with the PowerShell.MCP module imported is already running, the existing session will continue to be used.\n\n";
-
-                        if (statusInfo.Length > 0)
-                        {
-                            return $"{statusInfo}\n{msg}{locationResult}";
-                        }
-                        return msg + locationResult;
-                    }
-                    catch
-                    {
-                        // Fall through to start new console
-                    }
-                }
-            }
+            Console.Error.WriteLine("[INFO] Starting PowerShell console...");
 
             // Start new console
             var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(banner);
@@ -411,7 +388,13 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             Console.Error.WriteLine("[INFO] PowerShell console startup completed");
 
-            return $"PowerShell console started successfully with PowerShell.MCP module imported.\n\n{newLocationResult}";
+            var result = $"PowerShell console started successfully with PowerShell.MCP module imported.\n\n{newLocationResult}";
+
+            if (statusInfo.Length > 0)
+            {
+                return $"{statusInfo}\n{result}";
+            }
+            return result;
         }
         catch (Exception ex)
         {
