@@ -144,8 +144,15 @@ public class PowerShellTools
 
     private static void AppendCompletedStatus(StringBuilder statusInfo, GetStatusResponse status)
     {
-        // Output already contains the summary line, just append it directly
-        statusInfo.AppendLine(status.Output);
+        // Non-active pipes show "Standby" instead of "Ready" (replace only the first occurrence)
+        var output = status.Output ?? "";
+        const string oldValue = "| Status: Ready |";
+        var index = output.IndexOf(oldValue);
+        if (index >= 0)
+        {
+            output = output.Remove(index, oldValue.Length).Insert(index, "| Status: Standby |");
+        }
+        statusInfo.AppendLine(output);
         statusInfo.AppendLine();
     }
 
