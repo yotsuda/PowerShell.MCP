@@ -16,6 +16,12 @@ public static class PowerShellCommunication
     {
         _currentResult = result;
         _resultReadyEvent.Set();
+
+        // If marked for caching (e.g., WaitForResult timed out), cache the actual result
+        if (ExecutionState.ShouldCacheOutput)
+        {
+            ExecutionState.SetCompleted(result);
+        }
     }
 
     /// <summary>
@@ -23,26 +29,27 @@ public static class PowerShellCommunication
     /// </summary>
     public static string WaitForResult()
     {
-        var endTime = DateTime.UtcNow.AddSeconds(4 * 60 + 50);
-
         // Clear previous result
         _currentResult = null;
         _resultReadyEvent.Reset();
 
-        var remainingTime = endTime - DateTime.UtcNow;
-        var timeoutMs = (int)Math.Max(0, remainingTime.TotalMilliseconds);
-
-        // Block waiting with ManualResetEvent
-        bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
+        // First, wait for 4 minutes (before MCP 5-minute timeout)
+        const int markForCachingMs = 4 * 60 * 1000; // 4 minutes
+        bool signaled = _resultReadyEvent.WaitOne(markForCachingMs);
 
         if (signaled)
         {
             return _currentResult ?? "No result available";
         }
-        else
-        {
-            return "Command execution timed out (4 minutes 50 seconds). Your command is still running. Consider restarting the PowerShell console.";
-        }
+
+        // After 4 minutes, mark for caching (MCP will timeout at 5m, result will be cached)
+        ExecutionState.MarkForCaching();
+
+        // Continue waiting for the actual result (will be cached via NotifyResultReady)
+        _resultReadyEvent.WaitOne();
+
+        // Return info message instead of actual result (to avoid duplicate reporting)
+        return "Command completed. Output cached and will be included in next get_current_location or invoke_expression response.";
     }
 }
 

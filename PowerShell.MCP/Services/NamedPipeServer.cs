@@ -1,4 +1,4 @@
-using System.IO.Pipes;
+﻿using System.IO.Pipes;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -399,8 +399,9 @@ Please provide how to update the MCP client configuration to the user.";
                             // Proxy sent another request while we were busy, cache the result
                             ExecutionState.SetCompleted(result);
                         }
-                        else
+                        else if (ExecutionState.Status != "completed")
                         {
+                            // Only go to standby if not already completed (by NotifyResultReady)
                             ExecutionState.SetStandby();
                         }
                     }
