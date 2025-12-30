@@ -41,16 +41,16 @@ public class PowerShellProcessManager
     /// <returns>true if startup succeeded</returns>
     public static async Task<bool> StartPowerShellWithModuleAsync(string? startupMessage = null)
     {
-        var (success, _) = await StartPowerShellWithModuleAndPidAsync(startupMessage);
+        var (success, _) = await StartPowerShellWithModuleAndPipeNameAsync(startupMessage);
         return success;
     }
 
     /// <summary>
-    /// Starts PowerShell process with PowerShell.MCP module imported and returns PID
+    /// Starts PowerShell process with PowerShell.MCP module imported and returns pipe name
     /// </summary>
     /// <param name="startupMessage">Optional message to display before module import</param>
-    /// <returns>Tuple of (success, pid)</returns>
-    public static async Task<(bool Success, int Pid)> StartPowerShellWithModuleAndPidAsync(string? startupMessage = null)
+    /// <returns>Tuple of (success, pipeName)</returns>
+    public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string? startupMessage = null)
     {
         int pid = 0;
 
@@ -61,12 +61,10 @@ public class PowerShellProcessManager
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             PwshLauncherMacOS.LaunchPwsh(startupMessage);
-            pid = 0;
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             PwshLauncherLinux.LaunchPwsh(startupMessage);
-            pid = 0;
         }
         else
         {
@@ -74,7 +72,7 @@ public class PowerShellProcessManager
         }
 
         // Wait for Named Pipe to be ready
-        string pipeName;
+        string? pipeName;
         if (pid != 0)
         {
             // Windows: We know the PID, wait for specific pipe
@@ -82,15 +80,67 @@ public class PowerShellProcessManager
         }
         else
         {
-            // macOS/Linux: PID-based pipe name will be discovered by EnumeratePipes
-            await Task.Delay(500);
-            pipeName = ConsoleSessionManager.Instance.ActivePipeName
-                ?? ConsoleSessionManager.DefaultPipeName;
+            // macOS/Linux: Poll for a standby pipe (terminal and pwsh take time to start)
+            pipeName = await WaitForStandbyPipeAsync(maxWaitSeconds: 30);
+            if (pipeName == null)
+            {
+                return (false, string.Empty);
+            }
         }
 
         var success = await NamedPipeClient.WaitForPipeReadyAsync(pipeName);
 
-        return (success, pid);
+        return (success, pipeName);
+    }
+
+    /// <summary>
+    /// Waits for a standby pipe to become available (for macOS/Linux)
+    /// Polls every 500ms until a standby pipe is found or timeout
+    /// </summary>
+    private static async Task<string?> WaitForStandbyPipeAsync(int maxWaitSeconds)
+    {
+        var endTime = DateTime.UtcNow.AddSeconds(maxWaitSeconds);
+
+        while (DateTime.UtcNow < endTime)
+        {
+            var pipe = await FindStandbyPipeAsync();
+            if (pipe != null)
+            {
+                return pipe;
+            }
+
+            await Task.Delay(500);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds a standby pipe from available pipes
+    /// </summary>
+    private static async Task<string?> FindStandbyPipeAsync()
+    {
+        foreach (var pipe in ConsoleSessionManager.Instance.EnumeratePipes())
+        {
+            try
+            {
+                var request = "{\"name\":\"get_status\"}";
+                var response = await new NamedPipeClient().SendRequestToAsync(pipe, request);
+
+                using var doc = System.Text.Json.JsonDocument.Parse(response);
+                var status = doc.RootElement.GetProperty("status").GetString();
+
+                if (status == "standby" || status == "completed")
+                {
+                    return pipe;
+                }
+            }
+            catch
+            {
+                // Skip this pipe (dead or unresponsive)
+            }
+        }
+        return null;
     }
 }
 

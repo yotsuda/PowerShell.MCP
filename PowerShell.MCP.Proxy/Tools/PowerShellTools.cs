@@ -394,15 +394,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             }
 
             // Start new console
-            var (success, pid) = await PowerShellProcessManager.StartPowerShellWithModuleAndPidAsync(banner);
+            var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(banner);
 
             if (!success)
             {
                 return "Failed to start PowerShell console or establish Named Pipe connection.\n\nPossible causes:\n- No supported terminal emulator found (gnome-terminal, konsole, xfce4-terminal, xterm, etc.)\n- Terminal emulator failed to start\n- PowerShell.MCP module failed to initialize\n\nPlease ensure a terminal emulator is installed and try again.";
             }
 
-            // Register the new console with PID-based pipe name
-            var pipeName = ConsoleSessionManager.GetPipeNameForPid(pid);
+            // Register the new console
             sessionManager.SetActivePipeName(pipeName);
 
             Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), getting current location...");
