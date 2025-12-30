@@ -410,7 +410,7 @@ Please provide how to update the MCP client configuration to the user.";
                         ExecutionState.SetCompleted(result);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     // Execution error - still need to return to standby
                     ExecutionState.SetStandby();
