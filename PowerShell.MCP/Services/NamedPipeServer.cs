@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Diagnostics;
 
 namespace PowerShell.MCP.Services;
-
 /// <summary>
 /// Static class for managing execution state
 /// Status: standby / busy / completed
@@ -24,6 +23,10 @@ public static class ExecutionState
     // Flag: should cache output on completion (set when busy response is sent)
     private static bool _shouldCacheOutput = false;
     
+    // Heartbeat tracking for detecting user-initiated commands
+    private static DateTime _lastHeartbeat = DateTime.UtcNow;
+    private const int HeartbeatTimeoutMs = 500; // If no heartbeat for 500ms, runspace is likely busy
+    
     public static string Status => _status;
     public static string CurrentPipeline => _currentPipeline;
     
@@ -41,6 +44,17 @@ public static class ExecutionState
     /// Checks if output should be cached on completion
     /// </summary>
     public static bool ShouldCacheOutput => _shouldCacheOutput;
+    
+    /// <summary>
+    /// Updates the heartbeat timestamp. Called from PowerShell timer event.
+    /// </summary>
+    public static void Heartbeat() => _lastHeartbeat = DateTime.UtcNow;
+    
+    /// <summary>
+    /// Checks if the PowerShell runspace is available (heartbeat is recent)
+    /// </summary>
+    public static bool IsRunspaceAvailable => 
+        (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
     
     public static void SetBusy(string pipeline)
     {
@@ -272,8 +286,22 @@ public class NamedPipeServer : IDisposable
                 }
                 else
                 {
-                    // standby
-                    statusResponse = JsonSerializer.Serialize(new { pid, status = "standby" });
+                    // standby - but check if runspace is actually available (via heartbeat)
+                    if (ExecutionState.IsRunspaceAvailable)
+                    {
+                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby" });
+                    }
+                    else
+                    {
+                        // Runspace is busy with user command (no heartbeat received recently)
+                        statusResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "busy",
+                            pipeline = "(user command)",
+                            duration = 0
+                        });
+                    }
                 }
                 
                 await SendMessageAsync(pipeServer, statusResponse, cancellationToken);

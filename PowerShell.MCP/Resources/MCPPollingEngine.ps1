@@ -56,6 +56,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
         -EventName      Elapsed `
         -SourceIdentifier MCP_Poll `
         -Action {
+            # Update heartbeat to indicate runspace is available
+            [PowerShell.MCP.Services.ExecutionState]::Heartbeat()
 
             # ===== Helper Functions (Defined within Action Block) =====
 
