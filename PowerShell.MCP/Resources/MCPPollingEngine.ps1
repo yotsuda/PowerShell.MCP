@@ -296,7 +296,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $durationText = "{0:F2}s" -f $Duration
                 
                 $pipelineInfo = if ($pipelineSummary) { " | Pipeline: $pipelineSummary" } else { "" }
-                $statusLine = "$statusIcon Pipeline $statusText | PID: $PID | Status: $Status$pipelineInfo | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
+                $statusLine = "$statusIcon Pipeline $statusText | pwsh PID: $PID | Status: $Status$pipelineInfo | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
 
                 # Generate structured output strings
                 $structuredOutput = @{
