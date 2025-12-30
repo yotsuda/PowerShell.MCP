@@ -53,6 +53,13 @@ public class PowerShellProcessManager
     public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string? startupMessage = null)
     {
         int pid = 0;
+        HashSet<string>? existingPipes = null;
+
+        // macOS/Linux: Capture existing pipes BEFORE launching
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            existingPipes = ConsoleSessionManager.Instance.EnumeratePipes().ToHashSet();
+        }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -80,8 +87,8 @@ public class PowerShellProcessManager
         }
         else
         {
-            // macOS/Linux: Poll for a standby pipe (terminal and pwsh take time to start)
-            pipeName = await WaitForStandbyPipeAsync(maxWaitSeconds: 30);
+            // macOS/Linux: Poll for a NEW standby pipe (exclude existing pipes)
+            pipeName = await WaitForNewStandbyPipeAsync(existingPipes!, maxWaitSeconds: 30);
             if (pipeName == null)
             {
                 return (false, string.Empty);
@@ -94,16 +101,16 @@ public class PowerShellProcessManager
     }
 
     /// <summary>
-    /// Waits for a standby pipe to become available (for macOS/Linux)
-    /// Polls every 500ms until a standby pipe is found or timeout
+    /// Waits for a NEW standby pipe to become available (for macOS/Linux)
+    /// Polls every 500ms until a new standby pipe is found or timeout
     /// </summary>
-    private static async Task<string?> WaitForStandbyPipeAsync(int maxWaitSeconds)
+    private static async Task<string?> WaitForNewStandbyPipeAsync(HashSet<string> existingPipes, int maxWaitSeconds)
     {
         var endTime = DateTime.UtcNow.AddSeconds(maxWaitSeconds);
 
         while (DateTime.UtcNow < endTime)
         {
-            var pipe = await FindStandbyPipeAsync();
+            var pipe = await FindNewStandbyPipeAsync(existingPipes);
             if (pipe != null)
             {
                 return pipe;
@@ -116,12 +123,18 @@ public class PowerShellProcessManager
     }
 
     /// <summary>
-    /// Finds a standby pipe from available pipes
+    /// Finds a NEW standby pipe from available pipes (excludes existing pipes)
     /// </summary>
-    private static async Task<string?> FindStandbyPipeAsync()
+    private static async Task<string?> FindNewStandbyPipeAsync(HashSet<string> existingPipes)
     {
         foreach (var pipe in ConsoleSessionManager.Instance.EnumeratePipes())
         {
+            // Skip pipes that existed before launching
+            if (existingPipes.Contains(pipe))
+            {
+                continue;
+            }
+
             try
             {
                 var request = "{\"name\":\"get_status\"}";
