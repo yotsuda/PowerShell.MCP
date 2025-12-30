@@ -19,12 +19,12 @@ public class NamedPipeClient
 
             // Get active pipe name
             var pipeName = _sessionManager.ActivePipeName;
-            
+
             if (pipeName == null)
             {
-                return "PowerShell.MCP module is not imported in existing pwsh.";
+                return ConsoleSessionManager.ErrorModuleNotImported;
             }
-            
+
             return await SendRequestToAsync(pipeName, arguments);
         }
         catch (TimeoutException)
@@ -59,7 +59,7 @@ public class NamedPipeClient
 
             var messageBytes = Encoding.UTF8.GetBytes(arguments);
             var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
-            
+
             await pipeClient.WriteAsync(lengthBytes, 0, lengthBytes.Length);
             await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length);
 
@@ -77,19 +77,19 @@ public class NamedPipeClient
         // 1. Read message length (4 bytes) reliably
         var lengthBuffer = new byte[4];
         await ReadExactAsync(pipeClient, lengthBuffer, 4);
-        
+
         var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
-        
+
         // 2. Validate message length
         if (messageLength < 0)
         {
             throw new InvalidOperationException($"Invalid message length received: {messageLength}");
         }
-        
+
         // 3. Read message body reliably
         var messageBuffer = new byte[messageLength];
         await ReadExactAsync(pipeClient, messageBuffer, messageLength);
-        
+
         // 4. UTF-8 decode
         return Encoding.UTF8.GetString(messageBuffer);
     }
@@ -97,16 +97,16 @@ public class NamedPipeClient
     private async Task ReadExactAsync(NamedPipeClientStream pipeClient, byte[] buffer, int count)
     {
         int totalBytesRead = 0;
-        
+
         while (totalBytesRead < count)
         {
             var bytesRead = await pipeClient.ReadAsync(buffer, totalBytesRead, count - totalBytesRead);
-            
+
             if (bytesRead == 0)
             {
                 throw new InvalidOperationException($"Connection closed unexpectedly. Expected {count} bytes, got {totalBytesRead}");
             }
-            
+
             totalBytesRead += bytesRead;
         }
     }
@@ -117,7 +117,7 @@ public class NamedPipeClient
     public static async Task<bool> WaitForPipeReadyAsync(string pipeName)
     {
         const int maxAttempts = 80; // Wait up to 40 seconds
-        
+
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
@@ -138,7 +138,7 @@ public class NamedPipeClient
                 Console.Error.WriteLine($"[WARNING] Named Pipe connection attempt {attempt} to '{pipeName}' failed: {ex.Message}");
             }
         }
-        
+
         Console.Error.WriteLine($"[WARNING] Named Pipe '{pipeName}' not ready after maximum attempts");
         return false;
     }

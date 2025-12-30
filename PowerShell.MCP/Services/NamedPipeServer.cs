@@ -1,4 +1,4 @@
-﻿using System.IO.Pipes;
+using System.IO.Pipes;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -14,48 +14,48 @@ public static class ExecutionState
     private static string _status = "standby";
     private static readonly Stopwatch _stopwatch = new();
     private static string _currentPipeline = "";
-    
+
     // Unreported output (when result should be cached for later retrieval)
     private static string? _unreportedOutput = null;
     private static string? _unreportedPipeline = null;
     private static double _unreportedDuration = 0;
-    
+
     // Flag: should cache output on completion (set when busy response is sent)
     private static bool _shouldCacheOutput = false;
-    
+
     // Heartbeat tracking for detecting user-initiated commands
     private static DateTime _lastHeartbeat = DateTime.UtcNow;
     private const int HeartbeatTimeoutMs = 500; // If no heartbeat for 500ms, runspace is likely busy
-    
+
     public static string Status => _status;
     public static string CurrentPipeline => _currentPipeline;
-    
+
     /// <summary>
     /// Gets the elapsed time in seconds since execution started
     /// </summary>
     public static double ElapsedSeconds => _stopwatch.Elapsed.TotalSeconds;
-    
+
     /// <summary>
     /// Checks if there is unreported output
     /// </summary>
     public static bool HasUnreportedOutput => _unreportedOutput != null;
-    
+
     /// <summary>
     /// Checks if output should be cached on completion
     /// </summary>
     public static bool ShouldCacheOutput => _shouldCacheOutput;
-    
+
     /// <summary>
     /// Updates the heartbeat timestamp. Called from PowerShell timer event.
     /// </summary>
     public static void Heartbeat() => _lastHeartbeat = DateTime.UtcNow;
-    
+
     /// <summary>
     /// Checks if the PowerShell runspace is available (heartbeat is recent)
     /// </summary>
-    public static bool IsRunspaceAvailable => 
+    public static bool IsRunspaceAvailable =>
         (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
-    
+
     public static void SetBusy(string pipeline)
     {
         _stopwatch.Restart();
@@ -63,7 +63,7 @@ public static class ExecutionState
         _shouldCacheOutput = false;  // Reset flag
         _status = "busy";
     }
-    
+
     /// <summary>
     /// Marks that the output should be cached on completion.
     /// Called when a busy response is sent to another request.
@@ -72,7 +72,7 @@ public static class ExecutionState
     {
         _shouldCacheOutput = true;
     }
-    
+
     /// <summary>
     /// Sets status to standby (command completed, result delivered successfully)
     /// </summary>
@@ -83,7 +83,7 @@ public static class ExecutionState
         _shouldCacheOutput = false;
         _status = "standby";
     }
-    
+
     /// <summary>
     /// Sets status to completed with unreported output
     /// </summary>
@@ -97,7 +97,7 @@ public static class ExecutionState
         _shouldCacheOutput = false;
         _status = "completed";
     }
-    
+
     /// <summary>
     /// Consumes unreported output (returns and clears it, transitions to standby)
     /// </summary>
@@ -105,7 +105,7 @@ public static class ExecutionState
     {
         if (_unreportedOutput == null)
             return null;
-        
+
         var result = (_unreportedOutput, _unreportedPipeline ?? "", _unreportedDuration);
         _unreportedOutput = null;
         _unreportedPipeline = null;
@@ -123,12 +123,12 @@ public class NamedPipeServer : IDisposable
 {
     public const string BasePipeName = "PowerShell.MCP.Communication";
     private const int MaxConcurrentConnections = 2; // Two pipe instances
-    
+
     /// <summary>
     /// Gets the pipe name (with or without PID suffix depending on registration)
     /// </summary>
     public string PipeName { get; }
-    
+
     private readonly CancellationTokenSource _internalCancellation = new();
     private readonly List<Task> _serverTasks = new();
     private bool _disposed = false;
@@ -139,8 +139,8 @@ public class NamedPipeServer : IDisposable
     /// <param name="usePidSuffix">If true, append PID to pipe name</param>
     public NamedPipeServer(bool usePidSuffix)
     {
-        PipeName = usePidSuffix 
-            ? $"{BasePipeName}.{Environment.ProcessId}" 
+        PipeName = usePidSuffix
+            ? $"{BasePipeName}.{Environment.ProcessId}"
             : BasePipeName;
     }
 
@@ -184,10 +184,10 @@ public class NamedPipeServer : IDisposable
             try
             {
                 using var pipeServer = CreateNamedPipeServer();
-                
+
                 // Wait for client connection
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
-                
+
                 // Handle communication with connected client
                 await HandleClientAsync(pipeServer, cancellationToken);
             }
@@ -198,7 +198,7 @@ public class NamedPipeServer : IDisposable
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Named Pipe Server instance error: {ex.Message}");
-                
+
                 // Wait a moment before retrying on error
                 try
                 {
@@ -233,11 +233,11 @@ public class NamedPipeServer : IDisposable
         {
             // Receive request
             var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
-            
+
             // Parse JSON-RPC request
             using var requestDoc = JsonDocument.Parse(requestJson);
             var requestRoot = requestDoc.RootElement;
-            
+
             var name = requestRoot.GetProperty("name").GetString();
 
             // Handle get_status request FIRST - returns immediately without using main runspace
@@ -246,13 +246,13 @@ public class NamedPipeServer : IDisposable
             {
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var status = ExecutionState.Status;
-                
+
                 string statusResponse;
                 if (status == "busy")
                 {
                     // Mark for caching - Proxy will use another pipe, so result won't be received
                     ExecutionState.MarkForCaching();
-                    
+
                     var elapsed = ExecutionState.ElapsedSeconds;
                     var runningPipeline = ExecutionState.CurrentPipeline;
                     statusResponse = JsonSerializer.Serialize(new
@@ -303,7 +303,7 @@ public class NamedPipeServer : IDisposable
                         });
                     }
                 }
-                
+
                 await SendMessageAsync(pipeServer, statusResponse, cancellationToken);
                 return;
             }
@@ -364,7 +364,7 @@ Please provide how to update the MCP client configuration to the user.";
                 // Mark that the running command's output should be cached
                 // (because Proxy won't receive it - it's sending a new request)
                 ExecutionState.MarkForCaching();
-                
+
                 // Return busy response with status line including running pipeline
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var elapsed = ExecutionState.ElapsedSeconds;
@@ -378,22 +378,22 @@ Please provide how to update the MCP client configuration to the user.";
             // Execute tool with state management for invoke_expression
             if (name == "invoke_expression")
             {
-                var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement) 
+                var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement)
                     ? pipelineElement.GetString() ?? "" : "";
                 ExecutionState.SetBusy(pipeline);
-                
+
                 try
                 {
                     var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
-                    
+
                     // Check if output should be cached (busy response was sent to another request)
                     var shouldCache = ExecutionState.ShouldCacheOutput;
-                    
+
                     // Try to send response
                     try
                     {
                         await SendMessageAsync(pipeServer, result, cancellationToken);
-                        
+
                         if (shouldCache)
                         {
                             // Proxy sent another request while we were busy, cache the result
@@ -474,8 +474,8 @@ Please provide how to update the MCP client configuration to the user.";
     private static string ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
-        var executeImmediately = parameters.TryGetProperty("execute_immediately", out var execElement) 
-            ? execElement.GetBoolean() 
+        var executeImmediately = parameters.TryGetProperty("execute_immediately", out var execElement)
+            ? execElement.GetBoolean()
             : true;
 
         return McpServerHost.ExecuteCommand(pipeline, executeImmediately);
@@ -513,7 +513,7 @@ Please provide how to update the MCP client configuration to the user.";
 
         // Send message length (4 bytes)
         await pipeServer.WriteAsync(lengthBytes, 0, 4, cancellationToken);
-        
+
         // Send message body
         await pipeServer.WriteAsync(messageBytes, 0, messageBytes.Length, cancellationToken);
         await pipeServer.FlushAsync(cancellationToken);
@@ -543,22 +543,22 @@ Please provide how to update the MCP client configuration to the user.";
     {
         if (string.IsNullOrEmpty(pipeline))
             return "";
-        
+
         // Take first line
         var firstLine = pipeline.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? pipeline;
-        
+
         // Take first pipe segment
         var firstSegment = firstLine.Split('|').FirstOrDefault()?.Trim() ?? firstLine;
-        
+
         // Truncate if too long
         const int maxLength = 30;
         if (firstSegment.Length > maxLength)
             return firstSegment[..(maxLength - 3)] + "...";
-        
+
         // Add "..." if truncated by newline or pipe
         if (firstSegment != pipeline)
             return firstSegment + "...";
-        
+
         return firstSegment;
     }
 

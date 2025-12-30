@@ -11,17 +11,22 @@ public class ConsoleSessionManager
     public static ConsoleSessionManager Instance => _instance.Value;
 
     private readonly object _lock = new();
-    
+
     /// <summary>
     /// Base pipe name prefix for PowerShell.MCP
     /// </summary>
     public const string DefaultPipeName = "PowerShell.MCP.Communication";
-    
+
+    /// <summary>
+    /// Error message when module is not imported
+    /// </summary>
+    public const string ErrorModuleNotImported = "PowerShell.MCP module is not imported in existing pwsh.";
+
     /// <summary>
     /// Currently active (ready) Named Pipe name
     /// </summary>
     public string? ActivePipeName { get; private set; }
-    
+
     /// <summary>
     /// Known busy pipes (pipe name -> last known status info)
     /// </summary>
@@ -59,13 +64,13 @@ public class ConsoleSessionManager
         lock (_lock)
         {
             _busyPipes[pipeName] = statusInfo;
-            
+
             // If this was the active pipe, clear it
             if (ActivePipeName == pipeName)
             {
                 ActivePipeName = null;
             }
-            
+
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Marked pipe '{pipeName}' as busy");
         }
     }
@@ -118,7 +123,7 @@ public class ConsoleSessionManager
     {
         IEnumerable<string> paths;
         bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        
+
         try
         {
             if (isWindows)
@@ -137,11 +142,11 @@ public class ConsoleSessionManager
             Console.Error.WriteLine($"[WARN] EnumeratePipes: Failed to scan pipes: {ex.Message}");
             yield break;
         }
-        
+
         foreach (var path in paths)
         {
             var fileName = Path.GetFileName(path);
-            
+
             if (isWindows)
             {
                 yield return fileName;

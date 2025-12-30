@@ -18,7 +18,7 @@ public class PowerShellService : IPowerShellService
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetCurrentLocationParams);
 
         var response = await _namedPipeClient.SendRequestAsync(jsonRequest);
-        
+
         if (string.IsNullOrEmpty(response))
         {
             throw new InvalidOperationException("PowerShell.MCP module communication failed - no response received");
@@ -33,7 +33,7 @@ public class PowerShellService : IPowerShellService
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetCurrentLocationParams);
 
         var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
-        
+
         if (string.IsNullOrEmpty(response))
         {
             throw new InvalidOperationException($"PowerShell.MCP module communication to pipe '{pipeName}' failed - no response received");
@@ -48,7 +48,7 @@ public class PowerShellService : IPowerShellService
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetStatusParams);
 
         var response = await _namedPipeClient.SendRequestAsync(jsonRequest);
-        
+
         if (string.IsNullOrEmpty(response))
         {
             return null;
@@ -71,7 +71,7 @@ public class PowerShellService : IPowerShellService
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.GetStatusParams);
 
         var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
-        
+
         if (string.IsNullOrEmpty(response))
         {
             return null;
@@ -133,12 +133,12 @@ public class PowerShellService : IPowerShellService
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.StartPowerShellConsoleParams);
 
         var response = await _namedPipeClient.SendRequestAsync(jsonRequest);
-        
+
         if (string.IsNullOrEmpty(response))
         {
             throw new InvalidOperationException("PowerShell.MCP module communication failed for console start");
         }
-        
+
         return response;
     }
 }

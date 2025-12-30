@@ -18,13 +18,13 @@ public class PowerShellProcessManager
         {
             var processes = Process.GetProcessesByName(PowerShellExecutableName);
             var found = processes.Length > 0;
-            
+
             // Release process object resources
             foreach (var process in processes)
             {
                 process.Dispose();
             }
-            
+
             return found;
         }
         catch (Exception ex)
@@ -53,7 +53,7 @@ public class PowerShellProcessManager
     public static async Task<(bool Success, int Pid)> StartPowerShellWithModuleAndPidAsync(string? startupMessage = null)
     {
         int pid = 0;
-        
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             pid = PwshLauncherWindows.LaunchPwsh(startupMessage);
@@ -61,13 +61,11 @@ public class PowerShellProcessManager
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             PwshLauncherMacOS.LaunchPwsh(startupMessage);
-            // macOS: PID will be registered by PS module via RegistrationPipeServer
             pid = 0;
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             PwshLauncherLinux.LaunchPwsh(startupMessage);
-            // Linux: PID will be registered by PS module via RegistrationPipeServer
             pid = 0;
         }
         else
@@ -76,7 +74,6 @@ public class PowerShellProcessManager
         }
 
         // Wait for Named Pipe to be ready
-        // PS module will register itself via RegistrationPipeServer
         string pipeName;
         if (pid != 0)
         {
@@ -85,15 +82,14 @@ public class PowerShellProcessManager
         }
         else
         {
-            // macOS/Linux: Wait for registration, then use the active pipe
-            // For now, wait a bit and check if any console was registered
+            // macOS/Linux: PID-based pipe name will be discovered by EnumeratePipes
             await Task.Delay(500);
-            pipeName = ConsoleSessionManager.Instance.ActivePipeName 
+            pipeName = ConsoleSessionManager.Instance.ActivePipeName
                 ?? ConsoleSessionManager.DefaultPipeName;
         }
-        
+
         var success = await NamedPipeClient.WaitForPipeReadyAsync(pipeName);
-        
+
         return (success, pid);
     }
 }
@@ -217,17 +213,17 @@ public static class PwshLauncherWindows
         {
             if (env != IntPtr.Zero)
                 DestroyEnvironmentBlock(env);
-            
+
             if (hToken != IntPtr.Zero)
                 CloseHandle(hToken);
-            
+
             if (hProcess != IntPtr.Zero)
                 CloseHandle(hProcess);
-            
+
             if (hThread != IntPtr.Zero)
                 CloseHandle(hThread);
         }
-        
+
         return pid;
     }
 }
@@ -329,7 +325,7 @@ public static class PwshLauncherLinux
 
             using var whichProcess = Process.Start(whichPsi);
             whichProcess?.WaitForExit(2000);
-            
+
             if (whichProcess?.ExitCode != 0)
             {
                 return false;
@@ -348,7 +344,7 @@ public static class PwshLauncherLinux
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            
+
             // Build command with optional startup message
             string initCommand;
             if (!string.IsNullOrEmpty(startupMessage))

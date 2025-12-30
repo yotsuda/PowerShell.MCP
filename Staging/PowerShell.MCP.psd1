@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.4.1'
+ModuleVersion = '1.5.0'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -115,7 +115,7 @@ PrivateData = @{
         Platforms = @('Windows', 'Linux', 'macOS')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.4.1 - Cross-Platform MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.5.0 - Cross-Platform MCP Server
 
 === Cross-Platform Support ===
 Now available on Windows, Linux, and macOS!

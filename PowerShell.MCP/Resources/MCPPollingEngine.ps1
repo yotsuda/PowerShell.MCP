@@ -1,4 +1,4 @@
-﻿# MCPPollingEngine.ps1
+# MCPPollingEngine.ps1
 
 # ===== Main Timer Setup =====
 
@@ -296,7 +296,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $statusIcon = if ($hasErrors) { "✗" } else { "✓" }
                 $statusText = if ($hasErrors) { "executed with errors" } else { "executed successfully" }
                 $durationText = "{0:F2}s" -f $Duration
-                
+
                 $pipelineInfo = if ($pipelineSummary) { " | Pipeline: $pipelineSummary" } else { "" }
                 $statusLine = "$statusIcon Pipeline $statusText | pwsh PID: $PID | Status: $Status$pipelineInfo | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
 

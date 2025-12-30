@@ -24,17 +24,17 @@ public static class PowerShellCommunication
     public static string WaitForResult()
     {
         var endTime = DateTime.UtcNow.AddSeconds(4 * 60 + 50);
-        
+
         // Clear previous result
         _currentResult = null;
         _resultReadyEvent.Reset();
-        
+
         var remainingTime = endTime - DateTime.UtcNow;
         var timeoutMs = (int)Math.Max(0, remainingTime.TotalMilliseconds);
-        
+
         // Block waiting with ManualResetEvent
         bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
-        
+
         if (signaled)
         {
             return _currentResult ?? "No result available";
@@ -79,7 +79,7 @@ public static class McpServerHost
             return $"Error executing command: {ex.Message}";
         }
     }
-    
+
     /// <summary>
     /// Silent execution
     /// </summary>
