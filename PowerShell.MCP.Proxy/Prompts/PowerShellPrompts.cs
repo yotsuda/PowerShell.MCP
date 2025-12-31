@@ -147,6 +147,7 @@ Key principles:
 - Focus on real-world practical workflows
 - Use PowerShell.MCP for all setup and demonstrations
 - Create and maintain a progress tracking artifact
+- On Windows: Use Show-MarkdownViewer (requires MarkdownViewer module) for Markdown/Mermaid/KaTeX visual aids
 
 PROGRESSION:
 - Build knowledge step by step
