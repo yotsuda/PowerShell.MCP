@@ -118,7 +118,14 @@ internal static class FileMetadataHelper
             {
                 try
                 {
-                    return Encoding.GetEncoding(detector.Charset);
+                    var detectedEncoding = Encoding.GetEncoding(detector.Charset);
+                    // If detected as UTF-8 variant, use BOM-less UTF-8
+                    // (BOM was already checked above and not found)
+                    if (detectedEncoding is UTF8Encoding)
+                    {
+                        return new UTF8Encoding(false);
+                    }
+                    return detectedEncoding;
                 }
                 catch
                 {
