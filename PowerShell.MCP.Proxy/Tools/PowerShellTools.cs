@@ -198,11 +198,10 @@ public class PowerShellTools
             }
             return result;
         }
-        catch
+        catch (Exception ex)
         {
-            // Failed - try to start new console
-            Console.Error.WriteLine("[INFO] Failed to get location, auto-starting new console...");
-            return await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
+            Console.Error.WriteLine($"[ERROR] GetCurrentLocation failed: {ex.Message}");
+            return $"Failed to get current location: {ex.Message}\n\nPlease try again. A new console will be started automatically if needed.";
         }
     }
 
@@ -372,10 +371,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ERROR] InvokeExpression failed: {ex.Message}");
-
-            // Try to start new console
-            var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
-            return $"Command execution failed. A new console has been started.\n\n{startResult}\n\n[LLM] Pipeline NOT executed - verify location and re-execute.";
+            return $"Command execution failed: {ex.Message}\n\nPlease try again. A new console will be started automatically if needed.";
         }
     }
 
@@ -395,7 +391,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         const int pollIntervalMs = 1000; // Check every second
         var endTime = DateTime.UtcNow.AddSeconds(timeout_seconds);
 
-        // First pass: enumerate all pipes and find busy ones
+        // First pass: enumerate all pipes and find busy/completed ones
         var busyPipes = new List<string>();
         foreach (var pipeName in sessionManager.EnumeratePipes())
         {
@@ -405,8 +401,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             if (status.Status == "completed")
             {
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
-                return BuildWaitResponse(completedOutput, busyStatusInfo);
+                // Consume output directly from this completed pipe
+                var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
+                if (!string.IsNullOrEmpty(output))
+                {
+                    return output;
+                }
             }
 
             if (status.Status == "busy")
@@ -438,11 +438,21 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
                 if (status == null) continue;
 
-                if (status.Status == "completed" || status.Status == "standby")
+                if (status.Status == "completed")
                 {
-                    // Console finished - collect all outputs and return
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
-                    return BuildWaitResponse(completedOutput, busyStatusInfo);
+                    // Consume output directly from this completed pipe
+                    var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
+                    sessionManager.RemoveFromBusy(pipeName);
+                    if (!string.IsNullOrEmpty(output))
+                    {
+                        return output;
+                    }
+                }
+
+                if (status.Status == "standby")
+                {
+                    // Console returned to standby without caching (unexpected)
+                    sessionManager.RemoveFromBusy(pipeName);
                 }
             }
         }

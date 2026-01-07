@@ -432,17 +432,17 @@ Please provide how to update the MCP client configuration to the user.";
                     {
                         await SendMessageAsync(pipeServer, response, cancellationToken);
 
-                        // NotifyResultReady handles caching, so just check if we need to go standby
-                        // Don't go standby if we're waiting for caching (timeout case)
-                        if (ExecutionState.Status != "completed" && !shouldCache)
+                        // If shouldCache is true, NotifyResultReady will handle caching the actual result
+                        // Don't call AddToCache here - the result is just "Command is still running..." message
+                        if (!shouldCache && ExecutionState.Status != "completed")
                         {
                             ExecutionState.SetStandby();
                         }
                     }
                     catch
                     {
-                        // Pipe error - save as unreported output if not already cached by NotifyResultReady
-                        if (ExecutionState.Status != "completed")
+                        // Pipe error - save to cache (only if NotifyResultReady hasn't cached yet)
+                        if (ExecutionState.Status != "completed" && !shouldCache)
                         {
                             ExecutionState.AddToCache(result);
                         }
