@@ -48,7 +48,7 @@ public static class PowerShellCommunication
         ExecutionState.MarkForCaching();
 
         // Return immediately WITHOUT waiting for completion
-        return "Command is still running. Result will be cached and included in next response.";
+        return "Command is still running. Use wait_for_completion tool to wait and retrieve the result. If you have other tasks to run in parallel, use invoke_expression - a new console will be started automatically if needed.";
     }
 }
 

@@ -76,25 +76,25 @@ public class PowerShellTools
     }
 
     /// <summary>
-    /// Collects cached outputs and busy status from all pipes.
+    /// Collects cached outputs and busy status from all pipes except excludePipeName.
     /// Returns (completedOutput, busyStatusInfo).
     /// </summary>
     private static async Task<(string completedOutput, string busyStatusInfo)> CollectAllCachedOutputsAsync(
         IPowerShellService powerShellService,
-        string? usedPipeName,
+        string? excludePipeName,
         CancellationToken cancellationToken)
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var completedOutput = new StringBuilder();
         var busyStatusInfo = new StringBuilder();
 
-        // Collect pipes to check: busyPipes + usedPipeName
+        // Collect pipes to check: busyPipes (excluding excludePipeName)
         var pipesToCheck = new HashSet<string>(sessionManager.GetBusyPipes().Keys);
-        if (usedPipeName != null)
+        if (excludePipeName != null)
         {
-            pipesToCheck.Add(usedPipeName);
+            pipesToCheck.Remove(excludePipeName);
         }
-
+        Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: pipesToCheck.Count={pipesToCheck.Count}, excludePipeName={excludePipeName ?? "null"}");
         foreach (var pipeName in pipesToCheck)
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
@@ -258,10 +258,7 @@ Examples:
   ❌ WRONG: invoke_expression('Set-Content -Path file.cs -Value $code')
   ❌ WRONG: invoke_expression('Get-Content file.txt | Select-Object -Skip 9 -First 11')
 
-For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
-
-⏳ Long-running Commands:
-If ""Command is still running"" is returned, call Start-Sleep to wait. The cached result will be included in that response.")]
+For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]
@@ -334,7 +331,15 @@ If ""Command is still running"" is returned, call Start-Sleep to wait. The cache
                 return result;
             }
 
-            // Before returning, collect any cached outputs and busy status from all pipes
+            // Check if result is marked as cached (MCP client may have disconnected)
+            const string cachedPrefix = "[CACHED]";
+            if (result.StartsWith(cachedPrefix, StringComparison.Ordinal))
+            {
+                // Remove prefix and return without collecting other pipes' caches
+                return result[cachedPrefix.Length..];
+            }
+
+            // Normal case - collect other pipes' cached outputs and busy status
             var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
             // Build response: completedOutput + busyStatusInfo + result
@@ -363,6 +368,106 @@ If ""Command is still running"" is returned, call Start-Sleep to wait. The cache
             var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
             return $"Command execution failed. A new console has been started.\n\n{startResult}\n\n[LLM] Pipeline NOT executed - verify location and re-execute.";
         }
+    }
+
+    [McpServerTool]
+    [Description("Wait for busy console(s) to complete and retrieve cached results. Use this after receiving 'Command is still running' response instead of executing Start-Sleep (which would open a new console).")]
+    public static async Task<string> WaitForCompletion(
+        IPowerShellService powerShellService,
+        [Description("Maximum seconds to wait for completion (1-170, default: 30). Returns early if a console completes.")]
+        int timeout_seconds = 30,
+        CancellationToken cancellationToken = default)
+    {
+        var sessionManager = ConsoleSessionManager.Instance;
+
+        // Clamp timeout to reasonable range
+        timeout_seconds = Math.Clamp(timeout_seconds, 1, 170);
+
+        const int pollIntervalMs = 1000; // Check every second
+        var endTime = DateTime.UtcNow.AddSeconds(timeout_seconds);
+
+        // First pass: enumerate all pipes and find busy ones
+        var busyPipes = new List<string>();
+        foreach (var pipeName in sessionManager.EnumeratePipes())
+        {
+            var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+            Console.Error.WriteLine($"[DEBUG] WaitForCompletion (init): pipe={pipeName}, status={status?.Status ?? "null"}");
+
+            if (status == null) continue;
+
+            if (status.Status == "completed")
+            {
+                Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Found completed console on first pass");
+                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+                return BuildWaitResponse(completedOutput, busyStatusInfo);
+            }
+
+            if (status.Status == "busy")
+            {
+                busyPipes.Add(pipeName);
+                var busyInfo = FormatBusyStatus(status);
+                sessionManager.MarkPipeBusy(pipeName, busyInfo);
+            }
+        }
+
+        // No busy consoles - nothing to wait for
+        if (busyPipes.Count == 0)
+        {
+            Console.Error.WriteLine($"[DEBUG] WaitForCompletion: No busy consoles found on first pass");
+            return "No busy consoles to wait for.";
+        }
+
+        Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Polling {busyPipes.Count} busy pipe(s)");
+
+        // Poll only the busy pipes until timeout or completion
+        while (DateTime.UtcNow < endTime)
+        {
+            // Wait before next poll
+            var remainingMs = (int)(endTime - DateTime.UtcNow).TotalMilliseconds;
+            if (remainingMs <= 0) break;
+            await Task.Delay(Math.Min(pollIntervalMs, remainingMs), cancellationToken);
+
+            foreach (var pipeName in busyPipes)
+            {
+                var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+                Console.Error.WriteLine($"[DEBUG] WaitForCompletion (poll): pipe={pipeName}, status={status?.Status ?? "null"}");
+
+                if (status == null) continue;
+
+                if (status.Status == "completed" || status.Status == "standby")
+                {
+                    // Console finished - collect all outputs and return
+                    Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Console finished (status={status.Status}), collecting outputs...");
+                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+                    return BuildWaitResponse(completedOutput, busyStatusInfo);
+                }
+            }
+        }
+
+        // Timeout - collect final status
+        Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Timeout reached");
+        var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+        return BuildWaitResponse(finalCompletedOutput, finalBusyStatusInfo);
+    }
+
+    private static string BuildWaitResponse(string completedOutput, string busyStatusInfo)
+    {
+        var response = new StringBuilder();
+        if (completedOutput.Length > 0)
+        {
+            response.Append(completedOutput);
+        }
+        if (busyStatusInfo.Length > 0)
+        {
+            response.Append(busyStatusInfo);
+        }
+
+        if (response.Length == 0)
+        {
+            return "No busy consoles or cached results.";
+        }
+
+        return response.ToString();
     }
 
     [McpServerTool]

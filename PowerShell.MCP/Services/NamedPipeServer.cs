@@ -424,13 +424,17 @@ Please provide how to update the MCP client configuration to the user.";
                     var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
 
                     // Try to send response
+                    // Prefix with [CACHED] if this output will be cached (MCP client may have disconnected)
+                    var shouldCache = ExecutionState.ShouldCacheOutput;
+                    var response = shouldCache ? "[CACHED]" + result : result;
+
                     try
                     {
-                        await SendMessageAsync(pipeServer, result, cancellationToken);
+                        await SendMessageAsync(pipeServer, response, cancellationToken);
 
                         // NotifyResultReady handles caching, so just check if we need to go standby
                         // Don't go standby if we're waiting for caching (timeout case)
-                        if (ExecutionState.Status != "completed" && !ExecutionState.ShouldCacheOutput)
+                        if (ExecutionState.Status != "completed" && !shouldCache)
                         {
                             ExecutionState.SetStandby();
                         }
