@@ -94,7 +94,6 @@ public class PowerShellTools
         {
             pipesToCheck.Remove(excludePipeName);
         }
-        Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: pipesToCheck.Count={pipesToCheck.Count}, excludePipeName={excludePipeName ?? "null"}");
         foreach (var pipeName in pipesToCheck)
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
@@ -391,13 +390,11 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         foreach (var pipeName in sessionManager.EnumeratePipes())
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
-            Console.Error.WriteLine($"[DEBUG] WaitForCompletion (init): pipe={pipeName}, status={status?.Status ?? "null"}");
 
             if (status == null) continue;
 
             if (status.Status == "completed")
             {
-                Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Found completed console on first pass");
                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
                 return BuildWaitResponse(completedOutput, busyStatusInfo);
             }
@@ -413,11 +410,9 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // No busy consoles - nothing to wait for
         if (busyPipes.Count == 0)
         {
-            Console.Error.WriteLine($"[DEBUG] WaitForCompletion: No busy consoles found on first pass");
             return "No busy consoles to wait for.";
         }
 
-        Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Polling {busyPipes.Count} busy pipe(s)");
 
         // Poll only the busy pipes until timeout or completion
         while (DateTime.UtcNow < endTime)
@@ -430,14 +425,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             foreach (var pipeName in busyPipes)
             {
                 var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
-                Console.Error.WriteLine($"[DEBUG] WaitForCompletion (poll): pipe={pipeName}, status={status?.Status ?? "null"}");
 
                 if (status == null) continue;
 
                 if (status.Status == "completed" || status.Status == "standby")
                 {
                     // Console finished - collect all outputs and return
-                    Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Console finished (status={status.Status}), collecting outputs...");
                     var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
                     return BuildWaitResponse(completedOutput, busyStatusInfo);
                 }
@@ -445,7 +438,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         }
 
         // Timeout - collect final status
-        Console.Error.WriteLine($"[DEBUG] WaitForCompletion: Timeout reached");
         var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
         return BuildWaitResponse(finalCompletedOutput, finalBusyStatusInfo);
     }
