@@ -7,11 +7,6 @@ using System.Diagnostics;
 namespace PowerShell.MCP.Services;
 
 /// <summary>
-/// Represents a cached command output
-/// </summary>
-public record CachedOutput(string Output, string Pipeline, double Duration);
-
-/// <summary>
 /// Static class for managing execution state
 /// Status: standby / busy (status is derived from state, not stored)
 /// </summary>
@@ -22,7 +17,7 @@ public static class ExecutionState
     private static string _currentPipeline = "";
 
     // Cached outputs (multiple outputs can accumulate)
-    private static readonly List<CachedOutput> _cachedOutputs = new();
+    private static readonly List<string> _cachedOutputs = new();
     private static readonly object _cacheLock = new();
 
     // Flag: should cache output on completion (set when busy/timeout response is sent)
@@ -119,7 +114,7 @@ public static class ExecutionState
     {
         lock (_cacheLock)
         {
-            _cachedOutputs.Add(new CachedOutput(output, _currentPipeline, _stopwatch.Elapsed.TotalSeconds));
+            _cachedOutputs.Add(output);
         }
         _stopwatch.Stop();
         _currentPipeline = "";
@@ -130,7 +125,7 @@ public static class ExecutionState
     /// <summary>
     /// Peeks cached outputs without consuming them
     /// </summary>
-    public static IReadOnlyList<CachedOutput> PeekCachedOutputs()
+    public static IReadOnlyList<string> PeekCachedOutputs()
     {
         lock (_cacheLock)
         {
@@ -141,7 +136,7 @@ public static class ExecutionState
     /// <summary>
     /// Consumes all cached outputs (returns and clears them)
     /// </summary>
-    public static IReadOnlyList<CachedOutput> ConsumeCachedOutputs()
+    public static IReadOnlyList<string> ConsumeCachedOutputs()
     {
         lock (_cacheLock)
         {
@@ -340,7 +335,7 @@ public class NamedPipeServer : IDisposable
             {
                 var cachedOutputs = ExecutionState.ConsumeCachedOutputs();
                 // Combine all cached outputs with separators
-                var combinedOutput = string.Join("\n\n", cachedOutputs.Select(c => c.Output));
+                var combinedOutput = string.Join("\n\n", cachedOutputs);
                 await SendMessageAsync(pipeServer, combinedOutput, cancellationToken);
                 return;
             }

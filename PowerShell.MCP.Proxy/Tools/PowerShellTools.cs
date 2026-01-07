@@ -405,6 +405,22 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
                 if (!string.IsNullOrEmpty(output))
                 {
+                    // Check remaining pipes for busy status
+                    var remainingBusyInfo = new StringBuilder();
+                    foreach (var otherPipe in sessionManager.EnumeratePipes().Where(p => p != pipeName))
+                    {
+                        var otherStatus = await powerShellService.GetStatusFromPipeAsync(otherPipe, cancellationToken);
+                        if (otherStatus?.Status == "busy")
+                        {
+                            remainingBusyInfo.AppendLine(FormatBusyStatus(otherStatus));
+                            sessionManager.MarkPipeBusy(otherPipe, FormatBusyStatus(otherStatus));
+                        }
+                    }
+                    
+                    if (remainingBusyInfo.Length > 0)
+                    {
+                        return $"{output}\n\n{remainingBusyInfo.ToString().TrimEnd()}";
+                    }
                     return output;
                 }
             }
@@ -445,6 +461,21 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                     sessionManager.RemoveFromBusy(pipeName);
                     if (!string.IsNullOrEmpty(output))
                     {
+                        // Check remaining busy pipes for status
+                        var remainingBusyInfo = new StringBuilder();
+                        foreach (var otherPipe in busyPipes.Where(p => p != pipeName))
+                        {
+                            var otherStatus = await powerShellService.GetStatusFromPipeAsync(otherPipe, cancellationToken);
+                            if (otherStatus?.Status == "busy")
+                            {
+                                remainingBusyInfo.AppendLine(FormatBusyStatus(otherStatus));
+                            }
+                        }
+                        
+                        if (remainingBusyInfo.Length > 0)
+                        {
+                            return $"{output}\n\n{remainingBusyInfo.ToString().TrimEnd()}";
+                        }
                         return output;
                     }
                 }
