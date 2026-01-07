@@ -168,9 +168,9 @@ public class PowerShellTools
 
         if (readyPipeName == null)
         {
-            // No ready pipe - auto-start
+            // No ready pipe - auto-start (StartPowershellConsole includes busy info collection)
             Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
-            return await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+            return await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
         }
 
         try
@@ -277,16 +277,26 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         if (readyPipeName == null)
         {
-            // No ready pipe - auto-start (StartPowershellConsoleInternal includes busy status)
+            // No ready pipe - auto-start
             Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
             var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
 
-            // Extract JSON from startResult (skip first paragraph)
-            var separatorIndex = startResult.IndexOf("\n\n");
-            var json = separatorIndex > 0 ? startResult[(separatorIndex + 2)..] : startResult;
-            return BuildNotExecutedResponse(
-                "PowerShell console started with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.",
-                json);
+            // Collect busy status from Proxy side (after console start, using new pipe as exclude)
+            var sessionManager = ConsoleSessionManager.Instance;
+            var newPipeName = sessionManager.ActivePipeName;
+            var (_, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
+
+            // Build response: busy status + modified start message
+            var response = new StringBuilder();
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+                response.AppendLine();
+            }
+            response.Append(startResult.Replace(
+                "PowerShell console started successfully with PowerShell.MCP module imported.",
+                "PowerShell console started with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute."));
+            return response.ToString();
         }
 
         // Console switched - don't execute pipeline, return location info with busy status
@@ -470,7 +480,26 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         string? banner = null,
         CancellationToken cancellationToken = default)
     {
-        return await StartPowershellConsoleInternal(powerShellService, banner, cancellationToken);
+        var startResult = await StartPowershellConsoleInternal(powerShellService, banner, cancellationToken);
+
+        // Collect busy status from Proxy side
+        var sessionManager = ConsoleSessionManager.Instance;
+        var newPipeName = sessionManager.ActivePipeName;
+        var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
+
+        // Build response: completed output + busy status + start message
+        var response = new StringBuilder();
+        if (completedOutput.Length > 0)
+        {
+            response.Append(completedOutput);
+        }
+        if (busyStatusInfo.Length > 0)
+        {
+            response.Append(busyStatusInfo);
+            response.AppendLine();
+        }
+        response.Append(startResult);
+        return response.ToString();
     }
 
     /// <summary>
@@ -515,20 +544,8 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             Console.Error.WriteLine("[INFO] PowerShell console startup completed");
 
-            // Collect any cached outputs and busy status before returning
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, pipeName, cancellationToken);
-
-            // Build response
+            // Build response (busy info collection is done by caller)
             var response = new StringBuilder();
-            if (completedOutput.Length > 0)
-            {
-                response.Append(completedOutput);
-            }
-            if (busyStatusInfo.Length > 0)
-            {
-                response.Append(busyStatusInfo);
-                response.AppendLine();
-            }
             response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
             response.AppendLine();
             response.Append(newLocationResult);
