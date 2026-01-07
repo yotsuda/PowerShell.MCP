@@ -87,6 +87,14 @@ public class PowerShellService : IPowerShellService
         }
     }
 
+    public async Task<string> ConsumeOutputFromPipeAsync(string pipeName, CancellationToken cancellationToken = default)
+    {
+        var requestParams = new ConsumeOutputParams();
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.ConsumeOutputParams);
+
+        return await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+    }
+
     public async Task<string> InvokeExpressionAsync(string pipeline, bool execute_immediately, CancellationToken cancellationToken = default)
     {
         var requestParams = new InvokeExpressionParams

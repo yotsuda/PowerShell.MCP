@@ -14,14 +14,15 @@ public static class PowerShellCommunication
     /// </summary>
     public static void NotifyResultReady(string result)
     {
-        _currentResult = result;
-        _resultReadyEvent.Set();
-
-        // If marked for caching (e.g., WaitForResult timed out), cache the actual result
+        // If marked for caching, cache BEFORE signaling
+        // (to prevent race condition with HandleClientAsync)
         if (ExecutionState.ShouldCacheOutput)
         {
-            ExecutionState.SetCompleted(result);
+            ExecutionState.AddToCache(result);
         }
+
+        _currentResult = result;
+        _resultReadyEvent.Set();
     }
 
     /// <summary>
@@ -33,23 +34,21 @@ public static class PowerShellCommunication
         _currentResult = null;
         _resultReadyEvent.Reset();
 
-        // First, wait for 4 minutes (before MCP 5-minute timeout)
-        const int markForCachingMs = 4 * 60 * 1000; // 4 minutes
-        bool signaled = _resultReadyEvent.WaitOne(markForCachingMs);
+        // Wait for ~3 minutes (before MCP client timeout)
+        const int timeoutMs = 170 * 1000; // 2 minutes 50 seconds
+        bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
 
         if (signaled)
         {
             return _currentResult ?? "No result available";
         }
 
-        // After 4 minutes, mark for caching (MCP will timeout at 5m, result will be cached)
+        // Timeout - command still running
+        // Mark for caching (NotifyResultReady will cache the actual result when done)
         ExecutionState.MarkForCaching();
 
-        // Continue waiting for the actual result (will be cached via NotifyResultReady)
-        _resultReadyEvent.WaitOne();
-
-        // Return info message instead of actual result (to avoid duplicate reporting)
-        return "Command completed. Output cached and will be included in next get_current_location or invoke_expression response.";
+        // Return immediately WITHOUT waiting for completion
+        return "Command is still running. Result will be cached and included in next response.";
     }
 }
 

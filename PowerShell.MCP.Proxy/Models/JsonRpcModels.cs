@@ -42,6 +42,12 @@ public class GetStatusParams : PowerShellMcpParams
     public override string Name { get; } = "get_status";
 }
 
+public class ConsumeOutputParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "consume_output";
+}
+
 // Response type for get_status
 public class GetStatusResponse
 {

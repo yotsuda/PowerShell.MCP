@@ -13,127 +13,60 @@ public class PowerShellTools
     // Error message constant definitions
     private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";
     /// <summary>
-    /// Finds a ready pipe using cached state, with minimal queries.
-    /// Returns (readyPipeName, statusInfo for busy/completed pipes)
+    /// Finds a ready pipe. Returns (pipeName, consoleSwitched).
     /// </summary>
-    private static async Task<(string? readyPipeName, StringBuilder statusInfo, bool consoleSwitched)> FindReadyPipeAsync(
+    private static async Task<(string? readyPipeName, bool consoleSwitched)> FindReadyPipeAsync(
         IPowerShellService powerShellService,
         CancellationToken cancellationToken)
     {
         var sessionManager = ConsoleSessionManager.Instance;
-        var statusInfo = new StringBuilder();
-        var readyCandidates = new List<string>();
-        var originalActivePipe = sessionManager.ActivePipeName;
-        // Step 1: Check known busy pipes FIRST (they might be standby now)
-        // Collect ready candidates before checking ActivePipeName
-        var busyPipes = sessionManager.GetBusyPipes();
-        foreach (var (pipeName, _) in busyPipes)
-        {
-            var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
 
-            if (status == null)
-            {
-                // Dead pipe
-                sessionManager.ClearDeadPipe(pipeName);
-            }
-            else if (status.Status == "standby")
-            {
-                // Now ready - add to candidates
-                sessionManager.RemoveFromBusy(pipeName);
-                readyCandidates.Add(pipeName);
-            }
-            else if (status.Status == "completed")
-            {
-                // Has unreported output - add to candidates with output collected
-                AppendCompletedStatus(statusInfo, status);
-                sessionManager.RemoveFromBusy(pipeName);
-                readyCandidates.Add(pipeName);
-            }
-            else // still busy
-            {
-                var busyInfo = FormatBusyStatus(status);
-                sessionManager.MarkPipeBusy(pipeName, busyInfo);
-                statusInfo.AppendLine(busyInfo);
-            }
-        }
-
-        // Step 2: Check ActivePipeName (if not already checked in Step 1)
+        // Step 1: Check ActivePipeName
         var activePipe = sessionManager.ActivePipeName;
-        if (activePipe != null && !busyPipes.ContainsKey(activePipe))
+        if (activePipe != null)
         {
             var status = await powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
 
             if (status == null)
             {
-                // Dead pipe - try candidates
                 sessionManager.ClearDeadPipe(activePipe);
             }
-            else if (status.Status == "standby")
+            else if (status.Status == "standby" || status.Status == "completed")
             {
-                // Ready to use
-                return (activePipe, statusInfo, false);
-            }
-            else if (status.Status == "completed")
-            {
-                // Has unreported output - use this pipe
-                AppendCompletedStatus(statusInfo, status);
-                return (activePipe, statusInfo, false);
+                return (activePipe, false);
             }
             else // busy
             {
-                // Mark as busy - use candidates if available
                 var busyInfo = FormatBusyStatus(status);
                 sessionManager.MarkPipeBusy(activePipe, busyInfo);
-                statusInfo.AppendLine(busyInfo);
             }
         }
 
-        // Step 3: Use ready candidate if available
-        if (readyCandidates.Count > 0)
-        {
-            var candidatePipe = readyCandidates[0];
-            sessionManager.SetActivePipeName(candidatePipe);
-            return (candidatePipe, statusInfo, originalActivePipe != null && candidatePipe != originalActivePipe);
-        }
-
-        // Step 4: Discover new pipes (last resort) - lazy evaluation stops at first standby
-        var knownPipes = new HashSet<string>(busyPipes.Keys);
+        // Step 2: Discover new standby pipe
+        var knownPipes = new HashSet<string>(sessionManager.GetBusyPipes().Keys);
         if (activePipe != null) knownPipes.Add(activePipe);
 
-        var unknownPipes = sessionManager.EnumeratePipes()
-            .Where(p => !knownPipes.Contains(p));
-
-        foreach (var pipeName in unknownPipes)
+        foreach (var pipeName in sessionManager.EnumeratePipes().Where(p => !knownPipes.Contains(p)))
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
 
-            if (status == null)
-            {
-                // Dead pipe - skip
-                continue;
-            }
+            if (status == null) continue;
 
             if (status.Status == "standby")
             {
                 sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, statusInfo, originalActivePipe != null && pipeName != originalActivePipe);
+                return (pipeName, activePipe != null);
             }
 
-            if (status.Status == "completed")
+            if (status.Status == "busy")
             {
-                AppendCompletedStatus(statusInfo, status);
-                sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, statusInfo, originalActivePipe != null && pipeName != originalActivePipe);
+                var busyInfo = FormatBusyStatus(status);
+                sessionManager.MarkPipeBusy(pipeName, busyInfo);
             }
-
-            // busy
-            var busyInfo = FormatBusyStatus(status);
-            sessionManager.MarkPipeBusy(pipeName, busyInfo);
-            statusInfo.AppendLine(busyInfo);
         }
 
         // No ready pipe found
-        return (null, statusInfo, false);
+        return (null, false);
     }
 
     private static string FormatBusyStatus(GetStatusResponse status)
@@ -142,18 +75,65 @@ public class PowerShellTools
         return $"⧗ | pwsh PID: {status.Pid} | Status: Busy | Pipeline: {truncatedPipeline} | Duration: {status.Duration:F2}s";
     }
 
-    private static void AppendCompletedStatus(StringBuilder statusInfo, GetStatusResponse status)
+    /// <summary>
+    /// Collects cached outputs and busy status from all pipes.
+    /// Returns (completedOutput, busyStatusInfo).
+    /// </summary>
+    private static async Task<(string completedOutput, string busyStatusInfo)> CollectAllCachedOutputsAsync(
+        IPowerShellService powerShellService,
+        string? usedPipeName,
+        CancellationToken cancellationToken)
     {
-        // Non-active pipes show "Standby" instead of "Ready" (replace only the first occurrence)
-        var output = status.Output ?? "";
-        const string oldValue = "| Status: Ready |";
-        var index = output.IndexOf(oldValue);
-        if (index >= 0)
+        var sessionManager = ConsoleSessionManager.Instance;
+        var completedOutput = new StringBuilder();
+        var busyStatusInfo = new StringBuilder();
+
+        // Collect pipes to check: busyPipes + usedPipeName
+        var pipesToCheck = new HashSet<string>(sessionManager.GetBusyPipes().Keys);
+        if (usedPipeName != null)
         {
-            output = output.Remove(index, oldValue.Length).Insert(index, "| Status: Standby |");
+            pipesToCheck.Add(usedPipeName);
         }
-        statusInfo.AppendLine(output);
-        statusInfo.AppendLine();
+
+        foreach (var pipeName in pipesToCheck)
+        {
+            var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+
+            if (status == null)
+            {
+                sessionManager.ClearDeadPipe(pipeName);
+            }
+            else if (status.Status == "completed")
+            {
+                // Consume the cached output
+                var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
+                if (!string.IsNullOrEmpty(output))
+                {
+                    // Replace "Status: Ready" with "Status: Standby" for non-active pipes
+                    const string oldValue = "| Status: Ready |";
+                    var index = output.IndexOf(oldValue);
+                    if (index >= 0)
+                    {
+                        output = output.Remove(index, oldValue.Length).Insert(index, "| Status: Standby |");
+                    }
+                    completedOutput.AppendLine(output);
+                    completedOutput.AppendLine();
+                }
+                sessionManager.RemoveFromBusy(pipeName);
+            }
+            else if (status.Status == "standby")
+            {
+                sessionManager.RemoveFromBusy(pipeName);
+            }
+            else // busy
+            {
+                var busyInfo = FormatBusyStatus(status);
+                sessionManager.MarkPipeBusy(pipeName, busyInfo);
+                busyStatusInfo.AppendLine(busyInfo);
+            }
+        }
+
+        return (completedOutput.ToString(), busyStatusInfo.ToString());
     }
 
     private static string TruncatePipeline(string pipeline, int maxLength = 30)
@@ -169,13 +149,9 @@ public class PowerShellTools
         return normalized[..(maxLength - 3)] + "...";
     }
 
-    private static string BuildNotExecutedResponse(StringBuilder statusInfo, string message, string jsonContent)
+    private static string BuildNotExecutedResponse(string message, string jsonContent)
     {
         var response = new StringBuilder();
-        if (statusInfo.Length > 0)
-        {
-            response.AppendLine(statusInfo.ToString());
-        }
         response.AppendLine(message);
         response.AppendLine();
         response.Append(jsonContent);
@@ -188,31 +164,38 @@ public class PowerShellTools
         IPowerShellService powerShellService,
         CancellationToken cancellationToken = default)
     {
-        var sessionManager = ConsoleSessionManager.Instance;
-
-        // Find a ready pipe using cached state
-        var (readyPipeName, statusInfo, _) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+        // Find a ready pipe
+        var (readyPipeName, _) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
         if (readyPipeName == null)
         {
             // No ready pipe - auto-start
             Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
-            var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
-
-            if (statusInfo.Length > 0)
-            {
-                return $"{statusInfo}\n{startResult}";
-            }
-            return startResult;
+            return await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
         }
 
         try
         {
             var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
 
-            if (statusInfo.Length > 0)
+            // Collect any cached outputs and busy status before returning
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+
+            // Build response: completedOutput + busyStatusInfo + result
+            var response = new StringBuilder();
+            if (completedOutput.Length > 0)
             {
-                return $"{statusInfo}\n{result}";
+                response.Append(completedOutput);
+            }
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+            }
+            if (response.Length > 0)
+            {
+                response.AppendLine();
+                response.Append(result);
+                return response.ToString();
             }
             return result;
         }
@@ -275,7 +258,10 @@ Examples:
   ❌ WRONG: invoke_expression('Set-Content -Path file.cs -Value $code')
   ❌ WRONG: invoke_expression('Get-Content file.txt | Select-Object -Skip 9 -First 11')
 
-For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
+For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
+
+⏳ Long-running Commands:
+If ""Command is still running"" is returned, call Start-Sleep to wait. The cached result will be included in that response.")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]
@@ -290,30 +276,32 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             return "execute_immediately=false (insert mode) is not supported on Linux/macOS. Please use execute_immediately=true or omit the parameter.";
         }
 
-        // Find a ready pipe using cached state
-        var (readyPipeName, statusInfo, consoleSwitched) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+        // Find a ready pipe
+        var (readyPipeName, consoleSwitched) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
         if (readyPipeName == null)
         {
-            // No ready pipe - auto-start
+            // No ready pipe - auto-start (StartPowershellConsoleInternal includes busy status)
             Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
             var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
 
             // Extract JSON from startResult (skip first paragraph)
             var separatorIndex = startResult.IndexOf("\n\n");
             var json = separatorIndex > 0 ? startResult[(separatorIndex + 2)..] : startResult;
-            return BuildNotExecutedResponse(statusInfo,
+            return BuildNotExecutedResponse(
                 "PowerShell console started with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.",
                 json);
         }
 
-        // Console switched - don't execute pipeline, return location info instead
+        // Console switched - don't execute pipeline, return location info with busy status
         if (consoleSwitched)
         {
             var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
-            return BuildNotExecutedResponse(statusInfo,
-                "Console switched. Pipeline NOT executed - verify location and re-execute.",
-                locationResult);
+            var (_, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+            var message = busyStatusInfo.Length > 0
+                ? $"{busyStatusInfo}\nConsole switched. Pipeline NOT executed - verify location and re-execute."
+                : "Console switched. Pipeline NOT executed - verify location and re-execute.";
+            return BuildNotExecutedResponse(message, locationResult);
         }
 
         // Execute the command
@@ -336,9 +324,34 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 return $"[LLM] Pipeline NOT executed - verify location and re-execute.\n\n[Inform user] Existing PowerShell window did not have PowerShell.MCP module imported, so a new console was opened. Original pwsh remains unchanged.\n\n{startResult}";
             }
 
-            if (statusInfo.Length > 0)
+            // Check if command is still running (timeout case)
+            const string stillRunningMessage = "Command is still running.";
+            if (result.StartsWith(stillRunningMessage, StringComparison.Ordinal))
             {
-                return $"{statusInfo}\n{result}";
+                // Mark this pipe as busy for later cache collection
+                var sessionManager = ConsoleSessionManager.Instance;
+                sessionManager.MarkPipeBusy(readyPipeName, $"⧗ | Pipeline: {TruncatePipeline(pipeline)} | Waiting for completion");
+                return result;
+            }
+
+            // Before returning, collect any cached outputs and busy status from all pipes
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+
+            // Build response: completedOutput + busyStatusInfo + result
+            var response = new StringBuilder();
+            if (completedOutput.Length > 0)
+            {
+                response.Append(completedOutput);
+            }
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+            }
+            if (response.Length > 0)
+            {
+                response.AppendLine();
+                response.Append(result);
+                return response.ToString();
             }
             return result;
         }
@@ -375,11 +388,18 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             var sessionManager = ConsoleSessionManager.Instance;
 
-            // Check existing consoles and cache their status before starting new one
-            var (_, statusInfo, _) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+            // Check existing pipes and mark busy ones before starting new console
+            foreach (var existingPipe in sessionManager.EnumeratePipes())
+            {
+                var status = await powerShellService.GetStatusFromPipeAsync(existingPipe, cancellationToken);
+                if (status?.Status == "busy")
+                {
+                    var busyInfo = FormatBusyStatus(status);
+                    sessionManager.MarkPipeBusy(existingPipe, busyInfo);
+                }
+            }
 
             Console.Error.WriteLine("[INFO] Starting PowerShell console...");
-
             // Start new console
             var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(banner);
 
@@ -398,13 +418,24 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             Console.Error.WriteLine("[INFO] PowerShell console startup completed");
 
-            var result = $"PowerShell console started successfully with PowerShell.MCP module imported.\n\n{newLocationResult}";
+            // Collect any cached outputs and busy status before returning
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, pipeName, cancellationToken);
 
-            if (statusInfo.Length > 0)
+            // Build response
+            var response = new StringBuilder();
+            if (completedOutput.Length > 0)
             {
-                return $"{statusInfo}\n{result}";
+                response.Append(completedOutput);
             }
-            return result;
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+                response.AppendLine();
+            }
+            response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
+            response.AppendLine();
+            response.Append(newLocationResult);
+            return response.ToString();
         }
         catch (Exception ex)
         {

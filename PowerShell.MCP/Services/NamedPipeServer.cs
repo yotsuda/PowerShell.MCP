@@ -5,29 +5,48 @@ using System.Text.Json;
 using System.Diagnostics;
 
 namespace PowerShell.MCP.Services;
+
+/// <summary>
+/// Represents a cached command output
+/// </summary>
+public record CachedOutput(string Output, string Pipeline, double Duration);
+
 /// <summary>
 /// Static class for managing execution state
-/// Status: standby / busy / completed
+/// Status: standby / busy (status is derived from state, not stored)
 /// </summary>
 public static class ExecutionState
 {
-    private static string _status = "standby";
+    private static bool _isBusy = false;
     private static readonly Stopwatch _stopwatch = new();
     private static string _currentPipeline = "";
 
-    // Unreported output (when result should be cached for later retrieval)
-    private static string? _unreportedOutput = null;
-    private static string? _unreportedPipeline = null;
-    private static double _unreportedDuration = 0;
+    // Cached outputs (multiple outputs can accumulate)
+    private static readonly List<CachedOutput> _cachedOutputs = new();
+    private static readonly object _cacheLock = new();
 
-    // Flag: should cache output on completion (set when busy response is sent)
+    // Flag: should cache output on completion (set when busy/timeout response is sent)
     private static bool _shouldCacheOutput = false;
 
     // Heartbeat tracking for detecting user-initiated commands
     private static DateTime _lastHeartbeat = DateTime.UtcNow;
     private const int HeartbeatTimeoutMs = 500; // If no heartbeat for 500ms, runspace is likely busy
 
-    public static string Status => _status;
+    /// <summary>
+    /// Gets the current status (derived from state)
+    /// </summary>
+    public static string Status
+    {
+        get
+        {
+            if (_isBusy) return "busy";
+            lock (_cacheLock)
+            {
+                return _cachedOutputs.Count > 0 ? "completed" : "standby";
+            }
+        }
+    }
+
     public static string CurrentPipeline => _currentPipeline;
 
     /// <summary>
@@ -36,9 +55,18 @@ public static class ExecutionState
     public static double ElapsedSeconds => _stopwatch.Elapsed.TotalSeconds;
 
     /// <summary>
-    /// Checks if there is unreported output
+    /// Checks if there is cached output
     /// </summary>
-    public static bool HasUnreportedOutput => _unreportedOutput != null;
+    public static bool HasCachedOutput
+    {
+        get
+        {
+            lock (_cacheLock)
+            {
+                return _cachedOutputs.Count > 0;
+            }
+        }
+    }
 
     /// <summary>
     /// Checks if output should be cached on completion
@@ -61,12 +89,12 @@ public static class ExecutionState
         _stopwatch.Restart();
         _currentPipeline = pipeline;
         _shouldCacheOutput = false;  // Reset flag
-        _status = "busy";
+        _isBusy = true;
     }
 
     /// <summary>
     /// Marks that the output should be cached on completion.
-    /// Called when a busy response is sent to another request.
+    /// Called when a busy/timeout response is sent.
     /// </summary>
     public static void MarkForCaching()
     {
@@ -81,37 +109,46 @@ public static class ExecutionState
         _stopwatch.Stop();
         _currentPipeline = "";
         _shouldCacheOutput = false;
-        _status = "standby";
+        _isBusy = false;
     }
 
     /// <summary>
-    /// Sets status to completed with unreported output
+    /// Adds output to cache (called when MCP client won't receive the result directly)
     /// </summary>
-    public static void SetCompleted(string output)
+    public static void AddToCache(string output)
     {
-        _unreportedOutput = output;
-        _unreportedPipeline = _currentPipeline;
-        _unreportedDuration = _stopwatch.Elapsed.TotalSeconds;
+        lock (_cacheLock)
+        {
+            _cachedOutputs.Add(new CachedOutput(output, _currentPipeline, _stopwatch.Elapsed.TotalSeconds));
+        }
         _stopwatch.Stop();
         _currentPipeline = "";
         _shouldCacheOutput = false;
-        _status = "completed";
+        _isBusy = false;
     }
 
     /// <summary>
-    /// Consumes unreported output (returns and clears it, transitions to standby)
+    /// Peeks cached outputs without consuming them
     /// </summary>
-    public static (string Output, string Pipeline, double Duration)? ConsumeUnreportedOutput()
+    public static IReadOnlyList<CachedOutput> PeekCachedOutputs()
     {
-        if (_unreportedOutput == null)
-            return null;
+        lock (_cacheLock)
+        {
+            return _cachedOutputs.ToList();
+        }
+    }
 
-        var result = (_unreportedOutput, _unreportedPipeline ?? "", _unreportedDuration);
-        _unreportedOutput = null;
-        _unreportedPipeline = null;
-        _unreportedDuration = 0;
-        _status = "standby";
-        return result;
+    /// <summary>
+    /// Consumes all cached outputs (returns and clears them)
+    /// </summary>
+    public static IReadOnlyList<CachedOutput> ConsumeCachedOutputs()
+    {
+        lock (_cacheLock)
+        {
+            var result = _cachedOutputs.ToList();
+            _cachedOutputs.Clear();
+            return result;
+        }
     }
 }
 
@@ -265,24 +302,14 @@ public class NamedPipeServer : IDisposable
                 }
                 else if (status == "completed")
                 {
-                    // Consume unreported output (returns and clears it)
-                    var unreported = ExecutionState.ConsumeUnreportedOutput();
-                    if (unreported.HasValue)
+                    // Has cached output(s) - report count (Proxy will call consume_output later)
+                    var cachedOutputs = ExecutionState.PeekCachedOutputs();
+                    statusResponse = JsonSerializer.Serialize(new
                     {
-                        statusResponse = JsonSerializer.Serialize(new
-                        {
-                            pid,
-                            status = "completed",
-                            pipeline = unreported.Value.Pipeline,
-                            duration = Math.Round(unreported.Value.Duration, 2),
-                            output = unreported.Value.Output
-                        });
-                    }
-                    else
-                    {
-                        // Should not happen, but fallback to standby
-                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby" });
-                    }
+                        pid,
+                        status = "completed",
+                        cachedCount = cachedOutputs.Count
+                    });
                 }
                 else
                 {
@@ -305,6 +332,16 @@ public class NamedPipeServer : IDisposable
                 }
 
                 await SendMessageAsync(pipeServer, statusResponse, cancellationToken);
+                return;
+            }
+
+            // Handle consume_output request - consumes and returns all cached outputs
+            if (name == "consume_output")
+            {
+                var cachedOutputs = ExecutionState.ConsumeCachedOutputs();
+                // Combine all cached outputs with separators
+                var combinedOutput = string.Join("\n\n", cachedOutputs.Select(c => c.Output));
+                await SendMessageAsync(pipeServer, combinedOutput, cancellationToken);
                 return;
             }
 
@@ -386,29 +423,25 @@ Please provide how to update the MCP client configuration to the user.";
                 {
                     var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
 
-                    // Check if output should be cached (busy response was sent to another request)
-                    var shouldCache = ExecutionState.ShouldCacheOutput;
-
                     // Try to send response
                     try
                     {
                         await SendMessageAsync(pipeServer, result, cancellationToken);
 
-                        if (shouldCache)
+                        // NotifyResultReady handles caching, so just check if we need to go standby
+                        // Don't go standby if we're waiting for caching (timeout case)
+                        if (ExecutionState.Status != "completed" && !ExecutionState.ShouldCacheOutput)
                         {
-                            // Proxy sent another request while we were busy, cache the result
-                            ExecutionState.SetCompleted(result);
-                        }
-                        else if (ExecutionState.Status != "completed")
-                        {
-                            // Only go to standby if not already completed (by NotifyResultReady)
                             ExecutionState.SetStandby();
                         }
                     }
                     catch
                     {
-                        // Pipe error - save as unreported output
-                        ExecutionState.SetCompleted(result);
+                        // Pipe error - save as unreported output if not already cached by NotifyResultReady
+                        if (ExecutionState.Status != "completed")
+                        {
+                            ExecutionState.AddToCache(result);
+                        }
                     }
                 }
                 catch (Exception)
