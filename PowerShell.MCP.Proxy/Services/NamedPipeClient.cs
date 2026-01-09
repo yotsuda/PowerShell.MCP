@@ -116,7 +116,7 @@ public class NamedPipeClient
     /// </summary>
     public static async Task<bool> WaitForPipeReadyAsync(string pipeName)
     {
-        const int maxAttempts = 80; // Wait up to 40 seconds
+        const int maxAttempts = 120; // Wait up to 60 seconds
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
