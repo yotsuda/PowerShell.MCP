@@ -1,4 +1,4 @@
-# Build location information structure
+# get_current_location
 $locationInfo = [ordered]@{
     # System information
     system = [ordered]@{

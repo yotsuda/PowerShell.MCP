@@ -97,13 +97,12 @@ public static class ExecutionState
     }
 
     /// <summary>
-    /// Sets status to standby (command completed, result delivered successfully)
+    /// Completes execution (called from finally block after command execution)
     /// </summary>
-    public static void SetStandby()
+    public static void CompleteExecution()
     {
         _stopwatch.Stop();
         _currentPipeline = "";
-        _shouldCacheOutput = false;
         _isBusy = false;
     }
 
@@ -116,10 +115,7 @@ public static class ExecutionState
         {
             _cachedOutputs.Add(output);
         }
-        _stopwatch.Stop();
-        _currentPipeline = "";
         _shouldCacheOutput = false;
-        _isBusy = false;
     }
 
     /// <summary>
@@ -412,48 +408,60 @@ Please provide how to update the MCP client configuration to the user.";
             {
                 var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement)
                     ? pipelineElement.GetString() ?? "" : "";
+
                 ExecutionState.SetBusy(pipeline);
 
                 try
                 {
                     var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
 
-                    // Try to send response
-                    // Prefix with [CACHED] if this output will be cached (MCP client may have disconnected)
                     var shouldCache = ExecutionState.ShouldCacheOutput;
-                    var response = shouldCache ? "[CACHED]" + result : result;
 
-                    try
+                    if (shouldCache)
                     {
-                        await SendMessageAsync(pipeServer, response, cancellationToken);
-
-                        // If shouldCache is true, NotifyResultReady will handle caching the actual result
-                        // Don't call AddToCache here - the result is just "Command is still running..." message
-                        if (!shouldCache && ExecutionState.Status != "completed")
-                        {
-                            ExecutionState.SetStandby();
-                        }
+                        // MCP client has already timed out - just add to cache
+                        // Aggregation will happen when cache is consumed
+                        ExecutionState.AddToCache(result);
                     }
-                    catch
+                    else
                     {
-                        // Pipe error - save to cache (only if NotifyResultReady hasn't cached yet)
-                        if (ExecutionState.Status != "completed" && !shouldCache)
+                        string response = result;
+                        try
                         {
-                            ExecutionState.AddToCache(result);
+                            var cachedOutputs = ExecutionState.ConsumeCachedOutputs();
+                            if (cachedOutputs.Count > 0)
+                            {
+                                var combined = string.Join("\n\n", cachedOutputs);
+                                response = combined + "\n\n" + result;
+                            }
+
+                            await SendMessageAsync(pipeServer, response, cancellationToken);
+                        }
+                        catch
+                        {
+                            // Pipe error - save combined result to cache
+                            ExecutionState.AddToCache(response);
                         }
                     }
                 }
-                catch (Exception)
+                finally
                 {
-                    // Execution error - still need to return to standby
-                    ExecutionState.SetStandby();
-                    throw;
+                    ExecutionState.CompleteExecution();
                 }
             }
             else
             {
-                // Other tools (get_current_location) - no state management needed
+                // Other tools (get_current_location) - consume cached outputs and prepend to result
                 var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
+
+                // Consume cached outputs and prepend (older first, then current result)
+                var cachedOutputs = ExecutionState.ConsumeCachedOutputs();
+                if (cachedOutputs.Count > 0)
+                {
+                    var combined = string.Join("\n\n", cachedOutputs);
+                    result = combined + "\n\n" + result;
+                }
+
                 await SendMessageAsync(pipeServer, result, cancellationToken);
             }
         }

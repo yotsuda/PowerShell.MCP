@@ -14,13 +14,7 @@ public static class PowerShellCommunication
     /// </summary>
     public static void NotifyResultReady(string result)
     {
-        // If marked for caching, cache BEFORE signaling
-        // (to prevent race condition with HandleClientAsync)
-        if (ExecutionState.ShouldCacheOutput)
-        {
-            ExecutionState.AddToCache(result);
-        }
-
+        // Don't cache here - HandleClientAsync will do it based on ShouldCacheOutput flag
         _currentResult = result;
         _resultReadyEvent.Set();
     }

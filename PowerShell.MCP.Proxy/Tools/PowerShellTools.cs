@@ -33,6 +33,7 @@ public class PowerShellTools
             }
             else if (status.Status == "standby" || status.Status == "completed")
             {
+                // No switch - DLL will handle its own cache automatically
                 return (activePipe, false);
             }
             else // busy
@@ -40,6 +41,27 @@ public class PowerShellTools
                 var busyInfo = FormatBusyStatus(status);
                 sessionManager.MarkPipeBusy(activePipe, busyInfo);
             }
+        }
+
+        // Step 1.5: Check busy pipes - they might have become ready
+        var busyPipes = sessionManager.GetBusyPipes().Keys.ToList();
+        foreach (var pipeName in busyPipes)
+        {
+            var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+
+            if (status == null)
+            {
+                sessionManager.ClearDeadPipe(pipeName);
+                continue;
+            }
+
+            if (status.Status == "standby" || status.Status == "completed")
+            {
+                // Found a ready pipe - set as active and return
+                sessionManager.SetActivePipeName(pipeName);
+                return (pipeName, activePipe != null);
+            }
+            // busy pipes stay as they are - CollectAllCachedOutputsAsync will handle completed ones later
         }
 
         // Step 2: Discover new standby pipe
@@ -52,7 +74,7 @@ public class PowerShellTools
 
             if (status == null) continue;
 
-            if (status.Status == "standby")
+            if (status.Status == "standby" || status.Status == "completed")
             {
                 sessionManager.SetActivePipeName(pipeName);
                 return (pipeName, activePipe != null);
@@ -175,28 +197,26 @@ public class PowerShellTools
 
         try
         {
+            // Get location (DLL will include its own cached outputs automatically)
             var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
 
-            // Collect any cached outputs and busy status before returning
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+            // Collect completed outputs and busy status info from other pipes
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
-            // Build response: completedOutput + busyStatusInfo + result
+            // Build response: completed outputs + busyStatusInfo + result
             var response = new StringBuilder();
-            if (completedOutput.Length > 0)
+            if (completedOutputs.Length > 0)
             {
-                response.Append(completedOutput);
+                response.AppendLine(completedOutputs);
+                response.AppendLine();
             }
             if (busyStatusInfo.Length > 0)
             {
                 response.Append(busyStatusInfo);
-            }
-            if (response.Length > 0)
-            {
                 response.AppendLine();
-                response.Append(result);
-                return response.ToString();
             }
-            return result;
+            response.Append(result);
+            return response.ToString();
         }
         catch (Exception ex)
         {
@@ -280,13 +300,18 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
             var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
 
-            // Collect busy status from Proxy side (after console start, using new pipe as exclude)
+            // Collect completed outputs and busy status (after console start, using new pipe as exclude)
             var sessionManager = ConsoleSessionManager.Instance;
             var newPipeName = sessionManager.ActivePipeName;
-            var (_, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
-            // Build response: busy status + modified start message
+            // Build response: completed outputs + busy status + modified start message
             var response = new StringBuilder();
+            if (completedOutputs.Length > 0)
+            {
+                response.AppendLine(completedOutputs);
+                response.AppendLine();
+            }
             if (busyStatusInfo.Length > 0)
             {
                 response.Append(busyStatusInfo);
@@ -298,36 +323,34 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             return response.ToString();
         }
 
-        // Console switched - don't execute pipeline, return location info with busy status
+        // Console switched - get location (DLL will automatically include its own cached outputs)
         if (consoleSwitched)
         {
             var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
-            var (_, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
-            var message = busyStatusInfo.Length > 0
-                ? $"{busyStatusInfo}\nConsole switched. Pipeline NOT executed - verify location and re-execute."
-                : "Console switched. Pipeline NOT executed - verify location and re-execute.";
-            return BuildNotExecutedResponse(message, locationResult);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+
+            // Build response: completedOutputs + locationResult (includes pipe's own cache) + busy status + message
+            var response = new StringBuilder();
+            if (completedOutputs.Length > 0)
+            {
+                response.AppendLine(completedOutputs);
+                response.AppendLine();
+            }
+            response.AppendLine(locationResult);
+            response.AppendLine();
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+                response.AppendLine();
+            }
+            response.Append("Console switched. Pipeline NOT executed - verify location and re-execute.");
+            return response.ToString();
         }
 
         // Execute the command
         try
         {
             var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, execute_immediately, cancellationToken);
-
-            // Check for error messages
-            if (result.StartsWith(ERROR_CONSOLE_NOT_RUNNING, StringComparison.Ordinal))
-            {
-                Console.Error.WriteLine("[INFO] PowerShell console not running, auto-starting...");
-                var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
-                return $"PowerShell console was not running. It has been automatically started, but the requested pipeline was NOT executed. Please verify the current location and re-execute the command if appropriate.\n\n{startResult}";
-            }
-
-            if (result == ConsoleSessionManager.ErrorModuleNotImported)
-            {
-                Console.Error.WriteLine("[INFO] PowerShell.MCP module not imported, starting new console...");
-                var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
-                return $"[LLM] Pipeline NOT executed - verify location and re-execute.\n\n[Inform user] Existing PowerShell window did not have PowerShell.MCP module imported, so a new console was opened. Original pwsh remains unchanged.\n\n{startResult}";
-            }
 
             // Check if command is still running (timeout case)
             const string stillRunningMessage = "Command is still running.";
@@ -337,14 +360,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 var sessionManager = ConsoleSessionManager.Instance;
                 sessionManager.MarkPipeBusy(readyPipeName, $"⧗ | Pipeline: {TruncatePipeline(pipeline)} | Waiting for completion");
                 return result;
-            }
-
-            // Check if result is marked as cached (MCP client may have disconnected)
-            const string cachedPrefix = "[CACHED]";
-            if (result.StartsWith(cachedPrefix, StringComparison.Ordinal))
-            {
-                // Remove prefix and return without collecting other pipes' caches
-                return result[cachedPrefix.Length..];
             }
 
             // Normal case - collect other pipes' cached outputs and busy status

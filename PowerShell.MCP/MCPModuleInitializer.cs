@@ -84,7 +84,10 @@ namespace PowerShell.MCP
                 var locationCommand = EmbeddedResourceLoader.LoadScript("MCPLocationProvider.ps1");
 
                 // Execute silently with state management
-                return McpServerHost.ExecuteSilentCommand(locationCommand);
+                var result = McpServerHost.ExecuteSilentCommand(locationCommand);
+
+                // Replace "Pipeline" with "get_current_location" in status line
+                return result.Replace("Pipeline executed", "get_current_location executed");
             }
             catch (Exception ex)
             {
