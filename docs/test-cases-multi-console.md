@@ -74,6 +74,7 @@
 🤖 `wait_for_completion(timeout_seconds=90)`
 ✅ 残り(A)の結果が返る
 
+---
 
 ## 4. コンソール切り替え
 
@@ -98,6 +99,25 @@
 🤖 `wait_for_completion(timeout_seconds=150)`
 ✅ 元のコンソールの結果 "Slow" が返る
 
+### 4.3 completed コンソールへの切り替え時のキャッシュ集約
+🤖 コンソールA: `invoke_expression('pause')`
+👤 停止ボタンを押す（コンソールA は busy）
+
+🤖 コンソールB: `invoke_expression('pause')`
+👤 停止ボタンを押す（コンソールB は busy）
+
+👤 コンソールA の pause を完了させる（Enter キー）
+（コンソールA は completed、キャッシュあり）
+
+🤖 `invoke_expression('Get-Date')`
+✅ コンソールA に切り替わる
+✅ **pause の結果（ステータス行）がレスポンスに含まれる**
+✅ "Console switched. Pipeline NOT executed" メッセージ
+✅ コンソールB の busy ステータスが表示される
+
+🤖 `invoke_expression('Get-Date')`
+✅ 正常に Get-Date が実行される
+
 ---
 
 ## 5. エッジケース
@@ -120,10 +140,21 @@
 🤖 `wait_for_completion(timeout_seconds=10)`
 ✅ "No busy consoles to wait for." が返る（二重取得されない）
 
-### 5.3 [CACHED] プレフィックスの動作
-🤖 `invoke_expression('Start-Sleep -Seconds 200; Write-Output "Long"')`
-（約3分待ってタイムアウトさせる）
-✅ "[CACHED]" がレスポンスに含まれない（Proxy が除去）
+### 5.3 複数 completed コンソールからのキャッシュ集約
+🤖 コンソールA: `invoke_expression('pause')`
+👤 停止ボタンを押す
+
+🤖 コンソールB: `invoke_expression('pause')`
+👤 停止ボタンを押す
+
+🤖 コンソールC: `invoke_expression('pause')`
+👤 停止ボタンを押す
+
+👤 コンソールA, B, C すべての pause を完了させる
+
+🤖 `get_current_location()`
+✅ 3つのコンソールの pause 結果がすべて表示される
+✅ 現在のロケーション情報が返る
 
 ---
 
@@ -136,6 +167,18 @@
 🤖 約25秒後に `get_current_location()`
 ✅ "BG" の結果と現在のロケーションが返る
 
+### 6.2 get_current_location での completed コンソールキャッシュ回収
+🤖 コンソールA: `invoke_expression('pause')`
+👤 停止ボタンを押す
+
+🤖 コンソールB で作業（コンソールB がアクティブになる）
+
+👤 コンソールA の pause を完了させる
+
+🤖 `get_current_location()`
+✅ コンソールA の pause 結果が表示される（DLL が自動集約）
+✅ 現在のロケーション情報が返る
+
 ---
 
 ## 実行順序の推奨
@@ -143,5 +186,7 @@
 1. 2.4 → 1.1 → 1.2 （基本動作）
 2. 2.2 → 2.3 （wait_for_completion の基本）
 3. 3.1 （複数コンソール）
-4. 5.2 （二重消費防止）
-5. 必要に応じて他のケース
+4. **4.3 （completed コンソールへの切り替え時のキャッシュ集約）** ← 重要
+5. 5.2 （二重消費防止）
+6. 5.3 → 6.2 （複数キャッシュ集約）
+7. 必要に応じて他のケース
