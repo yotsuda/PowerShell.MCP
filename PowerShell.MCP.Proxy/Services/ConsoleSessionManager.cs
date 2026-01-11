@@ -65,12 +65,6 @@ public class ConsoleSessionManager
         {
             _busyPipes[pipeName] = statusInfo;
 
-            // If this was the active pipe, clear it
-            if (ActivePipeName == pipeName)
-            {
-                ActivePipeName = null;
-            }
-
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Marked pipe '{pipeName}' as busy");
         }
     }
