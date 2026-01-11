@@ -25,7 +25,11 @@ public class InvokeExpressionParams : PowerShellMcpParams
 
     [JsonPropertyName("pipeline")]
     public string Pipeline { get; set; } = string.Empty;
+
+    [JsonPropertyName("timeout_seconds")]
+    public int TimeoutSeconds { get; set; } = 170;
 }
+
 
 
 public class StartPowerShellConsoleParams : PowerShellMcpParams

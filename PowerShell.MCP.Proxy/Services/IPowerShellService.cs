@@ -9,7 +9,7 @@ public interface IPowerShellService
     Task<GetStatusResponse?> GetStatusAsync(CancellationToken cancellationToken = default);
     Task<GetStatusResponse?> GetStatusFromPipeAsync(string pipeName, CancellationToken cancellationToken = default);
     Task<string> ConsumeOutputFromPipeAsync(string pipeName, CancellationToken cancellationToken = default);
-    Task<string> InvokeExpressionAsync(string command, CancellationToken cancellationToken = default);
-    Task<string> InvokeExpressionToPipeAsync(string pipeName, string command, CancellationToken cancellationToken = default);
+    Task<string> InvokeExpressionAsync(string command, int timeoutSeconds = 170, CancellationToken cancellationToken = default);
+    Task<string> InvokeExpressionToPipeAsync(string pipeName, string command, int timeoutSeconds = 170, CancellationToken cancellationToken = default);
     Task<string> StartNewConsoleAsync(CancellationToken cancellationToken = default);
 }

@@ -10,8 +10,6 @@ namespace PowerShell.MCP.Proxy.Tools;
 [McpServerToolType]
 public class PowerShellTools
 {
-    // Error message constant definitions
-    private const string ERROR_CONSOLE_NOT_RUNNING = "The PowerShell 7 console is not running.";
     /// <summary>
     /// Finds a ready pipe. Returns (pipeName, consoleSwitched).
     /// </summary>
@@ -170,15 +168,6 @@ public class PowerShellTools
         return normalized[..(maxLength - 3)] + "...";
     }
 
-    private static string BuildNotExecutedResponse(string message, string jsonContent)
-    {
-        var response = new StringBuilder();
-        response.AppendLine(message);
-        response.AppendLine();
-        response.Append(jsonContent);
-        return response.ToString();
-    }
-
     [McpServerTool]
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
@@ -281,8 +270,13 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         IPowerShellService powerShellService,
         [Description("The PowerShell command or pipeline to execute. Both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks.")]
         string pipeline,
+        [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next MCP tool call. You can work on other tasks in parallel. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
+        int timeout_seconds = 170,
         CancellationToken cancellationToken = default)
     {
+        // Clamp timeout to valid range
+        timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
+
         // Find a ready pipe
         var (readyPipeName, consoleSwitched) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
@@ -352,7 +346,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // Execute the command
         try
         {
-            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, cancellationToken);
+            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, timeout_seconds, cancellationToken);
 
             // Check if pipeline is still running (timeout case)
             const string stillRunningMessage = "⧗ Pipeline is still running";

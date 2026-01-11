@@ -533,8 +533,16 @@ Please provide how to update the MCP client configuration to the user.";
     private static (bool isTimeout, bool shouldCache) ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
-        return McpServerHost.ExecuteCommand(pipeline);
+        var timeoutSeconds = parameters.TryGetProperty("timeout_seconds", out var timeoutElement)
+            ? timeoutElement.GetInt32()
+            : 170;
+        
+        // Clamp to valid range
+        timeoutSeconds = Math.Clamp(timeoutSeconds, 0, 170);
+        
+        return McpServerHost.ExecuteCommand(pipeline, timeoutSeconds);
     }
+
 
 
     /// <summary>

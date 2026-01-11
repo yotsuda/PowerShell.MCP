@@ -26,13 +26,14 @@ public static class PowerShellCommunication
     /// <summary>
     /// Waits for result (blocking method)
     /// </summary>
+    /// <param name="timeoutSeconds">Timeout in seconds (1-170)</param>
     /// <returns>Tuple of (isTimeout, shouldCache)</returns>
-    public static (bool isTimeout, bool shouldCache) WaitForResult()
+    public static (bool isTimeout, bool shouldCache) WaitForResult(int timeoutSeconds = 170)
     {
         _resultShouldCache = false;
         _resultReadyEvent.Reset();
 
-        bool signaled = _resultReadyEvent.WaitOne(170 * 1000);
+        bool signaled = _resultReadyEvent.WaitOne(timeoutSeconds * 1000);
 
         if (signaled)
         {
@@ -57,12 +58,14 @@ public static class McpServerHost
     /// <summary>
     /// Command execution (state management is handled by NamedPipeServer)
     /// </summary>
-    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command)
+    /// <param name="command">PowerShell command to execute</param>
+    /// <param name="timeoutSeconds">Timeout in seconds (1-170)</param>
+    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command, int timeoutSeconds = 170)
     {
         try
         {
             executeCommand = command;
-            return PowerShellCommunication.WaitForResult();
+            return PowerShellCommunication.WaitForResult(timeoutSeconds);
         }
         catch (Exception)
         {
