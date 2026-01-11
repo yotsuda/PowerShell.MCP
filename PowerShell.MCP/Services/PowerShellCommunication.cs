@@ -6,7 +6,7 @@ namespace PowerShell.MCP.Services;
 public static class PowerShellCommunication
 {
     private static readonly ManualResetEvent _resultReadyEvent = new(false);
-    private static string? _currentResult = null;
+    private static bool _resultShouldCache = false;
 
     /// <summary>
     /// Method to notify that the result is ready
@@ -14,35 +14,34 @@ public static class PowerShellCommunication
     /// </summary>
     public static void NotifyResultReady(string result)
     {
-        // Don't cache here - HandleClientAsync will do it based on ShouldCacheOutput flag
-        _currentResult = result;
+        // Capture cache flag before AddToCache resets it
+        _resultShouldCache = ExecutionState.ShouldCacheOutput;
+        
+        // Always add to cache
+        ExecutionState.AddToCache(result);
+        ExecutionState.CompleteExecution();
         _resultReadyEvent.Set();
     }
 
     /// <summary>
     /// Waits for result (blocking method)
     /// </summary>
-    public static string WaitForResult()
+    /// <returns>Tuple of (isTimeout, shouldCache)</returns>
+    public static (bool isTimeout, bool shouldCache) WaitForResult()
     {
-        // Clear previous result
-        _currentResult = null;
+        _resultShouldCache = false;
         _resultReadyEvent.Reset();
 
-        // Wait for ~3 minutes (before MCP client timeout)
-        const int timeoutMs = 170 * 1000; // 2 minutes 50 seconds
-        bool signaled = _resultReadyEvent.WaitOne(timeoutMs);
+        bool signaled = _resultReadyEvent.WaitOne(170 * 1000);
 
         if (signaled)
         {
-            return _currentResult ?? "No result available";
+            return (false, _resultShouldCache);
         }
 
-        // Timeout - command still running
-        // Mark for caching (NotifyResultReady will cache the actual result when done)
+        // Timeout - mark for caching so NotifyResultReady will know
         ExecutionState.MarkForCaching();
-
-        // Return immediately WITHOUT waiting for completion
-        return "Command is still running. Use wait_for_completion tool to wait and retrieve the result. If you have other tasks to run in parallel, use invoke_expression - a new console will be started automatically if needed.";
+        return (true, false);
     }
 }
 
@@ -55,10 +54,11 @@ public static class McpServerHost
     public static volatile string? executeCommand;
     public static volatile string? insertCommand;
     public static volatile string? executeCommandSilent;
+
     /// <summary>
     /// Command execution (state management is handled by NamedPipeServer)
     /// </summary>
-    public static string ExecuteCommand(string command, bool executeImmediately = true)
+    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command, bool executeImmediately = true)
     {
         try
         {
@@ -71,28 +71,26 @@ public static class McpServerHost
                 insertCommand = command;
             }
 
-            // Wait for result
             return PowerShellCommunication.WaitForResult();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return $"Error executing command: {ex.Message}";
+            return (false, false);
         }
     }
 
     /// <summary>
-    /// Silent execution
+    /// Silent execution - returns result directly (for internal use)
     /// </summary>
     public static string ExecuteSilentCommand(string command)
     {
-        // Note: Busy check is done at Named Pipe level (HandleClientAsync)
-        // No need to check here - would block ourselves
         try
         {
             executeCommandSilent = command;
-
-            // Process including state management using WaitForResult()
-            return PowerShellCommunication.WaitForResult();
+            PowerShellCommunication.WaitForResult();
+            // Silent command always consumes and returns the result
+            var outputs = ExecutionState.ConsumeCachedOutputs();
+            return string.Join("\n\n", outputs);
         }
         catch (Exception ex)
         {

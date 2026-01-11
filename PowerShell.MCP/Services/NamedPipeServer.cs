@@ -341,13 +341,13 @@ public class NamedPipeServer : IDisposable
 
             if (proxyVersion != MCPModuleInitializer.ServerVersion)
             {
-                string output = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath");
+                var output = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath");
                 string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
 
                 string versionErrorResponse;
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    string escapedPath = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath -Escape");
+                    var escapedPath = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath -Escape");
                     escapedPath = escapedPath[(escapedPath.LastIndexOfAny(['\r', '\n']) + 1)..];
 
                     versionErrorResponse =
@@ -397,7 +397,7 @@ Please provide how to update the MCP client configuration to the user.";
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var elapsed = ExecutionState.ElapsedSeconds;
                 var runningPipeline = TruncatePipeline(ExecutionState.CurrentPipeline);
-                var busyResponse = $"⧗ Previous pipeline running | PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s";
+                var busyResponse = $"⧗ Previous pipeline running | pwsh PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s";
 
                 await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
                 return;
@@ -413,40 +413,58 @@ Please provide how to update the MCP client configuration to the user.";
 
                 try
                 {
-                    var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
+                    var (isTimeout, shouldCache) = await Task.Run(() => ExecuteInvokeExpression(requestRoot));
 
-                    var shouldCache = ExecutionState.ShouldCacheOutput;
+                    var pid = Process.GetCurrentProcess().Id;
+                    var elapsed = ExecutionState.ElapsedSeconds;
+                    var runningPipeline = TruncatePipeline(pipeline);
 
-                    if (shouldCache)
+                    if (isTimeout)
                     {
-                        // MCP client has already timed out - just add to cache
-                        // Aggregation will happen when cache is consumed
-                        ExecutionState.AddToCache(result);
-                    }
-                    else
-                    {
-                        string response = result;
+                        // Timeout - send timeout response
+                        var timeoutResponse = $"⧗ Pipeline is still running | pwsh PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s\n\nUse wait_for_completion tool to wait and retrieve the result.";
                         try
                         {
-                            var cachedOutputs = ExecutionState.ConsumeCachedOutputs();
-                            if (cachedOutputs.Count > 0)
-                            {
-                                var combined = string.Join("\n\n", cachedOutputs);
-                                response = combined + "\n\n" + result;
-                            }
-
-                            await SendMessageAsync(pipeServer, response, cancellationToken);
+                            await SendMessageAsync(pipeServer, timeoutResponse, cancellationToken);
                         }
                         catch
                         {
-                            // Pipe error - save combined result to cache
-                            ExecutionState.AddToCache(response);
+                            // Pipe error on timeout - nothing to do
+                        }
+                    }
+                    else if (shouldCache)
+                    {
+                        // Result cached - MCP client disconnected, will be returned on next tool call
+                        var cachedResponse = $"✓ Pipeline executed successfully | pwsh PID: {pid} | Status: Completed | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s\n\nResult cached. Will be returned on next tool call.";
+                        try
+                        {
+                            await SendMessageAsync(pipeServer, cachedResponse, cancellationToken);
+                        }
+                        catch
+                        {
+                            // Pipe error - result already cached, ignore
+                        }
+                    }
+                    else
+                    {
+                        // Normal completion - consume all cached outputs and return
+                        var outputs = ExecutionState.ConsumeCachedOutputs();
+                        var result = string.Join("\n\n", outputs);
+                        try
+                        {
+                            await SendMessageAsync(pipeServer, result, cancellationToken);
+                        }
+                        catch
+                        {
+                            // Pipe error - save result to cache for next request
+                            ExecutionState.AddToCache(result);
                         }
                     }
                 }
-                finally
+                catch (Exception)
                 {
                     ExecutionState.CompleteExecution();
+                    throw;
                 }
             }
             else
@@ -497,14 +515,13 @@ Please provide how to update the MCP client configuration to the user.";
     }
 
     /// <summary>
-    /// Executes a tool
+    /// Executes a tool (except invoke_expression which is handled separately)
     /// </summary>
     private static string ExecuteTool(string method, JsonElement parameters)
     {
         return method switch
         {
             "get_current_location" => MCPModuleInitializer.GetCurrentLocation(),
-            "invoke_expression" => ExecuteInvokeExpression(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
     }
@@ -512,7 +529,8 @@ Please provide how to update the MCP client configuration to the user.";
     /// <summary>
     /// Executes the invokeExpression tool
     /// </summary>
-    private static string ExecuteInvokeExpression(JsonElement parameters)
+    /// <returns>Tuple of (isTimeout, shouldCache)</returns>
+    private static (bool isTimeout, bool shouldCache) ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
         var executeImmediately = parameters.TryGetProperty("execute_immediately", out var execElement)
