@@ -112,7 +112,6 @@ public class PowerShellTools
 
         // Collect pipes to check: busyPipes (excluding excludePipeName)
         var pipesToCheck = new HashSet<string>(sessionManager.GetBusyPipes().Keys);
-        Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: excludePipeName={excludePipeName}, pipesToCheck=[{string.Join(", ", pipesToCheck)}]");
         if (excludePipeName != null)
         {
             pipesToCheck.Remove(excludePipeName);
@@ -120,18 +119,15 @@ public class PowerShellTools
         foreach (var pipeName in pipesToCheck)
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
-            Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: {pipeName} status={status?.Status ?? "null"}");
 
             if (status == null)
             {
-                Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: {pipeName} is dead, clearing");
                 sessionManager.ClearDeadPipe(pipeName);
             }
             else if (status.Status == "completed")
             {
                 // Consume the cached output
                 var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
-                Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: {pipeName} completed, output length={output?.Length ?? 0}");
                 if (!string.IsNullOrEmpty(output))
                 {
                     // Replace "Status: Ready" with "Status: Standby" for non-active pipes
@@ -148,7 +144,6 @@ public class PowerShellTools
             }
             else if (status.Status == "standby")
             {
-                Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: {pipeName} standby, removing from busy");
                 sessionManager.RemoveFromBusy(pipeName);
             }
             else // busy
@@ -156,7 +151,6 @@ public class PowerShellTools
                 var busyInfo = FormatBusyStatus(status);
                 sessionManager.MarkPipeBusy(pipeName, busyInfo);
                 busyStatusInfo.AppendLine(busyInfo);
-                Console.Error.WriteLine($"[DEBUG] CollectAllCachedOutputsAsync: {pipeName} busy");
             }
         }
 
@@ -425,17 +419,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // First pass: enumerate all pipes and find busy/completed ones
         var busyPipes = new List<string>();
         var allPipes = sessionManager.EnumeratePipes().ToList();
-        Console.Error.WriteLine($"[DEBUG] WaitForCompletion: EnumeratePipes found {allPipes.Count} pipes: [{string.Join(", ", allPipes)}]");
         foreach (var pipeName in allPipes)
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
-            Console.Error.WriteLine($"[DEBUG] WaitForCompletion: {pipeName} status={status?.Status ?? "null"}");
 
             if (status == null) continue;
 
             if (status.Status == "completed")
             {
-                Console.Error.WriteLine($"[DEBUG] WaitForCompletion: {pipeName} is completed, consuming output");
                 // Consume output directly from this completed pipe
                 var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
                 if (!string.IsNullOrEmpty(output))
@@ -468,7 +459,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             }
         }
 
-        Console.Error.WriteLine($"[DEBUG] WaitForCompletion: busyPipes.Count={busyPipes.Count}");
 
         // No busy consoles - nothing to wait for
         if (busyPipes.Count == 0)
