@@ -50,27 +50,18 @@ public static class PowerShellCommunication
 /// </summary>
 public static class McpServerHost
 {
-    // Existing communication properties
+    // Communication properties
     public static volatile string? executeCommand;
-    public static volatile string? insertCommand;
     public static volatile string? executeCommandSilent;
 
     /// <summary>
     /// Command execution (state management is handled by NamedPipeServer)
     /// </summary>
-    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command, bool executeImmediately = true)
+    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command)
     {
         try
         {
-            if (executeImmediately)
-            {
-                executeCommand = command;
-            }
-            else
-            {
-                insertCommand = command;
-            }
-
+            executeCommand = command;
             return PowerShellCommunication.WaitForResult();
         }
         catch (Exception)

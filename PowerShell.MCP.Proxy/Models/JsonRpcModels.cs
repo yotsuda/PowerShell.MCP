@@ -25,10 +25,8 @@ public class InvokeExpressionParams : PowerShellMcpParams
 
     [JsonPropertyName("pipeline")]
     public string Pipeline { get; set; } = string.Empty;
-
-    [JsonPropertyName("execute_immediately")]
-    public bool ExecuteImmediately { get; set; } = true;
 }
+
 
 public class StartPowerShellConsoleParams : PowerShellMcpParams
 {

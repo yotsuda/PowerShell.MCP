@@ -279,18 +279,10 @@ Examples:
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
-        [Description("The PowerShell command or pipeline to execute. When execute_immediately=true (immediate execution), both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks. When execute_immediately=false (insertion mode), only single-line commands are supported - use semicolons to combine multiple statements into a single line.")]
+        [Description("The PowerShell command or pipeline to execute. Both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks.")]
         string pipeline,
-        [Description("If true, executes the command immediately and returns the result. If false, inserts the command into the console for manual execution. (Windows only - Linux/macOS always execute immediately)")]
-        bool execute_immediately = true,
         CancellationToken cancellationToken = default)
     {
-        // Linux/macOS does not support execute_immediately=false (insert mode)
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && !execute_immediately)
-        {
-            return "execute_immediately=false (insert mode) is not supported on Linux/macOS. Please use execute_immediately=true or omit the parameter.";
-        }
-
         // Find a ready pipe
         var (readyPipeName, consoleSwitched) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
@@ -360,7 +352,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // Execute the command
         try
         {
-            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, execute_immediately, cancellationToken);
+            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, cancellationToken);
 
             // Check if pipeline is still running (timeout case)
             const string stillRunningMessage = "⧗ Pipeline is still running";

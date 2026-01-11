@@ -95,12 +95,11 @@ public class PowerShellService : IPowerShellService
         return await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
     }
 
-    public async Task<string> InvokeExpressionAsync(string pipeline, bool execute_immediately, CancellationToken cancellationToken = default)
+    public async Task<string> InvokeExpressionAsync(string pipeline, CancellationToken cancellationToken = default)
     {
         var requestParams = new InvokeExpressionParams
         {
-            Pipeline = pipeline,
-            ExecuteImmediately = execute_immediately
+            Pipeline = pipeline
         };
 
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.InvokeExpressionParams);
@@ -115,12 +114,11 @@ public class PowerShellService : IPowerShellService
         return response;
     }
 
-    public async Task<string> InvokeExpressionToPipeAsync(string pipeName, string pipeline, bool execute_immediately, CancellationToken cancellationToken = default)
+    public async Task<string> InvokeExpressionToPipeAsync(string pipeName, string pipeline, CancellationToken cancellationToken = default)
     {
         var requestParams = new InvokeExpressionParams
         {
-            Pipeline = pipeline,
-            ExecuteImmediately = execute_immediately
+            Pipeline = pipeline
         };
 
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.InvokeExpressionParams);

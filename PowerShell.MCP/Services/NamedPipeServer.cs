@@ -533,12 +533,9 @@ Please provide how to update the MCP client configuration to the user.";
     private static (bool isTimeout, bool shouldCache) ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
-        var executeImmediately = parameters.TryGetProperty("execute_immediately", out var execElement)
-            ? execElement.GetBoolean()
-            : true;
-
-        return McpServerHost.ExecuteCommand(pipeline, executeImmediately);
+        return McpServerHost.ExecuteCommand(pipeline);
     }
+
 
     /// <summary>
     /// Receives a message from Named Pipe

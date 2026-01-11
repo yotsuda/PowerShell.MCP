@@ -368,19 +368,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
             # ===== Main Event Processing =====
 
-            # Handle insert command (Windows only - requires PSReadLine)
-            if ($IsWindows) {
-                $cmd = [PowerShell.MCP.Services.McpServerHost]::insertCommand
-                if ($cmd) {
-                    [PowerShell.MCP.Services.McpServerHost]::insertCommand = $null
-                    Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)'
-                    Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::DeleteLine()'
-                    Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::Insert($cmd)'
-
-                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady("Your pipeline has been inserted into the PS console.")
-                }
-            }
-
             # Handle execute command
             $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
             if ($cmd) {
