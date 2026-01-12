@@ -44,7 +44,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(1);
             buffer.Add(2);
             buffer.Add(3);
-            
+
             Assert.Equal(3, buffer.Count);
             Assert.Equal(1, buffer[0]); // oldest
             Assert.Equal(2, buffer[1]);
@@ -59,7 +59,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(2);
             buffer.Add(3);
             buffer.Add(4); // overwrites 1
-            
+
             Assert.Equal(3, buffer.Count);
             Assert.True(buffer.IsFull);
             Assert.Equal(2, buffer[0]); // oldest now
@@ -75,7 +75,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             {
                 buffer.Add(i);
             }
-            
+
             Assert.Equal(3, buffer.Count);
             Assert.Equal(8, buffer[0]);  // oldest
             Assert.Equal(9, buffer[1]);
@@ -89,7 +89,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add("a");
             buffer.Add("b");
             buffer.Add("c");
-            
+
             Assert.Equal("a", buffer[0]);
             Assert.Equal("b", buffer[1]);
             Assert.Equal("c", buffer[2]);
@@ -101,7 +101,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             var buffer = new RotateBuffer<int>(3);
             buffer.Add(1);
             buffer.Add(2);
-            
+
             Assert.Throws<ArgumentOutOfRangeException>(() => buffer[-1]);
             Assert.Throws<ArgumentOutOfRangeException>(() => buffer[2]);
             Assert.Throws<ArgumentOutOfRangeException>(() => buffer[10]);
@@ -114,9 +114,9 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(1);
             buffer.Add(2);
             buffer.Add(3);
-            
+
             Assert.Equal(3, buffer.Newest);
-            
+
             buffer.Add(4);
             Assert.Equal(4, buffer.Newest);
         }
@@ -135,9 +135,9 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(1);
             buffer.Add(2);
             buffer.Add(3);
-            
+
             Assert.Equal(1, buffer.Oldest);
-            
+
             buffer.Add(4);
             Assert.Equal(2, buffer.Oldest);
         }
@@ -158,7 +158,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(3);
             buffer.Add(4);
             buffer.Add(5);
-            
+
             Assert.Equal(5, buffer.FromEnd(0)); // newest
             Assert.Equal(4, buffer.FromEnd(1));
             Assert.Equal(3, buffer.FromEnd(2));
@@ -172,7 +172,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             var buffer = new RotateBuffer<int>(3);
             buffer.Add(1);
             buffer.Add(2);
-            
+
             Assert.Throws<ArgumentOutOfRangeException>(() => buffer.FromEnd(-1));
             Assert.Throws<ArgumentOutOfRangeException>(() => buffer.FromEnd(2));
         }
@@ -184,9 +184,9 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(1);
             buffer.Add(2);
             buffer.Add(3);
-            
+
             buffer.Clear();
-            
+
             Assert.Equal(0, buffer.Count);
             Assert.False(buffer.IsFull);
         }
@@ -199,9 +199,9 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(2);
             buffer.Add(3);
             buffer.Add(4);
-            
+
             var array = buffer.ToArray();
-            
+
             Assert.Equal(new[] { 2, 3, 4 }, array);
         }
 
@@ -213,9 +213,9 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add(2);
             buffer.Add(3);
             buffer.Add(4);
-            
+
             var list = buffer.ToList();
-            
+
             Assert.Equal(new[] { 2, 3, 4 }, list);
         }
 
@@ -223,13 +223,13 @@ namespace PowerShell.MCP.Tests.Unit.Core
         public void Capacity_One_WorksCorrectly()
         {
             var buffer = new RotateBuffer<int>(1);
-            
+
             buffer.Add(1);
             Assert.Equal(1, buffer.Count);
             Assert.Equal(1, buffer[0]);
             Assert.Equal(1, buffer.Newest);
             Assert.Equal(1, buffer.Oldest);
-            
+
             buffer.Add(2);
             Assert.Equal(1, buffer.Count);
             Assert.Equal(2, buffer[0]);
@@ -245,7 +245,7 @@ namespace PowerShell.MCP.Tests.Unit.Core
             buffer.Add("line 2");
             buffer.Add("line 3");
             buffer.Add("line 4");
-            
+
             Assert.Equal("line 2", buffer.Oldest);
             Assert.Equal("line 4", buffer.Newest);
             Assert.Equal(new[] { "line 2", "line 3", "line 4" }, buffer.ToArray());

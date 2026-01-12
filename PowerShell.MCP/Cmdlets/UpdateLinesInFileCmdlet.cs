@@ -37,9 +37,6 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         public int ContextAfter2Line { get; set; }
     }
 
-    private const string ErrorMessageLineRangeWithoutFile =
-        "File not found: {0}. Cannot use -LineRange with non-existent file.";
-
     [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
@@ -126,7 +123,6 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
             var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
             bool isFullFileReplace = LineRange == null;
-
 
             string actionDescription = GetActionDescription(fileExists, isFullFileReplace, startLine, endLine);
 
@@ -279,7 +275,6 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         }
 
         // linesRemoved is actual processed line count
-
         if (linesInserted == 0)
         {
             return $"Removed {linesRemoved} line(s) (net: -{linesRemoved})";
@@ -290,7 +285,6 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         string netStr = netChange > 0 ? $"+{netChange}" : netChange.ToString();
         return $"Replaced {linesRemoved} line(s) with {linesInserted} line(s) (net: {netStr})";
     }
-
 
     /// <summary>
     /// Replace line range while building context buffer (single pass)
@@ -314,7 +308,6 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         int linesInserted = contentLines.Length;
         string? warningMessage = null;
         bool insertedContent = false;
-
 
         // For deletion info collection
         int deletedCount = 0;
@@ -500,7 +493,6 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         int totalLines = outputLine - 1;
         return (linesRemoved, linesInserted, totalLines, warningMessage, context);
     }
-
 
     /// <summary>
     /// Display update context (from rotate buffer, no file re-read)

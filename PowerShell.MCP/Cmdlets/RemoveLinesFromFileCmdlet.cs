@@ -262,13 +262,13 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         if (useContains)
                                         {
                                             // Contains: highlight match in yellow background
-                                            displayLine = currentLine.Replace(Contains!, 
+                                            displayLine = currentLine.Replace(Contains!,
                                                 $"{AnsiColors.RedOnYellow}{Contains}{AnsiColors.RedOnDefault}");
                                         }
                                         else if (usePattern)
                                         {
                                             // Pattern: highlight regex match in yellow background
-                                            displayLine = regex!.Replace(currentLine, 
+                                            displayLine = regex!.Replace(currentLine,
                                                 match => $"{AnsiColors.RedOnYellow}{match.Value}{AnsiColors.RedOnDefault}");
                                         }
                                         else

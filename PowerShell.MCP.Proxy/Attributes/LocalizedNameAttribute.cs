@@ -46,7 +46,7 @@ public class LocalizedNameAttribute : Attribute
 
             // Get localized string based on current UI culture
             var localizedString = _resourceManager.GetString(_resourceKey);
-            
+
             // Return null if not found - this will use the default prompt name
             return string.IsNullOrEmpty(localizedString) ? null : localizedString;
         }

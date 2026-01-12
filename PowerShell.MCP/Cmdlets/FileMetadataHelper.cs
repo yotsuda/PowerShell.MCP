@@ -10,7 +10,7 @@ internal static class FileMetadataHelper
 {
     private const int HeaderBufferSize = 65536; // 64KB for encoding detection
     private const int TailBufferSize = 4096;    // 4KB for newline detection
-    
+
     /// <summary>
     /// Read file header and tail efficiently
     /// </summary>
@@ -20,12 +20,12 @@ internal static class FileMetadataHelper
         byte[] tailBytes = Array.Empty<byte>();
         int headerLength = 0;
         int tailLength = 0;
-        
+
         using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
         {
             // Read header
             headerLength = stream.Read(headerBytes, 0, headerBytes.Length);
-            
+
             // Read tail if file is large enough
             if (fileLength > HeaderBufferSize)
             {
@@ -40,17 +40,17 @@ internal static class FileMetadataHelper
                 tailLength = headerLength;
             }
         }
-        
+
         return (headerBytes, headerLength, tailBytes, tailLength);
     }
-    
+
     /// <summary>
     /// Detect newline sequence and trailing newline from bytes
     /// </summary>
     private static (string NewlineSequence, bool HasTrailingNewline) DetectNewlineFromBytes(
         byte[] headerBytes,
         int headerLength,
-        byte[] tailBytes, 
+        byte[] tailBytes,
         int tailLength,
         Encoding encoding,
         long fileLength)
@@ -60,10 +60,10 @@ internal static class FileMetadataHelper
 
         // Detect newline sequence from header
         string newlineSequence = Environment.NewLine;
-        
+
         // Decode header to find newline pattern
         string headerContent = encoding.GetString(headerBytes, 0, headerLength);
-        
+
         if (headerContent.Contains("\r\n"))
             newlineSequence = "\r\n";
         else if (headerContent.Contains("\n"))
@@ -93,7 +93,7 @@ internal static class FileMetadataHelper
     {
         if (length == 0)
             return new UTF8Encoding(false);
-        
+
         // BOM detection (only need first 4 bytes)
         if (length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
             return new UTF8Encoding(true);
@@ -106,14 +106,14 @@ internal static class FileMetadataHelper
         }
         if (length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
             return Encoding.BigEndianUnicode;
-        
+
         // Use Ude library for detection (already optimized to use only header)
         try
         {
             var detector = new Ude.CharsetDetector();
             detector.Feed(bytes, 0, length);
             detector.DataEnd();
-            
+
             if (detector.Charset != null)
             {
                 try
@@ -137,7 +137,7 @@ internal static class FileMetadataHelper
         {
             // Ude library not available or failed, use fallback
         }
-        
+
         // Fallback: Check if valid UTF-8 (using header bytes only)
         try
         {
@@ -157,11 +157,11 @@ internal static class FileMetadataHelper
     /// OPTIMIZED: Only reads necessary parts
     /// </summary>
     public static (string NewlineSequence, bool HasTrailingNewline) DetectNewline(
-        string filePath, 
+        string filePath,
         Encoding encoding)
     {
         var fileInfo = new FileInfo(filePath);
-        
+
         // Empty file defaults
         if (fileInfo.Length == 0)
             return (Environment.NewLine, false);
@@ -178,7 +178,7 @@ internal static class FileMetadataHelper
     public static TextFileUtility.FileMetadata DetectFileMetadata(string filePath)
     {
         var fileInfo = new FileInfo(filePath);
-        
+
         // Empty file defaults
         if (fileInfo.Length == 0)
         {
@@ -189,11 +189,11 @@ internal static class FileMetadataHelper
                 HasTrailingNewline = false
             };
         }
-        
+
         // ULTRA-OPTIMIZATION: Read only header + tail (64KB + 4KB = 68KB max)
         // Even for 1GB file, only reads 68KB!
         var (headerBytes, headerLength, tailBytes, tailLength) = ReadFilePartially(filePath, fileInfo.Length);
-        
+
         var encoding = DetectEncodingFromBytes(headerBytes, headerLength);
         var (newline, hasTrailing) = DetectNewlineFromBytes(headerBytes, headerLength, tailBytes, tailLength, encoding, fileInfo.Length);
 
@@ -210,18 +210,18 @@ internal static class FileMetadataHelper
     /// ULTRA-OPTIMIZED: Partial file reading when auto-detecting
     /// </summary>
     public static TextFileUtility.FileMetadata DetectFileMetadata(
-        string filePath, 
+        string filePath,
         string? encodingName)
     {
         var fileInfo = new FileInfo(filePath);
-        
+
         // Empty file defaults
         if (fileInfo.Length == 0)
         {
-            var defaultEncoding = string.IsNullOrEmpty(encodingName) 
-                ? new UTF8Encoding(false) 
+            var defaultEncoding = string.IsNullOrEmpty(encodingName)
+                ? new UTF8Encoding(false)
                 : EncodingHelper.GetEncoding(filePath, encodingName);
-            
+
             return new TextFileUtility.FileMetadata
             {
                 Encoding = defaultEncoding,
@@ -229,18 +229,18 @@ internal static class FileMetadataHelper
                 HasTrailingNewline = false
             };
         }
-        
+
         // If encoding is explicitly specified, use it directly
         if (!string.IsNullOrEmpty(encodingName))
         {
             try
             {
                 var encoding = EncodingHelper.GetEncoding(filePath, encodingName);
-                
+
                 // Still need to detect newline, but can be more efficient
                 var (headerBytes, headerLength, tailBytes, tailLength) = ReadFilePartially(filePath, fileInfo.Length);
                 var (newline, hasTrailing) = DetectNewlineFromBytes(headerBytes, headerLength, tailBytes, tailLength, encoding, fileInfo.Length);
-                
+
                 return new TextFileUtility.FileMetadata
                 {
                     Encoding = encoding,
@@ -253,7 +253,7 @@ internal static class FileMetadataHelper
                 // Invalid encoding name, fall through to auto-detection
             }
         }
-        
+
         // Auto-detect both encoding and newline
         return DetectFileMetadata(filePath);
     }

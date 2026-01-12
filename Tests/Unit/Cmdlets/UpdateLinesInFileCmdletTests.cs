@@ -63,16 +63,16 @@ public class UpdateLinesInFileCmdletTests : IDisposable
         {
             var utf8WithBom = new System.Text.UTF8Encoding(true);
             File.WriteAllText(tempFile, "Line1\nLine2\nLine3\n", utf8WithBom);
-            
+
             // Verify file has BOM before
             var bytesBefore = File.ReadAllBytes(tempFile);
             Assert.True(bytesBefore.Length >= 3 && bytesBefore[0] == 0xEF && bytesBefore[1] == 0xBB && bytesBefore[2] == 0xBF,
                 "Test file should have BOM");
-            
+
             // Act: Detect metadata and replace entire file
             var metadata = TextFileUtility.DetectFileMetadata(tempFile);
             TextFileUtility.ReplaceEntireFile(tempFile, tempOutput, metadata, new[] { "NewA", "NewB" });
-            
+
             // Assert: Output file should have BOM
             var bytesAfter = File.ReadAllBytes(tempOutput);
             Assert.True(bytesAfter.Length >= 3 && bytesAfter[0] == 0xEF && bytesAfter[1] == 0xBB && bytesAfter[2] == 0xBF,
@@ -95,16 +95,16 @@ public class UpdateLinesInFileCmdletTests : IDisposable
         {
             var utf8NoBom = new System.Text.UTF8Encoding(false);
             File.WriteAllText(tempFile, "Line1\nLine2\nLine3\n", utf8NoBom);
-            
+
             // Verify file has no BOM before
             var bytesBefore = File.ReadAllBytes(tempFile);
             Assert.False(bytesBefore.Length >= 3 && bytesBefore[0] == 0xEF && bytesBefore[1] == 0xBB && bytesBefore[2] == 0xBF,
                 "Test file should not have BOM");
-            
+
             // Act: Detect metadata and replace entire file
             var metadata = TextFileUtility.DetectFileMetadata(tempFile);
             TextFileUtility.ReplaceEntireFile(tempFile, tempOutput, metadata, new[] { "NewA", "NewB" });
-            
+
             // Assert: Output file should not have BOM
             var bytesAfter = File.ReadAllBytes(tempOutput);
             Assert.False(bytesAfter.Length >= 3 && bytesAfter[0] == 0xEF && bytesAfter[1] == 0xBB && bytesAfter[2] == 0xBF,

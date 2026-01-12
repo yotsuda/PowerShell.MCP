@@ -56,12 +56,12 @@ internal static class FileOperationHelper
         // OPTIMIZATION: Skip line counting since it's not critical information
         // and requires reading the entire file
         // If line count is needed for reporting, it can be done separately or on-demand
-        
+
         // Write new content directly
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
             writer.NewLine = metadata.NewlineSequence;
-            
+
             if (contentLines.Length > 0)
             {
                 for (int i = 0; i < contentLines.Length; i++)
@@ -74,7 +74,7 @@ internal static class FileOperationHelper
                 }
             }
         }
-        
+
         // Return 0 for removed lines since we're not counting them
         // This is acceptable as the operation is "replace entire file"
         // and the exact count of removed lines is not critical

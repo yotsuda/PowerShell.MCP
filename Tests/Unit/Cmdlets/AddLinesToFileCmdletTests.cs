@@ -70,19 +70,19 @@ public class AddLinesToFileCmdletTests : IDisposable
         {
             // UTF8 with CRLF
             File.WriteAllText(testFile, "Line1\r\nLine2\r\nLine3\r\n", System.Text.Encoding.UTF8);
-            
+
             // Verify trailing newline exists
             var bytesBeforeAdd = File.ReadAllBytes(testFile);
             Assert.Equal(0x0D, bytesBeforeAdd[^2]); // CR
             Assert.Equal(0x0A, bytesBeforeAdd[^1]); // LF
-            
+
             var cmdlet = new AddLinesToFileCmdlet();
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "Line4" };
-            
+
             // Act: Skip direct execution as test is outside PowerShell context
             // Actual behavior verification done in integration tests
-            
+
             // This test is structural verification, passes if implementation is correct
             Assert.NotNull(cmdlet.Path);
             Assert.NotNull(cmdlet.Content);
@@ -102,18 +102,18 @@ public class AddLinesToFileCmdletTests : IDisposable
         {
             // UTF8 without trailing newline
             File.WriteAllText(testFile, "Line1\r\nLine2\r\nLine3", System.Text.Encoding.UTF8);
-            
+
             // Verify no trailing newline
             var bytesBeforeAdd = File.ReadAllBytes(testFile);
             Assert.NotEqual(0x0A, bytesBeforeAdd[^1]); // No LF at end
-            
+
             var cmdlet = new AddLinesToFileCmdlet();
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "Line4" };
-            
+
             // Act: Skip direct execution as test is outside PowerShell context
             // Actual behavior verification done in integration tests
-            
+
             // This test is structural verification, passes if implementation is correct
             Assert.NotNull(cmdlet.Path);
             Assert.NotNull(cmdlet.Content);
@@ -132,11 +132,11 @@ public class AddLinesToFileCmdletTests : IDisposable
         try
         {
             File.WriteAllText(testFile, "Line1\r\nLine2\r\n", System.Text.Encoding.UTF8);
-            
+
             var cmdlet = new AddLinesToFileCmdlet();
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "NewLine1", "NewLine2", "NewLine3" };
-            
+
             // Structural verification
             Assert.NotNull(cmdlet.Path);
             Assert.Equal(3, cmdlet.Content.Length);
@@ -155,11 +155,11 @@ public class AddLinesToFileCmdletTests : IDisposable
         try
         {
             File.WriteAllText(testFile, "Start\r\nMiddle\r\nEnd\r\n", System.Text.Encoding.UTF8);
-            
+
             var cmdlet = new AddLinesToFileCmdlet();
             cmdlet.Path = new[] { testFile };
             cmdlet.Content = new object[] { "L1", "L2", "L3", "L4", "L5", "L6", "L7" };
-            
+
             // Structural verification
             Assert.NotNull(cmdlet.Path);
             Assert.Equal(7, cmdlet.Content.Length);

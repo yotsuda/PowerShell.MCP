@@ -120,19 +120,19 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
 
         if (isNewFile)
         {
-        // New file creation: warn if LineNumber > 1
+            // New file creation: warn if LineNumber > 1
             if (LineNumber > 1)
             {
                 WriteWarning($"File does not exist. Creating new file. LineNumber {LineNumber} will be treated as line 1.");
             }
 
-        // New file: if LineNumber not specified append to end, if > 1 treat as 1
+            // New file: if LineNumber not specified append to end, if > 1 treat as 1
             insertAt = (LineNumber > 1) ? 1 : (LineNumber > 0 ? LineNumber : int.MaxValue);
             effectiveAtEnd = LineNumber == 0;
         }
         else
         {
-        // Existing file: if LineNumber not specified, default to append
+            // Existing file: if LineNumber not specified, default to append
             insertAt = LineNumber > 0 ? LineNumber : int.MaxValue;
             effectiveAtEnd = LineNumber == 0;
         }
@@ -163,12 +163,12 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
             {
                 if (isNewFile || new FileInfo(resolvedPath).Length == 0)
                 {
-        // New file or empty file: write only new content
+                    // New file or empty file: write only new content
                     WriteNewContent(tempFile, contentLines, metadata);
                 }
                 else
                 {
-        // Existing non-empty file: insert processing (context output in real-time)
+                    // Existing non-empty file: insert processing (context output in real-time)
                     int totalLines;
                     (totalLines, actualInsertAt) = InsertLinesWithContext(originalPath, resolvedPath,
                         tempFile,
@@ -177,7 +177,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                         insertAt);
                 }
 
-        // Replace atomically (or create new)
+                // Replace atomically (or create new)
                 TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
 
                 string message = isNewFile
@@ -218,7 +218,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
             bool hasLines = enumerator.MoveNext();
             if (!hasLines)
             {
-            // This should not happen (empty file handled separately)
+                // This should not happen (empty file handled separately)
                 for (int i = 0; i < contentLines.Length; i++)
                 {
                     writer.Write(contentLines[i]);
@@ -264,7 +264,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                     // Output inserted lines
                     if (contentLines.Length <= 5)
                     {
-                    // 1-5 lines: show all
+                        // 1-5 lines: show all
                         for (int i = 0; i < contentLines.Length; i++)
                         {
                             writer.Write(contentLines[i]);
@@ -279,7 +279,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                     }
                     else
                     {
-                    // 6+ lines: show only first 2 and last 2
+                        // 6+ lines: show only first 2 and last 2
                         // First 2 lines
                         for (int i = 0; i < 2; i++)
                         {
@@ -348,31 +348,31 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                 }
                 else
                 {
-                // Process final line
+                    // Process final line
                     if (!inserted)
                     {
-                // Append to end (default)
+                        // Append to end (default)
                         writer.Write(metadata.NewlineSequence);
                         outputLineNumber++;
                         actualInsertAt = outputLineNumber;
 
-                    // Output context header
+                        // Output context header
                         if (!contextHeaderPrinted)
                         {
                             WriteObject(AnsiColors.Header(displayPath));
                             contextHeaderPrinted = true;
                         }
 
-                    // Output previous 2 lines (from rotate buffer)
+                        // Output previous 2 lines (from rotate buffer)
                         foreach (var ctx in preContextBuffer)
                         {
                             WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                         }
 
-                    // Output inserted lines
+                        // Output inserted lines
                         if (contentLines.Length <= 5)
                         {
-                    // 1-5 lines: show all
+                            // 1-5 lines: show all
                             for (int i = 0; i < contentLines.Length; i++)
                             {
                                 writer.Write(contentLines[i]);
@@ -393,7 +393,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                         }
                         else
                         {
-                        // 6+ lines: show only first 2 and last 2
+                            // 6+ lines: show only first 2 and last 2
                             // First 2 lines
                             for (int i = 0; i < 2; i++)
                             {
@@ -441,7 +441,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                     }
                     else
                     {
-                    // Preserve original file trailing newline
+                        // Preserve original file trailing newline
                         if (metadata.HasTrailingNewline)
                         {
                             writer.Write(metadata.NewlineSequence);

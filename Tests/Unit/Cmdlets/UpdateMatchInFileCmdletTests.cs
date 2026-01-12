@@ -195,10 +195,10 @@ public class UpdateMatchInFileCmdletTests : IDisposable
         try
         {
             File.WriteAllText(tempFile, "test");
-            
+
             // Act: Get encoding with utf8nobom alias
             var encoding = EncodingHelper.GetEncoding(tempFile, encodingName);
-            
+
             // Assert: Should be UTF-8 without BOM
             Assert.IsType<UTF8Encoding>(encoding);
             Assert.Empty(encoding.GetPreamble()); // No BOM
@@ -219,15 +219,15 @@ public class UpdateMatchInFileCmdletTests : IDisposable
         {
             var utf8WithBom = new UTF8Encoding(true);
             File.WriteAllText(tempFile, "test content", utf8WithBom);
-            
+
             // Verify file has BOM
             var bytes = File.ReadAllBytes(tempFile);
-            Assert.True(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, 
+            Assert.True(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF,
                 "Test file should have BOM");
-            
+
             // Act: Get encoding with explicit utf8NoBOM
             var encoding = EncodingHelper.GetEncoding(tempFile, "utf8NoBOM");
-            
+
             // Assert: Should return UTF-8 without BOM (explicit spec overrides file)
             Assert.IsType<UTF8Encoding>(encoding);
             Assert.Empty(encoding.GetPreamble());

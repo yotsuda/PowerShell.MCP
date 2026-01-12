@@ -47,7 +47,7 @@ public class LocalizedParameterNameAttribute : Attribute
 
             // Get localized string based on current UI culture
             var localizedString = _resourceManager.GetString(_resourceKey);
-            
+
             // Return null if not found - will use parameter name as fallback
             return string.IsNullOrEmpty(localizedString) ? null : localizedString;
         }

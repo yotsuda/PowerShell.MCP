@@ -10,8 +10,8 @@
 
 namespace PowerShell.MCP.Proxy.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   ローカライズされた文字列などを検索するための、厳密に型指定されたリソース クラスです。
     /// </summary>
@@ -23,15 +23,15 @@ namespace PowerShell.MCP.Proxy.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class PromptDescriptions {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal PromptDescriptions() {
         }
-        
+
         /// <summary>
         ///   このクラスで使用されているキャッシュされた ResourceManager インスタンスを返します。
         /// </summary>
@@ -45,7 +45,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
@@ -59,8 +59,8 @@ namespace PowerShell.MCP.Proxy.Resources {
                 resourceCulture = value;
             }
         }
-        
-        
+
+
         /// <summary>
         ///   Analyze content and provide insights with actionable recommendations に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -69,7 +69,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_AnalyzeContent_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Analyze Content に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -78,7 +78,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_AnalyzeContent_Name", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Path to content for analysis に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -87,7 +87,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_AnalyzeContent_Param_ContentPath", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Create themed interactive maps using PowerShell.Map (hot springs tours, ramen maps, etc.) に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -96,7 +96,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ShowInteractiveMap_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Create Interactive Map に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -105,7 +105,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ShowInteractiveMap_Name", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Best Pizza Spots, Historic Pubs, Stylish Cafes に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -114,7 +114,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ShowInteractiveMap_Param_MapTheme", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   United States, New York, California に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -123,7 +123,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ShowInteractiveMap_Param_TargetArea", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Create work procedure and progress tracking files. に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -132,7 +132,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_CreateWorkProcedure_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Create Work Procedure に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -141,7 +141,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_CreateWorkProcedure_Name", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Specific focus area に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -150,7 +150,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_CreateWorkProcedure_Param_FocusArea", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Description of the work or project に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -159,7 +159,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_CreateWorkProcedure_Param_WorkDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Working directory to analyze に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -168,7 +168,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_CreateWorkProcedure_Param_WorkingDirectory", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Execute work procedure and track progress with continuous improvement. に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -177,7 +177,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ExecuteWorkProcedure_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Execute Work Procedure に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -186,7 +186,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ExecuteWorkProcedure_Name", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Working directory where work will be performed に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -195,7 +195,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ExecuteWorkProcedure_Param_WorkingDirectory", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Start fast-paced foreign language dictation training with PowerShell audio and AI evaluation に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -204,7 +204,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Foreign Language Dictation Training に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -213,7 +213,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Name", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Short (3-5 words), Medium (6-8 words), Long (9-12 words), VeryLong (13-15 words) に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -222,7 +222,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Param_SentenceLength", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Show translation alongside target language (on/off) に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -231,7 +231,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Slow (rate -2), Normal (rate 0), Fast (rate +2), VeryFast (rate +4) に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -240,7 +240,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Target language: English, French, German, Spanish, Italian, Chinese, Korean, Japanese に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -249,7 +249,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Airport, Business, Food, Hospital, School, Weather, Zoo に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -258,7 +258,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Param_Topic", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Guidelines for AI to generate high-quality HTML reports with proper formatting, charts, and styling に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -267,7 +267,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_HtmlGenerationGuidelinesForAi_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   HTML Generation Guidelines for AI に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -276,7 +276,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_HtmlGenerationGuidelinesForAi_Name", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Interactive learning for programming languages or CLI tools with hands-on practice に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -285,7 +285,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_LearnProgrammingAndCli_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Learn Programming & CLI に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -294,7 +294,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_LearnProgrammingAndCli_Name", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   'async/await', 'branching', 'multithreading' に類似しているローカライズされた文字列を検索します。
         /// </summary>
@@ -303,7 +303,7 @@ namespace PowerShell.MCP.Proxy.Resources {
                 return ResourceManager.GetString("Prompt_LearnProgrammingAndCli_Param_LearningFocus", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Python, Git, Docker, C# に類似しているローカライズされた文字列を検索します。
         /// </summary>

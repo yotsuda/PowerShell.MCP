@@ -15,31 +15,31 @@ public abstract class TextFileCmdletBase : PSCmdlet
     {
         // Check if contains wildcard
         bool hasWildcard = originalPath.Contains('*') || originalPath.Contains('?');
-        
+
         if (hasWildcard)
         {
             // For wildcards, keep directory part and replace filename
             return GetDisplayPathForWildcard(originalPath, resolvedPath);
         }
-        
+
         // Check if PS Drive path
         if (IsPSDrivePath(originalPath))
         {
             // Return PS Drive path as-is
             return originalPath;
         }
-        
+
         // For FileSystem absolute path, compare relative and absolute, use shorter
         var currentDirectory = SessionState.Path.CurrentFileSystemLocation.Path;
         var currentResolved = GetResolvedProviderPathFromPSPath(currentDirectory, out _).FirstOrDefault() ?? currentDirectory;
-        
+
         var relativePath = TextFileUtility.GetRelativePath(currentResolved, resolvedPath);
         var absolutePath = resolvedPath;
-        
+
         // Use relative path if shorter or equal length
         return relativePath.Length <= absolutePath.Length ? relativePath : absolutePath;
     }
-    
+
     /// <summary>
     /// Generates display path when using wildcards
     /// </summary>
@@ -49,16 +49,16 @@ public abstract class TextFileCmdletBase : PSCmdlet
         {
             // Directory part of original pattern
             string? originalDir = System.IO.Path.GetDirectoryName(originalPattern);
-            
+
             // Filename of resolved path
             string fileName = System.IO.Path.GetFileName(resolvedPath);
-            
+
             if (string.IsNullOrEmpty(originalDir))
             {
                 // No directory specified (e.g., *.txt)
                 return fileName;
             }
-            
+
             // Directory + filename
             return System.IO.Path.Combine(originalDir, fileName);
         }
@@ -70,7 +70,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
             return TextFileUtility.GetRelativePath(currentResolved, resolvedPath);
         }
     }
-    
+
     /// <summary>
     /// Determines if path is a PS Drive path
     /// </summary>
@@ -83,13 +83,13 @@ public abstract class TextFileCmdletBase : PSCmdlet
             {
                 return false;
             }
-            
+
             // FileSystem absolute paths (C:\, D:\, etc.) are not PS Drives
             if (System.IO.Path.IsPathRooted(path))
             {
                 return false;
             }
-            
+
             // Otherwise containing : = PS Drive (Temp:\, Env:\, etc.)
             return true;
         }
@@ -113,7 +113,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
                 ErrorCategory.InvalidArgument,
                 lineRange));
         }
-        
+
         // Validate start <= end when range is specified
         // Note: 0 or negative end values are allowed (meaning end of file)
         if (lineRange != null && lineRange.Length == 2 && lineRange[1] > 0 && lineRange[0] > lineRange[1])
@@ -156,7 +156,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
     /// <param name="requireExisting">Whether to error if file does not exist</param>
     /// <returns>Iterator of resolved file information</returns>
     protected IEnumerable<ResolvedFileInfo> ResolveAndValidateFiles(
-        string[]? path, 
+        string[]? path,
         string[]? literalPath,
         bool allowNewFiles = false,
         bool requireExisting = true)
@@ -170,7 +170,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
             ResolvedFileInfo? newFileInfo = null;
             bool isNewFile = false;
             bool hasError = false;
-            
+
             try
             {
                 if (isLiteralPath)
@@ -229,23 +229,23 @@ public abstract class TextFileCmdletBase : PSCmdlet
                     inputPath));
                 hasError = true;
             }
-            
+
             // Execute yield return outside catch block
             if (newFileInfo != null)
             {
                 yield return newFileInfo.Value;
                 continue;
             }
-            
+
             if (hasError || resolvedPaths == null)
             {
                 continue;
             }
-            
+
             foreach (var resolvedPath in resolvedPaths)
             {
                 bool fileExists = File.Exists(resolvedPath);
-                
+
                 if (!fileExists)
                 {
                     if (allowNewFiles)
@@ -262,7 +262,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
                         continue;
                     }
                 }
-                
+
                 yield return new ResolvedFileInfo
                 {
                     InputPath = inputPath,
@@ -278,7 +278,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
     /// </summary>
     protected bool IsWhatIfMode()
     {
-        return MyInvocation.BoundParameters.ContainsKey("WhatIf") && 
+        return MyInvocation.BoundParameters.ContainsKey("WhatIf") &&
                (SwitchParameter)MyInvocation.BoundParameters["WhatIf"];
     }
 }

@@ -78,7 +78,7 @@ public static class LocalizedMcpServerBuilderExtensions
                                 {
                                     var paramName = kvp.Key;
                                     var localizedTitle = kvp.Value;
-                                    
+
                                     // If this property exists and doesn''t have a title, add it
                                     if (jsonObject.TryGetPropertyValue(paramName, out var paramNode) &&
                                         paramNode is JsonObject paramObject &&
@@ -138,7 +138,7 @@ public static class LocalizedMcpServerBuilderExtensions
     /// This generic version is trimming-safe.
     /// </summary>
     public static IMcpServerBuilder WithLocalizedPrompts<[DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicMethods | 
+        DynamicallyAccessedMemberTypes.PublicMethods |
         DynamicallyAccessedMemberTypes.NonPublicMethods |
         DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TPromptType>(
         this IMcpServerBuilder builder,
@@ -191,7 +191,7 @@ public static class LocalizedMcpServerBuilderExtensions
                             {
                                 var paramName = kvp.Key;
                                 var localizedTitle = kvp.Value;
-                                
+
                                 if (jsonObject.TryGetPropertyValue(paramName, out var paramNode) &&
                                     paramNode is JsonObject paramObject &&
                                     !paramObject.ContainsKey("title"))

@@ -135,7 +135,7 @@ public class ConsoleSessionManager
                 {
                     directories.Add(tmpDir.TrimEnd('/'));
                 }
-                
+
                 paths = directories
                     .Where(Directory.Exists)
                     .SelectMany(dir =>

@@ -36,7 +36,7 @@ namespace PowerShell.MCP.Proxy
                 .WithLocalizedPrompts<PowerShellPrompts>();
 
             var host = builder.Build();
-            
+
             await host.RunAsync();
         }
     }

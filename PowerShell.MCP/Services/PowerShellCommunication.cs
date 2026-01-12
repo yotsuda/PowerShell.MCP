@@ -16,7 +16,7 @@ public static class PowerShellCommunication
     {
         // Capture cache flag before AddToCache resets it
         _resultShouldCache = ExecutionState.ShouldCacheOutput;
-        
+
         // Always add to cache
         ExecutionState.AddToCache(result);
         ExecutionState.CompleteExecution();

@@ -13,11 +13,11 @@ public class ValidationAttributesTests
 {
     private readonly ValidateLineRangeAttribute _attribute;
     private readonly MethodInfo _validateMethod;
-    
+
     public ValidationAttributesTests()
     {
         _attribute = new ValidateLineRangeAttribute();
-        
+
         // Get protected method via reflection
         _validateMethod = typeof(ValidateLineRangeAttribute)
             .GetMethod("Validate", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -39,7 +39,7 @@ public class ValidationAttributesTests
 
         // Act & Assert
         var exception = Record.Exception(() => InvokeValidate(validRange));
-        
+
         Assert.Null(exception);
     }
 
@@ -52,7 +52,7 @@ public class ValidationAttributesTests
 
         // Act & Assert
         var exception = Record.Exception(() => InvokeValidate(validRange));
-        
+
         Assert.Null(exception);
     }
 
@@ -69,9 +69,9 @@ public class ValidationAttributesTests
         var invalidRange = new[] { 0 };
 
         // Act & Assert
-        var exception = Assert.Throws<TargetInvocationException>(() => 
+        var exception = Assert.Throws<TargetInvocationException>(() =>
             InvokeValidate(invalidRange));
-        
+
         Assert.IsType<ValidationMetadataException>(exception.InnerException);
         Assert.Contains("Start line cannot be 0", exception.InnerException!.Message);
     }
@@ -103,7 +103,7 @@ public class ValidationAttributesTests
 
         // Act & Assert
         var exception = Record.Exception(() => InvokeValidate(emptyRange));
-        
+
         Assert.Null(exception);
     }
 

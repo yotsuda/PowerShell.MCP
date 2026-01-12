@@ -50,7 +50,7 @@ public class ResourceDescriptionAttribute : DescriptionAttribute
 
             // Get localized string based on current UI culture
             var localizedString = _resourceManager.GetString(_resourceKey);
-            
+
             // Return empty string if not found - Description is required
             return localizedString ?? string.Empty;
         }

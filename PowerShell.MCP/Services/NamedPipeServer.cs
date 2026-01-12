@@ -536,10 +536,10 @@ Please provide how to update the MCP client configuration to the user.";
         var timeoutSeconds = parameters.TryGetProperty("timeout_seconds", out var timeoutElement)
             ? timeoutElement.GetInt32()
             : 170;
-        
+
         // Clamp to valid range
         timeoutSeconds = Math.Clamp(timeoutSeconds, 0, 170);
-        
+
         return McpServerHost.ExecuteCommand(pipeline, timeoutSeconds);
     }
 

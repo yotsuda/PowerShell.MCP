@@ -26,7 +26,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     [Parameter(ParameterSetName = "Path")]
     [Parameter(ParameterSetName = "LiteralPath")]
     public string? Pattern { get; set; }
-    
+
     [Parameter(ParameterSetName = "Path")]
     [Parameter(ParameterSetName = "LiteralPath")]
     public string? Contains { get; set; }
@@ -41,7 +41,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     protected override void BeginProcessing()
     {
         ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
-        
+
         // Error if pattern contains newlines (never matches in line-by-line processing)
         if (!string.IsNullOrEmpty(Pattern) && (Pattern.Contains('\n') || Pattern.Contains('\r')))
         {
@@ -51,7 +51,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 ErrorCategory.InvalidArgument,
                 Pattern));
         }
-        
+
         if (!string.IsNullOrEmpty(Contains) && (Contains.Contains('\n') || Contains.Contains('\r')))
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -79,8 +79,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 {
                     WriteObject("");
                 }
-                
-                
+
+
                 _totalFilesProcessed++;
 
                 var encoding = TextFileUtility.GetEncoding(fileInfo.ResolvedPath, Encoding);
@@ -124,19 +124,19 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         // Default to (1, int.MaxValue) if LineRange is null or empty
         int requestedStart = 1;
         int requestedEnd = int.MaxValue;
-        
+
         if (LineRange != null && LineRange.Length > 0)
         {
             requestedStart = LineRange[0];
             requestedEnd = LineRange.Length > 1 ? LineRange[1] : requestedStart;
-            
+
             // Tail specification (-10 or -10,-1)
             if (requestedStart < 0)
             {
                 ShowTailLines(filePath, encoding, -requestedStart);
                 return;
             }
-            
+
             // If endLine is 0 or negative, continue to end
             if (requestedEnd <= 0)
             {
@@ -170,9 +170,9 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private void ShowTailLines(string filePath, System.Text.Encoding encoding, int tailCount)
     {
-            // Get last N lines in single pass using RotateBuffer
+        // Get last N lines in single pass using RotateBuffer
         var buffer = new RotateBuffer<(string line, int lineNumber)>(tailCount);
-        
+
         int lineNumber = 1;
         foreach (var line in File.ReadLines(filePath, encoding))
         {
@@ -206,8 +206,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// Searches lines based on match conditions and displays with context (true single-pass implementation using rotate buffer)
     /// </summary>
-    private void ShowWithMatch(string inputPath, string filePath, 
-        System.Text.Encoding encoding, 
+    private void ShowWithMatch(string inputPath, string filePath,
+        System.Text.Encoding encoding,
         Func<string, bool> matchPredicate,
         string matchTypeForWarning,
         string matchValue,
@@ -217,55 +217,55 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         var displayPath = GetDisplayPath(inputPath, filePath);
         bool headerPrinted = false;
         bool anyMatch = false;
-        
+
         using (var enumerator = File.ReadLines(filePath, encoding).GetEnumerator())
         {
             if (!enumerator.MoveNext())
             {
-        // Empty file
+                // Empty file
                 WriteWarning("File is empty. No output.");
                 return;
             }
-            
+
             int lineNumber = 1;
             string currentLine = enumerator.Current;
             bool hasNext = enumerator.MoveNext();
-            
-        // Rotate buffer: holds previous 2 lines (line content and line number pairs)
+
+            // Rotate buffer: holds previous 2 lines (line content and line number pairs)
             var preContextBuffer = new RotateBuffer<(string line, int lineNumber)>(2);
-            
-        // Gap candidate (1 line after trailing context)
+
+            // Gap candidate (1 line after trailing context)
             (string line, int lineNumber)? gapLineInfo = null;
-            
-        // Trailing context counter
+
+            // Trailing context counter
             int afterMatchCounter = 0;
-            
-        // Last output line number (for gap detection)
+
+            // Last output line number (for gap detection)
             int lastOutputLine = 0;
-            
-        // Gap detection: empty line output flag (output when next match is found)
+
+            // Gap detection: empty line output flag (output when next match is found)
             bool needsGapSeparator = false;
-            
+
             while (true)
             {
-        // Match check only within original LineRange
+                // Match check only within original LineRange
                 bool matched = (lineNumber >= startLine && lineNumber <= endLine) && matchPredicate(currentLine);
-                
+
                 if (matched)
                 {
                     anyMatch = true;
-                    
-        // Output header (first time only)
+
+                    // Output header (first time only)
                     if (!headerPrinted)
                     {
                         WriteObject(AnsiColors.Header(displayPath));
                         headerPrinted = true;
                     }
-                    
-        // Gap processing: if gapLineInfo exists, check and output
+
+                    // Gap processing: if gapLineInfo exists, check and output
                     if (gapLineInfo.HasValue)
                     {
-        // Calculate start line of leading context
+                        // Calculate start line of leading context
                         int preContextStart = lineNumber;
                         for (int i = preContextBuffer.Count - 1; i >= 0; i--)
                         {
@@ -275,9 +275,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                                 preContextStart = ctx.lineNumber;
                             }
                         }
-                        
+
                         var gapInfo = gapLineInfo.Value;
-        // If gapLine next line is start of leading context, output gapLine (continuous)
+
+                        // If gapLine next line is start of leading context, output gapLine (continuous)
                         if (gapInfo.lineNumber + 1 == preContextStart)
                         {
                             string gapDisplay = ApplyHighlightingIfMatched(gapInfo.line, matchPredicate, matchValue, isRegex);
@@ -286,11 +287,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         }
                         else if (gapInfo.lineNumber >= preContextStart)
                         {
-        // gapLine is included in leading context -> will be output as leading context, do nothing
+                            // gapLine is included in leading context -> will be output as leading context, do nothing
                         }
                         else
                         {
-        // Gap is 2+ lines -> separate with empty line
+                            // Gap is 2+ lines -> separate with empty line
                             WriteObject("");
                         }
                         gapLineInfo = null;
@@ -298,12 +299,12 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     }
                     else if (needsGapSeparator)
                     {
-        // Empty line output when no gapLine
+                        // Empty line output when no gapLine
                         WriteObject("");
                         needsGapSeparator = false;
                     }
-                    
-        // Output previous 2 lines (from rotate buffer)
+
+                    // Output previous 2 lines (from rotate buffer)
                     foreach (var ctx in preContextBuffer)
                     {
                         if (ctx.lineNumber > lastOutputLine)
@@ -312,8 +313,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                             WriteObject($"{ctx.lineNumber,3}- {ctxDisplay}");
                         }
                     }
-                    
-        // Output match line (highlighted)
+
+                    // Output match line (highlighted)
                     string displayLine;
                     if (isRegex)
                     {
@@ -325,15 +326,15 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         displayLine = currentLine.Replace(matchValue, $"{AnsiColors.Yellow}{matchValue}{AnsiColors.Reset}");
                     }
                     WriteObject($"{lineNumber,3}: {displayLine}");
-                    
+
                     afterMatchCounter = 2;
                     lastOutputLine = lineNumber;
-        gapLineInfo = null; // Reset gap
-        needsGapSeparator = false; // Reset flag
+                    gapLineInfo = null; // Reset gap
+                    needsGapSeparator = false; // Reset flag
                 }
                 else
                 {
-        // Output trailing context
+                    // Output trailing context
                     if (afterMatchCounter > 0)
                     {
                         string display = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, isRegex);
@@ -343,25 +344,25 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     }
                     else if (lastOutputLine > 0)
                     {
-        // Gap detection mode
+                        // Gap detection mode
                         if (lineNumber == lastOutputLine + 1)
                         {
-        // First line after last output -> store as gap candidate
+                            // First line after last output -> store as gap candidate
                             gapLineInfo = (currentLine, lineNumber);
                         }
                         else if (lineNumber == lastOutputLine + 2)
                         {
-        // Second line after last output -> gap is 2+ lines -> set empty line flag
+                            // Second line after last output -> gap is 2+ lines -> set empty line flag
                             needsGapSeparator = true;
-        // Keep gapLineInfo (used later for check)
+                            // Keep gapLineInfo (used later for check)
                         }
                     }
                 }
-                
-        // Update rotate buffer (save with line number)
+
+                // Update rotate buffer (save with line number)
                 preContextBuffer.Add((currentLine, lineNumber));
-                
-        // Continue to next
+
+                // Continue to next
                 if (hasNext)
                 {
                     lineNumber++;
@@ -374,11 +375,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 }
             }
         }
-        
+
         // No matches found
         if (!anyMatch)
         {
-            string message = matchTypeForWarning == "pattern" 
+            string message = matchTypeForWarning == "pattern"
                 ? $"No lines matched pattern: {matchValue}"
                 : $"No lines contain: {matchValue}";
             WriteWarning(message);
@@ -394,7 +395,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         {
             return line;
         }
-        
+
         if (isRegex)
         {
             var regex = new Regex(matchValue, RegexOptions.Compiled);

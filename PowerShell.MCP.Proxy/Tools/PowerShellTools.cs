@@ -428,7 +428,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                             sessionManager.MarkPipeBusy(otherPipe, FormatBusyStatus(otherStatus));
                         }
                     }
-                    
+
                     if (remainingBusyInfo.Length > 0)
                     {
                         return $"{output}\n\n{remainingBusyInfo.ToString().TrimEnd()}";
@@ -484,7 +484,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 remainingBusyInfo.AppendLine(FormatBusyStatus(otherStatus));
                             }
                         }
-                        
+
                         if (remainingBusyInfo.Length > 0)
                         {
                             return $"{output}\n\n{remainingBusyInfo.ToString().TrimEnd()}";

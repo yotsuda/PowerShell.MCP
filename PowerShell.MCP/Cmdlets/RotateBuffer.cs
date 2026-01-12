@@ -23,7 +23,7 @@ namespace PowerShell.MCP.Cmdlets
         {
             if (capacity < 1)
                 throw new ArgumentOutOfRangeException(nameof(capacity), "Capacity must be at least 1.");
-            
+
             _buffer = new T[capacity];
             _head = 0;
             _count = 0;
@@ -69,7 +69,7 @@ namespace PowerShell.MCP.Cmdlets
             {
                 if (index < 0 || index >= _count)
                     throw new ArgumentOutOfRangeException(nameof(index), $"Index must be between 0 and {_count - 1}.");
-                
+
                 // Calculate position of oldest element
                 int start = (_head - _count + _buffer.Length) % _buffer.Length;
                 return _buffer[(start + index) % _buffer.Length];
@@ -115,7 +115,7 @@ namespace PowerShell.MCP.Cmdlets
         {
             if (indexFromEnd < 0 || indexFromEnd >= _count)
                 throw new ArgumentOutOfRangeException(nameof(indexFromEnd), $"Index must be between 0 and {_count - 1}.");
-            
+
             return this[_count - 1 - indexFromEnd];
         }
 

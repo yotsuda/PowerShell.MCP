@@ -1,6 +1,5 @@
 using System.Management.Automation;
 using System.Text.RegularExpressions;
-using System.IO;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -42,7 +41,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     {
         bool hasLiteral = !string.IsNullOrEmpty(OldText);
         bool hasRegex = !string.IsNullOrEmpty(Pattern);
-        
+
         // Neither specified
         if (!hasLiteral && !hasRegex)
         {
@@ -52,7 +51,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 ErrorCategory.InvalidArgument,
                 null));
         }
-        
+
         // Both specified
         if (hasLiteral && hasRegex)
         {
@@ -62,7 +61,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 ErrorCategory.InvalidArgument,
                 null));
         }
-        
+
         // Literal mode with only one specified
         if (hasLiteral && Replacement == null)
         {
@@ -82,7 +81,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 ErrorCategory.InvalidArgument,
                 OldText));
         }
-        
+
         // Regex mode with only one specified
         if (hasRegex && Replacement == null)
         {
@@ -129,17 +128,17 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     private void ProcessStringReplacement(string originalPath, string resolvedPath)
     {
         var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
-        
+
         // If Replacement contains non-ASCII chars, upgrade encoding to UTF-8
-        if (!string.IsNullOrEmpty(Replacement) && 
+        if (!string.IsNullOrEmpty(Replacement) &&
             EncodingHelper.TryUpgradeEncodingIfNeeded(metadata, [Replacement], Encoding != null, out var upgradeMessage))
         {
             WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
         }
-        
+
         var isLiteral = !string.IsNullOrEmpty(OldText);
         var regex = isLiteral ? null : new Regex(Pattern!, RegexOptions.Compiled);
-        
+
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
 
         // More specific action description
@@ -156,7 +155,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
 
         bool isWhatIf = IsWhatIfMode();
-        
+
         // Confirm with ShouldProcess (-Confirm and -WhatIf handling)
         if (!ShouldProcess(resolvedPath, actionDescription))
         {
@@ -168,7 +167,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             }
             // Continue for -WhatIf to display diff preview
         }
-        
+
         bool dryRun = isWhatIf;
 
         // Backup (only if not dryRun)
@@ -182,12 +181,11 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         string? tempFile = dryRun ? null : System.IO.Path.GetTempFileName();
         int replacementCount = 0;
         bool headerPrinted = false;
-        
+
         // For context display
         var preContextBuffer = new RotateBuffer<(string line, int lineNum)>(2);
         int afterMatchCounter = 0;
         int lastOutputLine = 0;
-        
 
         try
         {
@@ -276,7 +274,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             // Execute replacement
                             if (isLiteral)
                             {
-                                int count = (currentLine.Length - currentLine.Replace(OldText!, "").Length) / 
+                                int count = (currentLine.Length - currentLine.Replace(OldText!, "").Length) /
                                             Math.Max(1, OldText!.Length);
                                 replacementCount += count;
                                 outputLine = currentLine.Replace(OldText, Replacement);
@@ -295,7 +293,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 // WhatIf: display both before (red) and after (green) replacement
                                 if (isLiteral)
                                 {
-                                    displayLine = currentLine.Replace(OldText!, 
+                                    displayLine = currentLine.Replace(OldText!,
                                         $"{AnsiColors.Red}{OldText}{AnsiColors.Reset}{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                                 else
@@ -308,12 +306,12 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 // Normal execution: display only replacement result (highlighted in green)
                                 if (isLiteral)
                                 {
-                                    displayLine = currentLine.Replace(OldText!, 
+                                    displayLine = currentLine.Replace(OldText!,
                                         $"{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                                 else
                                 {
-                                    displayLine = regex!.Replace(currentLine, 
+                                    displayLine = regex!.Replace(currentLine,
                                         match => $"{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
                                 }
                             }
@@ -417,15 +415,15 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     private static string BuildRegexDisplayLine(string originalLine, Regex regex, string replacement)
     {
         // Display each match deletion->addition consecutively (supports capture groups)
-        var result = regex.Replace(originalLine, match => 
+        var result = regex.Replace(originalLine, match =>
         {
             // Get expanded result of $1, $2 etc. with match.Result()
             var replacedText = match.Result(replacement);
-            
+
             // Display deleted part (original match) in red+strikethrough, added part (replacement result) in green
             return $"{AnsiColors.Red}{match.Value}{AnsiColors.Reset}{AnsiColors.Green}{replacedText}{AnsiColors.Reset}";
         });
-        
+
         return result;
     }
 
@@ -449,7 +447,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 return regex.Replace(line, match => $"{AnsiColors.Yellow}{match.Value}{AnsiColors.Reset}");
             }
         }
-        
+
         return line;
     }
 }

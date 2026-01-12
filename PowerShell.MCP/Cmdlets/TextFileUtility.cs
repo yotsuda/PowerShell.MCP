@@ -84,16 +84,16 @@ public static class TextFileUtility
             // Empty file
             return;
         }
-            
+
         int lineNumber = 1;
         string? nextLine = reader.ReadLine();
-            
+
         while (true)
         {
             // Process line
             string processedLine = lineProcessor(currentLine, lineNumber);
             writer.Write(processedLine);
-                
+
             if (nextLine != null)
             {
                 // Add newline since there is a next line
@@ -174,15 +174,15 @@ public static class TextFileUtility
     {
         if (lineRange == null || lineRange.Length == 0)
             return (1, int.MaxValue);
-        
+
         if (lineRange.Length > 2)
         {
             throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20");
         }
-        
+
         int startLine = lineRange[0];
         int endLine;
-        
+
         if (lineRange.Length > 1)
         {
             // When two values specified
@@ -193,12 +193,10 @@ public static class TextFileUtility
             // When only one value specified, that line only
             endLine = startLine;
         }
-        
+
         return (startLine, endLine);
     }
-    
-    /// <summary>
-    /// Replaces entire file with new content
+
     /// <summary>
     /// Replaces entire file with new content
     /// For LLM: simple and predictable behavior
@@ -297,7 +295,7 @@ public static class TextFileUtility
                 {
                     // Final line processing complete
                     actualLineCount = lineNumber;
-                    
+
                     // Out of range check (determined at file end)
                     if (startLine > actualLineCount)
                     {
@@ -305,7 +303,7 @@ public static class TextFileUtility
                             $"Line range {startLine}-{endLine} is out of bounds. File has only {actualLineCount} line(s).",
                             nameof(startLine));
                     }
-                    
+
                     if (endLine > actualLineCount)
                     {
                         warningMessage = $"End line {endLine} exceeds file length ({actualLineCount} lines). Will process up to line {actualLineCount}.";
@@ -315,7 +313,7 @@ public static class TextFileUtility
                     {
                         linesChanged = endLine - startLine + 1;
                     }
-                    
+
                     if (metadata.HasTrailingNewline)
                     {
                         writer.Write(metadata.NewlineSequence);
@@ -338,22 +336,22 @@ public static class TextFileUtility
             // Normalize both paths
             fromPath = System.IO.Path.GetFullPath(fromPath);
             toPath = System.IO.Path.GetFullPath(toPath);
-                
+
             // Check if same drive
             if (System.IO.Path.GetPathRoot(fromPath) != System.IO.Path.GetPathRoot(toPath))
             {
                 // Return absolute path if different drives
                 return toPath;
             }
-                
-            var fromUri = new Uri(fromPath.EndsWith(System.IO.Path.DirectorySeparatorChar.ToString()) 
-                ? fromPath 
+
+            var fromUri = new Uri(fromPath.EndsWith(System.IO.Path.DirectorySeparatorChar.ToString())
+                ? fromPath
                 : fromPath + System.IO.Path.DirectorySeparatorChar);
             var toUri = new Uri(toPath);
-                
+
             var relativeUri = fromUri.MakeRelativeUri(toUri);
             var relativePath = Uri.UnescapeDataString(relativeUri.ToString());
-                
+
             // Convert to backslashes (Windows)
             return relativePath.Replace('/', System.IO.Path.DirectorySeparatorChar);
         }
@@ -363,7 +361,7 @@ public static class TextFileUtility
             return toPath;
         }
     }
-    
+
     /// <summary>
     /// Upgrades encoding to UTF-8 if necessary
     /// Upgrades to UTF-8 when Content contains non-ASCII and current encoding is ASCII
@@ -374,8 +372,8 @@ public static class TextFileUtility
     /// <param name="upgradeMessage">Message if upgraded (null if not upgraded)</param>
     /// <returns>true if encoding was upgraded, false otherwise</returns>
     public static bool TryUpgradeEncodingIfNeeded(
-        FileMetadata metadata, 
-        string[] contentLines, 
+        FileMetadata metadata,
+        string[] contentLines,
         bool encodingExplicitlySpecified,
         out string? upgradeMessage)
     {

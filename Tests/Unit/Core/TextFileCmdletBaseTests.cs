@@ -113,9 +113,9 @@ public class TextFileCmdletBaseTests
         var invalidRange = new[] { 10, 5 };
 
         // Act & Assert
-        var exception = Assert.Throws<ArgumentException>(() => 
+        var exception = Assert.Throws<ArgumentException>(() =>
             cmdlet.PublicValidateLineRange(invalidRange));
-        
+
         Assert.Contains("must be less than or equal to end", exception.Message);
     }
 
@@ -137,9 +137,9 @@ public class TextFileCmdletBaseTests
         var cmdlet = new TestCmdlet();
 
         // Act & Assert
-        var exception = Assert.Throws<PSArgumentException>(() => 
+        var exception = Assert.Throws<PSArgumentException>(() =>
             cmdlet.PublicValidateContainsAndPatternMutuallyExclusive("search", "pattern"));
-        
+
         Assert.Contains("Cannot specify both -Contains and -Pattern", exception.Message);
     }
 
