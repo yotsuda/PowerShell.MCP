@@ -404,6 +404,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         // First pass: enumerate all pipes and find busy/completed ones
         var busyPipes = new List<string>();
+        var userCommandBusyInfo = new StringBuilder();
         var allPipes = sessionManager.EnumeratePipes().ToList();
         foreach (var pipeName in allPipes)
         {
@@ -439,6 +440,13 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             if (status.Status == "busy")
             {
+                // Track but don't wait for user-initiated commands - they won't produce cached output
+                if (status.Pipeline == "(user command)")
+                {
+                    userCommandBusyInfo.AppendLine(FormatBusyStatus(status));
+                    continue;
+                }
+
                 busyPipes.Add(pipeName);
                 var busyInfo = FormatBusyStatus(status);
                 sessionManager.MarkPipeBusy(pipeName, busyInfo);
@@ -446,10 +454,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         }
 
 
-        // No busy consoles - nothing to wait for
+        // No MCP-initiated busy consoles - nothing to wait for
         if (busyPipes.Count == 0)
         {
-            return "No busy consoles to wait for.";
+            if (userCommandBusyInfo.Length > 0)
+            {
+                return $"No commands to wait for completion.\n\n{userCommandBusyInfo.ToString().TrimEnd()}";
+            }
+            return "No commands to wait for completion.";
         }
 
 
