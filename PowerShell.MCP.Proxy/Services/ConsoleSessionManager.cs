@@ -127,8 +127,22 @@ public class ConsoleSessionManager
             }
             else
             {
-                // Linux/macOS: .NET Named Pipes use Unix Domain Sockets at /tmp/CoreFxPipe_*
-                paths = Directory.EnumerateFiles("/tmp", $"CoreFxPipe_{DefaultPipeName}*");
+                // Linux/macOS: .NET Named Pipes use Unix Domain Sockets at CoreFxPipe_*
+                // macOS may use $TMPDIR instead of /tmp
+                var directories = new List<string> { "/tmp" };
+                var tmpDir = Environment.GetEnvironmentVariable("TMPDIR");
+                if (!string.IsNullOrEmpty(tmpDir) && tmpDir != "/tmp" && tmpDir != "/tmp/")
+                {
+                    directories.Add(tmpDir.TrimEnd('/'));
+                }
+                
+                paths = directories
+                    .Where(Directory.Exists)
+                    .SelectMany(dir =>
+                    {
+                        try { return Directory.EnumerateFiles(dir, $"CoreFxPipe_{DefaultPipeName}*"); }
+                        catch { return Enumerable.Empty<string>(); }
+                    });
             }
         }
         catch (Exception ex)
