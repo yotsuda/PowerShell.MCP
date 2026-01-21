@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Text;
+using System.Text.Json;
 
 namespace PowerShell.MCP.Proxy.Services;
 
@@ -112,30 +113,40 @@ public class NamedPipeClient
     }
 
     /// <summary>
-    /// Waits until a specific Named Pipe is ready
+    /// Waits until a specific Named Pipe is ready and returns standby status
     /// </summary>
     public static async Task<bool> WaitForPipeReadyAsync(string pipeName)
     {
-        const int maxAttempts = 120; // Wait up to 60 seconds
+        const int maxAttempts = 600; // Wait up to 60 seconds (100ms * 600)
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
-                using var testClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
-                await testClient.ConnectAsync(500); // 500ms timeout
-                Console.Error.WriteLine($"[INFO] Named Pipe '{pipeName}' ready after {attempt} attempts");
-                // Give the server time to prepare for the next connection
-                await Task.Delay(500);
-                return true;
+                var request = "{\"name\":\"get_status\"}";
+                var response = await new NamedPipeClient().SendRequestToAsync(pipeName, request);
+
+                using var doc = JsonDocument.Parse(response);
+                var status = doc.RootElement.GetProperty("status").GetString();
+
+                if (status == "standby" || status == "completed")
+                {
+                    Console.Error.WriteLine($"[INFO] Named Pipe '{pipeName}' ready with status '{status}' after {attempt} attempts");
+                    return true;
+                }
+
+                // busy - wait and retry
+                await Task.Delay(100);
             }
             catch (TimeoutException)
             {
-                // Expected during startup - waiting for Named Pipe
+                // Expected during startup - pipe not yet available
+                await Task.Delay(100);
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[WARNING] Named Pipe connection attempt {attempt} to '{pipeName}' failed: {ex.Message}");
+                await Task.Delay(100);
             }
         }
 

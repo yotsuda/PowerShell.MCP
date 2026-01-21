@@ -25,7 +25,8 @@ public static class ExecutionState
 
     // Heartbeat tracking for detecting user-initiated commands
     private static DateTime _lastHeartbeat = DateTime.UtcNow;
-    private const int HeartbeatTimeoutMs = 500; // If no heartbeat for 500ms, runspace is likely busy
+    private static bool _firstHeartbeatReceived = false;
+    private const int HeartbeatTimeoutMs = 10000; // If no heartbeat for 10s, runspace is likely busy
 
     /// <summary>
     /// Gets the current status (derived from state)
@@ -71,13 +72,23 @@ public static class ExecutionState
     /// <summary>
     /// Updates the heartbeat timestamp. Called from PowerShell timer event.
     /// </summary>
-    public static void Heartbeat() => _lastHeartbeat = DateTime.UtcNow;
+    public static void Heartbeat()
+    {
+        _lastHeartbeat = DateTime.UtcNow;
+        _firstHeartbeatReceived = true;
+    }
 
     /// <summary>
     /// Checks if the PowerShell runspace is available (heartbeat is recent)
     /// </summary>
     public static bool IsRunspaceAvailable =>
-        (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
+        !_firstHeartbeatReceived || (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
+
+    /// <summary>
+    /// Gets the estimated elapsed time in seconds since user command started (heartbeat timed out)
+    /// </summary>
+    public static double UserCommandElapsedSeconds =>
+        (DateTime.UtcNow - _lastHeartbeat).TotalSeconds;
 
     public static void SetBusy(string pipeline)
     {
@@ -317,7 +328,7 @@ public class NamedPipeServer : IDisposable
                             pid,
                             status = "busy",
                             pipeline = "(user command)",
-                            duration = 0
+                            duration = ExecutionState.UserCommandElapsedSeconds
                         });
                     }
                 }

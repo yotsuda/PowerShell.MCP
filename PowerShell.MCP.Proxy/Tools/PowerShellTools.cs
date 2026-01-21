@@ -1,9 +1,10 @@
-﻿using ModelContextProtocol.Server;
+using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Models;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace PowerShell.MCP.Proxy.Tools;
 
@@ -11,13 +12,15 @@ namespace PowerShell.MCP.Proxy.Tools;
 public class PowerShellTools
 {
     /// <summary>
-    /// Finds a ready pipe. Returns (pipeName, consoleSwitched).
+    /// Finds a ready pipe. Returns (pipeName, consoleSwitched, allPipesStatusInfo).
+    /// allPipesStatusInfo contains status of all pipes when no ready pipe is found.
     /// </summary>
-    private static async Task<(string? readyPipeName, bool consoleSwitched)> FindReadyPipeAsync(
+    private static async Task<(string? readyPipeName, bool consoleSwitched, string? allPipesStatusInfo)> FindReadyPipeAsync(
         IPowerShellService powerShellService,
         CancellationToken cancellationToken)
     {
         var sessionManager = ConsoleSessionManager.Instance;
+        var allPipesStatus = new List<string>(); // Collect status of all pipes for diagnostics
 
         // Step 1: Check ActivePipeName
         var activePipe = sessionManager.ActivePipeName;
@@ -28,16 +31,18 @@ public class PowerShellTools
             if (status == null)
             {
                 sessionManager.ClearDeadPipe(activePipe);
+                allPipesStatus.Add($"  - {activePipe}: dead (no response)");
             }
             else if (status.Status == "standby" || status.Status == "completed")
             {
                 // No switch - DLL will handle its own cache automatically
-                return (activePipe, false);
+                return (activePipe, false, null);
             }
             else // busy
             {
                 var busyInfo = FormatBusyStatus(status);
                 sessionManager.MarkPipeBusy(activePipe, busyInfo);
+                allPipesStatus.Add($"  - {activePipe}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
             }
         }
 
@@ -45,11 +50,14 @@ public class PowerShellTools
         var busyPipes = sessionManager.GetBusyPipes().Keys.ToList();
         foreach (var pipeName in busyPipes)
         {
+            if (pipeName == activePipe) continue; // Already checked
+
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
 
             if (status == null)
             {
                 sessionManager.ClearDeadPipe(pipeName);
+                allPipesStatus.Add($"  - {pipeName}: dead (no response)");
                 continue;
             }
 
@@ -57,9 +65,11 @@ public class PowerShellTools
             {
                 // Found a ready pipe - set as active and return
                 sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, activePipe != null);
+                return (pipeName, activePipe != null, null);
             }
-            // busy pipes stay as they are - CollectAllCachedOutputsAsync will handle completed ones later
+
+            // busy pipes stay as they are
+            allPipesStatus.Add($"  - {pipeName}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
         }
 
         // Step 2: Discover new standby pipe
@@ -70,23 +80,31 @@ public class PowerShellTools
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
 
-            if (status == null) continue;
+            if (status == null)
+            {
+                allPipesStatus.Add($"  - {pipeName}: dead (no response)");
+                continue;
+            }
 
             if (status.Status == "standby" || status.Status == "completed")
             {
                 sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, activePipe != null);
+                return (pipeName, activePipe != null, null);
             }
 
             if (status.Status == "busy")
             {
                 var busyInfo = FormatBusyStatus(status);
                 sessionManager.MarkPipeBusy(pipeName, busyInfo);
+                allPipesStatus.Add($"  - {pipeName}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
             }
         }
 
-        // No ready pipe found
-        return (null, false);
+        // No ready pipe found - return status info for diagnostics
+        var statusInfo = allPipesStatus.Count > 0
+            ? "All pipes status:\n" + string.Join("\n", allPipesStatus)
+            : "No pipes found.";
+        return (null, false, statusInfo);
     }
 
     private static string FormatBusyStatus(GetStatusResponse status)
@@ -175,12 +193,12 @@ public class PowerShellTools
         CancellationToken cancellationToken = default)
     {
         // Find a ready pipe
-        var (readyPipeName, _) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+        var (readyPipeName, _, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
         if (readyPipeName == null)
         {
             // No ready pipe - auto-start (StartPowershellConsole includes busy info collection)
-            Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
+            Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
             return await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
         }
 
@@ -252,8 +270,9 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
 
 Note: All cmdlets support -LiteralPath for exact paths and accept arrays directly (no loops needed). For LineRange, use -1 or 0 for end of file (e.g., 100,-1).
 
-⚡ Markdown/Mermaid/KaTeX Viewer (Windows, requires MarkdownViewer module):
-• Show-MarkdownViewer <content|path> [-Title <string>] - Display Markdown with Mermaid diagrams (auto-refresh on save).
+⚡ Viewing .md (Windows):
+Install-Module MarkdownViewer
+Show-MarkdownViewer $reportPath  # Mermaid, KaTeX, auto-refresh on save
 
 Examples:
   ✅ CORRECT: invoke_expression('Add-LinesToFile -Path file.cs -Content $code')
@@ -278,12 +297,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
 
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+        var (readyPipeName, consoleSwitched, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
         if (readyPipeName == null)
         {
             // No ready pipe - auto-start
-            Console.Error.WriteLine("[INFO] No ready PowerShell console found, auto-starting...");
+            Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
             var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
 
             // Collect completed outputs and busy status (after console start, using new pipe as exclude)
@@ -312,6 +331,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             {
                 response.AppendLine();
                 response.Append(busyStatusInfo);
+            }
+            if (!string.IsNullOrEmpty(allPipesStatusInfo))
+            {
+                response.AppendLine();
+                response.AppendLine("Why new console was started:");
+                response.Append(allPipesStatusInfo);
             }
             return response.ToString();
         }
@@ -343,6 +368,9 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             return response.ToString();
         }
 
+        // Check for local variable assignments without scope prefix
+        var scopeWarning = CheckLocalVariableAssignments(pipeline);
+
         // Execute the command
         try
         {
@@ -355,14 +383,24 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 // Mark this pipe as busy for later cache collection
                 var sessionManager = ConsoleSessionManager.Instance;
                 sessionManager.MarkPipeBusy(readyPipeName, $"⧗ | Pipeline: {TruncatePipeline(pipeline)} | Waiting for completion");
+                
+                // Include scope warning if present
+                if (!string.IsNullOrEmpty(scopeWarning))
+                {
+                    return scopeWarning + "\n\n" + result;
+                }
                 return result;
             }
 
             // Normal case - collect other pipes' cached outputs and busy status
             var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
-            // Build response: completedOutput + busyStatusInfo + result
+            // Build response: scopeWarning + completedOutput + busyStatusInfo + result
             var response = new StringBuilder();
+            if (!string.IsNullOrEmpty(scopeWarning))
+            {
+                response.AppendLine(scopeWarning);
+            }
             if (completedOutput.Length > 0)
             {
                 response.Append(completedOutput);
@@ -622,5 +660,29 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             Console.Error.WriteLine($"[ERROR] StartPowershellConsole failed: {ex.Message}");
             return $"Failed to start PowerShell console: {ex.Message}\n\nPlease check if a terminal emulator is available and try again.";
         }
+    }
+
+    /// <summary>
+    /// Checks for local variable assignments without scope prefix and returns a warning message.
+    /// </summary>
+    private static string? CheckLocalVariableAssignments(string pipeline)
+    {
+        // Pattern: $varname = (but not $script:, $global:, $env:, $using:, $null, $true, $false)
+        // Also exclude common automatic variables like $_, $?, $^, $$, $args, $input, $foreach, $switch
+        var pattern = @"\$(?!script:|global:|env:|using:|null\b|true\b|false\b|_\b|\?\b|\^\b|\$\b|args\b|input\b|foreach\b|switch\b|Matches\b|PSItem\b)([a-zA-Z_]\w*)\s*=";
+        var matches = Regex.Matches(pipeline, pattern);
+        
+        if (matches.Count == 0) return null;
+        
+        var vars = matches.Select(m => "$" + m.Groups[1].Value).Distinct().ToList();
+        if (vars.Count == 0) return null;
+        
+        var sb = new StringBuilder();
+        sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
+        foreach (var v in vars)
+        {
+            sb.AppendLine($"  {v} → Consider using {v.Replace("$", "$script:")} to preserve across calls");
+        }
+        return sb.ToString().TrimEnd();
     }
 }
