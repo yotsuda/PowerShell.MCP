@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace PowerShell.MCP.Proxy.Services;
 
 /// <summary>
-/// Manages PowerShell console sessions with caching for efficiency
+/// Manages PowerShell console sessions
 /// </summary>
 public class ConsoleSessionManager
 {
@@ -27,11 +27,6 @@ public class ConsoleSessionManager
     /// </summary>
     public string? ActivePipeName { get; private set; }
 
-    /// <summary>
-    /// Known busy pipes (pipe name -> last known status info)
-    /// </summary>
-    private readonly Dictionary<string, string> _busyPipes = new();
-
     private ConsoleSessionManager() { }
 
     /// <summary>
@@ -49,56 +44,18 @@ public class ConsoleSessionManager
             ActivePipeName = pipeName;
             if (pipeName != null)
             {
-                // Remove from busy list if it was there
-                _busyPipes.Remove(pipeName);
                 Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Active pipe set to '{pipeName}'");
             }
         }
     }
 
     /// <summary>
-    /// Marks a pipe as busy with its status info
-    /// </summary>
-    public void MarkPipeBusy(string pipeName, string statusInfo)
-    {
-        lock (_lock)
-        {
-            _busyPipes[pipeName] = statusInfo;
-
-            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Marked pipe '{pipeName}' as busy");
-        }
-    }
-
-    /// <summary>
-    /// Gets all known busy pipes and their status info
-    /// </summary>
-    public Dictionary<string, string> GetBusyPipes()
-    {
-        lock (_lock)
-        {
-            return new Dictionary<string, string>(_busyPipes);
-        }
-    }
-
-    /// <summary>
-    /// Removes a pipe from the busy list (when it becomes standby or dead)
-    /// </summary>
-    public void RemoveFromBusy(string pipeName)
-    {
-        lock (_lock)
-        {
-            _busyPipes.Remove(pipeName);
-        }
-    }
-
-    /// <summary>
-    /// Clears a dead pipe from all caches
+    /// Clears a dead pipe from active pipe
     /// </summary>
     public void ClearDeadPipe(string pipeName)
     {
         lock (_lock)
         {
-            _busyPipes.Remove(pipeName);
             if (ActivePipeName == pipeName)
             {
                 ActivePipeName = null;
