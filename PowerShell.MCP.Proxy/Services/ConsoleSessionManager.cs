@@ -27,12 +27,30 @@ public class ConsoleSessionManager
     /// </summary>
     public string? ActivePipeName { get; private set; }
 
+    /// <summary>
+    /// Known busy pipe PIDs (tracked across tool calls to detect externally closed consoles)
+    /// </summary>
+    private readonly HashSet<int> _knownBusyPids = new();
+
     private ConsoleSessionManager() { }
 
     /// <summary>
     /// Generates a PID-based pipe name for proxy-started consoles
     /// </summary>
     public static string GetPipeNameForPid(int pid) => $"{DefaultPipeName}.{pid}";
+
+    /// <summary>
+    /// Extracts PID from pipe name (format: PowerShell.MCP.Communication.{PID})
+    /// </summary>
+    public static int? GetPidFromPipeName(string pipeName)
+    {
+        var parts = pipeName.Split('.');
+        if (parts.Length > 0 && int.TryParse(parts[^1], out var pid))
+        {
+            return pid;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Sets the active pipe name
@@ -50,7 +68,42 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Clears a dead pipe from active pipe
+    /// Marks a pipe as busy
+    /// </summary>
+    public void MarkPipeBusy(int pid)
+    {
+        lock (_lock)
+        {
+            _knownBusyPids.Add(pid);
+        }
+    }
+
+    /// <summary>
+    /// Removes a pipe from busy tracking
+    /// </summary>
+    public void UnmarkPipeBusy(int pid)
+    {
+        lock (_lock)
+        {
+            _knownBusyPids.Remove(pid);
+        }
+    }
+
+    /// <summary>
+    /// Gets known busy PIDs and clears the set. Returns PIDs that were tracked as busy.
+    /// </summary>
+    public HashSet<int> ConsumeKnownBusyPids()
+    {
+        lock (_lock)
+        {
+            var result = new HashSet<int>(_knownBusyPids);
+            _knownBusyPids.Clear();
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Clears a dead pipe from active pipe and busy tracking
     /// </summary>
     public void ClearDeadPipe(string pipeName)
     {
@@ -59,6 +112,11 @@ public class ConsoleSessionManager
             if (ActivePipeName == pipeName)
             {
                 ActivePipeName = null;
+            }
+            var pid = GetPidFromPipeName(pipeName);
+            if (pid.HasValue)
+            {
+                _knownBusyPids.Remove(pid.Value);
             }
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}'");
         }

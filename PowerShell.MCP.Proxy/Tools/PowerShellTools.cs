@@ -1,5 +1,6 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Text;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Models;
@@ -14,6 +15,7 @@ public class PowerShellTools
     /// <summary>
     /// Finds a ready pipe. Returns (pipeName, consoleSwitched, allPipesStatusInfo).
     /// allPipesStatusInfo contains status of all pipes when no ready pipe is found.
+    /// Also detects externally closed consoles by comparing known busy PIDs with current pipes.
     /// </summary>
     private static async Task<(string? readyPipeName, bool consoleSwitched, string? allPipesStatusInfo)> FindReadyPipeAsync(
         IPowerShellService powerShellService,
@@ -21,6 +23,23 @@ public class PowerShellTools
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var allPipesStatus = new List<string>();
+
+        // Detect externally closed consoles
+        var previouslyBusyPids = sessionManager.ConsumeKnownBusyPids();
+        var currentPipes = sessionManager.EnumeratePipes().ToList();
+        var currentPids = currentPipes
+            .Select(ConsoleSessionManager.GetPidFromPipeName)
+            .Where(p => p.HasValue)
+            .Select(p => p!.Value)
+            .ToHashSet();
+
+        foreach (var pid in previouslyBusyPids)
+        {
+            if (!currentPids.Contains(pid))
+            {
+                allPipesStatus.Add($"  - ⚠ Console PID {pid} was closed");
+            }
+        }
 
         // Step 1: Check ActivePipeName first
         var activePipe = sessionManager.ActivePipeName;
@@ -31,20 +50,23 @@ public class PowerShellTools
             if (status == null)
             {
                 sessionManager.ClearDeadPipe(activePipe);
-                allPipesStatus.Add($"  - {activePipe}: dead (no response)");
+                var pid = ConsoleSessionManager.GetPidFromPipeName(activePipe);
+                allPipesStatus.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
             }
             else if (status.Status == "standby" || status.Status == "completed")
             {
-                return (activePipe, false, null);
+                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
+                return (activePipe, false, BuildClosedConsoleInfo(allPipesStatus));
             }
             else // busy
             {
+                if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
                 allPipesStatus.Add($"  - {activePipe}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
             }
         }
 
         // Step 2: Check all other pipes via EnumeratePipes
-        foreach (var pipeName in sessionManager.EnumeratePipes())
+        foreach (var pipeName in currentPipes)
         {
             if (pipeName == activePipe) continue; // Already checked
 
@@ -53,16 +75,19 @@ public class PowerShellTools
             if (status == null)
             {
                 sessionManager.ClearDeadPipe(pipeName);
-                allPipesStatus.Add($"  - {pipeName}: dead (no response)");
+                var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+                allPipesStatus.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
                 continue;
             }
 
             if (status.Status == "standby" || status.Status == "completed")
             {
+                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
                 sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, activePipe != null, null);
+                return (pipeName, activePipe != null, BuildClosedConsoleInfo(allPipesStatus));
             }
 
+            if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
             allPipesStatus.Add($"  - {pipeName}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
         }
 
@@ -71,6 +96,16 @@ public class PowerShellTools
             ? "All pipes status:\n" + string.Join("\n", allPipesStatus)
             : "No pipes found.";
         return (null, false, statusInfo);
+    }
+
+    /// <summary>
+    /// Builds closed console info string if there are any closed console messages.
+    /// </summary>
+    private static string? BuildClosedConsoleInfo(List<string> allPipesStatus)
+    {
+        var closedMessages = allPipesStatus.Where(s => s.Contains("was closed")).ToList();
+        if (closedMessages.Count == 0) return null;
+        return string.Join("\n", closedMessages);
     }
 
     private static string FormatBusyStatus(GetStatusResponse status)
@@ -104,6 +139,7 @@ public class PowerShellTools
             }
             else if (status.Status == "completed")
             {
+                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
                 var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
                 if (!string.IsNullOrEmpty(output))
                 {
@@ -120,9 +156,13 @@ public class PowerShellTools
             }
             else if (status.Status == "busy")
             {
+                if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
                 busyStatusInfo.AppendLine(FormatBusyStatus(status));
             }
-            // standby: nothing to do
+            else if (status.Status == "standby")
+            {
+                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
+            }
         }
 
         return (completedOutput.ToString(), busyStatusInfo.ToString());
@@ -251,6 +291,8 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // Clamp timeout to valid range
         timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
 
+
+        var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
         var (readyPipeName, consoleSwitched, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
 
@@ -261,7 +303,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
 
             // Collect completed outputs and busy status (after console start, using new pipe as exclude)
-            var sessionManager = ConsoleSessionManager.Instance;
             var newPipeName = sessionManager.ActivePipeName;
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
@@ -305,8 +346,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = readyPipeName.Split('.').LastOrDefault() ?? "unknown";
 
-            // Build response: message first + locationResult + completedOutputs + busy status
+            // Build response: closedConsoleInfo + message + locationResult + completedOutputs + busy status
             var response = new StringBuilder();
+            if (!string.IsNullOrEmpty(allPipesStatusInfo))
+            {
+                response.AppendLine(allPipesStatusInfo);
+            }
             response.AppendLine($"Switched to console PID#{pid}. Pipeline NOT executed - verify location and re-execute.");
             response.AppendLine();
             response.AppendLine(locationResult);
@@ -335,19 +380,35 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             const string stillRunningMessage = "⧗ Pipeline is still running";
             if (result.StartsWith(stillRunningMessage, StringComparison.Ordinal))
             {
-                // Include scope warning if present
+                // Mark this pipe as busy for tracking
+                var pid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
+                if (pid.HasValue) sessionManager.MarkPipeBusy(pid.Value);
+
+                // Build response with closed console info + scope warning
+                var timeoutResponse = new StringBuilder();
+                if (!string.IsNullOrEmpty(allPipesStatusInfo))
+                {
+                    timeoutResponse.AppendLine(allPipesStatusInfo);
+                    timeoutResponse.AppendLine();
+                }
                 if (!string.IsNullOrEmpty(scopeWarning))
                 {
-                    return scopeWarning + "\n\n" + result;
+                    timeoutResponse.AppendLine(scopeWarning);
+                    timeoutResponse.AppendLine();
                 }
-                return result;
+                timeoutResponse.Append(result);
+                return timeoutResponse.ToString();
             }
 
             // Normal case - collect other pipes' cached outputs and busy status
             var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
-            // Build response: scopeWarning + completedOutput + busyStatusInfo + result
+            // Build response: closedConsoleInfo + scopeWarning + completedOutput + busyStatusInfo + result
             var response = new StringBuilder();
+            if (!string.IsNullOrEmpty(allPipesStatusInfo))
+            {
+                response.AppendLine(allPipesStatusInfo);
+            }
             if (!string.IsNullOrEmpty(scopeWarning))
             {
                 response.AppendLine(scopeWarning);
@@ -390,32 +451,98 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         const int pollIntervalMs = 1000;
         var endTime = DateTime.UtcNow.AddSeconds(timeout_seconds);
 
+        // Detect externally closed consoles - return immediately if any previously busy pipe is gone
+        var closedConsoleMessages = new List<string>();
+        var previouslyBusyPids = sessionManager.ConsumeKnownBusyPids();
+        var currentPipes = sessionManager.EnumeratePipes().ToList();
+        var currentPids = currentPipes
+            .Select(ConsoleSessionManager.GetPidFromPipeName)
+            .Where(p => p.HasValue)
+            .Select(p => p!.Value)
+            .ToHashSet();
+
+        foreach (var pid in previouslyBusyPids)
+        {
+            if (!currentPids.Contains(pid))
+            {
+                closedConsoleMessages.Add($"⚠ Console PID {pid} was closed");
+            }
+        }
+
+        // If any previously busy pipe was closed, return immediately with remaining busy status
+        if (closedConsoleMessages.Count > 0)
+        {
+            var remainingBusyInfo = new StringBuilder();
+            foreach (var pipeName in currentPipes)
+            {
+                var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+                if (status?.Status == "busy")
+                {
+                    if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
+                    remainingBusyInfo.AppendLine(FormatBusyStatus(status));
+                }
+            }
+
+            var closedResponse = new StringBuilder();
+            closedResponse.AppendLine(string.Join("\n", closedConsoleMessages));
+            if (remainingBusyInfo.Length > 0)
+            {
+                closedResponse.AppendLine();
+                closedResponse.Append(remainingBusyInfo.ToString().TrimEnd());
+            }
+            return closedResponse.ToString();
+        }
+
         // First pass: identify busy pipes and check for completed/dead
         var busyPipes = new List<string>();
         var userCommandBusyInfo = new StringBuilder();
 
-        foreach (var pipeName in sessionManager.EnumeratePipes())
+        foreach (var pipeName in currentPipes)
         {
             var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
 
             if (status == null)
             {
+                // Dead pipe detected during first pass - return immediately
                 sessionManager.ClearDeadPipe(pipeName);
-                continue;
+                var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+
+                // Check remaining pipes for busy status
+                var remainingBusyInfo = new StringBuilder();
+                foreach (var otherPipe in currentPipes.Where(p => p != pipeName))
+                {
+                    var otherStatus = await powerShellService.GetStatusFromPipeAsync(otherPipe, cancellationToken);
+                    if (otherStatus?.Status == "busy")
+                    {
+                        if (otherStatus.Pid > 0) sessionManager.MarkPipeBusy(otherStatus.Pid);
+                        remainingBusyInfo.AppendLine(FormatBusyStatus(otherStatus));
+                    }
+                }
+
+                var deadResponse = new StringBuilder();
+                deadResponse.AppendLine($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
+                if (remainingBusyInfo.Length > 0)
+                {
+                    deadResponse.AppendLine();
+                    deadResponse.Append(remainingBusyInfo.ToString().TrimEnd());
+                }
+                return deadResponse.ToString();
             }
 
             if (status.Status == "completed")
             {
+                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
                 // Consume output and return immediately
                 var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
 
                 // Check remaining pipes for busy status
                 var remainingBusyInfo = new StringBuilder();
-                foreach (var otherPipe in sessionManager.EnumeratePipes().Where(p => p != pipeName))
+                foreach (var otherPipe in currentPipes.Where(p => p != pipeName))
                 {
                     var otherStatus = await powerShellService.GetStatusFromPipeAsync(otherPipe, cancellationToken);
                     if (otherStatus?.Status == "busy")
                     {
+                        if (otherStatus.Pid > 0) sessionManager.MarkPipeBusy(otherStatus.Pid);
                         remainingBusyInfo.AppendLine(FormatBusyStatus(otherStatus));
                     }
                 }
@@ -425,15 +552,25 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                     output = "Command completed with no output.";
                 }
 
+                var response = new StringBuilder();
+                if (closedConsoleMessages.Count > 0)
+                {
+                    response.AppendLine(string.Join("\n", closedConsoleMessages));
+                    response.AppendLine();
+                }
+                response.Append(output);
                 if (remainingBusyInfo.Length > 0)
                 {
-                    return $"{output}\n\n{remainingBusyInfo.ToString().TrimEnd()}";
+                    response.AppendLine();
+                    response.AppendLine();
+                    response.Append(remainingBusyInfo.ToString().TrimEnd());
                 }
-                return output;
+                return response.ToString();
             }
 
             if (status.Status == "busy")
             {
+                if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
                 if (status.Pipeline == "(user command)")
                 {
                     userCommandBusyInfo.AppendLine(FormatBusyStatus(status));
@@ -443,20 +580,33 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                     busyPipes.Add(pipeName);
                 }
             }
-            // standby: nothing to do
+            else if (status.Status == "standby")
+            {
+                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
+            }
         }
 
         // No MCP-initiated busy pipes - nothing to wait for
         if (busyPipes.Count == 0)
         {
+            var response = new StringBuilder();
+            if (closedConsoleMessages.Count > 0)
+            {
+                response.AppendLine(string.Join("\n", closedConsoleMessages));
+                response.AppendLine();
+            }
             if (userCommandBusyInfo.Length > 0)
             {
-                return $"No commands to wait for completion.\n\n{userCommandBusyInfo.ToString().TrimEnd()}";
+                response.AppendLine($"No commands to wait for completion.");
+                response.AppendLine();
+                response.Append(userCommandBusyInfo.ToString().TrimEnd());
+                return response.ToString();
             }
-            return "No commands to wait for completion.";
+            response.Append("No commands to wait for completion.");
+            return response.ToString();
         }
 
-        // Poll only the busy pipes until timeout or completion
+        // Poll only the busy pipes until timeout or completion/dead
         while (DateTime.UtcNow < endTime)
         {
             // Wait before next poll
@@ -470,13 +620,37 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
                 if (status == null)
                 {
+                    // Dead pipe detected - return immediately
                     sessionManager.ClearDeadPipe(pipeName);
                     busyPipes.Remove(pipeName);
-                    continue;
+                    var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+                    closedConsoleMessages.Add($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
+
+                    // Check remaining busy pipes for status
+                    var remainingBusyInfo = new StringBuilder();
+                    foreach (var otherPipe in busyPipes)
+                    {
+                        var otherStatus = await powerShellService.GetStatusFromPipeAsync(otherPipe, cancellationToken);
+                        if (otherStatus?.Status == "busy")
+                        {
+                            if (otherStatus.Pid > 0) sessionManager.MarkPipeBusy(otherStatus.Pid);
+                            remainingBusyInfo.AppendLine(FormatBusyStatus(otherStatus));
+                        }
+                    }
+
+                    var deadResponse = new StringBuilder();
+                    deadResponse.AppendLine(string.Join("\n", closedConsoleMessages));
+                    if (remainingBusyInfo.Length > 0)
+                    {
+                        deadResponse.AppendLine();
+                        deadResponse.Append(remainingBusyInfo.ToString().TrimEnd());
+                    }
+                    return deadResponse.ToString();
                 }
 
                 if (status.Status == "completed")
                 {
+                    if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
                     // Consume output and return immediately
                     var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
 
@@ -487,6 +661,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                         var otherStatus = await powerShellService.GetStatusFromPipeAsync(otherPipe, cancellationToken);
                         if (otherStatus?.Status == "busy")
                         {
+                            if (otherStatus.Pid > 0) sessionManager.MarkPipeBusy(otherStatus.Pid);
                             remainingBusyInfo.AppendLine(FormatBusyStatus(otherStatus));
                         }
                     }
@@ -496,15 +671,25 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                         output = "Command completed with no output.";
                     }
 
+                    var response = new StringBuilder();
+                    if (closedConsoleMessages.Count > 0)
+                    {
+                        response.AppendLine(string.Join("\n", closedConsoleMessages));
+                        response.AppendLine();
+                    }
+                    response.Append(output);
                     if (remainingBusyInfo.Length > 0)
                     {
-                        return $"{output}\n\n{remainingBusyInfo.ToString().TrimEnd()}";
+                        response.AppendLine();
+                        response.AppendLine();
+                        response.Append(remainingBusyInfo.ToString().TrimEnd());
                     }
-                    return output;
+                    return response.ToString();
                 }
 
                 if (status.Status == "standby")
                 {
+                    if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
                     // Console returned to standby without caching (unexpected)
                     busyPipes.Remove(pipeName);
                 }
@@ -519,12 +704,17 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         // Timeout - collect final status
         var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
-        return BuildWaitResponse(finalCompletedOutput, finalBusyStatusInfo);
+        return BuildWaitResponse(closedConsoleMessages, finalCompletedOutput, finalBusyStatusInfo);
     }
 
-    private static string BuildWaitResponse(string completedOutput, string busyStatusInfo)
+    private static string BuildWaitResponse(List<string> closedConsoleMessages, string completedOutput, string busyStatusInfo)
     {
         var response = new StringBuilder();
+        if (closedConsoleMessages.Count > 0)
+        {
+            response.AppendLine(string.Join("\n", closedConsoleMessages));
+            response.AppendLine();
+        }
         if (completedOutput.Length > 0)
         {
             response.Append(completedOutput);
