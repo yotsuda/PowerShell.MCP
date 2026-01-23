@@ -265,10 +265,6 @@ When calling invoke_expression for file operations, ALWAYS use these cmdlets. NE
 
 Note: All cmdlets support -LiteralPath for exact paths and accept arrays directly (no loops needed). For LineRange, use -1 or 0 for end of file (e.g., 100,-1).
 
-⚡ Viewing .md (Windows):
-Install-Module MarkdownViewer
-Show-MarkdownViewer $reportPath  # Mermaid, KaTeX, auto-refresh on save
-
 Examples:
   ✅ CORRECT: invoke_expression('Add-LinesToFile -Path file.cs -Content $code')
   ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 10,20')
