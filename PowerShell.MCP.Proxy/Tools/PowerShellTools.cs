@@ -182,6 +182,13 @@ public class PowerShellTools
         return normalized[..(maxLength - 3)] + "...";
     }
 
+    private static string GetPidString(string? pipeName)
+    {
+        if (pipeName == null) return "unknown";
+        var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+        return pid?.ToString() ?? "unknown";
+    }
+
     [McpServerTool]
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
@@ -304,7 +311,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
-            var pid = newPipeName?.Split('.').LastOrDefault() ?? "unknown";
+            var pid = GetPidString(newPipeName);
 
             // Build response: busy status first + message + startResult + completedOutputs
             var response = new StringBuilder();
@@ -335,7 +342,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
-            var pid = readyPipeName.Split('.').LastOrDefault() ?? "unknown";
+            var pid = GetPidString(readyPipeName);
 
             // Build response: busy status first + closedConsoleInfo + message + locationResult + completedOutputs
             var response = new StringBuilder();
@@ -393,11 +400,15 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                     var newPipeName = sessionManager.ActivePipeName;
                                     var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
-                                    var newPid = newPipeName?.Split('.').LastOrDefault() ?? "unknown";
+                                    var newPid = GetPidString(newPipeName);
 
                                     var busyResponse = new StringBuilder();
-                                    // Busy status at the top
+                                    // Busy status at the top (current pipe first, then other pipes)
                                     busyResponse.AppendLine(FormatBusyStatus(jsonResponse));
+                                    if (busyInfo.Length > 0)
+                                    {
+                                        busyResponse.Append(busyInfo);
+                                    }
                                     busyResponse.AppendLine();
                                     busyResponse.AppendLine($"Started new console PID#{newPid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
                                     busyResponse.AppendLine();
@@ -410,11 +421,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                     {
                                         busyResponse.AppendLine();
                                         busyResponse.Append(completedOutputs);
-                                    }
-                                    if (busyInfo.Length > 0)
-                                    {
-                                        busyResponse.AppendLine();
-                                        busyResponse.Append(busyInfo);
                                     }
                                     return busyResponse.ToString();
                                 }
