@@ -246,7 +246,7 @@ public static class PwshLauncherWindows
             {
                 // Escape single quotes for PowerShell
                 var escaped = startupMessage.Replace("'", "''");
-                command = $"Write-Host '{escaped}' -ForegroundColor Green; Import-Module PowerShell.MCP,PSReadLine";
+                command = $"Write-Host '{escaped}' -ForegroundColor Green; Write-Host ''; Import-Module PowerShell.MCP,PSReadLine";
             }
             else
             {
