@@ -306,8 +306,13 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = newPipeName?.Split('.').LastOrDefault() ?? "unknown";
 
-            // Build response: message first + startResult (without redundant message) + completedOutputs + busy status
+            // Build response: busy status first + message + startResult + completedOutputs
             var response = new StringBuilder();
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+                response.AppendLine();
+            }
             response.AppendLine($"Started new console PID#{pid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
             response.AppendLine();
             response.Append(startResult.Replace(
@@ -319,17 +324,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             {
                 response.AppendLine();
                 response.Append(completedOutputs);
-            }
-            if (busyStatusInfo.Length > 0)
-            {
-                response.AppendLine();
-                response.Append(busyStatusInfo);
-            }
-            if (!string.IsNullOrEmpty(allPipesStatusInfo))
-            {
-                response.AppendLine();
-                response.AppendLine("Why new console was started:");
-                response.Append(allPipesStatusInfo);
             }
             return response.ToString();
         }
@@ -343,8 +337,13 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = readyPipeName.Split('.').LastOrDefault() ?? "unknown";
 
-            // Build response: closedConsoleInfo + message + locationResult + completedOutputs + busy status
+            // Build response: busy status first + closedConsoleInfo + message + locationResult + completedOutputs
             var response = new StringBuilder();
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+                response.AppendLine();
+            }
             if (!string.IsNullOrEmpty(allPipesStatusInfo))
             {
                 response.AppendLine(allPipesStatusInfo);
@@ -356,11 +355,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             {
                 response.AppendLine();
                 response.Append(completedOutputs);
-            }
-            if (busyStatusInfo.Length > 0)
-            {
-                response.AppendLine();
-                response.Append(busyStatusInfo);
             }
             return response.ToString();
         }
@@ -433,8 +427,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 // Collect completed outputs and busy status from other pipes
                                 var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
-                                // Build timeout response
+                                // Build timeout response: busy status first + closedConsoleInfo + completedOutput + scopeWarning + timeout message
                                 var timeoutResponse = new StringBuilder();
+                                if (timeoutBusyStatusInfo.Length > 0)
+                                {
+                                    timeoutResponse.Append(timeoutBusyStatusInfo);
+                                }
                                 if (!string.IsNullOrEmpty(allPipesStatusInfo))
                                 {
                                     timeoutResponse.AppendLine(allPipesStatusInfo);
@@ -443,10 +441,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 if (timeoutCompletedOutput.Length > 0)
                                 {
                                     timeoutResponse.Append(timeoutCompletedOutput);
-                                }
-                                if (timeoutBusyStatusInfo.Length > 0)
-                                {
-                                    timeoutResponse.Append(timeoutBusyStatusInfo);
                                 }
                                 if (!string.IsNullOrEmpty(scopeWarning))
                                 {
@@ -476,6 +470,10 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
                                 var successResponse = new StringBuilder();
+                                if (busyStatusInfo.Length > 0)
+                                {
+                                    successResponse.Append(busyStatusInfo);
+                                }
                                 if (!string.IsNullOrEmpty(allPipesStatusInfo))
                                 {
                                     successResponse.AppendLine(allPipesStatusInfo);
@@ -487,10 +485,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 if (completedOutput.Length > 0)
                                 {
                                     successResponse.Append(completedOutput);
-                                }
-                                if (busyStatusInfo.Length > 0)
-                                {
-                                    successResponse.Append(busyStatusInfo);
                                 }
                                 if (successResponse.Length > 0)
                                 {
@@ -668,6 +662,10 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     private static string BuildWaitResponse(List<string> closedConsoleMessages, string completedOutput, string busyStatusInfo)
     {
         var response = new StringBuilder();
+        if (busyStatusInfo.Length > 0)
+        {
+            response.Append(busyStatusInfo);
+        }
         if (closedConsoleMessages.Count > 0)
         {
             response.AppendLine(string.Join("\n", closedConsoleMessages));
@@ -679,7 +677,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         }
         if (busyStatusInfo.Length > 0)
         {
-            response.Append(busyStatusInfo);
             response.AppendLine();
             response.Append("Use wait_for_completion tool to wait and retrieve the result.");
         }
@@ -707,16 +704,16 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         var newPipeName = sessionManager.ActivePipeName;
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
-        // Build response: completed output + busy status + start message
+        // Build response: busy status first + completed output + start message
         var response = new StringBuilder();
-        if (completedOutput.Length > 0)
-        {
-            response.Append(completedOutput);
-        }
         if (busyStatusInfo.Length > 0)
         {
             response.Append(busyStatusInfo);
             response.AppendLine();
+        }
+        if (completedOutput.Length > 0)
+        {
+            response.Append(completedOutput);
         }
         response.Append(startResult);
         return response.ToString();
