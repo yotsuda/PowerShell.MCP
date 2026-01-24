@@ -372,12 +372,16 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         try
         {
             var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, timeout_seconds, cancellationToken);
-            // Parse JSON response from DLL
-            if (result.StartsWith("{"))
+            // Parse response: header JSON (first line) + "\n\n" + body
+            var separatorIndex = result.IndexOf("\n\n");
+            var jsonHeader = separatorIndex >= 0 ? result.Substring(0, separatorIndex) : result;
+            var body = separatorIndex >= 0 ? result.Substring(separatorIndex + 2) : "";
+
+            if (jsonHeader.StartsWith("{"))
             {
                 try
                 {
-                    var jsonResponse = JsonSerializer.Deserialize(result, GetStatusResponseContext.Default.GetStatusResponse);
+                    var jsonResponse = JsonSerializer.Deserialize(jsonHeader, GetStatusResponseContext.Default.GetStatusResponse);
                     if (jsonResponse != null)
                     {
                         switch (jsonResponse.Status)
@@ -457,7 +461,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 return cachedResponse.ToString();
 
                             case "success":
-                                // Normal completion - extract result and format response
+                                // Normal completion - use body as result
                                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
                                 var successResponse = new StringBuilder();
@@ -481,7 +485,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 {
                                     successResponse.AppendLine();
                                 }
-                                successResponse.Append(jsonResponse.Result ?? "");
+                                successResponse.Append(body);
                                 return successResponse.ToString();
                         }
                     }

@@ -540,20 +540,20 @@ Please provide how to update the MCP client configuration to the user.";
                     }
                     else
                     {
-                        // Normal completion - consume all cached outputs and return as JSON
+                        // Normal completion - return header JSON + blank line + body
                         var outputs = ExecutionState.ConsumeCachedOutputs();
                         var resultText = string.Join("\n\n", outputs);
-                        var successResponse = JsonSerializer.Serialize(new
+                        var header = JsonSerializer.Serialize(new
                         {
                             pid,
                             status = "success",
                             pipeline = runningPipeline,
-                            duration = Math.Round(elapsed, 2),
-                            result = resultText
+                            duration = Math.Round(elapsed, 2)
                         });
+                        var response = header + "\n\n" + resultText;
                         try
                         {
-                            await SendMessageAsync(pipeServer, successResponse, cancellationToken);
+                            await SendMessageAsync(pipeServer, response, cancellationToken);
                         }
                         catch
                         {
