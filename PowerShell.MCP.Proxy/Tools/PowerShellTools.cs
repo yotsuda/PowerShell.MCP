@@ -424,10 +424,13 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 // Mark this pipe as busy for tracking
                                 if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(jsonResponse.Pid);
 
+                                // Consume cached output from current pipe (if any)
+                                var currentPipeCachedOutput = await powerShellService.ConsumeOutputFromPipeAsync(readyPipeName, cancellationToken);
+
                                 // Collect completed outputs and busy status from other pipes
                                 var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
-                                // Build timeout response: busy status first + closedConsoleInfo + completedOutput + scopeWarning + timeout message
+                                // Build timeout response: busy status first + closedConsoleInfo + cachedOutput + completedOutput + scopeWarning + timeout message
                                 var timeoutResponse = new StringBuilder();
                                 if (timeoutBusyStatusInfo.Length > 0)
                                 {
@@ -436,6 +439,11 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 if (!string.IsNullOrEmpty(allPipesStatusInfo))
                                 {
                                     timeoutResponse.AppendLine(allPipesStatusInfo);
+                                    timeoutResponse.AppendLine();
+                                }
+                                if (!string.IsNullOrEmpty(currentPipeCachedOutput))
+                                {
+                                    timeoutResponse.AppendLine(currentPipeCachedOutput);
                                     timeoutResponse.AppendLine();
                                 }
                                 if (timeoutCompletedOutput.Length > 0)
