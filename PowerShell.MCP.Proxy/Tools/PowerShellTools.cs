@@ -304,7 +304,11 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             // No ready pipe - auto-start
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+            var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+            if (!success)
+            {
+                return locationResult; // Error message
+            }
 
             // Collect completed outputs and busy status (after console start, using new pipe as exclude)
             var newPipeName = sessionManager.ActivePipeName;
@@ -313,7 +317,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = GetPidString(newPipeName);
 
-            // Build response: busy status first + message + startResult + completedOutputs
+            // Build response: busy status first + message + location + completedOutputs
             var response = new StringBuilder();
             if (busyStatusInfo.Length > 0)
             {
@@ -322,13 +326,10 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             }
             response.AppendLine($"Started new console PID#{pid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
             response.AppendLine();
-            response.Append(startResult.Replace(
-                "PowerShell console started successfully with PowerShell.MCP module imported.\r\n\r\n",
-                "").Replace(
-                "PowerShell console started successfully with PowerShell.MCP module imported.\n\n",
-                ""));
+            response.Append(locationResult);
             if (completedOutputs.Length > 0)
             {
+                response.AppendLine();
                 response.AppendLine();
                 response.Append(completedOutputs);
             }
@@ -395,7 +396,11 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 {
                                     // Auto-start new console
                                     Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-starting new console...");
-                                    var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+                                    var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+                                    if (!success)
+                                    {
+                                        return locationResult; // Error message
+                                    }
 
                                     var newPipeName = sessionManager.ActivePipeName;
                                     var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
@@ -412,13 +417,10 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                     busyResponse.AppendLine();
                                     busyResponse.AppendLine($"Started new console PID#{newPid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
                                     busyResponse.AppendLine();
-                                    busyResponse.Append(startResult.Replace(
-                                        "PowerShell console started successfully with PowerShell.MCP module imported.\r\n\r\n",
-                                        "").Replace(
-                                        "PowerShell console started successfully with PowerShell.MCP module imported.\n\n",
-                                        ""));
+                                    busyResponse.Append(locationResult);
                                     if (completedOutputs.Length > 0)
                                     {
+                                        busyResponse.AppendLine();
                                         busyResponse.AppendLine();
                                         busyResponse.Append(completedOutputs);
                                     }
@@ -711,14 +713,18 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         string? banner = null,
         CancellationToken cancellationToken = default)
     {
-        var startResult = await StartPowershellConsoleInternal(powerShellService, banner, cancellationToken);
+        var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, banner, cancellationToken);
+        if (!success)
+        {
+            return locationResult; // Error message
+        }
 
         // Collect busy status from Proxy side
         var sessionManager = ConsoleSessionManager.Instance;
         var newPipeName = sessionManager.ActivePipeName;
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
-        // Build response: busy status first + completed output + start message
+        // Build response: busy status first + completed output + start message + location
         var response = new StringBuilder();
         if (busyStatusInfo.Length > 0)
         {
@@ -729,14 +735,17 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             response.Append(completedOutput);
         }
-        response.Append(startResult);
+        response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
+        response.AppendLine();
+        response.Append(locationResult);
         return response.ToString();
     }
 
     /// <summary>
-    /// Internal method to start PowerShell console
+    /// Internal method to start PowerShell console.
+    /// Returns (success, result) where result is locationResult on success, or error message on failure.
     /// </summary>
-    private static async Task<string> StartPowershellConsoleInternal(
+    private static async Task<(bool success, string result)> StartPowershellConsoleInternal(
         IPowerShellService powerShellService,
         string? banner,
         CancellationToken cancellationToken)
@@ -751,7 +760,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             if (!success)
             {
-                return "Failed to start PowerShell console or establish Named Pipe connection.\n\nPossible causes:\n- No supported terminal emulator found (gnome-terminal, konsole, xfce4-terminal, xterm, etc.)\n- Terminal emulator failed to start\n- PowerShell.MCP module failed to initialize\n\nPlease ensure a terminal emulator is installed and try again.";
+                return (false, "Failed to start PowerShell console or establish Named Pipe connection.\n\nPossible causes:\n- No supported terminal emulator found (gnome-terminal, konsole, xfce4-terminal, xterm, etc.)\n- Terminal emulator failed to start\n- PowerShell.MCP module failed to initialize\n\nPlease ensure a terminal emulator is installed and try again.");
             }
 
             // Register the new console
@@ -760,21 +769,16 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), getting current location...");
 
             // Get current location from new console
-            var newLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);
+            var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);
 
             Console.Error.WriteLine("[INFO] PowerShell console startup completed");
 
-            // Build response (busy info collection is done by caller)
-            var response = new StringBuilder();
-            response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
-            response.AppendLine();
-            response.Append(newLocationResult);
-            return response.ToString();
+            return (true, locationResult);
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ERROR] StartPowershellConsole failed: {ex.Message}");
-            return $"Failed to start PowerShell console: {ex.Message}\n\nPlease check if a terminal emulator is available and try again.";
+            return (false, $"Failed to start PowerShell console: {ex.Message}\n\nPlease check if a terminal emulator is available and try again.");
         }
     }
 
