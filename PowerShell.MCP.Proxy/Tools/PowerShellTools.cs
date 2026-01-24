@@ -5,6 +5,7 @@ using System.Text;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Models;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace PowerShell.MCP.Proxy.Tools;
@@ -371,58 +372,127 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         try
         {
             var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, timeout_seconds, cancellationToken);
-
-            // Check if pipeline is still running (timeout case)
-            const string stillRunningMessage = "⧗ Pipeline is still running";
-            if (result.StartsWith(stillRunningMessage, StringComparison.Ordinal))
+            // Parse JSON response from DLL
+            if (result.StartsWith("{"))
             {
-                // Mark this pipe as busy for tracking
-                var pid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
-                if (pid.HasValue) sessionManager.MarkPipeBusy(pid.Value);
-
-                // Build response with closed console info + scope warning
-                var timeoutResponse = new StringBuilder();
-                if (!string.IsNullOrEmpty(allPipesStatusInfo))
+                try
                 {
-                    timeoutResponse.AppendLine(allPipesStatusInfo);
-                    timeoutResponse.AppendLine();
+                    var jsonResponse = JsonSerializer.Deserialize(result, GetStatusResponseContext.Default.GetStatusResponse);
+                    if (jsonResponse != null)
+                    {
+                        switch (jsonResponse.Status)
+                        {
+                            case "busy":
+                                // Mark this pipe as busy for tracking
+                                if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(jsonResponse.Pid);
+
+                                if (jsonResponse.Reason == "user_command" || jsonResponse.Reason == "mcp_command")
+                                {
+                                    // Auto-start new console
+                                    Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-starting new console...");
+                                    var startResult = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+
+                                    var newPipeName = sessionManager.ActivePipeName;
+                                    var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
+
+                                    var newPid = newPipeName?.Split('.').LastOrDefault() ?? "unknown";
+
+                                    var busyResponse = new StringBuilder();
+                                    busyResponse.AppendLine($"Started new console PID#{newPid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
+                                    busyResponse.AppendLine();
+                                    busyResponse.Append(startResult.Replace(
+                                        "PowerShell console started successfully with PowerShell.MCP module imported.\r\n\r\n",
+                                        "").Replace(
+                                        "PowerShell console started successfully with PowerShell.MCP module imported.\n\n",
+                                        ""));
+                                    if (completedOutputs.Length > 0)
+                                    {
+                                        busyResponse.AppendLine();
+                                        busyResponse.Append(completedOutputs);
+                                    }
+                                    if (busyInfo.Length > 0)
+                                    {
+                                        busyResponse.AppendLine();
+                                        busyResponse.Append(busyInfo);
+                                    }
+                                    busyResponse.AppendLine();
+                                    busyResponse.AppendLine("Why new console was started:");
+                                    busyResponse.Append(FormatBusyStatus(jsonResponse));
+                                    return busyResponse.ToString();
+                                }
+                                break;
+
+                            case "timeout":
+                                // Mark this pipe as busy for tracking
+                                if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(jsonResponse.Pid);
+
+                                // Build timeout response
+                                var timeoutResponse = new StringBuilder();
+                                if (!string.IsNullOrEmpty(allPipesStatusInfo))
+                                {
+                                    timeoutResponse.AppendLine(allPipesStatusInfo);
+                                    timeoutResponse.AppendLine();
+                                }
+                                if (!string.IsNullOrEmpty(scopeWarning))
+                                {
+                                    timeoutResponse.AppendLine(scopeWarning);
+                                    timeoutResponse.AppendLine();
+                                }
+                                timeoutResponse.AppendLine($"⧗ Pipeline is still running | pwsh PID: {jsonResponse.Pid} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s");
+                                timeoutResponse.AppendLine();
+                                timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
+                                return timeoutResponse.ToString();
+
+                            case "completed":
+                                // Result was cached - return status
+                                var cachedResponse = new StringBuilder();
+                                if (!string.IsNullOrEmpty(allPipesStatusInfo))
+                                {
+                                    cachedResponse.AppendLine(allPipesStatusInfo);
+                                    cachedResponse.AppendLine();
+                                }
+                                cachedResponse.AppendLine($"✓ Pipeline executed successfully | pwsh PID: {jsonResponse.Pid} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s");
+                                cachedResponse.AppendLine();
+                                cachedResponse.Append("Result cached. Will be returned on next tool call.");
+                                return cachedResponse.ToString();
+
+                            case "success":
+                                // Normal completion - extract result and format response
+                                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+
+                                var successResponse = new StringBuilder();
+                                if (!string.IsNullOrEmpty(allPipesStatusInfo))
+                                {
+                                    successResponse.AppendLine(allPipesStatusInfo);
+                                }
+                                if (!string.IsNullOrEmpty(scopeWarning))
+                                {
+                                    successResponse.AppendLine(scopeWarning);
+                                }
+                                if (completedOutput.Length > 0)
+                                {
+                                    successResponse.Append(completedOutput);
+                                }
+                                if (busyStatusInfo.Length > 0)
+                                {
+                                    successResponse.Append(busyStatusInfo);
+                                }
+                                if (successResponse.Length > 0)
+                                {
+                                    successResponse.AppendLine();
+                                }
+                                successResponse.Append(jsonResponse.Result ?? "");
+                                return successResponse.ToString();
+                        }
+                    }
                 }
-                if (!string.IsNullOrEmpty(scopeWarning))
+                catch
                 {
-                    timeoutResponse.AppendLine(scopeWarning);
-                    timeoutResponse.AppendLine();
+                    // Not valid JSON or parsing failed, return as-is
                 }
-                timeoutResponse.Append(result);
-                return timeoutResponse.ToString();
             }
 
-            // Normal case - collect other pipes' cached outputs and busy status
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
-
-            // Build response: closedConsoleInfo + scopeWarning + completedOutput + busyStatusInfo + result
-            var response = new StringBuilder();
-            if (!string.IsNullOrEmpty(allPipesStatusInfo))
-            {
-                response.AppendLine(allPipesStatusInfo);
-            }
-            if (!string.IsNullOrEmpty(scopeWarning))
-            {
-                response.AppendLine(scopeWarning);
-            }
-            if (completedOutput.Length > 0)
-            {
-                response.Append(completedOutput);
-            }
-            if (busyStatusInfo.Length > 0)
-            {
-                response.Append(busyStatusInfo);
-            }
-            if (response.Length > 0)
-            {
-                response.AppendLine();
-                response.Append(result);
-                return response.ToString();
-            }
+            // Fallback: return result as-is (shouldn't happen with new DLL)
             return result;
         }
         catch (Exception ex)

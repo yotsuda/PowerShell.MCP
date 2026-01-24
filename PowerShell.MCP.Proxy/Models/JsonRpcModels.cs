@@ -64,6 +64,12 @@ public class GetStatusResponse
 
     [JsonPropertyName("duration")]
     public double? Duration { get; set; }
+    [JsonPropertyName("reason")]
+    public string? Reason { get; set; }
+
+    [JsonPropertyName("result")]
+    public string? Result { get; set; }
+
 
     [JsonPropertyName("output")]
     public string? Output { get; set; }

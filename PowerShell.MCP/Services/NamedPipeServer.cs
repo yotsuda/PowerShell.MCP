@@ -1,4 +1,4 @@
-﻿using System.IO.Pipes;
+using System.IO.Pipes;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -89,6 +89,51 @@ public static class ExecutionState
     /// </summary>
     public static double UserCommandElapsedSeconds =>
         (DateTime.UtcNow - _lastHeartbeat).TotalSeconds;
+
+    /// <summary>
+    /// Waits for a heartbeat to confirm runspace availability.
+    /// If heartbeat was received recently (within recentThresholdMs), returns true immediately.
+    /// If more than heartbeatTimeoutMs has passed since last heartbeat, returns false immediately.
+    /// Otherwise waits until heartbeatTimeoutMs has passed since last heartbeat.
+    /// Returns true if runspace is available, false if busy with user command.
+    /// </summary>
+    public static bool WaitForHeartbeat(int heartbeatTimeoutMs = 10000, int recentThresholdMs = 500)
+    {
+        if (!_firstHeartbeatReceived)
+        {
+            // No heartbeat received yet, assume available (module just loaded)
+            return true;
+        }
+
+        // Check if heartbeat was received recently
+        var timeSinceLastHeartbeat = (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds;
+        if (timeSinceLastHeartbeat < recentThresholdMs)
+        {
+            return true; // Heartbeat is recent, runspace is available
+        }
+
+        // Check if already timed out (more than heartbeatTimeoutMs since last heartbeat)
+        if (timeSinceLastHeartbeat >= heartbeatTimeoutMs)
+        {
+            return false; // Already timed out, runspace is busy with user command
+        }
+
+        // Wait for remaining time until heartbeatTimeoutMs since last heartbeat
+        var remainingWaitMs = heartbeatTimeoutMs - timeSinceLastHeartbeat;
+        var lastKnownHeartbeat = _lastHeartbeat;
+        var waitEndTime = DateTime.UtcNow.AddMilliseconds(remainingWaitMs);
+
+        while (DateTime.UtcNow < waitEndTime)
+        {
+            if (_lastHeartbeat > lastKnownHeartbeat)
+            {
+                return true; // Runspace is available
+            }
+            Thread.Sleep(50); // Poll every 50ms
+        }
+
+        return false; // No heartbeat received within timeout, runspace is busy
+    }
 
     public static void SetBusy(string pipeline)
     {
@@ -404,11 +449,18 @@ Please provide how to update the MCP client configuration to the user.";
                 // (because Proxy won't receive it - it's sending a new request)
                 ExecutionState.MarkForCaching();
 
-                // Return busy response with status line including running pipeline
+                // Return busy response as JSON
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var elapsed = ExecutionState.ElapsedSeconds;
                 var runningPipeline = TruncatePipeline(ExecutionState.CurrentPipeline);
-                var busyResponse = $"⧗ Previous pipeline running | pwsh PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s";
+                var busyResponse = JsonSerializer.Serialize(new
+                {
+                    pid,
+                    status = "busy",
+                    reason = "mcp_command",
+                    pipeline = runningPipeline,
+                    duration = Math.Round(elapsed, 2)
+                });
 
                 await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
                 return;
@@ -419,6 +471,24 @@ Please provide how to update the MCP client configuration to the user.";
             {
                 var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement)
                     ? pipelineElement.GetString() ?? "" : "";
+
+                // Wait for heartbeat to confirm runspace is available
+                if (!ExecutionState.WaitForHeartbeat())
+                {
+                    // Runspace is busy with user command - return JSON response
+                    var pid = Process.GetCurrentProcess().Id;
+                    var userCmdElapsed = ExecutionState.UserCommandElapsedSeconds;
+                    var busyResponse = JsonSerializer.Serialize(new
+                    {
+                        pid,
+                        status = "busy",
+                        reason = "user_command",
+                        pipeline = "(user command)",
+                        duration = Math.Round(userCmdElapsed, 2)
+                    });
+                    await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
+                    return;
+                }
 
                 ExecutionState.SetBusy(pipeline);
 
@@ -432,8 +502,14 @@ Please provide how to update the MCP client configuration to the user.";
 
                     if (isTimeout)
                     {
-                        // Timeout - send timeout response
-                        var timeoutResponse = $"⧗ Pipeline is still running | pwsh PID: {pid} | Status: Busy | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s\n\nUse wait_for_completion tool to wait and retrieve the result.";
+                        // Timeout - send JSON response
+                        var timeoutResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "timeout",
+                            pipeline = runningPipeline,
+                            duration = Math.Round(elapsed, 2)
+                        });
                         try
                         {
                             await SendMessageAsync(pipeServer, timeoutResponse, cancellationToken);
@@ -446,7 +522,13 @@ Please provide how to update the MCP client configuration to the user.";
                     else if (shouldCache)
                     {
                         // Result cached - MCP client disconnected, will be returned on next tool call
-                        var cachedResponse = $"✓ Pipeline executed successfully | pwsh PID: {pid} | Status: Completed | Pipeline: {runningPipeline} | Duration: {elapsed:F2}s\n\nResult cached. Will be returned on next tool call.";
+                        var cachedResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "completed",
+                            pipeline = runningPipeline,
+                            duration = Math.Round(elapsed, 2)
+                        });
                         try
                         {
                             await SendMessageAsync(pipeServer, cachedResponse, cancellationToken);
@@ -458,17 +540,25 @@ Please provide how to update the MCP client configuration to the user.";
                     }
                     else
                     {
-                        // Normal completion - consume all cached outputs and return
+                        // Normal completion - consume all cached outputs and return as JSON
                         var outputs = ExecutionState.ConsumeCachedOutputs();
-                        var result = string.Join("\n\n", outputs);
+                        var resultText = string.Join("\n\n", outputs);
+                        var successResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "success",
+                            pipeline = runningPipeline,
+                            duration = Math.Round(elapsed, 2),
+                            result = resultText
+                        });
                         try
                         {
-                            await SendMessageAsync(pipeServer, result, cancellationToken);
+                            await SendMessageAsync(pipeServer, successResponse, cancellationToken);
                         }
                         catch
                         {
                             // Pipe error - save result to cache for next request
-                            ExecutionState.AddToCache(result);
+                            ExecutionState.AddToCache(resultText);
                         }
                     }
                 }
