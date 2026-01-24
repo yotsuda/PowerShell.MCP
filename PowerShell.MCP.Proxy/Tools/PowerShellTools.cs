@@ -402,6 +402,9 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                     var newPid = newPipeName?.Split('.').LastOrDefault() ?? "unknown";
 
                                     var busyResponse = new StringBuilder();
+                                    // Busy status at the top
+                                    busyResponse.AppendLine(FormatBusyStatus(jsonResponse));
+                                    busyResponse.AppendLine();
                                     busyResponse.AppendLine($"Started new console PID#{newPid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
                                     busyResponse.AppendLine();
                                     busyResponse.Append(startResult.Replace(
@@ -419,9 +422,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                         busyResponse.AppendLine();
                                         busyResponse.Append(busyInfo);
                                     }
-                                    busyResponse.AppendLine();
-                                    busyResponse.AppendLine("Why new console was started:");
-                                    busyResponse.Append(FormatBusyStatus(jsonResponse));
                                     return busyResponse.ToString();
                                 }
                                 break;
