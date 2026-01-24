@@ -378,17 +378,22 @@ public class NamedPipeServer : IDisposable
                     }
                 }
 
-                await SendMessageAsync(pipeServer, statusResponse, cancellationToken);
+                await SendMessageAsync(pipeServer, statusResponse + "\n\n", cancellationToken);
                 return;
             }
 
             // Handle consume_output request - consumes and returns all cached outputs
             if (name == "consume_output")
             {
+                var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var cachedOutputs = ExecutionState.ConsumeCachedOutputs();
-                // Combine all cached outputs with separators
                 var combinedOutput = string.Join("\n\n", cachedOutputs);
-                await SendMessageAsync(pipeServer, combinedOutput, cancellationToken);
+                var header = JsonSerializer.Serialize(new
+                {
+                    pid,
+                    status = "success"
+                });
+                await SendMessageAsync(pipeServer, header + "\n\n" + combinedOutput, cancellationToken);
                 return;
             }
 
@@ -571,6 +576,7 @@ Please provide how to update the MCP client configuration to the user.";
             else
             {
                 // Other tools (get_current_location) - consume cached outputs and prepend to result
+                var pid = Process.GetCurrentProcess().Id;
                 var result = await Task.Run(() => ExecuteTool(name!, requestRoot));
 
                 // Consume cached outputs and prepend (older first, then current result)
@@ -581,7 +587,12 @@ Please provide how to update the MCP client configuration to the user.";
                     result = combined + "\n\n" + result;
                 }
 
-                await SendMessageAsync(pipeServer, result, cancellationToken);
+                var header = JsonSerializer.Serialize(new
+                {
+                    pid,
+                    status = "success"
+                });
+                await SendMessageAsync(pipeServer, header + "\n\n" + result, cancellationToken);
             }
         }
         catch (Exception ex)
