@@ -213,17 +213,16 @@ public class PowerShellTools
             // Collect completed outputs and busy status info from other pipes
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
-            // Build response: completed outputs + busyStatusInfo + result
+            // Build response: busyStatusInfo + completedOutputs + result
             var response = new StringBuilder();
-            if (completedOutputs.Length > 0)
-            {
-                response.AppendLine(completedOutputs);
-                response.AppendLine();
-            }
             if (busyStatusInfo.Length > 0)
             {
                 response.Append(busyStatusInfo);
                 response.AppendLine();
+            }
+            if (completedOutputs.Length > 0)
+            {
+                response.Append(completedOutputs);
             }
             response.Append(result);
             return response.ToString();
@@ -470,11 +469,22 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
                             case "completed":
                                 // Result was cached - return status
+                                // Collect busy status from other pipes
+                                var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+
                                 var cachedResponse = new StringBuilder();
+                                if (cachedBusyStatusInfo.Length > 0)
+                                {
+                                    cachedResponse.Append(cachedBusyStatusInfo);
+                                }
                                 if (!string.IsNullOrEmpty(allPipesStatusInfo))
                                 {
                                     cachedResponse.AppendLine(allPipesStatusInfo);
                                     cachedResponse.AppendLine();
+                                }
+                                if (cachedCompletedOutput.Length > 0)
+                                {
+                                    cachedResponse.Append(cachedCompletedOutput);
                                 }
                                 cachedResponse.AppendLine($"✓ Pipeline executed successfully | pwsh PID: {jsonResponse.Pid} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s");
                                 cachedResponse.AppendLine();
@@ -494,15 +504,16 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 {
                                     successResponse.AppendLine(allPipesStatusInfo);
                                 }
-                                if (!string.IsNullOrEmpty(scopeWarning))
-                                {
-                                    successResponse.AppendLine(scopeWarning);
-                                }
                                 if (completedOutput.Length > 0)
                                 {
                                     successResponse.Append(completedOutput);
                                 }
-                                if (successResponse.Length > 0)
+                                if (!string.IsNullOrEmpty(scopeWarning))
+                                {
+                                    successResponse.AppendLine(scopeWarning);
+                                    successResponse.AppendLine();
+                                }
+                                if (successResponse.Length > 0 && string.IsNullOrEmpty(scopeWarning))
                                 {
                                     successResponse.AppendLine();
                                 }
@@ -724,20 +735,22 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         var newPipeName = sessionManager.ActivePipeName;
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
-        // Build response: busy status first + completed output + start message + location
+        // Build response: busy status first + start message + location + completed output
         var response = new StringBuilder();
         if (busyStatusInfo.Length > 0)
         {
             response.Append(busyStatusInfo);
             response.AppendLine();
         }
-        if (completedOutput.Length > 0)
-        {
-            response.Append(completedOutput);
-        }
         response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
         response.AppendLine();
         response.Append(locationResult);
+        if (completedOutput.Length > 0)
+        {
+            response.AppendLine();
+            response.AppendLine();
+            response.Append(completedOutput);
+        }
         return response.ToString();
     }
 
