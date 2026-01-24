@@ -792,6 +792,8 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         if (busyStatusInfo.Length > 0)
         {
             response.Append(busyStatusInfo);
+            response.AppendLine();
+            response.Append("Use wait_for_completion tool to wait and retrieve the result.");
         }
 
         if (response.Length == 0)
