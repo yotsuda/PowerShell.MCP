@@ -735,22 +735,20 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         var newPipeName = sessionManager.ActivePipeName;
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
-        // Build response: busy status first + start message + location + completed output
+        // Build response: busy status first + completed output + start message + location
         var response = new StringBuilder();
         if (busyStatusInfo.Length > 0)
         {
             response.Append(busyStatusInfo);
             response.AppendLine();
         }
+        if (completedOutput.Length > 0)
+        {
+            response.Append(completedOutput);
+        }
         response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
         response.AppendLine();
         response.Append(locationResult);
-        if (completedOutput.Length > 0)
-        {
-            response.AppendLine();
-            response.AppendLine();
-            response.Append(completedOutput);
-        }
         return response.ToString();
     }
 
