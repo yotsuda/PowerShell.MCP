@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Text;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
 
@@ -167,6 +169,113 @@ public class AddLinesToFileCmdletTests : IDisposable
         finally
         {
             if (File.Exists(testFile)) File.Delete(testFile);
+        }
+    }
+
+    [Fact]
+    public void DetectFileMetadata_PreservesNoBom_WhenFileHasNoBom()
+    {
+        // Arrange: Create a UTF-8 file WITHOUT BOM
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            var utf8NoBom = new UTF8Encoding(false);
+            File.WriteAllText(tempFile, "日本語テスト\nLine2\nLine3\n", utf8NoBom);
+
+            // Verify file has no BOM before
+            var bytesBefore = File.ReadAllBytes(tempFile);
+            Assert.False(bytesBefore.Length >= 3 && bytesBefore[0] == 0xEF && bytesBefore[1] == 0xBB && bytesBefore[2] == 0xBF,
+                "Test file should not have BOM");
+
+            // Act: Detect metadata - this is what Add-LinesToFile uses internally
+            var metadata = TextFileUtility.DetectFileMetadata(tempFile);
+
+            // Assert: Encoding should be UTF8 without BOM
+            // The fix ensures that when BOM is not found, UTF8Encoding(false) is returned
+            Assert.IsType<UTF8Encoding>(metadata.Encoding);
+            var utf8Encoding = (UTF8Encoding)metadata.Encoding;
+
+            // GetPreamble() returns empty array for BOM-less UTF8
+            Assert.Empty(utf8Encoding.GetPreamble());
+        }
+        finally
+        {
+            if (File.Exists(tempFile)) File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void DetectFileMetadata_PreservesBom_WhenFileHasBom()
+    {
+        // Arrange: Create a UTF-8 file WITH BOM
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            var utf8WithBom = new UTF8Encoding(true);
+            File.WriteAllText(tempFile, "日本語テスト\nLine2\nLine3\n", utf8WithBom);
+
+            // Verify file has BOM before
+            var bytesBefore = File.ReadAllBytes(tempFile);
+            Assert.True(bytesBefore.Length >= 3 && bytesBefore[0] == 0xEF && bytesBefore[1] == 0xBB && bytesBefore[2] == 0xBF,
+                "Test file should have BOM");
+
+            // Act: Detect metadata - this is what Add-LinesToFile uses internally
+            var metadata = TextFileUtility.DetectFileMetadata(tempFile);
+
+            // Assert: Encoding should be UTF8 with BOM
+            Assert.IsType<UTF8Encoding>(metadata.Encoding);
+            var utf8Encoding = (UTF8Encoding)metadata.Encoding;
+
+            // GetPreamble() returns BOM bytes for BOM UTF8
+            Assert.Equal(3, utf8Encoding.GetPreamble().Length);
+        }
+        finally
+        {
+            if (File.Exists(tempFile)) File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void AddLinesToFile_DoesNotAddBom_WhenOriginalFileHasNoBom()
+    {
+        // Arrange: Create a UTF-8 file WITHOUT BOM
+        var tempFile = Path.GetTempFileName();
+        var tempOutput = Path.GetTempFileName();
+        try
+        {
+            var utf8NoBom = new UTF8Encoding(false);
+            File.WriteAllText(tempFile, "日本語テスト\nLine2\nLine3\n", utf8NoBom);
+
+            // Verify file has no BOM before
+            var bytesBefore = File.ReadAllBytes(tempFile);
+            Assert.False(bytesBefore.Length >= 3 && bytesBefore[0] == 0xEF && bytesBefore[1] == 0xBB && bytesBefore[2] == 0xBF,
+                "Test file should not have BOM");
+
+            // Act: Simulate Add-LinesToFile by detecting metadata and writing with same encoding
+            var metadata = TextFileUtility.DetectFileMetadata(tempFile);
+
+            // Read existing lines and add new ones
+            var lines = new List<string>(File.ReadAllLines(tempFile, metadata.Encoding));
+            lines.Add("Line4");
+
+            // Write back using detected encoding (simulates what Add-LinesToFile does)
+            using (var writer = new StreamWriter(tempOutput, false, metadata.Encoding))
+            {
+                foreach (var line in lines)
+                {
+                    writer.WriteLine(line);
+                }
+            }
+
+            // Assert: Output file should NOT have BOM
+            var bytesAfter = File.ReadAllBytes(tempOutput);
+            Assert.False(bytesAfter.Length >= 3 && bytesAfter[0] == 0xEF && bytesAfter[1] == 0xBB && bytesAfter[2] == 0xBF,
+                "Output file should not have BOM - this was the bug that was fixed");
+        }
+        finally
+        {
+            if (File.Exists(tempFile)) File.Delete(tempFile);
+            if (File.Exists(tempOutput)) File.Delete(tempOutput);
         }
     }
 }
