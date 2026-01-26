@@ -1,4 +1,5 @@
 ﻿using System.Management.Automation;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Linq;
 
@@ -310,7 +311,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         // If gapLine next line is start of leading context, output gapLine (continuous)
                         if (gapInfo.lineNumber + 1 == preContextStart)
                         {
-                            string gapDisplay = ApplyHighlightingIfMatched(gapInfo.line, matchPredicate, matchValue, regex);
+                            string gapDisplay = ApplyHighlighting(gapInfo.line, regex, regex == null ? matchValue : null);
                             WriteObject($"{gapInfo.lineNumber,3}- {gapDisplay}");
                             lastOutputLine = gapInfo.lineNumber;
                         }
@@ -338,21 +339,13 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     {
                         if (ctx.lineNumber > lastOutputLine)
                         {
-                            string ctxDisplay = ApplyHighlightingIfMatched(ctx.line, matchPredicate, matchValue, regex);
+                            string ctxDisplay = ApplyHighlighting(ctx.line, regex, regex == null ? matchValue : null);
                             WriteObject($"{ctx.lineNumber,3}- {ctxDisplay}");
                         }
                     }
 
                     // Output match line (highlighted)
-                    string displayLine;
-                    if (regex != null)
-                    {
-                        displayLine = regex.Replace(currentLine, m => $"{AnsiColors.Yellow}{m.Value}{AnsiColors.Reset}");
-                    }
-                    else
-                    {
-                        displayLine = currentLine.Replace(matchValue, $"{AnsiColors.Yellow}{matchValue}{AnsiColors.Reset}");
-                    }
+                    string displayLine = ApplyHighlighting(currentLine, regex, regex == null ? matchValue : null);
                     WriteObject($"{lineNumber,3}: {displayLine}");
 
                     afterMatchCounter = 2;
@@ -365,7 +358,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     // Output trailing context
                     if (afterMatchCounter > 0)
                     {
-                        string display = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, regex);
+                        string display = ApplyHighlighting(currentLine, regex, regex == null ? matchValue : null);
                         WriteObject($"{lineNumber,3}- {display}");
                         afterMatchCounter--;
                         lastOutputLine = lineNumber;
@@ -408,23 +401,49 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
-    /// Applies yellow highlighting if line contains match
+    /// Applies yellow highlighting using index-based approach (faster than Regex.Replace)
     /// </summary>
-    private string ApplyHighlightingIfMatched(string line, Func<string, bool> matchPredicate, string matchValue, Regex? regex)
+    private string ApplyHighlighting(string line, Regex? regex, string? containsValue)
     {
-        if (!matchPredicate(line))
-        {
-            return line;
-        }
-
         if (regex != null)
         {
-            return regex.Replace(line, m => $"{AnsiColors.Yellow}{m.Value}{AnsiColors.Reset}");
+            var match = regex.Match(line);
+            if (!match.Success) return line;
+
+            var sb = new StringBuilder(line.Length + 32);
+            int lastEnd = 0;
+            while (match.Success)
+            {
+                sb.Append(line, lastEnd, match.Index - lastEnd);
+                sb.Append(AnsiColors.Yellow);
+                sb.Append(match.Value);
+                sb.Append(AnsiColors.Reset);
+                lastEnd = match.Index + match.Length;
+                match = match.NextMatch();
+            }
+            sb.Append(line, lastEnd, line.Length - lastEnd);
+            return sb.ToString();
         }
-        else
+        else if (containsValue != null)
         {
-            return line.Replace(matchValue, $"{AnsiColors.Yellow}{matchValue}{AnsiColors.Reset}");
+            int index = line.IndexOf(containsValue, StringComparison.Ordinal);
+            if (index < 0) return line;
+
+            var sb = new StringBuilder(line.Length + 32);
+            int lastEnd = 0;
+            while (index >= 0)
+            {
+                sb.Append(line, lastEnd, index - lastEnd);
+                sb.Append(AnsiColors.Yellow);
+                sb.Append(containsValue);
+                sb.Append(AnsiColors.Reset);
+                lastEnd = index + containsValue.Length;
+                index = line.IndexOf(containsValue, lastEnd, StringComparison.Ordinal);
+            }
+            sb.Append(line, lastEnd, line.Length - lastEnd);
+            return sb.ToString();
         }
+        return line;
     }
 
     /// <summary>
