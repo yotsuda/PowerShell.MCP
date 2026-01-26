@@ -195,7 +195,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         int skipCount = requestedStart - 1;
         int takeCount = requestedEnd == int.MaxValue ? int.MaxValue : requestedEnd - requestedStart + 1;
 
-        var lines = (encoding != null ? File.ReadLines(filePath, encoding) : File.ReadLines(filePath))
+        var lines = TextFileUtility.ReadLinesShared(filePath, encoding)
             .Skip(skipCount)
             .Take(takeCount);
 
@@ -221,7 +221,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         var buffer = new RotateBuffer<(string line, int lineNumber)>(tailCount);
 
         int lineNumber = 1;
-        foreach (var line in (encoding != null ? File.ReadLines(filePath, encoding) : File.ReadLines(filePath)))
+        foreach (var line in TextFileUtility.ReadLinesShared(filePath, encoding))
         {
             buffer.Add((line, lineNumber));
             lineNumber++;
@@ -265,9 +265,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         bool anyMatch = false;
 
         // Use encoding if specified, otherwise default (UTF-8 with BOM auto-detection)
-        var lines = encoding != null 
-            ? File.ReadLines(filePath, encoding) 
-            : File.ReadLines(filePath);
+        // ReadLinesShared allows reading files locked by other processes
+        var lines = TextFileUtility.ReadLinesShared(filePath, encoding);
         
         using (var enumerator = lines.GetEnumerator())
         {

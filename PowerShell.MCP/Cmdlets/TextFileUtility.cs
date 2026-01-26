@@ -380,4 +380,23 @@ public static class TextFileUtility
         return EncodingHelper.TryUpgradeEncodingIfNeeded(
             metadata, contentLines, encodingExplicitlySpecified, out upgradeMessage);
     }
+
+    /// <summary>
+    /// Reads lines from a file with FileShare.ReadWrite to allow reading files locked by other processes.
+    /// Useful for reading log files that are being written to by another application.
+    /// </summary>
+    /// <param name="path">Path to the file</param>
+    /// <param name="encoding">Encoding to use, or null for auto-detection</param>
+    /// <returns>Enumerable of lines</returns>
+    public static IEnumerable<string> ReadLinesShared(string path, Encoding? encoding)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(fs, encoding ?? Encoding.UTF8, detectEncodingFromByteOrderMarks: encoding == null);
+        
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            yield return line;
+        }
+    }
 }
