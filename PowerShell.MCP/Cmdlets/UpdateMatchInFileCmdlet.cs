@@ -137,6 +137,16 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
         }
 
+        // Normalize newlines in Replacement to match file's newline sequence
+        var normalizedReplacement = Replacement ?? "";
+        if (normalizedReplacement.Contains('\n') || normalizedReplacement.Contains('\r'))
+        {
+            normalizedReplacement = normalizedReplacement
+                .Replace("\r\n", "\n")
+                .Replace("\r", "\n")
+                .Replace("\n", metadata.NewlineSequence);
+        }
+
         var isLiteral = !string.IsNullOrEmpty(OldText);
         var regex = isLiteral ? null : new Regex(Pattern!, RegexOptions.Compiled);
 
@@ -281,13 +291,13 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 int count = (currentLine.Length - currentLine.Replace(OldText!, "").Length) /
                                             Math.Max(1, OldText!.Length);
                                 replacementCount += count;
-                                outputLine = currentLine.Replace(OldText, Replacement);
+                                outputLine = currentLine.Replace(OldText, normalizedReplacement);
                             }
                             else
                             {
                                 // Reuse cached matches from match check
                                 replacementCount += regexMatches!.Count;
-                                outputLine = regex!.Replace(currentLine, Replacement!);
+                                outputLine = regex!.Replace(currentLine, normalizedReplacement);
                             }
 
                             // Display match line (WhatIf: red+green, normal: green only)
@@ -298,11 +308,11 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 if (isLiteral)
                                 {
                                     displayLine = currentLine.Replace(OldText!,
-                                        $"{AnsiColors.Red}{OldText}{AnsiColors.Reset}{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
+                                        $"{AnsiColors.Red}{OldText}{AnsiColors.Reset}{AnsiColors.Green}{normalizedReplacement}{AnsiColors.Reset}");
                                 }
                                 else
                                 {
-                                    displayLine = BuildRegexDisplayLine(currentLine, regex!, Replacement!);
+                                    displayLine = BuildRegexDisplayLine(currentLine, regex!, normalizedReplacement);
                                 }
                             }
                             else
@@ -311,12 +321,12 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 if (isLiteral)
                                 {
                                     displayLine = currentLine.Replace(OldText!,
-                                        $"{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
+                                        $"{AnsiColors.Green}{normalizedReplacement}{AnsiColors.Reset}");
                                 }
                                 else
                                 {
                                     displayLine = regex!.Replace(currentLine,
-                                        match => $"{AnsiColors.Green}{Replacement}{AnsiColors.Reset}");
+                                        match => $"{AnsiColors.Green}{normalizedReplacement}{AnsiColors.Reset}");
                                 }
                             }
 
