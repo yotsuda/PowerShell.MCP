@@ -84,6 +84,79 @@ public static class EncodingHelper
         }
     }
 
+
+    /// <summary>
+    /// Fast encoding detection for read-only operations (BOM check only, defaults to UTF-8)
+    /// Use this for Show-TextFile where exact encoding detection is not critical
+    /// </summary>
+    public static Encoding GetEncodingForReading(string filePath, string? encodingName)
+    {
+        // If encoding explicitly specified, use it
+        if (!string.IsNullOrEmpty(encodingName))
+        {
+            return GetEncodingByName(encodingName) ?? new UTF8Encoding(false);
+        }
+
+        // BOM check only - fast path
+        try
+        {
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4, FileOptions.SequentialScan);
+            Span<byte> bom = stackalloc byte[4];
+            int bytesRead = stream.Read(bom);
+
+            if (bytesRead >= 3 && bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF)
+                return new UTF8Encoding(true);
+            if (bytesRead >= 2 && bom[0] == 0xFF && bom[1] == 0xFE)
+            {
+                if (bytesRead >= 4 && bom[2] == 0x00 && bom[3] == 0x00)
+                    return Encoding.UTF32;
+                return Encoding.Unicode;
+            }
+            if (bytesRead >= 2 && bom[0] == 0xFE && bom[1] == 0xFF)
+                return Encoding.BigEndianUnicode;
+        }
+        catch
+        {
+            // Fall through to default
+        }
+
+        return new UTF8Encoding(false);
+    }
+
+    /// <summary>
+    /// Get encoding by name only (no file detection)
+    /// Returns null if encoding name is invalid
+    /// </summary>
+    private static Encoding? GetEncodingByName(string encodingName)
+    {
+        try
+        {
+            return encodingName.ToLowerInvariant() switch
+            {
+                // UTF encodings
+                "utf-8" or "utf8" or "utf8nobom" or "utf-8nobom" or "utf-8-nobom" or "utf8-nobom" => new UTF8Encoding(false),
+                "utf-8-bom" or "utf8-bom" or "utf8bom" or "utf8-sig" or "utf-8-sig" => new UTF8Encoding(true),
+                "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" => Encoding.Unicode,
+                "utf-16be" or "utf16be" => Encoding.BigEndianUnicode,
+                "utf-32" or "utf32" or "utf-32le" or "utf32le" => Encoding.UTF32,
+
+                // Japanese encodings
+                "shift_jis" or "shift-jis" or "shiftjis" or "sjis" or "cp932" => Encoding.GetEncoding("shift_jis"),
+                "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
+                "iso-2022-jp" or "iso2022jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
+
+                // ASCII
+                "ascii" => Encoding.ASCII,
+
+                _ => Encoding.GetEncoding(encodingName)
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Get encoding from name or detect from file
     /// </summary>

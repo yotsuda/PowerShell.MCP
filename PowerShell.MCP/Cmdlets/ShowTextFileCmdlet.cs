@@ -109,7 +109,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     _lastFileHadOutput = false;
                 }
 
-                var encoding = TextFileUtility.GetEncoding(fileInfo.ResolvedPath, Encoding);
+                var encoding = EncodingHelper.GetEncodingForReading(fileInfo.ResolvedPath, Encoding);
 
                 // Handle empty file - skip silently when Pattern/Contains is specified
                 var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
