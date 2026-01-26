@@ -247,8 +247,9 @@ Verbose and Debug streams are NOT visible to you. If you need verbose/debug info
 For user-provided paths (like C:\), use PowerShell.MCP tools ONLY. Server-side tools (such as str_replace) cannot access them.
 When calling invoke_expression for file operations, ALWAYS use these cmdlets. NEVER use Set-Content, Get-Content, or Out-File:
 
-• Show-TextFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
+• Show-TextFile [-Path] <string[]> [-Recurse] [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
   Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex).
+  Use -Recurse with -Pattern/-Contains to search subdirectories.
   Use negative LineRange to show tail: -LineRange -10 shows last 10 lines, -LineRange -10,-1 is equivalent.
 
 • Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
