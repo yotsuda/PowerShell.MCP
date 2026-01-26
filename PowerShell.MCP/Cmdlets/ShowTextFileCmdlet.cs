@@ -33,14 +33,27 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
 
     [Parameter]
+    public SwitchParameter Recurse { get; set; }
+
+    [Parameter]
     public string? Encoding { get; set; }
 
-    private int _totalFilesProcessed = 0;
+    private bool _lastFileHadOutput = false;
 
 
     protected override void BeginProcessing()
     {
         ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
+
+        // -Recurse requires -Pattern or -Contains
+        if (Recurse && string.IsNullOrEmpty(Pattern) && string.IsNullOrEmpty(Contains))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("-Recurse requires -Pattern or -Contains parameter."),
+                "RecurseRequiresPattern",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
 
         // Error if pattern contains newlines (never matches in line-by-line processing)
         if (!string.IsNullOrEmpty(Pattern) && (Pattern.Contains('\n') || Pattern.Contains('\r')))
@@ -67,45 +80,56 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         // LineRange validation
         ValidateLineRange(LineRange);
 
-        // ResolveAndValidateFiles returns IEnumerable, process with lazy evaluation
-        var files = ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true);
+        // Get files to process
+        IEnumerable<ResolvedFileInfo> files;
+        if (Recurse)
+        {
+            files = EnumerateFilesRecursively(Path, LiteralPath);
+        }
+        else
+        {
+            files = ResolveAndValidateFiles(Path, LiteralPath, allowNewFiles: false, requireExisting: true);
+        }
 
         foreach (var fileInfo in files)
         {
             try
             {
-                // Blank line between files (except first)
-                if (_totalFilesProcessed > 0)
+                // Blank line between files (only if last file had output)
+                if (_lastFileHadOutput)
                 {
                     WriteObject("");
+                    _lastFileHadOutput = false;
                 }
-
-
-                _totalFilesProcessed++;
 
                 var encoding = TextFileUtility.GetEncoding(fileInfo.ResolvedPath, Encoding);
 
-                // Handle empty file
+                // Handle empty file - skip silently when Pattern/Contains is specified
                 var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
                 if (fileInfoObj.Length == 0)
                 {
-                    var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
-                    WriteObject(AnsiColors.Header(displayPath));
-                    WriteWarning("File is empty");
+                    if (string.IsNullOrEmpty(Pattern) && string.IsNullOrEmpty(Contains))
+                    {
+                        var displayPath = GetDisplayPath(fileInfo.InputPath, fileInfo.ResolvedPath);
+                        WriteObject(AnsiColors.Header(displayPath));
+                        WriteWarning("File is empty");
+                        _lastFileHadOutput = true;
+                    }
                     continue;
                 }
 
                 if (!string.IsNullOrEmpty(Pattern))
                 {
-                    ShowWithPattern(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
+                    _lastFileHadOutput = ShowWithPattern(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
                 }
                 else if (!string.IsNullOrEmpty(Contains))
                 {
-                    ShowWithContains(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
+                    _lastFileHadOutput = ShowWithContains(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
                 }
                 else
                 {
                     ShowWithLineRange(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
+                    _lastFileHadOutput = true;
                 }
             }
             catch (Exception ex)
@@ -192,24 +216,24 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         }
     }
 
-    private void ShowWithPattern(string inputPath, string filePath, System.Text.Encoding encoding)
+    private bool ShowWithPattern(string inputPath, string filePath, System.Text.Encoding encoding)
     {
         var regex = new Regex(Pattern!, RegexOptions.Compiled);
-        ShowWithMatch(inputPath, filePath, encoding, line => regex.IsMatch(line), "pattern", Pattern!, true);
+        return ShowWithMatch(inputPath, filePath, encoding, line => regex.IsMatch(line), Pattern!, true);
     }
 
-    private void ShowWithContains(string inputPath, string filePath, System.Text.Encoding encoding)
+    private bool ShowWithContains(string inputPath, string filePath, System.Text.Encoding encoding)
     {
-        ShowWithMatch(inputPath, filePath, encoding, line => line.Contains(Contains!, StringComparison.Ordinal), "contain", Contains!, false);
+        return ShowWithMatch(inputPath, filePath, encoding, line => line.Contains(Contains!, StringComparison.Ordinal), Contains!, false);
     }
 
     /// <summary>
     /// Searches lines based on match conditions and displays with context (true single-pass implementation using rotate buffer)
+    /// Returns true if any matches were found
     /// </summary>
-    private void ShowWithMatch(string inputPath, string filePath,
+    private bool ShowWithMatch(string inputPath, string filePath,
         System.Text.Encoding encoding,
         Func<string, bool> matchPredicate,
-        string matchTypeForWarning,
         string matchValue,
         bool isRegex)
     {
@@ -223,8 +247,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             if (!enumerator.MoveNext())
             {
                 // Empty file
-                WriteWarning("File is empty. No output.");
-                return;
+                return false;
             }
 
             int lineNumber = 1;
@@ -376,14 +399,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             }
         }
 
-        // No matches found
-        if (!anyMatch)
-        {
-            string message = matchTypeForWarning == "pattern"
-                ? $"No lines matched pattern: {matchValue}"
-                : $"No lines contain: {matchValue}";
-            WriteWarning(message);
-        }
+        return anyMatch;
     }
 
     /// <summary>
@@ -404,6 +420,71 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         else
         {
             return line.Replace(matchValue, $"{AnsiColors.Yellow}{matchValue}{AnsiColors.Reset}");
+        }
+    }
+
+    /// <summary>
+    /// Enumerates files recursively from directories or returns files directly
+    /// </summary>
+    private IEnumerable<ResolvedFileInfo> EnumerateFilesRecursively(string[]? path, string[]? literalPath)
+    {
+        string[] inputPaths = path ?? literalPath ?? [];
+
+        foreach (var inputPath in inputPaths)
+        {
+            string resolvedPath;
+            try
+            {
+                resolvedPath = GetUnresolvedProviderPathFromPSPath(inputPath);
+            }
+            catch (Exception ex)
+            {
+                WriteError(new ErrorRecord(ex, "PathResolutionFailed", ErrorCategory.InvalidArgument, inputPath));
+                continue;
+            }
+
+            if (Directory.Exists(resolvedPath))
+            {
+                // Directory: enumerate files recursively
+                IEnumerable<string> files;
+                try
+                {
+                    files = Directory.EnumerateFiles(resolvedPath, "*", SearchOption.AllDirectories);
+                }
+                catch (Exception ex)
+                {
+                    WriteError(new ErrorRecord(ex, "DirectoryEnumerationFailed", ErrorCategory.ReadError, resolvedPath));
+                    continue;
+                }
+
+                foreach (var filePath in files)
+                {
+                    yield return new ResolvedFileInfo
+                    {
+                        InputPath = inputPath,
+                        ResolvedPath = filePath,
+                        IsNewFile = false
+                    };
+                }
+            }
+            else if (File.Exists(resolvedPath))
+            {
+                // File: return directly
+                yield return new ResolvedFileInfo
+                {
+                    InputPath = inputPath,
+                    ResolvedPath = resolvedPath,
+                    IsNewFile = false
+                };
+            }
+            else
+            {
+                WriteError(new ErrorRecord(
+                    new FileNotFoundException($"Path not found: {inputPath}"),
+                    "PathNotFound",
+                    ErrorCategory.ObjectNotFound,
+                    inputPath));
+            }
         }
     }
 }
