@@ -32,7 +32,12 @@ Displays file contents with line numbers. When using -Contains or -Pattern, matc
 ### Example 1: Search with context display
 ```powershell
 Show-TextFile log.txt -Pattern "ERROR|WARN"     # Shows matches with 3-line context
-Show-TextFile log.txt -Contains "[ERROR]"       # Literal match (-Pattern and -Contains are mutually exclusive)
+Show-TextFile log.txt -Contains "[ERROR]"       # Literal match (can be combined with -Pattern)
+```
+
+### Example 2: Combine literal and regex search (OR condition)
+```powershell
+Show-TextFile log.txt -Contains "[Error]" -Pattern "Warning|Critical"  # Matches "[Error]" OR "Warning" OR "Critical"
 ```
 
 ### Encoding
@@ -319,7 +324,7 @@ Contains vs Pattern:
 - Use -Contains for simple literal string searches (no regex knowledge needed)
 - Use -Pattern for advanced regex pattern matching
 - -Contains does not require escaping special characters: [, ], (, ), ., *, +, ?, $, etc.
-- -Contains and -Pattern are mutually exclusive (cannot be used together)
+- -Contains and -Pattern can be combined (OR condition: matches if either matches)
 
 Multiple files:
 
