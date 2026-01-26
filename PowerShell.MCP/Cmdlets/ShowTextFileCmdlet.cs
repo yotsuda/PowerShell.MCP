@@ -110,7 +110,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     _lastFileHadOutput = false;
                 }
 
-                var encoding = EncodingHelper.GetEncodingForReading(fileInfo.ResolvedPath, Encoding);
+                // Get encoding: if specified use it, otherwise null (auto-detect BOM in StreamReader)
+                System.Text.Encoding? encoding = string.IsNullOrEmpty(Encoding) 
+                    ? null 
+                    : EncodingHelper.GetEncodingForReading(fileInfo.ResolvedPath, Encoding);
 
                 // Handle empty file - skip silently when Pattern/Contains is specified
                 var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
@@ -148,7 +151,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     }
 
 
-    private void ShowWithLineRange(string inputPath, string filePath, System.Text.Encoding encoding)
+    private void ShowWithLineRange(string inputPath, string filePath, System.Text.Encoding? encoding)
     {
         var displayPath = GetDisplayPath(inputPath, filePath);
         WriteObject(AnsiColors.Header(displayPath));
@@ -180,7 +183,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         int skipCount = requestedStart - 1;
         int takeCount = requestedEnd == int.MaxValue ? int.MaxValue : requestedEnd - requestedStart + 1;
 
-        var lines = File.ReadLines(filePath, encoding)
+        var lines = (encoding != null ? File.ReadLines(filePath, encoding) : File.ReadLines(filePath))
             .Skip(skipCount)
             .Take(takeCount);
 
@@ -200,13 +203,13 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         }
     }
 
-    private void ShowTailLines(string filePath, System.Text.Encoding encoding, int tailCount)
+    private void ShowTailLines(string filePath, System.Text.Encoding? encoding, int tailCount)
     {
         // Get last N lines in single pass using RotateBuffer
         var buffer = new RotateBuffer<(string line, int lineNumber)>(tailCount);
 
         int lineNumber = 1;
-        foreach (var line in File.ReadLines(filePath, encoding))
+        foreach (var line in (encoding != null ? File.ReadLines(filePath, encoding) : File.ReadLines(filePath)))
         {
             buffer.Add((line, lineNumber));
             lineNumber++;
@@ -224,12 +227,12 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         }
     }
 
-    private bool ShowWithPattern(string inputPath, string filePath, System.Text.Encoding encoding)
+    private bool ShowWithPattern(string inputPath, string filePath, System.Text.Encoding? encoding)
     {
         return ShowWithMatch(inputPath, filePath, encoding, line => _compiledRegex!.IsMatch(line), Pattern!, _compiledRegex);
     }
 
-    private bool ShowWithContains(string inputPath, string filePath, System.Text.Encoding encoding)
+    private bool ShowWithContains(string inputPath, string filePath, System.Text.Encoding? encoding)
     {
         return ShowWithMatch(inputPath, filePath, encoding, line => line.Contains(Contains!, StringComparison.Ordinal), Contains!, null);
     }
@@ -239,7 +242,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     /// Returns true if any matches were found
     /// </summary>
     private bool ShowWithMatch(string inputPath, string filePath,
-        System.Text.Encoding encoding,
+        System.Text.Encoding? encoding,
         Func<string, bool> matchPredicate,
         string matchValue,
         Regex? regex)
@@ -249,7 +252,12 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         var outputBuffer = new List<string>();
         bool anyMatch = false;
 
-        using (var enumerator = File.ReadLines(filePath, encoding).GetEnumerator())
+        // Use encoding if specified, otherwise default (UTF-8 with BOM auto-detection)
+        var lines = encoding != null 
+            ? File.ReadLines(filePath, encoding) 
+            : File.ReadLines(filePath);
+        
+        using (var enumerator = lines.GetEnumerator())
         {
             if (!enumerator.MoveNext())
             {
