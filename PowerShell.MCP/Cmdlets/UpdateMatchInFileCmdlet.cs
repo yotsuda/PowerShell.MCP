@@ -230,6 +230,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                     {
                         // Match check
                         bool isMatched = false;
+                        MatchCollection? regexMatches = null;
                         if (lineNumber >= startLine && lineNumber <= endLine)
                         {
                             if (isLiteral)
@@ -238,7 +239,9 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             }
                             else
                             {
-                                isMatched = regex!.IsMatch(currentLine);
+                                // Use Matches instead of IsMatch to avoid redundant regex call
+                                regexMatches = regex!.Matches(currentLine);
+                                isMatched = regexMatches.Count > 0;
                             }
                         }
 
@@ -281,9 +284,9 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             }
                             else
                             {
-                                var matches = regex!.Matches(currentLine);
-                                replacementCount += matches.Count;
-                                outputLine = regex.Replace(currentLine, Replacement!);
+                                // Reuse cached matches from match check
+                                replacementCount += regexMatches!.Count;
+                                outputLine = regex!.Replace(currentLine, Replacement!);
                             }
 
                             // Display match line (WhatIf: red+green, normal: green only)

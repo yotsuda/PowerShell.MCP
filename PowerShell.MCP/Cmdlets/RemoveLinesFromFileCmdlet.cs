@@ -1,4 +1,5 @@
 using System.Management.Automation;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace PowerShell.MCP.Cmdlets;
@@ -191,6 +192,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                             while (true)
                             {
                                 bool shouldRemove = false;
+                                Match? currentMatch = null;
 
                                 // Condition check
                                 if (useLineRange && useContains)
@@ -200,8 +202,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 }
                                 else if (useLineRange && usePattern)
                                 {
+                                    // Use Match instead of IsMatch to cache result for highlighting
+                                    currentMatch = regex!.Match(currentLine);
                                     shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) &&
-                                                  regex!.IsMatch(currentLine);
+                                                  currentMatch.Success;
                                 }
                                 else if (useLineRange)
                                 {
@@ -213,7 +217,9 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 }
                                 else // usePattern only
                                 {
-                                    shouldRemove = regex!.IsMatch(currentLine);
+                                    // Use Match instead of IsMatch to cache result for highlighting
+                                    currentMatch = regex!.Match(currentLine);
+                                    shouldRemove = currentMatch.Success;
                                 }
 
                                 // Detect start of deletion range
@@ -267,9 +273,21 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         }
                                         else if (usePattern)
                                         {
-                                            // Pattern: highlight regex match in yellow background
-                                            displayLine = regex!.Replace(currentLine,
-                                                match => $"{AnsiColors.RedOnYellow}{match.Value}{AnsiColors.RedOnDefault}");
+                                            // Pattern: highlight regex match in yellow background using cached Match
+                                            var sb = new StringBuilder(currentLine.Length + 32);
+                                            int lastEnd = 0;
+                                            var match = currentMatch!;
+                                            while (match.Success)
+                                            {
+                                                sb.Append(currentLine, lastEnd, match.Index - lastEnd);
+                                                sb.Append(AnsiColors.RedOnYellow);
+                                                sb.Append(match.Value);
+                                                sb.Append(AnsiColors.RedOnDefault);
+                                                lastEnd = match.Index + match.Length;
+                                                match = match.NextMatch();
+                                            }
+                                            sb.Append(currentLine, lastEnd, currentLine.Length - lastEnd);
+                                            displayLine = sb.ToString();
                                         }
                                         else
                                         {
