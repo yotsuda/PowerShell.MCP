@@ -45,7 +45,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
+        // Contains and Pattern can be combined (OR condition) for Show-TextFile
 
         // -Recurse requires -Pattern or -Contains
         if (Recurse && string.IsNullOrEmpty(Pattern) && string.IsNullOrEmpty(Contains))
@@ -77,9 +77,24 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         }
 
         // Pre-compile regex for performance (used across all files)
-        if (!string.IsNullOrEmpty(Pattern))
+        // Combine Contains and Pattern with OR if both specified
+        if (!string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains))
         {
-            _compiledRegex = new Regex(Pattern, RegexOptions.Compiled);
+            string combinedPattern;
+            if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
+            {
+                // Both specified: OR condition (escaped Contains | Pattern)
+                combinedPattern = Regex.Escape(Contains) + "|" + Pattern;
+            }
+            else if (!string.IsNullOrEmpty(Pattern))
+            {
+                combinedPattern = Pattern;
+            }
+            else
+            {
+                combinedPattern = Regex.Escape(Contains!);
+            }
+            _compiledRegex = new Regex(combinedPattern, RegexOptions.Compiled);
         }
     }
 
@@ -129,13 +144,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     continue;
                 }
 
-                if (!string.IsNullOrEmpty(Pattern))
+                if (!string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains))
                 {
+                    // Both Pattern and Contains use _compiledRegex (combined with OR if both specified)
                     _lastFileHadOutput = ShowWithPattern(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
-                }
-                else if (!string.IsNullOrEmpty(Contains))
-                {
-                    _lastFileHadOutput = ShowWithContains(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
                 }
                 else
                 {
@@ -229,7 +241,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private bool ShowWithPattern(string inputPath, string filePath, System.Text.Encoding? encoding)
     {
-        return ShowWithMatch(inputPath, filePath, encoding, line => _compiledRegex!.IsMatch(line), Pattern!, _compiledRegex);
+        return ShowWithMatch(inputPath, filePath, encoding, line => _compiledRegex!.IsMatch(line), Pattern ?? "", _compiledRegex);
     }
 
     private bool ShowWithContains(string inputPath, string filePath, System.Text.Encoding? encoding)
