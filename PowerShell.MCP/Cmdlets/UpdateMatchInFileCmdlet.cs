@@ -1,4 +1,5 @@
 using System.Management.Automation;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace PowerShell.MCP.Cmdlets;
@@ -444,10 +445,23 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
         else
         {
-            if (regex!.IsMatch(line))
+            // Use Match instead of IsMatch + Replace to avoid redundant regex call
+            var match = regex!.Match(line);
+            if (match.Success)
             {
-                // Highlight regex match in yellow (original string unchanged)
-                return regex.Replace(line, match => $"{AnsiColors.Yellow}{match.Value}{AnsiColors.Reset}");
+                var sb = new StringBuilder(line.Length + 32);
+                int lastEnd = 0;
+                while (match.Success)
+                {
+                    sb.Append(line, lastEnd, match.Index - lastEnd);
+                    sb.Append(AnsiColors.Yellow);
+                    sb.Append(match.Value);
+                    sb.Append(AnsiColors.Reset);
+                    lastEnd = match.Index + match.Length;
+                    match = match.NextMatch();
+                }
+                sb.Append(line, lastEnd, line.Length - lastEnd);
+                return sb.ToString();
             }
         }
 
