@@ -14,14 +14,14 @@ Display text file contents with line numbers
 
 ### Path
 ```
-Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
+Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse]
  [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
 Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
- [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Recurse] [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -139,6 +139,21 @@ Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
+### Recurse
+Recursively searches subdirectories for files matching the -Path pattern. Requires -Pattern or -Contains to be specified. Useful for searching across an entire project directory tree.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
@@ -240,6 +255,21 @@ Specifies a literal string to search for in each line. Unlike -Pattern (which us
 
 ```yaml
 Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Recurse
+Recursively searches subdirectories for files matching the -Path pattern. Requires -Pattern or -Contains to be specified. Useful for searching across an entire project directory tree.
+
+```yaml
+Type: SwitchParameter
 Parameter Sets: (All)
 Aliases:
 
