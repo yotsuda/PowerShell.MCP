@@ -287,7 +287,20 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             while (true)
             {
                 // Match check only within original LineRange
-                bool matched = (lineNumber >= startLine && lineNumber <= endLine) && matchPredicate(currentLine);
+                Match? currentMatch = null;
+                bool matched = false;
+                if (lineNumber >= startLine && lineNumber <= endLine)
+                {
+                    if (regex != null)
+                    {
+                        currentMatch = regex.Match(currentLine);
+                        matched = currentMatch.Success;
+                    }
+                    else
+                    {
+                        matched = matchPredicate(currentLine);
+                    }
+                }
 
                 if (matched)
                 {
@@ -351,8 +364,10 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         }
                     }
 
-                    // Output match line (highlighted)
-                    string displayLine = ApplyHighlighting(currentLine, regex, regex == null ? matchValue : null);
+                    // Output match line (highlighted) - use cached match if available
+                    string displayLine = currentMatch != null 
+                        ? ApplyHighlightingWithMatch(currentLine, currentMatch)
+                        : ApplyHighlighting(currentLine, regex, matchValue);
                     outputBuffer.Add($"{lineNumber,3}: {displayLine}");
 
                     afterMatchCounter = 2;
@@ -456,6 +471,28 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             return sb.ToString();
         }
         return line;
+    }
+
+    /// <summary>
+    /// Applies yellow highlighting using pre-computed Match object (avoids re-matching)
+    /// </summary>
+    private string ApplyHighlightingWithMatch(string line, Match match)
+    {
+        if (!match.Success) return line;
+
+        var sb = new StringBuilder(line.Length + 32);
+        int lastEnd = 0;
+        while (match.Success)
+        {
+            sb.Append(line, lastEnd, match.Index - lastEnd);
+            sb.Append(AnsiColors.Yellow);
+            sb.Append(match.Value);
+            sb.Append(AnsiColors.Reset);
+            lastEnd = match.Index + match.Length;
+            match = match.NextMatch();
+        }
+        sb.Append(line, lastEnd, line.Length - lastEnd);
+        return sb.ToString();
     }
 
     /// <summary>
