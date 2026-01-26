@@ -39,6 +39,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     public string? Encoding { get; set; }
 
     private bool _lastFileHadOutput = false;
+    private Regex? _compiledRegex = null;
 
 
     protected override void BeginProcessing()
@@ -72,6 +73,12 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 "InvalidContains",
                 ErrorCategory.InvalidArgument,
                 Contains));
+        }
+
+        // Pre-compile regex for performance (used across all files)
+        if (!string.IsNullOrEmpty(Pattern))
+        {
+            _compiledRegex = new Regex(Pattern, RegexOptions.Compiled);
         }
     }
 
@@ -218,13 +225,12 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private bool ShowWithPattern(string inputPath, string filePath, System.Text.Encoding encoding)
     {
-        var regex = new Regex(Pattern!, RegexOptions.Compiled);
-        return ShowWithMatch(inputPath, filePath, encoding, line => regex.IsMatch(line), Pattern!, true);
+        return ShowWithMatch(inputPath, filePath, encoding, line => _compiledRegex!.IsMatch(line), Pattern!, _compiledRegex);
     }
 
     private bool ShowWithContains(string inputPath, string filePath, System.Text.Encoding encoding)
     {
-        return ShowWithMatch(inputPath, filePath, encoding, line => line.Contains(Contains!, StringComparison.Ordinal), Contains!, false);
+        return ShowWithMatch(inputPath, filePath, encoding, line => line.Contains(Contains!, StringComparison.Ordinal), Contains!, null);
     }
 
     /// <summary>
@@ -235,7 +241,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         System.Text.Encoding encoding,
         Func<string, bool> matchPredicate,
         string matchValue,
-        bool isRegex)
+        Regex? regex)
     {
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
         var displayPath = GetDisplayPath(inputPath, filePath);
@@ -304,7 +310,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         // If gapLine next line is start of leading context, output gapLine (continuous)
                         if (gapInfo.lineNumber + 1 == preContextStart)
                         {
-                            string gapDisplay = ApplyHighlightingIfMatched(gapInfo.line, matchPredicate, matchValue, isRegex);
+                            string gapDisplay = ApplyHighlightingIfMatched(gapInfo.line, matchPredicate, matchValue, regex);
                             WriteObject($"{gapInfo.lineNumber,3}- {gapDisplay}");
                             lastOutputLine = gapInfo.lineNumber;
                         }
@@ -332,16 +338,15 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     {
                         if (ctx.lineNumber > lastOutputLine)
                         {
-                            string ctxDisplay = ApplyHighlightingIfMatched(ctx.line, matchPredicate, matchValue, isRegex);
+                            string ctxDisplay = ApplyHighlightingIfMatched(ctx.line, matchPredicate, matchValue, regex);
                             WriteObject($"{ctx.lineNumber,3}- {ctxDisplay}");
                         }
                     }
 
                     // Output match line (highlighted)
                     string displayLine;
-                    if (isRegex)
+                    if (regex != null)
                     {
-                        var regex = new Regex(matchValue, RegexOptions.Compiled);
                         displayLine = regex.Replace(currentLine, m => $"{AnsiColors.Yellow}{m.Value}{AnsiColors.Reset}");
                     }
                     else
@@ -360,7 +365,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     // Output trailing context
                     if (afterMatchCounter > 0)
                     {
-                        string display = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, isRegex);
+                        string display = ApplyHighlightingIfMatched(currentLine, matchPredicate, matchValue, regex);
                         WriteObject($"{lineNumber,3}- {display}");
                         afterMatchCounter--;
                         lastOutputLine = lineNumber;
@@ -405,16 +410,15 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     /// <summary>
     /// Applies yellow highlighting if line contains match
     /// </summary>
-    private string ApplyHighlightingIfMatched(string line, Func<string, bool> matchPredicate, string matchValue, bool isRegex)
+    private string ApplyHighlightingIfMatched(string line, Func<string, bool> matchPredicate, string matchValue, Regex? regex)
     {
         if (!matchPredicate(line))
         {
             return line;
         }
 
-        if (isRegex)
+        if (regex != null)
         {
-            var regex = new Regex(matchValue, RegexOptions.Compiled);
             return regex.Replace(line, m => $"{AnsiColors.Yellow}{m.Value}{AnsiColors.Reset}");
         }
         else
