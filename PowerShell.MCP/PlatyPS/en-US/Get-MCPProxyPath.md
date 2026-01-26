@@ -52,7 +52,7 @@ Accept wildcard characters: False
 ```
 
 ### -ProgressAction
-{{ Fill ProgressAction Description }}
+Common parameter for controlling progress output. See about_CommonParameters for details.
 
 ```yaml
 Type: ActionPreference
