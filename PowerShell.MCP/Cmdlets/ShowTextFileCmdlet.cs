@@ -246,7 +246,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
     {
         var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
         var displayPath = GetDisplayPath(inputPath, filePath);
-        bool headerPrinted = false;
+        var outputBuffer = new List<string>();
         bool anyMatch = false;
 
         using (var enumerator = File.ReadLines(filePath, encoding).GetEnumerator())
@@ -286,10 +286,9 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     anyMatch = true;
 
                     // Output header (first time only)
-                    if (!headerPrinted)
+                    if (outputBuffer.Count == 0)
                     {
-                        WriteObject(AnsiColors.Header(displayPath));
-                        headerPrinted = true;
+                        outputBuffer.Add(AnsiColors.Header(displayPath));
                     }
 
                     // Gap processing: if gapLineInfo exists, check and output
@@ -312,7 +311,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         if (gapInfo.lineNumber + 1 == preContextStart)
                         {
                             string gapDisplay = ApplyHighlighting(gapInfo.line, regex, regex == null ? matchValue : null);
-                            WriteObject($"{gapInfo.lineNumber,3}- {gapDisplay}");
+                            outputBuffer.Add($"{gapInfo.lineNumber,3}- {gapDisplay}");
                             lastOutputLine = gapInfo.lineNumber;
                         }
                         else if (gapInfo.lineNumber >= preContextStart)
@@ -322,7 +321,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         else
                         {
                             // Gap is 2+ lines -> separate with empty line
-                            WriteObject("");
+                            outputBuffer.Add("");
                         }
                         gapLineInfo = null;
                         needsGapSeparator = false;
@@ -330,7 +329,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     else if (needsGapSeparator)
                     {
                         // Empty line output when no gapLine
-                        WriteObject("");
+                        outputBuffer.Add("");
                         needsGapSeparator = false;
                     }
 
@@ -340,13 +339,13 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                         if (ctx.lineNumber > lastOutputLine)
                         {
                             string ctxDisplay = ApplyHighlighting(ctx.line, regex, regex == null ? matchValue : null);
-                            WriteObject($"{ctx.lineNumber,3}- {ctxDisplay}");
+                            outputBuffer.Add($"{ctx.lineNumber,3}- {ctxDisplay}");
                         }
                     }
 
                     // Output match line (highlighted)
                     string displayLine = ApplyHighlighting(currentLine, regex, regex == null ? matchValue : null);
-                    WriteObject($"{lineNumber,3}: {displayLine}");
+                    outputBuffer.Add($"{lineNumber,3}: {displayLine}");
 
                     afterMatchCounter = 2;
                     lastOutputLine = lineNumber;
@@ -359,7 +358,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     if (afterMatchCounter > 0)
                     {
                         string display = ApplyHighlighting(currentLine, regex, regex == null ? matchValue : null);
-                        WriteObject($"{lineNumber,3}- {display}");
+                        outputBuffer.Add($"{lineNumber,3}- {display}");
                         afterMatchCounter--;
                         lastOutputLine = lineNumber;
                     }
@@ -397,9 +396,14 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             }
         }
 
+        // Batch output for better performance
+        if (outputBuffer.Count > 0)
+        {
+            WriteObject(outputBuffer, enumerateCollection: true);
+        }
+
         return anyMatch;
     }
-
     /// <summary>
     /// Applies yellow highlighting using index-based approach (faster than Regex.Replace)
     /// </summary>
