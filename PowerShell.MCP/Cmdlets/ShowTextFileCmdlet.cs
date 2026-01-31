@@ -1,4 +1,4 @@
-﻿using System.Management.Automation;
+using System.Management.Automation;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Linq;
@@ -126,8 +126,8 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 }
 
                 // Get encoding: if specified use it, otherwise null (auto-detect BOM in StreamReader)
-                System.Text.Encoding? encoding = string.IsNullOrEmpty(Encoding) 
-                    ? null 
+                System.Text.Encoding? encoding = string.IsNullOrEmpty(Encoding)
+                    ? null
                     : EncodingHelper.GetEncodingForReading(fileInfo.ResolvedPath, Encoding);
 
                 // Handle empty file - skip silently when Pattern/Contains is specified
@@ -267,7 +267,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         // Use encoding if specified, otherwise default (UTF-8 with BOM auto-detection)
         // ReadLinesShared allows reading files locked by other processes
         var lines = TextFileUtility.ReadLinesShared(filePath, encoding);
-        
+
         using (var enumerator = lines.GetEnumerator())
         {
             if (!enumerator.MoveNext())
@@ -376,7 +376,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     }
 
                     // Output match line (highlighted) - use cached match if available
-                    string displayLine = currentMatch != null 
+                    string displayLine = currentMatch != null
                         ? ApplyHighlightingWithMatch(currentLine, currentMatch)
                         : ApplyHighlighting(currentLine, regex, matchValue);
                     outputBuffer.Add($"{lineNumber,3}: {displayLine}");

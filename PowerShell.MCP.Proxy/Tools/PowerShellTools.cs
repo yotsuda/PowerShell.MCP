@@ -803,12 +803,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // Also exclude common automatic variables like $_, $?, $^, $$, $args, $input, $foreach, $switch
         var pattern = @"\$(?!script:|global:|env:|using:|null\b|true\b|false\b|_\b|\?\b|\^\b|\$\b|args\b|input\b|foreach\b|switch\b|Matches\b|PSItem\b)([a-zA-Z_]\w*)\s*=";
         var matches = Regex.Matches(pipeline, pattern);
-        
+
         if (matches.Count == 0) return null;
-        
+
         var vars = matches.Select(m => "$" + m.Groups[1].Value).Distinct().ToList();
         if (vars.Count == 0) return null;
-        
+
         var sb = new StringBuilder();
         sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
         foreach (var v in vars)

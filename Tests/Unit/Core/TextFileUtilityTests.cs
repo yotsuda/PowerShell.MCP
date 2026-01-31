@@ -1,4 +1,4 @@
-﻿using Xunit;
+using Xunit;
 using PowerShell.MCP.Cmdlets;
 using System.Text;
 

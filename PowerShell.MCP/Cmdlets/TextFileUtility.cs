@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace PowerShell.MCP.Cmdlets;
 
@@ -392,7 +392,7 @@ public static class TextFileUtility
     {
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(fs, encoding ?? Encoding.UTF8, detectEncodingFromByteOrderMarks: encoding == null);
-        
+
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
