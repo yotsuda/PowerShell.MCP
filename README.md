@@ -19,6 +19,7 @@ Despite its powerful capabilities, PowerShell.MCP is built with just four carefu
 - **get_current_location:** retrieving the current working directory
 - **invoke_expression:** executing any cmdlets/.ps1/.bat/CLI tools (chainable with pipes) in the PS console
 - **wait_for_completion:** waiting for busy console(s) to complete and retrieving cached results
+
 This minimalist architecture provides maximum flexibility while maintaining simplicity.
 
 ### What Makes It Powerful
