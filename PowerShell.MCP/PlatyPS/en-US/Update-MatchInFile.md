@@ -8,247 +8,27 @@ schema: 2.0.0
 # Update-MatchInFile
 
 ## SYNOPSIS
-Update text file content using string literal or regex replacement
+Replace text in a file using literal string or regex pattern
 
 ## SYNTAX
 
-### Path
 ```
-Update-MatchInFile [-Path] <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
- [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
- [-Confirm] [<CommonParameters>]
+Update-MatchInFile [-Path] <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>] [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-WhatIf]
 ```
-
-### LiteralPath
-```
-Update-MatchInFile -LiteralPath <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
- [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
- [-Confirm] [<CommonParameters>]
-```
-
-## DESCRIPTION
-Replaces matching text (literal or regex) within optional line range. Preserves file metadata (encoding, newlines). Use -OldText for literal string replacement or -Pattern for regex-based replacement with capture groups support.
 
 ## EXAMPLES
 
-### Example 1: Replace text
+### Example 1: Basic usage
 ```powershell
-Update-MatchInFile config.txt -OldText "debug=false" -Replacement "debug=true"      # Literal
-Update-MatchInFile code.cs -Pattern "var (\w+)" -Replacement "string $1"            # Regex with capture groups
+Update-MatchInFile file.txt -OldText "foo" -Replacement "bar"          # literal replacement
+Update-MatchInFile file.txt -Pattern "v\d+" -Replacement "v2"          # regex replacement
+Update-MatchInFile file.cs -Pattern "(\w+)\.Log" -Replacement '$1.Debug'  # with capture group
+Update-MatchInFile file.txt -LineRange 10,20 -OldText "old" -Replacement "new"  # within range
 ```
-
-## PARAMETERS
-
-### -Backup
-Creates a backup file before modifying. Recommended for important files.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Confirm
-Prompts you for confirmation before running the cmdlet.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Encoding
-Specifies the character encoding. If omitted, encoding is auto-detected and preserved. Supports: utf8, utf8bom, sjis, eucjp, jis, ascii, utf16, utf32, etc.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -LineRange
-Limits replacement to specific lines. Accepts 1 or 2 values: single line (e.g., 5) or range (e.g., 5,10). Line numbers are 1-based. Use 0 or negative values for the end position to indicate end of file (e.g., 100,-1 searches from line 100 to end of file). Only matches within this range are replaced.
-
-```yaml
-Type: Int32[]
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -LiteralPath
-Specifies the path to the text file without wildcard expansion. Use this parameter when the file path contains characters that would otherwise be interpreted as wildcards (like '[', ']', '*', '?'). Unlike -Path, this parameter treats the input literally.
-
-```yaml
-Type: String[]
-Parameter Sets: LiteralPath
-Aliases: PSPath
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: True (ByPropertyName)
-Accept wildcard characters: False
-```
-
-### -Path
-Specifies the path to the text file(s) to modify. Supports wildcards for processing multiple files.
-
-```yaml
-Type: String[]
-Parameter Sets: Path
-Aliases:
-
-Required: True
-Position: 0
-Default value: None
-Accept pipeline input: True (ByPropertyName)
-Accept wildcard characters: True
-```
-
-### -Pattern
-Regular expression pattern to search for. Use with -Replacement parameter. Supports capture groups ($1, $2, etc.).
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Replacement
-The replacement string for regex replacement. Used with -Pattern parameter. Supports backreferences ($1, $2, etc.) to captured groups. Note: In PowerShell strings, escape the dollar sign with a backtick (` $1`) to prevent variable expansion.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -WhatIf
-Shows a detailed preview of what would change without modifying the file. Displays each matching line with the original text highlighted for removal and the replacement text highlighted for addition, along with surrounding context lines. This is strongly recommended before running regex replacements to verify the changes are correct.
-The cmdlet does not modify the file when this parameter is specified.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: wi
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-Common parameter for controlling progress display behavior. See about_CommonParameters for details.
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -OldText
-Literal string to search for and replace. Use with -Replacement parameter. The matched text (not the entire line) is replaced. For regex-based replacement, use -Pattern instead.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### CommonParameters
-This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
-
-## INPUTS
-
-### System.String[]
-
-## OUTPUTS
-
-### System.Object
 
 ## NOTES
-
-BEST PRACTICE - Verify before and after:
-
-1. Check current content: Show-TextFile config.js -Pattern "localhost"
-
-2. Make the replacement: Update-MatchInFile config.js -OldText "localhost" -Replacement "production"
-
-3. Verify the change: Show-TextFile config.js -Pattern "production"
-
-CRITICAL - Handling special characters (dollar, braces, quotes):
-
-When replacing code with special characters, ALWAYS use here-strings.
-Example: $old = @'...'@ and $new = @'...'@ then Update-MatchInFile file.cs -OldText $old -Replacement $new
-
-Here-strings (@'...'@) treat ALL characters literally.
-
-When to use -LineRange:
-
-- Limit to specific section (use Show-TextFile line numbers)
-- Avoid unintended replacements elsewhere
-- Essential when text appears multiple times
-
-When to use -Backup:
-
-- Files not under version control
-- Critical configuration changes
-
-Regular expression mode:
-
-- Use for complex transformations
-- Test first: Show-TextFile -Pattern "regex"
-- Escape special regex chars: . * + ? [ ] ( ) { } ^ $ |
-- -OldText and -Pattern are mutually exclusive (cannot be used together)
-
-## RELATED LINKS
+- `-OldText` (literal) and `-Pattern` (regex) are mutually exclusive
+- `-Pattern` supports capture groups (`$1`, `$2`) in `-Replacement`
+- Use here-strings (@'...'@) for code with special characters ($, {}, quotes)
+- `-WhatIf` shows detailed preview with highlighting
+- Newlines in `-Replacement` are normalized to match file's newline style
