@@ -10,6 +10,7 @@ namespace PowerShell.MCP.Proxy.Models;
 [JsonSerializable(typeof(GetStatusParams))]
 [JsonSerializable(typeof(ConsumeOutputParams))]
 [JsonSerializable(typeof(ClaimConsoleParams))]
+[JsonSerializable(typeof(SetWindowTitleParams))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     WriteIndented = false,

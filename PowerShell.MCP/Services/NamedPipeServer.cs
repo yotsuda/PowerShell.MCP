@@ -635,6 +635,7 @@ Please provide how to update the MCP client configuration to the user.";
         {
             "get_current_location" => MCPModuleInitializer.GetCurrentLocation(),
             "claim_console" => ClaimConsole(parameters),
+            "set_window_title" => SetWindowTitle(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
     }
@@ -651,6 +652,24 @@ Please provide how to update the MCP client configuration to the user.";
             return $"{{\"success\":true,\"new_pipe_name\":\"{newPipeName}\"}}";
         }
         return "{\"success\":false,\"error\":\"Failed to claim console\"}";
+    }
+
+    /// <summary>
+    /// Handles the set_window_title command - sets the console window title silently
+    /// </summary>
+    private static string SetWindowTitle(JsonElement parameters)
+    {
+        try
+        {
+            var title = parameters.GetProperty("title").GetString() ?? "";
+            var escapedTitle = title.Replace("'", "''");
+            McpServerHost.ExecuteSilentCommand($"$Host.UI.RawUI.WindowTitle = '{escapedTitle}'");
+            return "{\"success\":true}";
+        }
+        catch (Exception ex)
+        {
+            return $"{{\"success\":false,\"error\":\"{ex.Message.Replace("\"", "\\\"")}\"}}";
+        }
     }
 
 

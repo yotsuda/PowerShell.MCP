@@ -185,4 +185,19 @@ public class PowerShellService : IPowerShellService
             return null;
         }
     }
+
+    public async Task SetWindowTitleAsync(string pipeName, string title, CancellationToken cancellationToken = default)
+    {
+        var request = new SetWindowTitleParams { Title = title };
+        var jsonRequest = JsonSerializer.Serialize(request, PowerShellJsonRpcContext.Default.SetWindowTitleParams);
+
+        try
+        {
+            await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+        }
+        catch
+        {
+            // Ignore errors - title setting is best effort
+        }
+    }
 }

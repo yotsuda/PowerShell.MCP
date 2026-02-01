@@ -101,3 +101,12 @@ public class ClaimConsoleResponse
 
 [JsonSerializable(typeof(ClaimConsoleResponse))]
 public partial class ClaimConsoleResponseContext : JsonSerializerContext { }
+
+public class SetWindowTitleParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "set_window_title";
+
+    [JsonPropertyName("title")]
+    public required string Title { get; set; }
+}

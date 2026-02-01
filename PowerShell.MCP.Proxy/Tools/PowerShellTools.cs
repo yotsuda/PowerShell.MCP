@@ -85,7 +85,7 @@ public class PowerShellTools
             {
                 if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
                 sessionManager.SetActivePipeName(pipeName);
-                return (pipeName, activePipe != null, BuildClosedConsoleInfo(allPipesStatus));
+                return (pipeName, true, BuildClosedConsoleInfo(allPipesStatus));
             }
 
             if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
@@ -230,6 +230,16 @@ public class PowerShellTools
         return pid?.ToString() ?? "unknown";
     }
 
+    /// <summary>
+    /// Sets the console window title (fire and forget)
+    /// </summary>
+    private static async Task SetConsoleTitleAsync(IPowerShellService powerShellService, string pipeName, CancellationToken cancellationToken)
+    {
+        var title = ConsoleSessionManager.Instance.GetNextConsoleName();
+        await powerShellService.SetWindowTitleAsync(pipeName, title, cancellationToken);
+    }
+
+
     [McpServerTool]
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
@@ -351,6 +361,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 return locationResult; // Error message
             }
 
+            // Set console window title
+            if (sessionManager.ActivePipeName != null)
+            {
+                await SetConsoleTitleAsync(powerShellService, sessionManager.ActivePipeName, cancellationToken);
+            }
+
             // Collect completed outputs and busy status (after console start, using new pipe as exclude)
             var newPipeName = sessionManager.ActivePipeName;
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
@@ -381,6 +397,9 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         if (consoleSwitched)
         {
             var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
+
+            // Set console window title for claimed console
+            await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
 
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
@@ -441,6 +460,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                     if (!success)
                                     {
                                         return locationResult; // Error message
+                                    }
+
+                                    // Set console window title
+                                    if (sessionManager.ActivePipeName != null)
+                                    {
+                                        await SetConsoleTitleAsync(powerShellService, sessionManager.ActivePipeName, cancellationToken);
                                     }
 
                                     var newPipeName = sessionManager.ActivePipeName;
@@ -772,8 +797,15 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             return locationResult; // Error message
         }
 
-        // Collect busy status from Proxy side
+        // Set console window title
         var sessionManager = ConsoleSessionManager.Instance;
+        if (sessionManager.ActivePipeName != null)
+        {
+            await SetConsoleTitleAsync(powerShellService, sessionManager.ActivePipeName, cancellationToken);
+        }
+
+        // Collect busy status from Proxy side
+        // sessionManager already declared above
         var newPipeName = sessionManager.ActivePipeName;
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 

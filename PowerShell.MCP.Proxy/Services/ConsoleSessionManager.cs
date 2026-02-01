@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -38,7 +39,93 @@ public class ConsoleSessionManager
     /// </summary>
     private readonly HashSet<int> _knownBusyPids = new();
 
-    private ConsoleSessionManager() { }
+    /// <summary>
+    /// Category index assigned to this proxy instance
+    /// </summary>
+    private readonly int _categoryIndex;
+
+    /// <summary>
+    /// Counter for generating unique console names within the category
+    /// </summary>
+    private int _nameCounter = 0;
+
+    /// <summary>
+    /// Path to the category lock file
+    /// </summary>
+    private static readonly string CategoryLockFile = Path.Combine(Path.GetTempPath(), "PowerShell.MCP.Categories.json");
+
+    /// <summary>
+    /// Console name categories - each proxy gets a unique category
+    /// </summary>
+    private static readonly string[][] Categories = new[]
+    {
+        // Animals
+        new[] { "Cat", "Dog", "Fox", "Wolf", "Bear", "Lion", "Tiger", "Panda", "Koala", "Otter" },
+        // Zodiac
+        new[] { "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Aquarius", "Pisces" },
+        // Gems
+        new[] { "Sapphire", "Emerald", "Diamond", "Pearl", "Opal", "Topaz", "Amber", "Garnet", "Onyx", "Quartz" },
+        // Planets & Moons
+        new[] { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Neptune", "Pluto", "Titan", "Europa", "Luna" },
+        // Colors
+        new[] { "Red", "Blue", "Green", "Gold", "Silver", "Violet", "Coral", "Cyan", "Crimson", "Indigo" },
+        // Elements
+        new[] { "Fire", "Water", "Wind", "Earth", "Light", "Shadow", "Storm", "Frost", "Thunder", "Crystal" },
+        // Birds
+        new[] { "Robin", "Sparrow", "Falcon", "Raven", "Phoenix", "Crane", "Swan", "Finch", "Jay", "Dove" },
+        // Flowers
+        new[] { "Rose", "Lily", "Iris", "Daisy", "Lotus", "Orchid", "Tulip", "Jasmine", "Dahlia", "Peony" },
+        // Trees
+        new[] { "Oak", "Pine", "Maple", "Cedar", "Willow", "Birch", "Elm", "Ash", "Cherry", "Cypress" },
+        // Mountains
+        new[] { "Fuji", "Everest", "K2", "Kilimanjaro", "Olympus", "Alps", "Blanc", "Matterhorn", "Eiger", "Elbrus" },
+        // Seas & Oceans
+        new[] { "Pacific", "Atlantic", "Arctic", "Baltic", "Aegean", "Caspian", "Adriatic", "Nordic", "Arabian", "Tasman" },
+        // Greek Mythology
+        new[] { "Apollo", "Athena", "Hermes", "Artemis", "Hera", "Hades", "Poseidon", "Demeter", "Hestia", "Ares" },
+        // Music Genres
+        new[] { "Jazz", "Blues", "Rock", "Soul", "Funk", "Reggae", "Tango", "Waltz", "Swing", "Bossa" },
+        // Weather
+        new[] { "Sunny", "Cloudy", "Misty", "Breeze", "Rainbow", "Dusk", "Dawn", "Twilight", "Drizzle", "Haze" },
+        // Fruits
+        new[] { "Mango", "Apple", "Orange", "Grape", "Kiwi", "Papaya", "Melon", "Guava", "Fig", "Plum" },
+        // Fish & Sea Creatures
+        new[] { "Salmon", "Tuna", "Shark", "Trout", "Bass", "Goldfish", "Cod", "Carp", "Koi", "Mackerel" },
+        // Vegetables
+        new[] { "Carrot", "Potato", "Tomato", "Onion", "Garlic", "Pepper", "Spinach", "Lettuce", "Celery", "Cabbage" },
+        // Dinosaurs
+        new[] { "Rex", "Raptor", "Stego", "Diplo", "Tricera", "Ankylo", "Bronto", "Ptera", "Spino", "Pachy" },
+        // Cheese
+        new[] { "Cheddar", "Gouda", "Brie", "Feta", "Mozza", "Parma", "Ricotta", "Camembert", "Cream", "Swiss" },
+        // Pasta
+        new[] { "Penne", "Spaghetti", "Rigatoni", "Ravioli", "Lasagna", "Macaroni", "Fettuccine", "Tortellini", "Linguine", "Gnocchi" },
+        // Spices & Herbs
+        new[] { "Cumin", "Sage", "Thyme", "Basil", "Oregano", "Paprika", "Saffron", "Clove", "Nutmeg", "Cardamom" },
+        // Instruments
+        new[] { "Piano", "Guitar", "Violin", "Flute", "Drums", "Harp", "Cello", "Trumpet", "Banjo", "Oboe" },
+        // Dance Styles
+        new[] { "Salsa", "Mambo", "Rumba", "Ballet", "Tap", "Samba", "Polka", "Disco", "Flamenco", "Breakdance" },
+        // Mythical Creatures
+        new[] { "Dragon", "Griffin", "Unicorn", "Pegasus", "Sphinx", "Chimera", "Hydra", "Centaur", "Kraken", "Wyvern" },
+        // Stars
+        new[] { "Sirius", "Vega", "Polaris", "Rigel", "Altair", "Deneb", "Betelgeuse", "Proxima", "Alpha", "Centauri" },
+        // Space Objects
+        new[] { "Nova", "Pulsar", "Quasar", "Nebula", "Comet", "Meteor", "Orbit", "Galaxy", "Cosmos", "Aurora" },
+        // Chemical Elements
+        new[] { "Helium", "Neon", "Argon", "Xenon", "Cobalt", "Nickel", "Copper", "Zinc", "Titanium", "Carbon" },
+        // Architecture
+        new[] { "Tower", "Castle", "Palace", "Manor", "Villa", "Temple", "Fortress", "Chateau", "Bridge", "Abbey" },
+        // Desserts
+        new[] { "Waffle", "Crepe", "Mousse", "Sorbet", "Gelato", "Truffle", "Toffee", "Fudge", "Caramel", "Cookie" },
+        // Fabrics
+        new[] { "Silk", "Velvet", "Cotton", "Linen", "Denim", "Satin", "Cashmere", "Tweed", "Flannel", "Suede" },
+    };
+
+    private ConsoleSessionManager()
+    {
+        _categoryIndex = InitializeCategory();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => CleanupCategory();
+    }
 
     /// <summary>
     /// Generates a pipe name for proxy-started consoles (format: {name}.{proxyPid}.{pwshPid})
@@ -218,6 +305,112 @@ public class ConsoleSessionManager
             {
                 yield return pipe;
             }
+        }
+    }
+
+    /// <summary>
+    /// Gets the next console name for this proxy's category
+    /// </summary>
+    /// <returns>Console name in format "#proxyPid name"</returns>
+    public string GetNextConsoleName()
+    {
+        var category = Categories[_categoryIndex];
+        var name = category[_nameCounter % category.Length];
+        _nameCounter++;
+        return $"#{ProxyPid} {name}";
+    }
+
+    /// <summary>
+    /// Initializes the category for this proxy instance by reading the lock file
+    /// and selecting an unused category
+    /// </summary>
+    private int InitializeCategory()
+    {
+        Dictionary<int, int> usedCategories = new();
+
+        try
+        {
+            if (File.Exists(CategoryLockFile))
+            {
+                var json = File.ReadAllText(CategoryLockFile);
+                var data = JsonSerializer.Deserialize<Dictionary<string, int>>(json);
+                if (data != null)
+                {
+                    // Clean up entries for dead processes
+                    foreach (var kvp in data)
+                    {
+                        if (int.TryParse(kvp.Key, out var pid))
+                        {
+                            try
+                            {
+                                Process.GetProcessById(pid);
+                                usedCategories[pid] = kvp.Value;
+                            }
+                            catch (ArgumentException)
+                            {
+                                // Process no longer exists, skip
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore read errors, start fresh
+        }
+
+        // Find an unused category
+        var usedIndices = usedCategories.Values.ToHashSet();
+        int categoryIndex = 0;
+        for (int i = 0; i < Categories.Length; i++)
+        {
+            if (!usedIndices.Contains(i))
+            {
+                categoryIndex = i;
+                break;
+            }
+        }
+
+        // Register this proxy's category
+        usedCategories[ProxyPid] = categoryIndex;
+
+        try
+        {
+            var newData = usedCategories.ToDictionary(kvp => kvp.Key.ToString(), kvp => kvp.Value);
+            var json = JsonSerializer.Serialize(newData);
+            File.WriteAllText(CategoryLockFile, json);
+        }
+        catch
+        {
+            // Ignore write errors
+        }
+
+        Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Using category {categoryIndex} ({Categories[categoryIndex][0]}, {Categories[categoryIndex][1]}, ...)");
+        return categoryIndex;
+    }
+
+    /// <summary>
+    /// Removes this proxy's entry from the category lock file
+    /// </summary>
+    private void CleanupCategory()
+    {
+        try
+        {
+            if (!File.Exists(CategoryLockFile)) return;
+
+            var json = File.ReadAllText(CategoryLockFile);
+            var data = JsonSerializer.Deserialize<Dictionary<string, int>>(json);
+            if (data != null)
+            {
+                data.Remove(ProxyPid.ToString());
+                var newJson = JsonSerializer.Serialize(data);
+                File.WriteAllText(CategoryLockFile, newJson);
+            }
+        }
+        catch
+        {
+            // Ignore cleanup errors
         }
     }
 }
