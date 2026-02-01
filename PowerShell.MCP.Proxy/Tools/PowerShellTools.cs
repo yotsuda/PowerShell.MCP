@@ -27,7 +27,7 @@ public class PowerShellTools
 
         // Detect externally closed consoles
         var previouslyBusyPids = sessionManager.ConsumeKnownBusyPids();
-        var currentPipes = sessionManager.EnumeratePipes().ToList();
+        var currentPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid).ToList();
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
             .Where(p => p.HasValue)
@@ -128,7 +128,7 @@ public class PowerShellTools
         var completedOutput = new StringBuilder();
         var busyStatusInfo = new StringBuilder();
 
-        foreach (var pipeName in sessionManager.EnumeratePipes())
+        foreach (var pipeName in sessionManager.EnumeratePipes(sessionManager.ProxyPid))
         {
             if (pipeName == excludePipeName) continue;
 
@@ -557,7 +557,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // Detect externally closed consoles - return immediately if any previously busy pipe is gone
         var closedConsoleMessages = new List<string>();
         var previouslyBusyPids = sessionManager.ConsumeKnownBusyPids();
-        var currentPipes = sessionManager.EnumeratePipes().ToList();
+        var currentPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid).ToList();
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
             .Where(p => p.HasValue)

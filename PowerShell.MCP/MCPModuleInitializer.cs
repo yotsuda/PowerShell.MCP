@@ -35,8 +35,20 @@ namespace PowerShell.MCP
         {
             try
             {
-                // Create Named Pipe server with PID suffix (always use PID for uniqueness)
-                _namedPipeServer = new NamedPipeServer(usePidSuffix: true);
+                // Read proxy PID from global variable (set by PowerShell.MCP.Proxy before Import-Module)
+                int? proxyPid = null;
+                using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
+                {
+                    ps.AddScript("$global:PowerShellMCPProxyPid");
+                    var result = ps.Invoke();
+                    if (result.Count > 0 && result[0]?.BaseObject is int pid)
+                    {
+                        proxyPid = pid;
+                    }
+                }
+
+                // Create Named Pipe server with proxy PID (if available) and pwsh PID
+                _namedPipeServer = new NamedPipeServer(proxyPid);
                 _tokenSource = new CancellationTokenSource();
 
                 // Load and execute MCP polling engine script
