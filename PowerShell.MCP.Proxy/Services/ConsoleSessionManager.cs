@@ -45,9 +45,9 @@ public class ConsoleSessionManager
     private readonly int _categoryIndex;
 
     /// <summary>
-    /// Counter for generating unique console names within the category
+    /// Shuffled queue of names for this category (refilled when exhausted)
     /// </summary>
-    private int _nameCounter = 0;
+    private readonly Queue<string> _shuffledNames = new();
 
     /// <summary>
     /// Path to the category lock file
@@ -314,10 +314,18 @@ public class ConsoleSessionManager
     /// <returns>Console name in format "#proxyPid name"</returns>
     public string GetNextConsoleName()
     {
-        var category = Categories[_categoryIndex];
-        var name = category[_nameCounter % category.Length];
-        _nameCounter++;
-        return $"#{ProxyPid} {name}";
+        if (_shuffledNames.Count == 0)
+        {
+            // Refill with shuffled category names (Fisher-Yates shuffle)
+            var names = Categories[_categoryIndex].ToArray();
+            for (int i = names.Length - 1; i > 0; i--)
+            {
+                int j = Random.Shared.Next(i + 1);
+                (names[i], names[j]) = (names[j], names[i]);
+            }
+            foreach (var n in names) _shuffledNames.Enqueue(n);
+        }
+        return $"#{ProxyPid} {_shuffledNames.Dequeue()}";
     }
 
     /// <summary>
@@ -360,17 +368,15 @@ public class ConsoleSessionManager
             // Ignore read errors, start fresh
         }
 
-        // Find an unused category
+        // Find unused categories and pick one randomly
         var usedIndices = usedCategories.Values.ToHashSet();
-        int categoryIndex = 0;
-        for (int i = 0; i < Categories.Length; i++)
-        {
-            if (!usedIndices.Contains(i))
-            {
-                categoryIndex = i;
-                break;
-            }
-        }
+        var availableIndices = Enumerable.Range(0, Categories.Length)
+            .Where(i => !usedIndices.Contains(i))
+            .ToList();
+        
+        int categoryIndex = availableIndices.Count > 0
+            ? availableIndices[Random.Shared.Next(availableIndices.Count)]
+            : Random.Shared.Next(Categories.Length); // All used, pick any randomly
 
         // Register this proxy's category
         usedCategories[ProxyPid] = categoryIndex;
