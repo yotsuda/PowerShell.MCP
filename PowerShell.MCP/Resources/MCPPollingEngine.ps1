@@ -381,10 +381,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     try {
                         $promptText = & { prompt }
                         $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
-                        [Console]::Write("${cleanPrompt}> ")
+                        [Console]::Write("${cleanPrompt}> `e[0K")
                     }
                     catch {
-                        [Console]::Write("PS $((Get-Location).Path)> ")
+                        [Console]::Write("PS $((Get-Location).Path)> `e[0K")
                     }
 
                     $isMultiLine = $cmd.Contains("`n") -or $cmd.Contains("`r")
@@ -438,10 +438,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     try {
                         $promptText = & { prompt }
                         $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
-                        [Console]::Write("${cleanPrompt}> ")
+                        [Console]::Write("${cleanPrompt}> `e[0K")
                     }
                     catch {
-                        [Console]::Write("PS $($currentLocation.currentPath)> ")
+                        [Console]::Write("PS $($currentLocation.currentPath)> `e[0K")
                     }
 
                     # Generate MCP formatted output with duration
