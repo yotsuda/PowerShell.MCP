@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace PowerShell.MCP.Proxy.Services;
@@ -23,6 +24,11 @@ public class ConsoleSessionManager
     public const string ErrorModuleNotImported = "PowerShell.MCP module is not imported in existing pwsh.";
 
     /// <summary>
+    /// The PID of this proxy process (used for pipe name filtering)
+    /// </summary>
+    public int ProxyPid { get; } = Process.GetCurrentProcess().Id;
+
+    /// <summary>
     /// Currently active (ready) Named Pipe name
     /// </summary>
     public string? ActivePipeName { get; private set; }
@@ -35,12 +41,12 @@ public class ConsoleSessionManager
     private ConsoleSessionManager() { }
 
     /// <summary>
-    /// Generates a PID-based pipe name for proxy-started consoles
+    /// Generates a pipe name for proxy-started consoles (format: {name}.{proxyPid}.{pwshPid})
     /// </summary>
-    public static string GetPipeNameForPid(int pid) => $"{DefaultPipeName}.{pid}";
+    public static string GetPipeNameForPids(int proxyPid, int pwshPid) => $"{DefaultPipeName}.{proxyPid}.{pwshPid}";
 
     /// <summary>
-    /// Extracts PID from pipe name (format: PowerShell.MCP.Communication.{PID})
+    /// Extracts pwsh PID from pipe name (last segment: {name}.{pwshPid} or {name}.{proxyPid}.{pwshPid})
     /// </summary>
     public static int? GetPidFromPipeName(string pipeName)
     {
@@ -128,17 +134,23 @@ public class ConsoleSessionManager
     /// Windows: \\.\pipe\PowerShell.MCP.Communication.*
     /// Linux/macOS: /tmp/CoreFxPipe_PowerShell.MCP.Communication.*
     /// </summary>
-    public IEnumerable<string> EnumeratePipes()
+    /// <param name="proxyPid">If specified, only returns pipes owned by this proxy (format: {name}.{proxyPid}.*)</param>
+    public IEnumerable<string> EnumeratePipes(int? proxyPid = null)
     {
         IEnumerable<string> paths;
         bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+        // Build filter pattern based on proxyPid
+        string filterPattern = proxyPid.HasValue
+            ? $"{DefaultPipeName}.{proxyPid.Value}.*"
+            : $"{DefaultPipeName}*";
 
         try
         {
             if (isWindows)
             {
                 // Windows: Named Pipes appear in \\.\pipe\
-                paths = Directory.EnumerateFiles(@"\\.\pipe\", $"{DefaultPipeName}*");
+                paths = Directory.EnumerateFiles(@"\\.\pipe\", filterPattern);
             }
             else
             {
@@ -155,7 +167,7 @@ public class ConsoleSessionManager
                     .Where(Directory.Exists)
                     .SelectMany(dir =>
                     {
-                        try { return Directory.EnumerateFiles(dir, $"CoreFxPipe_{DefaultPipeName}*"); }
+                        try { return Directory.EnumerateFiles(dir, $"CoreFxPipe_{filterPattern}"); }
                         catch { return Enumerable.Empty<string>(); }
                     });
             }

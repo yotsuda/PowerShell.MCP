@@ -220,12 +220,12 @@ public class NamedPipeServer : IDisposable
     /// <summary>
     /// Creates a new Named Pipe server with the specified pipe name
     /// </summary>
-    /// <param name="usePidSuffix">If true, append PID to pipe name</param>
-    public NamedPipeServer(bool usePidSuffix)
+    /// <param name="proxyPid">Proxy PID to include in pipe name (null for user-started consoles)</param>
+    public NamedPipeServer(int? proxyPid)
     {
-        PipeName = usePidSuffix
-            ? $"{BasePipeName}.{Environment.ProcessId}"
-            : BasePipeName;
+        PipeName = proxyPid.HasValue
+            ? $"{BasePipeName}.{proxyPid.Value}.{Environment.ProcessId}"
+            : $"{BasePipeName}.{Environment.ProcessId}";
     }
 
     /// <summary>
