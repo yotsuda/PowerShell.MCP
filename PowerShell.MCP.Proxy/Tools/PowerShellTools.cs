@@ -92,6 +92,47 @@ public class PowerShellTools
             allPipesStatus.Add($"  - {pipeName}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
         }
 
+        // Step 3: Check unowned pipes (user-started consoles not yet claimed by any proxy)
+        foreach (var pipeName in sessionManager.EnumerateUnownedPipes())
+        {
+            var status = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+
+            if (status == null)
+            {
+                sessionManager.ClearDeadPipe(pipeName);
+                continue;
+            }
+
+            if (status.Status == "standby" || status.Status == "completed")
+            {
+                // Claim this console - response may not be received because pipe closes during rename
+                var pwshPid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+                if (!pwshPid.HasValue) continue;
+
+                // Fire and forget - the pipe will close before response
+                _ = powerShellService.ClaimConsoleAsync(pipeName, sessionManager.ProxyPid, cancellationToken);
+
+                // Calculate the expected new pipe name
+                var newPipeName = ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, pwshPid.Value);
+
+                // Wait for the new pipe to become available (retry with short timeout)
+                for (int i = 0; i < 20; i++)
+                {
+                    await Task.Delay(100, cancellationToken);
+
+                    var newStatus = await powerShellService.GetStatusFromPipeAsync(newPipeName, cancellationToken);
+                    if (newStatus != null)
+                    {
+                        sessionManager.SetActivePipeName(newPipeName);
+                        return (newPipeName, false, BuildClosedConsoleInfo(allPipesStatus));
+                    }
+                }
+            }
+
+            if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
+            allPipesStatus.Add($"  - {pipeName} (unowned): {status.Status}");
+        }
+
         // No ready pipe found
         var statusInfo = allPipesStatus.Count > 0
             ? "All pipes status:\n" + string.Join("\n", allPipesStatus)

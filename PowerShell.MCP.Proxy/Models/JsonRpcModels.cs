@@ -77,3 +77,27 @@ public class GetStatusResponse
 
 [JsonSerializable(typeof(GetStatusResponse))]
 public partial class GetStatusResponseContext : JsonSerializerContext { }
+
+public class ClaimConsoleParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "claim_console";
+
+    [JsonPropertyName("proxy_pid")]
+    public int ProxyPid { get; set; }
+}
+
+public class ClaimConsoleResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("new_pipe_name")]
+    public string? NewPipeName { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+[JsonSerializable(typeof(ClaimConsoleResponse))]
+public partial class ClaimConsoleResponseContext : JsonSerializerContext { }

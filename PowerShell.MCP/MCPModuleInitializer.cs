@@ -106,5 +106,46 @@ namespace PowerShell.MCP
                 return $"Error getting current location: {ex.Message}";
             }
         }
+    /// <summary>
+    /// Claims this console for a specific proxy by restarting the Named Pipe server with new name.
+    /// Called when a proxy connects to an unowned console.
+    /// </summary>
+    /// <param name="proxyPid">The PID of the proxy claiming this console</param>
+    /// <returns>The new pipe name after claiming</returns>
+    public static string? ClaimConsole(int proxyPid)
+    {
+        if (_namedPipeServer == null || _tokenSource == null)
+            return null;
+
+        try
+        {
+            // Stop current server
+            _tokenSource.Cancel();
+            _namedPipeServer.Dispose();
+
+            // Create new server with proxy PID
+            _namedPipeServer = new NamedPipeServer(proxyPid);
+            _tokenSource = new CancellationTokenSource();
+
+            // Start new server
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await _namedPipeServer.StartAsync(_tokenSource.Token);
+                }
+                catch (Exception)
+                {
+                    // Silently ignore Named Pipe server errors
+                }
+            }, _tokenSource.Token);
+
+            return _namedPipeServer.PipeName;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
     }
 }

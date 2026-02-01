@@ -634,9 +634,25 @@ Please provide how to update the MCP client configuration to the user.";
         return method switch
         {
             "get_current_location" => MCPModuleInitializer.GetCurrentLocation(),
+            "claim_console" => ClaimConsole(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
     }
+    /// <summary>
+    /// Handles the claim_console command - claims this console for a proxy
+    /// </summary>
+    private static string ClaimConsole(JsonElement parameters)
+    {
+        var proxyPid = parameters.GetProperty("proxy_pid").GetInt32();
+        var newPipeName = MCPModuleInitializer.ClaimConsole(proxyPid);
+
+        if (newPipeName != null)
+        {
+            return $"{{\"success\":true,\"new_pipe_name\":\"{newPipeName}\"}}";
+        }
+        return "{\"success\":false,\"error\":\"Failed to claim console\"}";
+    }
+
 
     /// <summary>
     /// Executes the invokeExpression tool

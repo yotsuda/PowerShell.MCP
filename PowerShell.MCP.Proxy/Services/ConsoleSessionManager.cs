@@ -193,4 +193,31 @@ public class ConsoleSessionManager
             }
         }
     }
+
+    /// <summary>
+    /// Enumerates unowned PowerShell.MCP Named Pipes (user-started consoles not yet claimed by any proxy).
+    /// Unowned pipes have 4 segments: {name}.{pwshPid}
+    /// Owned pipes have 5 segments: {name}.{proxyPid}.{pwshPid}
+    /// </summary>
+    public IEnumerable<string> EnumerateUnownedPipes()
+    {
+        foreach (var pipe in EnumeratePipes(proxyPid: null))
+        {
+            // Get just the pipe name without directory path
+            var baseName = Path.GetFileName(pipe);
+
+            // Remove CoreFxPipe_ prefix (Linux/macOS)
+            if (baseName.StartsWith("CoreFxPipe_"))
+                baseName = baseName.Substring("CoreFxPipe_".Length);
+
+            // Count segments after DefaultPipeName
+            // Unowned: PowerShell.MCP.Communication.{pwshPid} = 4 segments
+            // Owned:   PowerShell.MCP.Communication.{proxyPid}.{pwshPid} = 5 segments
+            var segments = baseName.Split('.');
+            if (segments.Length == 4 && int.TryParse(segments[^1], out _))
+            {
+                yield return pipe;
+            }
+        }
+    }
 }

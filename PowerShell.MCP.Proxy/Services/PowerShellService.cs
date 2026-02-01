@@ -163,4 +163,26 @@ public class PowerShellService : IPowerShellService
 
         return response;
     }
+
+    public async Task<ClaimConsoleResponse?> ClaimConsoleAsync(string pipeName, int proxyPid, CancellationToken cancellationToken = default)
+    {
+        var requestParams = new ClaimConsoleParams { ProxyPid = proxyPid };
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.ClaimConsoleParams);
+
+        try
+        {
+            var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+
+            if (string.IsNullOrEmpty(response))
+            {
+                return null;
+            }
+
+            return JsonSerializer.Deserialize(response, ClaimConsoleResponseContext.Default.ClaimConsoleResponse);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }
