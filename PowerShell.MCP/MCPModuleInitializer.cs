@@ -147,5 +147,14 @@ namespace PowerShell.MCP
             return null;
         }
     }
+
+    /// <summary>
+    /// Gets the current pipe name for this console.
+    /// </summary>
+    /// <returns>The pipe name, or null if not initialized</returns>
+    public static string? GetPipeName()
+    {
+        return _namedPipeServer?.PipeName;
+    }
     }
 }

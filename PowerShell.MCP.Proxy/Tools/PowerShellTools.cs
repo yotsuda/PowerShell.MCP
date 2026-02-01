@@ -124,7 +124,7 @@ public class PowerShellTools
                     if (newStatus != null)
                     {
                         sessionManager.SetActivePipeName(newPipeName);
-                        return (newPipeName, false, BuildClosedConsoleInfo(allPipesStatus));
+                        return (newPipeName, true, BuildClosedConsoleInfo(allPipesStatus));
                     }
                 }
             }

@@ -112,4 +112,113 @@ function Get-MCPProxyPath {
     return $proxyPath
 }
 
-Export-ModuleMember -Function Get-MCPProxyPath
+
+<#
+.SYNOPSIS
+    Gets information about the MCP client that owns this console.
+
+.DESCRIPTION
+    Returns ownership information for the current PowerShell console, including
+    whether it is owned by an MCP proxy, the proxy's PID, and the client name
+    (e.g., Claude Desktop, Claude Code, VS Code).
+
+.EXAMPLE
+    Get-MCPOwner
+
+    Owned      : True
+    ProxyPid   : 22208
+    ClientName : Claude Desktop
+
+.EXAMPLE
+    Get-MCPOwner
+
+    Owned      : False
+    ProxyPid   :
+    ClientName :
+
+.OUTPUTS
+    PSCustomObject with Owned, ProxyPid, and ClientName properties
+#>
+function Get-MCPOwner {
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param()
+
+    $pipeName = [PowerShell.MCP.MCPModuleInitializer]::GetPipeName()
+
+    if (-not $pipeName) {
+        return [PSCustomObject]@{
+            Owned      = $false
+            ProxyPid   = $null
+            ClientName = $null
+        }
+    }
+
+    # Parse pipe name segments
+    # Unowned: PowerShell.MCP.Communication.{pwshPid} (4 segments)
+    # Owned:   PowerShell.MCP.Communication.{proxyPid}.{pwshPid} (5 segments)
+    $segments = $pipeName.Split('.')
+
+    if ($segments.Length -ne 5) {
+        return [PSCustomObject]@{
+            Owned      = $false
+            ProxyPid   = $null
+            ClientName = $null
+        }
+    }
+
+    $proxyPid = [int]$segments[3]
+
+    # Determine client name by traversing process tree
+    $clientName = $null
+    try {
+        $process = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
+        if ($process) {
+            # Check parent processes to find MCP client
+            $currentProcess = $process
+            for ($i = 0; $i -lt 5; $i++) {
+                $processName = $currentProcess.ProcessName.ToLower()
+
+                if ($processName -eq 'claude') {
+                    $clientName = 'Claude Desktop'
+                    break
+                }
+                elseif ($processName -eq 'code' -or $processName -eq 'code - insiders') {
+                    $clientName = 'VS Code'
+                    break
+                }
+                elseif ($processName -match 'cursor') {
+                    $clientName = 'Cursor'
+                    break
+                }
+
+                # Try to get parent process
+                try {
+                    $parentId = (Get-CimInstance Win32_Process -Filter "ProcessId = $($currentProcess.Id)" -ErrorAction SilentlyContinue).ParentProcessId
+                    if ($parentId) {
+                        $currentProcess = Get-Process -Id $parentId -ErrorAction SilentlyContinue
+                        if (-not $currentProcess) { break }
+                    }
+                    else { break }
+                }
+                catch { break }
+            }
+
+            # If not identified, use proxy process name
+            if (-not $clientName) {
+                $clientName = $process.ProcessName
+            }
+        }
+    }
+    catch {
+        # Ignore errors in process lookup
+    }
+
+    return [PSCustomObject]@{
+        Owned      = $true
+        ProxyPid   = $proxyPid
+        ClientName = $clientName
+    }
+}
+
+Export-ModuleMember -Function Get-MCPProxyPath, Get-MCPOwner
