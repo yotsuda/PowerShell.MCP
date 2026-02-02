@@ -1,4 +1,4 @@
-name: Cross-Platform Test
+﻿name: Cross-Platform Test
 
 on:
   workflow_dispatch:  # Manual trigger
@@ -388,17 +388,29 @@ jobs:
           $process.StandardInput.Flush()
           Start-Sleep -Milliseconds 200
           
-          # Test: invoke_expression with Get-Date
-          Write-Host "`n=== Test: invoke_expression (Get-Date) ===" -ForegroundColor Yellow
+          # Test: invoke_expression with Get-Date (first call - should return get_current_location)
+          Write-Host "`n=== Test: invoke_expression (Get-Date) - First call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
+          $response = Send-JsonRpc $invokeRequest 10000
+          Write-Host "Response (truncated): $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
+          
+          if ($response -match "Switched to console" -and $response -match "Pipeline NOT executed") {
+            Write-Host "First invoke_expression: PASSED (expected behavior - command not executed)" -ForegroundColor Green
+          } else {
+            throw "First invoke_expression did not return expected ''Switched to console'' message"
+          }
+          
+          # Test: invoke_expression with Get-Date (second call - should execute)
+          Write-Host "`n=== Test: invoke_expression (Get-Date) - Second call ===" -ForegroundColor Yellow
+          $invokeRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 10000
           Write-Host "Response: $response"
           
           $today = Get-Date -Format "yyyy-MM-dd"
           if ($response -match $today) {
-            Write-Host "invoke_expression (Get-Date): PASSED" -ForegroundColor Green
+            Write-Host "Second invoke_expression (Get-Date): PASSED" -ForegroundColor Green
           } else {
-            throw "invoke_expression failed - expected date $today not found"
+            throw "Second invoke_expression failed - expected date $today not found"
           }
           
           Write-Host "`n=== All Named Pipe tests passed ===" -ForegroundColor Green
