@@ -50,9 +50,9 @@ public class ConsoleSessionManager
     private readonly Queue<string> _shuffledNames = new();
 
     /// <summary>
-    /// Mapping from pwsh PID to assigned name (for recycling names when console closes)
+    /// Set of pwsh PIDs that have been assigned a console title
     /// </summary>
-    private readonly Dictionary<int, string> _pidToName = new();
+    private readonly HashSet<int> _titledPids = new();
 
     /// <summary>
     /// Path to the category lock file
@@ -203,7 +203,7 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Clears a dead pipe from active pipe and busy tracking, and recycles the console name
+    /// Clears a dead pipe from active pipe and busy tracking
     /// </summary>
     public void ClearDeadPipe(string pipeName)
     {
@@ -217,14 +217,7 @@ public class ConsoleSessionManager
             if (pid.HasValue)
             {
                 _knownBusyPids.Remove(pid.Value);
-                
-                // Recycle the console name back to the queue
-                if (_pidToName.TryGetValue(pid.Value, out var name))
-                {
-                    _pidToName.Remove(pid.Value);
-                    _shuffledNames.Enqueue(name);
-                    Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Recycled name '{name}' from dead pipe '{pipeName}'");
-                }
+                _titledPids.Remove(pid.Value);
             }
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}'");
         }
@@ -324,25 +317,21 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Assigns a console name to the specified pwsh PID. Returns the same name if already assigned.
-    /// When the console is closed, call ClearDeadPipe to recycle the name.
+    /// Assigns a console name to the specified pwsh PID. Returns null if already assigned.
     /// </summary>
     /// <param name="pwshPid">The PID of the PowerShell process</param>
-    /// <returns>Console name in format "#pwshPid name"</returns>
-    public string AssignNameToPid(int pwshPid)
+    /// <returns>Console name in format "#pwshPid name", or null if already titled</returns>
+    public string? TryAssignNameToPid(int pwshPid)
     {
         lock (_lock)
         {
-            // Return existing name if already assigned
-            if (_pidToName.TryGetValue(pwshPid, out var existingName))
-                return $"#{pwshPid} {existingName}";
+            if (!_titledPids.Add(pwshPid))
+                return null;
 
-            // Get next name from shuffled queue
             if (_shuffledNames.Count == 0)
                 RefillShuffledNames();
 
             var name = _shuffledNames.Dequeue();
-            _pidToName[pwshPid] = name;
             return $"#{pwshPid} {name}";
         }
     }
