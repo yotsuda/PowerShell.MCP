@@ -235,7 +235,10 @@ public class PowerShellTools
     /// </summary>
     private static async Task SetConsoleTitleAsync(IPowerShellService powerShellService, string pipeName, CancellationToken cancellationToken)
     {
-        var title = ConsoleSessionManager.Instance.GetNextConsoleName();
+        var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+        if (pid == null) return;
+        
+        var title = ConsoleSessionManager.Instance.AssignNameToPid(pid.Value);
         await powerShellService.SetWindowTitleAsync(pipeName, title, cancellationToken);
     }
 

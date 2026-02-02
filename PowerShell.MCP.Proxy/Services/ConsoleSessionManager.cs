@@ -50,6 +50,11 @@ public class ConsoleSessionManager
     private readonly Queue<string> _shuffledNames = new();
 
     /// <summary>
+    /// Mapping from pwsh PID to assigned name (for recycling names when console closes)
+    /// </summary>
+    private readonly Dictionary<int, string> _pidToName = new();
+
+    /// <summary>
     /// Path to the category lock file
     /// </summary>
     private static readonly string CategoryLockFile = Path.Combine(Path.GetTempPath(), "PowerShell.MCP.Categories.json");
@@ -60,17 +65,15 @@ public class ConsoleSessionManager
     private static readonly string[][] Categories = new[]
     {
         // Animals
-        new[] { "Cat", "Dog", "Fox", "Wolf", "Bear", "Lion", "Tiger", "Panda", "Koala", "Otter" },
+        new[] { "Cat", "Dog", "Fox", "Wolf", "Bear", "Lion", "Tiger", "Panda", "Koala", "Rabbit" },
         // Zodiac
         new[] { "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Aquarius", "Pisces" },
         // Gems
-        new[] { "Sapphire", "Emerald", "Diamond", "Pearl", "Opal", "Topaz", "Amber", "Garnet", "Onyx", "Quartz" },
+        new[] { "Sapphire", "Emerald", "Diamond", "Pearl", "Opal", "Topaz", "Amber", "Ruby", "Amethyst", "Quartz" },
         // Planets & Moons
         new[] { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Neptune", "Pluto", "Titan", "Europa", "Luna" },
         // Colors
-        new[] { "Red", "Blue", "Green", "Gold", "Silver", "Violet", "Coral", "Cyan", "Crimson", "Indigo" },
-        // Elements
-        new[] { "Fire", "Water", "Wind", "Earth", "Light", "Shadow", "Storm", "Frost", "Thunder", "Crystal" },
+        new[] { "Red", "Blue", "Green", "Yellow", "Orange", "Pink", "Purple", "Gold", "Silver", "White" },
         // Birds
         new[] { "Robin", "Sparrow", "Falcon", "Raven", "Phoenix", "Crane", "Swan", "Finch", "Jay", "Dove" },
         // Flowers
@@ -84,41 +87,45 @@ public class ConsoleSessionManager
         // Greek Mythology
         new[] { "Apollo", "Athena", "Hermes", "Artemis", "Hera", "Hades", "Poseidon", "Demeter", "Hestia", "Ares" },
         // Music Genres
-        new[] { "Jazz", "Blues", "Rock", "Soul", "Funk", "Reggae", "Tango", "Waltz", "Swing", "Bossa" },
+        new[] { "Jazz", "Blues", "Rock", "Soul", "Funk", "Reggae", "Pop", "Metal", "Punk", "Classical" },
         // Weather
         new[] { "Sunny", "Cloudy", "Misty", "Breeze", "Rainbow", "Dusk", "Dawn", "Twilight", "Drizzle", "Haze" },
         // Fruits
         new[] { "Mango", "Apple", "Orange", "Grape", "Kiwi", "Papaya", "Melon", "Guava", "Fig", "Plum" },
         // Fish & Sea Creatures
-        new[] { "Salmon", "Tuna", "Shark", "Trout", "Bass", "Goldfish", "Cod", "Carp", "Koi", "Mackerel" },
+        new[] { "Salmon", "Tuna", "Shark", "Swordfish", "Catfish", "Goldfish", "Piranha", "Angelfish", "Koi", "Sardine" },
         // Vegetables
-        new[] { "Carrot", "Potato", "Tomato", "Onion", "Garlic", "Pepper", "Spinach", "Lettuce", "Celery", "Cabbage" },
+        new[] { "Carrot", "Potato", "Tomato", "Onion", "Garlic", "Pumpkin", "Bean", "Corn", "Broccoli", "Radish" },
         // Dinosaurs
         new[] { "Rex", "Raptor", "Stego", "Diplo", "Tricera", "Ankylo", "Bronto", "Ptera", "Spino", "Pachy" },
         // Cheese
         new[] { "Cheddar", "Gouda", "Brie", "Feta", "Mozza", "Parma", "Ricotta", "Camembert", "Cream", "Swiss" },
-        // Pasta
-        new[] { "Penne", "Spaghetti", "Rigatoni", "Ravioli", "Lasagna", "Macaroni", "Fettuccine", "Tortellini", "Linguine", "Gnocchi" },
+        // Sports
+        new[] { "Soccer", "Tennis", "Golf", "Baseball", "Basketball", "Rugby", "Hockey", "Volleyball", "Bowling", "Softball" },
         // Spices & Herbs
         new[] { "Cumin", "Sage", "Thyme", "Basil", "Oregano", "Paprika", "Saffron", "Clove", "Nutmeg", "Cardamom" },
         // Instruments
         new[] { "Piano", "Guitar", "Violin", "Flute", "Drums", "Harp", "Cello", "Trumpet", "Banjo", "Oboe" },
         // Dance Styles
-        new[] { "Salsa", "Mambo", "Rumba", "Ballet", "Tap", "Samba", "Polka", "Disco", "Flamenco", "Breakdance" },
+        new[] { "Ballet", "Tap", "Polka", "Moonwalk", "Flamenco", "Breakdance", "Waltz", "Twist", "Hiphop", "Tango" },
         // Mythical Creatures
         new[] { "Dragon", "Griffin", "Unicorn", "Pegasus", "Sphinx", "Chimera", "Hydra", "Centaur", "Kraken", "Wyvern" },
         // Stars
-        new[] { "Sirius", "Vega", "Polaris", "Rigel", "Altair", "Deneb", "Betelgeuse", "Proxima", "Alpha", "Centauri" },
+        new[] { "Sirius", "Vega", "Polaris", "Rigel", "Altair", "Deneb", "Betelgeuse", "Antares", "Spica", "Proxima" },
         // Space Objects
-        new[] { "Nova", "Pulsar", "Quasar", "Nebula", "Comet", "Meteor", "Orbit", "Galaxy", "Cosmos", "Aurora" },
+        new[] { "Nova", "Pulsar", "Quasar", "Nebula", "Comet", "Meteor", "Orbit", "Galaxy", "Cosmos", "Asteroid" },
         // Chemical Elements
         new[] { "Helium", "Neon", "Argon", "Xenon", "Cobalt", "Nickel", "Copper", "Zinc", "Titanium", "Carbon" },
         // Architecture
         new[] { "Tower", "Castle", "Palace", "Manor", "Villa", "Temple", "Fortress", "Chateau", "Bridge", "Abbey" },
         // Desserts
-        new[] { "Waffle", "Crepe", "Mousse", "Sorbet", "Gelato", "Truffle", "Toffee", "Fudge", "Caramel", "Cookie" },
+        new[] { "Waffle", "Crepe", "Pie", "Donut", "Cupcake", "Pancake", "Cake", "Pudding", "Caramel", "Cookie" },
         // Fabrics
         new[] { "Silk", "Velvet", "Cotton", "Linen", "Denim", "Satin", "Cashmere", "Tweed", "Flannel", "Suede" },
+        // Drinks
+        new[] { "Coffee", "Tea", "Juice", "Milk", "Cocoa", "Soda", "Water", "Cola", "Lemonade", "Smoothie" },
+        // Vehicles
+        new[] { "Car", "Bike", "Train", "Plane", "Boat", "Bus", "Taxi", "Truck", "Ship", "Subway" },
     };
 
     private ConsoleSessionManager()
@@ -196,7 +203,7 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Clears a dead pipe from active pipe and busy tracking
+    /// Clears a dead pipe from active pipe and busy tracking, and recycles the console name
     /// </summary>
     public void ClearDeadPipe(string pipeName)
     {
@@ -210,6 +217,14 @@ public class ConsoleSessionManager
             if (pid.HasValue)
             {
                 _knownBusyPids.Remove(pid.Value);
+                
+                // Recycle the console name back to the queue
+                if (_pidToName.TryGetValue(pid.Value, out var name))
+                {
+                    _pidToName.Remove(pid.Value);
+                    _shuffledNames.Enqueue(name);
+                    Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Recycled name '{name}' from dead pipe '{pipeName}'");
+                }
             }
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}'");
         }
@@ -309,23 +324,41 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Gets the next console name for this proxy's category
+    /// Assigns a console name to the specified pwsh PID. Returns the same name if already assigned.
+    /// When the console is closed, call ClearDeadPipe to recycle the name.
     /// </summary>
-    /// <returns>Console name in format "#proxyPid name"</returns>
-    public string GetNextConsoleName()
+    /// <param name="pwshPid">The PID of the PowerShell process</param>
+    /// <returns>Console name in format "#pwshPid name"</returns>
+    public string AssignNameToPid(int pwshPid)
     {
-        if (_shuffledNames.Count == 0)
+        lock (_lock)
         {
-            // Refill with shuffled category names (Fisher-Yates shuffle)
-            var names = Categories[_categoryIndex].ToArray();
-            for (int i = names.Length - 1; i > 0; i--)
-            {
-                int j = Random.Shared.Next(i + 1);
-                (names[i], names[j]) = (names[j], names[i]);
-            }
-            foreach (var n in names) _shuffledNames.Enqueue(n);
+            // Return existing name if already assigned
+            if (_pidToName.TryGetValue(pwshPid, out var existingName))
+                return $"#{pwshPid} {existingName}";
+
+            // Get next name from shuffled queue
+            if (_shuffledNames.Count == 0)
+                RefillShuffledNames();
+
+            var name = _shuffledNames.Dequeue();
+            _pidToName[pwshPid] = name;
+            return $"#{pwshPid} {name}";
         }
-        return $"#{ProxyPid} {_shuffledNames.Dequeue()}";
+    }
+
+    /// <summary>
+    /// Refills the shuffled names queue with category names in random order (Fisher-Yates shuffle)
+    /// </summary>
+    private void RefillShuffledNames()
+    {
+        var names = Categories[_categoryIndex].ToArray();
+        for (int i = names.Length - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (names[i], names[j]) = (names[j], names[i]);
+        }
+        foreach (var n in names) _shuffledNames.Enqueue(n);
     }
 
     /// <summary>
