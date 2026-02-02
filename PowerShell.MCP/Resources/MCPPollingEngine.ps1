@@ -297,8 +297,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $statusText = if ($hasErrors) { "executed with errors" } else { "executed successfully" }
                 $durationText = "{0:F2}s" -f $Duration
 
+                # Get window title (contains PID and name like "#12345 Cat")
+                $windowTitle = $Host.UI.RawUI.WindowTitle
+
                 $pipelineInfo = if ($pipelineSummary) { " | Pipeline: $pipelineSummary" } else { "" }
-                $statusLine = "$statusIcon Pipeline $statusText | pwsh PID: $PID | Status: $Status$pipelineInfo | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
+                $statusLine = "$statusIcon Pipeline $statusText | Window: $windowTitle | Status: $Status$pipelineInfo | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
 
                 # Generate structured output strings
                 $structuredOutput = @{

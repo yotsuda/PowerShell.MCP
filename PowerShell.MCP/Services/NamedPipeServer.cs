@@ -339,23 +339,29 @@ public class NamedPipeServer : IDisposable
 
                     var elapsed = ExecutionState.ElapsedSeconds;
                     var runningPipeline = ExecutionState.CurrentPipeline;
+                    var truncatedPipeline = TruncatePipeline(runningPipeline);
+                    var roundedDuration = Math.Round(elapsed, 2);
+                    var statusLine = BuildStatusLine("⧗", "Pipeline is running", "Busy", truncatedPipeline, roundedDuration);
                     statusResponse = JsonSerializer.Serialize(new
                     {
                         pid,
                         status = "busy",
-                        pipeline = runningPipeline,
-                        duration = Math.Round(elapsed, 2)
+                        pipeline = truncatedPipeline,
+                        duration = roundedDuration,
+                        statusLine
                     });
                 }
                 else if (status == "completed")
                 {
                     // Has cached output(s) - report count (Proxy will call consume_output later)
                     var cachedOutputs = ExecutionState.PeekCachedOutputs();
+                    var statusLine = BuildStatusLine("✓", "Pipeline completed (cached)", "Completed");
                     statusResponse = JsonSerializer.Serialize(new
                     {
                         pid,
                         status = "completed",
-                        cachedCount = cachedOutputs.Count
+                        cachedCount = cachedOutputs.Count,
+                        statusLine
                     });
                 }
                 else
@@ -363,17 +369,21 @@ public class NamedPipeServer : IDisposable
                     // standby - but check if runspace is actually available (via heartbeat)
                     if (ExecutionState.IsRunspaceAvailable)
                     {
-                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby" });
+                        var statusLine = BuildStatusLine("●", "Console ready", "Standby");
+                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby", statusLine });
                     }
                     else
                     {
                         // Runspace is busy with user command (no heartbeat received recently)
+                        var userDuration = Math.Round(ExecutionState.UserCommandElapsedSeconds, 2);
+                        var statusLine = BuildStatusLine("⧗", "User command running", "Busy", "(user command)", userDuration);
                         statusResponse = JsonSerializer.Serialize(new
                         {
                             pid,
                             status = "busy",
                             pipeline = "(user command)",
-                            duration = ExecutionState.UserCommandElapsedSeconds
+                            duration = userDuration,
+                            statusLine
                         });
                     }
                 }
@@ -504,16 +514,19 @@ Please provide how to update the MCP client configuration to the user.";
                     var pid = Process.GetCurrentProcess().Id;
                     var elapsed = ExecutionState.ElapsedSeconds;
                     var runningPipeline = TruncatePipeline(pipeline);
+                    var roundedDuration = Math.Round(elapsed, 2);
 
                     if (isTimeout)
                     {
                         // Timeout - send JSON response
+                        var statusLine = BuildStatusLine("⧗", "Pipeline is still running", "Busy", runningPipeline, roundedDuration);
                         var timeoutResponse = JsonSerializer.Serialize(new
                         {
                             pid,
                             status = "timeout",
                             pipeline = runningPipeline,
-                            duration = Math.Round(elapsed, 2)
+                            duration = roundedDuration,
+                            statusLine
                         });
                         try
                         {
@@ -527,12 +540,14 @@ Please provide how to update the MCP client configuration to the user.";
                     else if (shouldCache)
                     {
                         // Result cached - MCP client disconnected, will be returned on next tool call
+                        var statusLine = BuildStatusLine("✓", "Pipeline executed successfully", "Completed", runningPipeline, roundedDuration);
                         var cachedResponse = JsonSerializer.Serialize(new
                         {
                             pid,
                             status = "completed",
                             pipeline = runningPipeline,
-                            duration = Math.Round(elapsed, 2)
+                            duration = roundedDuration,
+                            statusLine
                         });
                         try
                         {
@@ -771,6 +786,38 @@ Please provide how to update the MCP client configuration to the user.";
             return firstSegment + "...";
 
         return firstSegment;
+    }
+
+
+    /// <summary>
+    /// Gets the current window title for status line display
+    /// </summary>
+    private static string GetWindowTitle()
+    {
+        try
+        {
+            return Console.Title;
+        }
+        catch
+        {
+            return $"#{System.Diagnostics.Process.GetCurrentProcess().Id}";
+        }
+    }
+
+    /// <summary>
+    /// Builds a status line for MCP response display
+    /// </summary>
+    /// <param name="icon">Status icon (✓, ✗, ⧗)</param>
+    /// <param name="statusText">Description text (e.g., "Pipeline executed successfully")</param>
+    /// <param name="status">Status value (Ready, Busy, Completed)</param>
+    /// <param name="pipeline">Pipeline being executed (optional)</param>
+    /// <param name="duration">Execution duration in seconds (optional)</param>
+    private static string BuildStatusLine(string icon, string statusText, string status, string? pipeline = null, double? duration = null)
+    {
+        var windowTitle = GetWindowTitle();
+        var pipelineInfo = !string.IsNullOrEmpty(pipeline) ? $" | Pipeline: {pipeline}" : "";
+        var durationInfo = duration.HasValue ? $" | Duration: {duration:F2}s" : "";
+        return $"{icon} {statusText} | Window: {windowTitle} | Status: {status}{pipelineInfo}{durationInfo}";
     }
 
     public void Dispose()

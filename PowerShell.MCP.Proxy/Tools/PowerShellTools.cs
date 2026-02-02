@@ -152,6 +152,10 @@ public class PowerShellTools
 
     private static string FormatBusyStatus(GetStatusResponse status)
     {
+        // Use statusLine from dll if available, otherwise fallback to old format
+        if (!string.IsNullOrEmpty(status.StatusLine))
+            return status.StatusLine;
+
         var truncatedPipeline = TruncatePipeline(status.Pipeline ?? "");
         return $"⧗ | pwsh PID: {status.Pid} | Status: Busy | Pipeline: {truncatedPipeline} | Duration: {status.Duration:F2}s";
     }
@@ -532,7 +536,11 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                     timeoutResponse.AppendLine(scopeWarning);
                                     timeoutResponse.AppendLine();
                                 }
-                                timeoutResponse.AppendLine($"⧗ Pipeline is still running | pwsh PID: {jsonResponse.Pid} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s");
+                                // Use statusLine from dll if available
+                                var timeoutStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
+                                    ? jsonResponse.StatusLine
+                                    : $"⧗ Pipeline is still running | pwsh PID: {jsonResponse.Pid} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
+                                timeoutResponse.AppendLine(timeoutStatusLine);
                                 timeoutResponse.AppendLine();
                                 timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
                                 return timeoutResponse.ToString();
@@ -556,7 +564,11 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 {
                                     cachedResponse.Append(cachedCompletedOutput);
                                 }
-                                cachedResponse.AppendLine($"✓ Pipeline executed successfully | pwsh PID: {jsonResponse.Pid} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s");
+                                // Use statusLine from dll if available
+                                var cachedStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
+                                    ? jsonResponse.StatusLine
+                                    : $"✓ Pipeline executed successfully | pwsh PID: {jsonResponse.Pid} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
+                                cachedResponse.AppendLine(cachedStatusLine);
                                 cachedResponse.AppendLine();
                                 cachedResponse.Append("Result cached. Will be returned on next tool call.");
                                 return cachedResponse.ToString();
@@ -854,7 +866,10 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             // Register the new console
             sessionManager.SetActivePipeName(pipeName);
 
-            Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), getting current location...");
+            Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), setting title and getting current location...");
+
+            // Set console title before getting location (so title appears in status line)
+            await SetConsoleTitleAsync(powerShellService, pipeName, cancellationToken);
 
             // Get current location from new console
             var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);
