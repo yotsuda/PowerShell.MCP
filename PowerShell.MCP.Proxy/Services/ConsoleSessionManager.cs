@@ -73,7 +73,7 @@ public class ConsoleSessionManager
         // Planets & Moons
         new[] { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Neptune", "Pluto", "Titan", "Europa", "Luna" },
         // Colors
-        new[] { "Red", "Blue", "Green", "Yellow", "Orange", "Pink", "Purple", "Gold", "Silver", "White" },
+        new[] { "Red", "Blue", "Green", "Yellow", "Cyan", "Pink", "Purple", "Gold", "Silver", "White" },
         // Birds
         new[] { "Robin", "Sparrow", "Falcon", "Raven", "Phoenix", "Crane", "Swan", "Finch", "Jay", "Dove" },
         // Flowers
@@ -91,7 +91,7 @@ public class ConsoleSessionManager
         // Weather
         new[] { "Sunny", "Cloudy", "Misty", "Breeze", "Rainbow", "Dusk", "Dawn", "Twilight", "Drizzle", "Haze" },
         // Fruits
-        new[] { "Mango", "Apple", "Orange", "Grape", "Kiwi", "Papaya", "Melon", "Guava", "Fig", "Plum" },
+        new[] { "Mango", "Apple", "Peach", "Grape", "Kiwi", "Papaya", "Melon", "Guava", "Banana", "Plum" },
         // Fish & Sea Creatures
         new[] { "Salmon", "Tuna", "Shark", "Swordfish", "Catfish", "Goldfish", "Piranha", "Angelfish", "Koi", "Sardine" },
         // Vegetables
