@@ -115,12 +115,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
 
+            # Cache PSReadLine options (Windows only) - retrieved once for performance
+            $script:cachedPSReadLineOptions = if ($IsWindows) { 
+                try { Invoke-Expression 'Get-PSReadLineOption' } catch { $null }
+            } else { $null }
+
             function Write-ColoredCommand {
                 param([string]$Command)
 
                 try {
-                    # Get PSReadLine color options (Windows only)
-                    $psReadLineOptions = if ($IsWindows) { Invoke-Expression 'Get-PSReadLineOption' } else { $null }
+                    # Use cached PSReadLine options for performance
+                    $psReadLineOptions = $script:cachedPSReadLineOptions
 
                     # Default ANSI colors (matching PSReadLine defaults)
                     $defaultColors = @{
