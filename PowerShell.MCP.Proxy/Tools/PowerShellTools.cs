@@ -241,7 +241,7 @@ public class PowerShellTools
     {
         var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
         if (pid == null) return;
-        
+
         var title = ConsoleSessionManager.Instance.TryAssignNameToPid(pid.Value);
         if (title == null) return;
         await powerShellService.SetWindowTitleAsync(pipeName, title, cancellationToken);
@@ -363,7 +363,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             // No ready pipe - auto-start
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+            var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
             if (!success)
             {
                 return locationResult; // Error message
@@ -464,7 +464,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 {
                                     // Auto-start new console
                                     Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-starting new console...");
-                                    var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, cancellationToken);
+                                    var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
                                     if (!success)
                                     {
                                         return locationResult; // Error message
@@ -805,9 +805,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         IPowerShellService powerShellService,
         [Description("Message displayed at console startup (e.g. greeting, joke, fun fact). Be creative and make the user smile!")]
         string? banner = null,
+        [Description("Optional starting directory path. If relative, resolved from home directory. Defaults to home directory if not specified.")]
+        string? start_location = null,
         CancellationToken cancellationToken = default)
     {
-        var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, banner, cancellationToken);
+        var (resolvedPath, warningMessage) = ResolveStartLocation(start_location);
+        var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, banner, resolvedPath, cancellationToken);
         if (!success)
         {
             return locationResult; // Error message
@@ -836,6 +839,11 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         {
             response.Append(completedOutput);
         }
+        if (!string.IsNullOrEmpty(warningMessage))
+        {
+            response.Append(warningMessage);
+            response.AppendLine();
+        }
         response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
         response.AppendLine();
         response.Append(locationResult);
@@ -849,6 +857,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     private static async Task<(bool success, string result)> StartPowershellConsoleInternal(
         IPowerShellService powerShellService,
         string? banner,
+        string startLocation,
         CancellationToken cancellationToken)
     {
         try
@@ -857,7 +866,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             Console.Error.WriteLine("[INFO] Starting PowerShell console...");
             // Start new console
-            var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(banner);
+            var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(banner, startLocation);
 
             if (!success)
             {
@@ -885,6 +894,41 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             return (false, $"Failed to start PowerShell console: {ex.Message}\n\nPlease check if a terminal emulator is available and try again.");
         }
     }
+    /// <summary>
+    /// Resolves start location path and validates it.
+    /// Returns (resolvedPath, warningMessage).
+    /// If directory doesn't exist, returns home directory and a warning message.
+    /// </summary>
+    private static (string resolvedPath, string? warningMessage) ResolveStartLocation(string? startLocation)
+    {
+        var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        if (string.IsNullOrEmpty(startLocation))
+        {
+            return (homeDir, null);
+        }
+
+        string resolvedPath;
+        if (Path.IsPathRooted(startLocation))
+        {
+            // Absolute path
+            resolvedPath = startLocation;
+        }
+        else
+        {
+            // Relative path - resolve from home directory
+            resolvedPath = Path.Combine(homeDir, startLocation);
+        }
+
+        if (!Directory.Exists(resolvedPath))
+        {
+            var warning = $"⚠️ Warning: Specified start_location does not exist: {resolvedPath}\nConsole started in default location (home directory) instead.\n";
+            return (homeDir, warning);
+        }
+
+        return (resolvedPath, null);
+    }
+
 
     /// <summary>
     /// Checks for local variable assignments without scope prefix and returns a warning message.

@@ -49,8 +49,9 @@ public class PowerShellProcessManager
     /// Starts PowerShell process with PowerShell.MCP module imported and returns pipe name
     /// </summary>
     /// <param name="startupMessage">Optional message to display before module import</param>
+    /// <param name="startLocation">Starting directory path</param>
     /// <returns>Tuple of (success, pipeName)</returns>
-    public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string? startupMessage = null)
+    public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string? startupMessage = null, string? startLocation = null)
     {
         int pid = 0;
         HashSet<string>? existingPipes = null;
@@ -64,15 +65,15 @@ public class PowerShellProcessManager
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            pid = PwshLauncherWindows.LaunchPwsh(startupMessage);
+            pid = PwshLauncherWindows.LaunchPwsh(startupMessage, startLocation);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            PwshLauncherMacOS.LaunchPwsh(startupMessage);
+            PwshLauncherMacOS.LaunchPwsh(startupMessage, startLocation);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            PwshLauncherLinux.LaunchPwsh(startupMessage);
+            PwshLauncherLinux.LaunchPwsh(startupMessage, startLocation);
         }
         else
         {
@@ -219,7 +220,7 @@ public static class PwshLauncherWindows
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint CREATE_NEW_CONSOLE = 0x00000010;
 
-    public static int LaunchPwsh(string? startupMessage = null)
+    public static int LaunchPwsh(string? startupMessage = null, string? startLocation = null)
     {
         IntPtr hToken = IntPtr.Zero;
         IntPtr env = IntPtr.Zero;
@@ -266,7 +267,7 @@ public static class PwshLauncherWindows
                 false,
                 CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE,
                 env,
-                userProfile,
+                startLocation ?? userProfile,
                 ref si,
                 out pi);
 
@@ -300,7 +301,7 @@ public static class PwshLauncherWindows
 /// </summary>
 public static class PwshLauncherMacOS
 {
-    public static void LaunchPwsh(string? startupMessage = null)
+    public static void LaunchPwsh(string? startupMessage = null, string? startLocation = null)
     {
         // Use osascript with stdin to avoid shell quoting issues
         var psi = new ProcessStartInfo
@@ -326,6 +327,8 @@ public static class PwshLauncherMacOS
             command = $"$global:PowerShellMCPProxyPid = {proxyPid}; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         }
 
+        var workingDir = string.IsNullOrEmpty(startLocation) ? "~" : startLocation.Replace("'", "'\\''");
+
         using var process = Process.Start(psi);
         if (process != null)
         {
@@ -334,7 +337,7 @@ public static class PwshLauncherMacOS
             // This ensures pwsh is found regardless of installation method (Homebrew, pkg, etc.)
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -WorkingDirectory ~ -Command '{command}'\"");
+            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -WorkingDirectory '{workingDir}' -Command '{command}'\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
@@ -363,11 +366,11 @@ public static class PwshLauncherLinux
         "kitty",
     ];
 
-    public static void LaunchPwsh(string? startupMessage = null)
+    public static void LaunchPwsh(string? startupMessage = null, string? startLocation = null)
     {
         foreach (var terminal in SupportedTerminals)
         {
-            if (TryLaunchTerminal(terminal, startupMessage))
+            if (TryLaunchTerminal(terminal, startupMessage, startLocation))
             {
                 return;
             }
@@ -378,7 +381,7 @@ public static class PwshLauncherLinux
             string.Join(", ", SupportedTerminals));
     }
 
-    private static bool TryLaunchTerminal(string terminal, string? startupMessage)
+    private static bool TryLaunchTerminal(string terminal, string? startupMessage, string? startLocation)
     {
         try
         {
@@ -429,9 +432,12 @@ public static class PwshLauncherLinux
                 initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
             }
 
+            // Resolve working directory
+            var workingDir = string.IsNullOrEmpty(startLocation) ? "~" : startLocation.Replace("'", "'\\''");
+
             // Command to launch pwsh with proper initialization via login shell
             // exec replaces the shell with pwsh to keep the process tree clean
-            var pwshCommand = $"exec pwsh -NoExit -WorkingDirectory ~ -Command ''{initCommand}''";
+            var pwshCommand = $"exec pwsh -NoExit -WorkingDirectory '{workingDir}' -Command ''{initCommand}''";
 
             // setsid <terminal> ... <shell> -l -c '<pwshCommand>'
             psi.ArgumentList.Add(terminal);
