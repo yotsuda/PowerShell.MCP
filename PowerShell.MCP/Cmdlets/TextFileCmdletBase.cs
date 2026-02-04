@@ -62,7 +62,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
             // Directory + filename
             return System.IO.Path.Combine(originalDir, fileName);
         }
-        catch
+        catch (ArgumentException)
         {
             // On error, calculate relative path from resolvedPath
             var currentDirectory = SessionState.Path.CurrentFileSystemLocation.Path;
@@ -93,7 +93,7 @@ public abstract class TextFileCmdletBase : PSCmdlet
             // Otherwise containing : = PS Drive (Temp:\, Env:\, etc.)
             return true;
         }
-        catch
+        catch (ArgumentException)
         {
             return false;
         }
