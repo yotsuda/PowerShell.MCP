@@ -116,7 +116,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             }
 
             # Cache PSReadLine options (Windows only) - retrieved once for performance
-            $script:cachedPSReadLineOptions = if ($IsWindows) { 
+            $script:cachedPSReadLineOptions = if ($IsWindows) {
                 try { Invoke-Expression 'Get-PSReadLineOption' } catch { $null }
             } else { $null }
 

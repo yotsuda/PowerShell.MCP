@@ -395,7 +395,7 @@ public class ConsoleSessionManager
         var availableIndices = Enumerable.Range(0, Categories.Length)
             .Where(i => !usedIndices.Contains(i))
             .ToList();
-        
+
         int categoryIndex = availableIndices.Count > 0
             ? availableIndices[Random.Shared.Next(availableIndices.Count)]
             : Random.Shared.Next(Categories.Length); // All used, pick any randomly

@@ -1,4 +1,4 @@
-﻿name: Cross-Platform Test
+name: Cross-Platform Test
 
 on:
   workflow_dispatch:  # Manual trigger
@@ -28,18 +28,18 @@ jobs:
           - os: macos-14
             rid: osx-arm64
             exe: PowerShell.MCP.Proxy
-    
+
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
-    
+
     - name: Install PowerShell 7.5 (Windows)
       if: runner.os == 'Windows'
       run: |
@@ -50,17 +50,17 @@ jobs:
         $url = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.zip"
         $zipPath = "$env:TEMP\PowerShell-7.5.4-win-x64.zip"
         $installPath = "C:\pwsh75"
-        
+
         Write-Host "Downloading PowerShell 7.5.4 ZIP..."
         Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
         Write-Host "Downloaded: $((Get-Item $zipPath).Length) bytes"
-        
+
         Write-Host "Extracting to $installPath..."
         Expand-Archive -Path $zipPath -DestinationPath $installPath -Force
-        
+
         Write-Host "Verifying installation..."
         & "$installPath\pwsh.exe" --version
-        
+
         # Add to PATH for subsequent steps
         echo "$installPath" | Out-File -FilePath $env:GITHUB_PATH -Append
       shell: pwsh
@@ -69,7 +69,7 @@ jobs:
       if: runner.os == 'macOS'
       run: |
         brew install powershell/tap/powershell
-    
+
     - name: Install PowerShell (Linux)
       if: runner.os == 'Linux'
       run: |
@@ -82,7 +82,7 @@ jobs:
         rm packages-microsoft-prod.deb
         sudo apt-get update
         sudo apt-get install -y powershell
-    
+
     - name: Verify PowerShell
       shell: pwsh
       run: |
@@ -97,63 +97,63 @@ jobs:
     - name: Build PowerShell.MCP module
       run: |
         dotnet build PowerShell.MCP -c Release --no-incremental
-    
+
     - name: Build Proxy
       run: |
         dotnet publish PowerShell.MCP.Proxy -c Release -r ${{ matrix.rid }} --self-contained
-    
+
     - name: Setup module directory (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
         $modulePath = "$env:USERPROFILE\Documents\PowerShell\Modules\PowerShell.MCP"
         New-Item -Path "$modulePath\bin\${{ matrix.rid }}" -ItemType Directory -Force | Out-Null
-        
+
         Copy-Item "PowerShell.MCP\bin\Release\net9.0\PowerShell.MCP.dll" -Destination $modulePath
         Copy-Item "PowerShell.MCP\bin\Release\net9.0\Ude.NetStandard.dll" -Destination $modulePath
         Copy-Item "Staging\PowerShell.MCP.psd1" -Destination $modulePath
         Copy-Item "Staging\PowerShell.MCP.psm1" -Destination $modulePath
         Copy-Item "PowerShell.MCP.Proxy\bin\Release\net9.0\${{ matrix.rid }}\publish\${{ matrix.exe }}" -Destination "$modulePath\bin\${{ matrix.rid }}"
-        
+
         Write-Host "Module files:"
         Get-ChildItem $modulePath -Recurse | Select-Object FullName
-    
+
     - name: Setup module directory (Linux/macOS)
       if: runner.os != 'Windows'
       run: |
         MODULE_PATH="$HOME/.local/share/powershell/Modules/PowerShell.MCP"
         mkdir -p "$MODULE_PATH/bin/${{ matrix.rid }}"
-        
+
         cp PowerShell.MCP/bin/Release/net9.0/PowerShell.MCP.dll "$MODULE_PATH/"
         cp PowerShell.MCP/bin/Release/net9.0/Ude.NetStandard.dll "$MODULE_PATH/"
         cp Staging/PowerShell.MCP.psd1 "$MODULE_PATH/"
         cp Staging/PowerShell.MCP.psm1 "$MODULE_PATH/"
         cp "PowerShell.MCP.Proxy/bin/Release/net9.0/${{ matrix.rid }}/publish/${{ matrix.exe }}" "$MODULE_PATH/bin/${{ matrix.rid }}/"
         chmod +x "$MODULE_PATH/bin/${{ matrix.rid }}/${{ matrix.exe }}"
-        
+
         echo "Module files:"
         ls -laR "$MODULE_PATH/"
-    
+
     - name: Test module import
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
-        
+
         Write-Host "=== Importing module ===" -ForegroundColor Cyan
         Import-Module PowerShell.MCP -Verbose
-        
+
         Write-Host "`n=== Module info ===" -ForegroundColor Cyan
         Get-Module PowerShell.MCP | Format-List Name, Version, ModuleBase
-        
+
         Write-Host "`n=== Get-MCPProxyPath ===" -ForegroundColor Cyan
         $proxyPath = Get-MCPProxyPath
         Write-Host "Proxy path: $proxyPath"
         if (-not (Test-Path $proxyPath)) { throw "Proxy not found at $proxyPath" }
-        
+
         Write-Host "`n=== Get-MCPProxyPath -Escape ===" -ForegroundColor Cyan
         $escapedPath = Get-MCPProxyPath -Escape
         Write-Host "Escaped path: $escapedPath"
-        
+
         Write-Host "`n=== PSReadLine status ===" -ForegroundColor Cyan
         $psrl = Get-Module PSReadLine
         if ($IsWindows) {
@@ -169,19 +169,19 @@ jobs:
             Write-Host "PSReadLine is NOT loaded (expected on Linux/macOS)" -ForegroundColor Green
           }
         }
-        
+
         Write-Host "`n=== All tests passed ===" -ForegroundColor Green
-    
+
     - name: Test Proxy JSON-RPC communication
       shell: pwsh
       timeout-minutes: 2
       run: |
         $ErrorActionPreference = "Stop"
-        
+
         Write-Host "=== Testing Proxy JSON-RPC ===" -ForegroundColor Cyan
         $proxyPath = Get-MCPProxyPath
         Write-Host "Proxy path: $proxyPath"
-        
+
         # Start Proxy process with redirected stdin/stdout
         $psi = [System.Diagnostics.ProcessStartInfo]::new()
         $psi.FileName = $proxyPath
@@ -190,17 +190,17 @@ jobs:
         $psi.RedirectStandardError = $true
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
-        
+
         $process = [System.Diagnostics.Process]::Start($psi)
         Write-Host "Proxy started with PID: $($process.Id)"
-        
+
         # Use async reading with timeout
         function Send-JsonRpc {
           param([string]$Json, [int]$TimeoutMs = 5000)
           Write-Host "Sending: $Json"
           $process.StandardInput.WriteLine($Json)
           $process.StandardInput.Flush()
-          
+
           # Read response line with timeout
           $task = $process.StandardOutput.ReadLineAsync()
           if ($task.Wait($TimeoutMs)) {
@@ -209,40 +209,40 @@ jobs:
             throw "Timeout waiting for response"
           }
         }
-        
+
         try {
           # Test 1: Initialize
           Write-Host "`n=== Test 1: Initialize ===" -ForegroundColor Yellow
           $initRequest = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
           $response = Send-JsonRpc $initRequest
           Write-Host "Response: $response"
-          
+
           if ($response -match '"protocolVersion"') {
             Write-Host "Initialize: PASSED" -ForegroundColor Green
           } else {
             throw "Initialize failed - no protocolVersion in response"
           }
-          
+
           # Send initialized notification (no response expected)
           Write-Host "`nSending initialized notification..."
           $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
           $process.StandardInput.Flush()
           Start-Sleep -Milliseconds 200
-          
+
           # Test 2: List tools
           Write-Host "`n=== Test 2: List Tools ===" -ForegroundColor Yellow
           $listRequest = '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
           $response = Send-JsonRpc $listRequest
           Write-Host "Response: $response"
-          
+
           if ($response -match '"get_current_location"' -and $response -match '"invoke_expression"') {
             Write-Host "List Tools: PASSED" -ForegroundColor Green
           } else {
             throw "List Tools failed - expected tools not found"
           }
-          
+
           Write-Host "`n=== All JSON-RPC tests passed ===" -ForegroundColor Green
-          
+
         } finally {
           if (-not $process.HasExited) { $process.Kill() }
           $process.Dispose()
@@ -255,9 +255,9 @@ jobs:
       timeout-minutes: 2
       run: |
         $ErrorActionPreference = "Stop"
-        
+
         Write-Host "=== Testing Named Pipe Communication ===" -ForegroundColor Cyan
-        
+
         # Clean up any existing Named Pipe socket files (Linux/macOS)
         $pipeName = "PowerShell.MCP.Communication"
         if (-not $IsWindows) {
@@ -274,7 +274,7 @@ jobs:
             }
           }
         }
-        
+
         # Start a background pwsh process with PowerShell.MCP imported
         Write-Host "Starting background pwsh with PowerShell.MCP..."
         $bgPsi = [System.Diagnostics.ProcessStartInfo]::new()
@@ -285,17 +285,17 @@ jobs:
         $bgPsi.RedirectStandardInput = $true
         $bgPsi.RedirectStandardOutput = $true
         $bgPsi.RedirectStandardError = $true
-        
+
         $bgProcess = [System.Diagnostics.Process]::Start($bgPsi)
         Write-Host "Background pwsh PID: $($bgProcess.Id)"
-        
+
         # Wait for Named Pipe server to be ready
         Write-Host "Waiting for Named Pipe server..."
         $pipeName = "PowerShell.MCP.Communication.$($bgProcess.Id)"
         $pipeReady = $false
         for ($i = 0; $i -lt 30; $i++) {
           Start-Sleep -Milliseconds 500
-          
+
           # Check if process is still running
           if ($bgProcess.HasExited) {
             Write-Host "ERROR: Background pwsh exited with code $($bgProcess.ExitCode)" -ForegroundColor Red
@@ -305,25 +305,25 @@ jobs:
             Write-Host $bgProcess.StandardError.ReadToEnd()
             throw "Background pwsh process exited unexpectedly"
           }
-          
+
           if ($IsWindows) {
             $pipeReady = Test-Path "\\.\pipe\$pipeName"
           } else {
             # Check both /tmp and $TMPDIR (macOS uses $TMPDIR)
-            $pipeReady = (Test-Path "/tmp/CoreFxPipe_$pipeName") -or 
+            $pipeReady = (Test-Path "/tmp/CoreFxPipe_$pipeName") -or
                          ($env:TMPDIR -and (Test-Path "$env:TMPDIR/CoreFxPipe_$pipeName"))
           }
           if ($pipeReady) {
             Write-Host "Named Pipe ready after $($i * 500)ms"
             break
           }
-          
+
           # Show progress every 5 seconds
           if ($i % 10 -eq 9) {
             Write-Host "Still waiting... ($($i * 500)ms elapsed)"
           }
         }
-        
+
         if (-not $pipeReady) {
           Write-Host "=== Named Pipe not found, checking process state ===" -ForegroundColor Red
           Write-Host "Process running: $(-not $bgProcess.HasExited)"
@@ -333,7 +333,7 @@ jobs:
               Write-Host ([char]$bgProcess.StandardOutput.Read()) -NoNewline
             }
             Write-Host ""
-            Write-Host "=== Available stderr ===" -ForegroundColor Yellow  
+            Write-Host "=== Available stderr ===" -ForegroundColor Yellow
             while ($bgProcess.StandardError.Peek() -ge 0) {
               Write-Host ([char]$bgProcess.StandardError.Read()) -NoNewline
             }
@@ -342,7 +342,7 @@ jobs:
           }
           throw "Named Pipe server did not start within 15 seconds"
         }
-        
+
         # Start Proxy (build path directly to avoid importing PowerShell.MCP in test script)
         Write-Host "Starting Proxy..."
         if ($IsWindows) {
@@ -360,16 +360,16 @@ jobs:
         $psi.RedirectStandardError = $true
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
-        
+
         $process = [System.Diagnostics.Process]::Start($psi)
-        
+
         # Use async reading with timeout
         function Send-JsonRpc {
           param([string]$Json, [int]$TimeoutMs = 5000)
           Write-Host "Sending: $Json"
           $process.StandardInput.WriteLine($Json)
           $process.StandardInput.Flush()
-          
+
           $task = $process.StandardOutput.ReadLineAsync()
           if ($task.Wait($TimeoutMs)) {
             return $task.Result
@@ -377,44 +377,44 @@ jobs:
             throw "Timeout waiting for response"
           }
         }
-        
+
         try {
           # Initialize
           $initRequest = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
           $response = Send-JsonRpc $initRequest
           Write-Host "Init response: $response"
-          
+
           $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
           $process.StandardInput.Flush()
           Start-Sleep -Milliseconds 200
-          
+
           # Test: invoke_expression with Get-Date (first call - should return get_current_location)
           Write-Host "`n=== Test: invoke_expression (Get-Date) - First call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 10000
           Write-Host "Response (truncated): $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
-          
+
           if ($response -match "Switched to console" -and $response -match "Pipeline NOT executed") {
             Write-Host "First invoke_expression: PASSED (expected behavior - command not executed)" -ForegroundColor Green
           } else {
             throw "First invoke_expression did not return expected ''Switched to console'' message"
           }
-          
+
           # Test: invoke_expression with Get-Date (second call - should execute)
           Write-Host "`n=== Test: invoke_expression (Get-Date) - Second call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 10000
           Write-Host "Response: $response"
-          
+
           $today = Get-Date -Format "yyyy-MM-dd"
           if ($response -match $today) {
             Write-Host "Second invoke_expression (Get-Date): PASSED" -ForegroundColor Green
           } else {
             throw "Second invoke_expression failed - expected date $today not found"
           }
-          
+
           Write-Host "`n=== All Named Pipe tests passed ===" -ForegroundColor Green
-          
+
         } finally {
           if (-not $process.HasExited) { $process.Kill() }
           $process.Dispose()
