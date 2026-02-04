@@ -48,17 +48,9 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             throw new PSArgumentException("At least one of -LineRange, -Contains, or -Pattern must be specified.");
         }
 
-        // Error if Contains includes newline (processing is line-by-line)
-        if (!string.IsNullOrEmpty(Contains) && (Contains.Contains('\n') || Contains.Contains('\r')))
-        {
-            throw new PSArgumentException("Contains cannot contain newline characters. Remove-LinesFromFile processes files line by line.");
-        }
-
-        // Error if Pattern includes newline (processing is line-by-line)
-        if (!string.IsNullOrEmpty(Pattern) && (Pattern.Contains('\n') || Pattern.Contains('\r')))
-        {
-            throw new PSArgumentException("Pattern cannot contain newline characters. Remove-LinesFromFile processes files line by line.");
-        }
+        // Error if Contains/Pattern includes newline (processing is line-by-line)
+        ValidateNoNewlines(Contains, "Contains");
+        ValidateNoNewlines(Pattern, "Pattern");
 
         // LineRange validation
         if (LineRange != null)

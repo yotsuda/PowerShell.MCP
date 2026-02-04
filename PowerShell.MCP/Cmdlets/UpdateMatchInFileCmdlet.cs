@@ -73,15 +73,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-        // Error if OldText includes newline (processing is line-by-line)
-        if (hasLiteral && (OldText!.Contains('\n') || OldText.Contains('\r')))
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("OldText cannot contain newline characters. Update-MatchInFile processes files line by line."),
-                "InvalidOldText",
-                ErrorCategory.InvalidArgument,
-                OldText));
-        }
+        // Error if OldText/Pattern includes newline (processing is line-by-line)
+        ValidateNoNewlines(OldText, "OldText");
 
         // Regex mode with only one specified
         if (hasRegex && Replacement == null)
@@ -93,15 +86,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-        // Error if Pattern includes newline (processing is line-by-line)
-        if (hasRegex && (Pattern!.Contains('\n') || Pattern.Contains('\r')))
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Pattern cannot contain newline characters. Update-MatchInFile processes files line by line."),
-                "InvalidPattern",
-                ErrorCategory.InvalidArgument,
-                Pattern));
-        }
+        ValidateNoNewlines(Pattern, "Pattern");
     }
 
     protected override void ProcessRecord()

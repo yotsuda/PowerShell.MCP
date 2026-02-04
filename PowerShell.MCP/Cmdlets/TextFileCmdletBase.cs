@@ -127,6 +127,22 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
+    /// Validates that a parameter value does not contain newline characters
+    /// </summary>
+    protected void ValidateNoNewlines(string? value, string parameterName)
+    {
+        if (!string.IsNullOrEmpty(value) && (value.Contains('\n') || value.Contains('\r')))
+        {
+            var cmdletName = MyInvocation.MyCommand.Name;
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException($"{parameterName} cannot contain newline characters. {cmdletName} processes files line by line."),
+                $"Invalid{parameterName}",
+                ErrorCategory.InvalidArgument,
+                value));
+        }
+    }
+
+    /// <summary>
     /// Exclusive check for -Contains and -Pattern
     /// </summary>
     protected static void ValidateContainsAndPatternMutuallyExclusive(string? contains, string? pattern)

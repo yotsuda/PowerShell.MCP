@@ -57,24 +57,9 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-        // Error if pattern contains newlines (never matches in line-by-line processing)
-        if (!string.IsNullOrEmpty(Pattern) && (Pattern.Contains('\n') || Pattern.Contains('\r')))
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Pattern cannot contain newline characters. Show-TextFile processes files line by line."),
-                "InvalidPattern",
-                ErrorCategory.InvalidArgument,
-                Pattern));
-        }
-
-        if (!string.IsNullOrEmpty(Contains) && (Contains.Contains('\n') || Contains.Contains('\r')))
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Contains cannot contain newline characters. Show-TextFile processes files line by line."),
-                "InvalidContains",
-                ErrorCategory.InvalidArgument,
-                Contains));
-        }
+        // Error if pattern/contains contains newlines (never matches in line-by-line processing)
+        ValidateNoNewlines(Pattern, "Pattern");
+        ValidateNoNewlines(Contains, "Contains");
 
         // Pre-compile regex for performance (used across all files)
         // Combine Contains and Pattern with OR if both specified
