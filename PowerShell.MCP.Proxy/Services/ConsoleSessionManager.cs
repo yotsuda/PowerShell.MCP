@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.IO.MemoryMappedFiles;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -55,9 +55,23 @@ public class ConsoleSessionManager
     private readonly HashSet<int> _titledPids = new();
 
     /// <summary>
-    /// Path to the category lock file
+    /// File path for shared memory backing (cross-platform)
     /// </summary>
-    private static readonly string CategoryLockFile = Path.Combine(Path.GetTempPath(), "PowerShell.MCP.Categories.json");
+    private static readonly string SharedMemoryFile = Path.Combine(Path.GetTempPath(), "PowerShell.MCP.AllocatedConsoleCategories.dat");
+
+    /// <summary>
+    /// Mutex name for synchronizing access
+    /// </summary>
+    private const string MutexName = "PowerShell.MCP.AllocatedConsoleCategories";
+
+    /// <summary>
+    /// Shared memory layout constants
+    /// </summary>
+    private const int MaxEntries = 64;
+    private const int EntrySize = 8;        // 4 bytes PID + 4 bytes category index
+    private const int HeaderSize = 8;       // 4 bytes magic + 4 bytes count
+    private const int SharedMemorySize = HeaderSize + (MaxEntries * EntrySize);
+    private const int MagicNumber = 0x4D435043; // "MCPC"
 
     /// <summary>
     /// Console name categories - each proxy gets a unique category
@@ -351,94 +365,145 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Initializes the category for this proxy instance by reading the lock file
-    /// and selecting an unused category
+    /// Initializes the category for this proxy instance using shared memory
     /// </summary>
     private int InitializeCategory()
     {
-        Dictionary<int, int> usedCategories = new();
+        using var mutex = new Mutex(false, MutexName, out _);
 
         try
         {
-            if (File.Exists(CategoryLockFile))
+            mutex.WaitOne();
+
+            using var mmf = MemoryMappedFile.CreateFromFile(SharedMemoryFile, FileMode.OpenOrCreate, null, SharedMemorySize);
+            using var accessor = mmf.CreateViewAccessor();
+
+            // Read and validate header
+            int magic = accessor.ReadInt32(0);
+            int count = accessor.ReadInt32(4);
+
+            if (magic != MagicNumber)
             {
-                var json = File.ReadAllText(CategoryLockFile);
-                var data = JsonSerializer.Deserialize<Dictionary<string, int>>(json);
-                if (data != null)
+                // Initialize fresh
+                accessor.Write(0, MagicNumber);
+                count = 0;
+            }
+
+            // Read existing entries and clean up dead processes
+            var usedCategories = new Dictionary<int, int>();
+            var validEntries = new List<(int pid, int category)>();
+
+            for (int i = 0; i < count && i < MaxEntries; i++)
+            {
+                int offset = HeaderSize + (i * EntrySize);
+                int pid = accessor.ReadInt32(offset);
+                int category = accessor.ReadInt32(offset + 4);
+
+                if (IsProcessAlive(pid))
                 {
-                    // Clean up entries for dead processes
-                    foreach (var kvp in data)
-                    {
-                        if (int.TryParse(kvp.Key, out var pid))
-                        {
-                            try
-                            {
-                                Process.GetProcessById(pid);
-                                usedCategories[pid] = kvp.Value;
-                            }
-                            catch (ArgumentException)
-                            {
-                                // Process no longer exists, skip
-                            }
-                        }
-                    }
+                    usedCategories[pid] = category;
+                    validEntries.Add((pid, category));
                 }
             }
+
+            // Find unused category
+            var usedIndices = usedCategories.Values.ToHashSet();
+            var availableIndices = Enumerable.Range(0, Categories.Length)
+                .Where(i => !usedIndices.Contains(i))
+                .ToList();
+
+            int categoryIndex = availableIndices.Count > 0
+                ? availableIndices[Random.Shared.Next(availableIndices.Count)]
+                : Random.Shared.Next(Categories.Length); // All used, pick any randomly
+
+            // Add this proxy's entry
+            validEntries.Add((ProxyPid, categoryIndex));
+
+            // Write back all valid entries
+            accessor.Write(4, validEntries.Count);
+            for (int i = 0; i < validEntries.Count; i++)
+            {
+                int offset = HeaderSize + (i * EntrySize);
+                accessor.Write(offset, validEntries[i].pid);
+                accessor.Write(offset + 4, validEntries[i].category);
+            }
+
+            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Using category {categoryIndex} ({Categories[categoryIndex][0]}, {Categories[categoryIndex][1]}, ...)");
+            return categoryIndex;
         }
-        catch
+        finally
         {
-            // Ignore read errors, start fresh
+            mutex.ReleaseMutex();
         }
-
-        // Find unused categories and pick one randomly
-        var usedIndices = usedCategories.Values.ToHashSet();
-        var availableIndices = Enumerable.Range(0, Categories.Length)
-            .Where(i => !usedIndices.Contains(i))
-            .ToList();
-
-        int categoryIndex = availableIndices.Count > 0
-            ? availableIndices[Random.Shared.Next(availableIndices.Count)]
-            : Random.Shared.Next(Categories.Length); // All used, pick any randomly
-
-        // Register this proxy's category
-        usedCategories[ProxyPid] = categoryIndex;
-
-        try
-        {
-            var newData = usedCategories.ToDictionary(kvp => kvp.Key.ToString(), kvp => kvp.Value);
-            var json = JsonSerializer.Serialize(newData);
-            File.WriteAllText(CategoryLockFile, json);
-        }
-        catch
-        {
-            // Ignore write errors
-        }
-
-        Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Using category {categoryIndex} ({Categories[categoryIndex][0]}, {Categories[categoryIndex][1]}, ...)");
-        return categoryIndex;
     }
 
     /// <summary>
-    /// Removes this proxy's entry from the category lock file
+    /// Checks if a process with the given PID is still running
+    /// </summary>
+    private static bool IsProcessAlive(int pid)
+    {
+        try
+        {
+            Process.GetProcessById(pid);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Removes this proxy's entry from the shared memory
     /// </summary>
     private void CleanupCategory()
     {
         try
         {
-            if (!File.Exists(CategoryLockFile)) return;
+            using var mutex = new Mutex(false, MutexName, out _);
+            mutex.WaitOne();
 
-            var json = File.ReadAllText(CategoryLockFile);
-            var data = JsonSerializer.Deserialize<Dictionary<string, int>>(json);
-            if (data != null)
+            try
             {
-                data.Remove(ProxyPid.ToString());
-                var newJson = JsonSerializer.Serialize(data);
-                File.WriteAllText(CategoryLockFile, newJson);
+                using var mmf = MemoryMappedFile.CreateFromFile(SharedMemoryFile, FileMode.OpenOrCreate, null, SharedMemorySize);
+                using var accessor = mmf.CreateViewAccessor();
+
+                int magic = accessor.ReadInt32(0);
+                int count = accessor.ReadInt32(4);
+
+                if (magic != MagicNumber) return;
+
+                // Read entries, excluding this proxy
+                var validEntries = new List<(int pid, int category)>();
+                for (int i = 0; i < count && i < MaxEntries; i++)
+                {
+                    int offset = HeaderSize + (i * EntrySize);
+                    int pid = accessor.ReadInt32(offset);
+                    int category = accessor.ReadInt32(offset + 4);
+
+                    if (pid != ProxyPid && IsProcessAlive(pid))
+                    {
+                        validEntries.Add((pid, category));
+                    }
+                }
+
+                // Write back
+                accessor.Write(4, validEntries.Count);
+                for (int i = 0; i < validEntries.Count; i++)
+                {
+                    int offset = HeaderSize + (i * EntrySize);
+                    accessor.Write(offset, validEntries[i].pid);
+                    accessor.Write(offset + 4, validEntries[i].category);
+                }
+            }
+            finally
+            {
+                mutex.ReleaseMutex();
             }
         }
         catch
         {
-            // Ignore cleanup errors
+            // Ignore cleanup errors (shared memory may not exist)
         }
     }
 }
