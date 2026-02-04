@@ -1,6 +1,6 @@
 # PowerShell.MCP
 
-[![PowerShell](https://img.shields.io/badge/PowerShell-7.2+-blue.svg)](https://github.com/PowerShell/PowerShell)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7.5+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen.svg)](#prerequisites)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
@@ -105,10 +105,10 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 | **macOS** | macOS 12 (Monterey) or later, Intel or Apple Silicon |
 
 **All platforms require:**
-- PowerShell 7.2 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
+- PowerShell 7.5 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
 - Claude Desktop ([download](https://claude.ai/download)), Claude Code, or any MCP client
 
-> **Note:** Claude Desktop is strongly recommended as other clients may not deliver optimal performance.
+> **Note:** Claude Desktop and Claude Code are recommended. Claude Code is ideal for development work with its multi-console support. Other MCP clients may not deliver optimal performance.
 
 ---
 
