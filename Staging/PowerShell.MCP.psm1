@@ -229,4 +229,136 @@ function Get-MCPOwner {
     }
 }
 
-Export-ModuleMember -Function Get-MCPProxyPath, Get-MCPOwner
+
+<#
+.SYNOPSIS
+    Installs PowerShell.MCP skills for Claude Code.
+
+.DESCRIPTION
+    Copies skill files from the PowerShell.MCP module to the Claude Code skills directory
+    (~/.claude/skills/). These skills provide slash commands for common PowerShell.MCP operations.
+
+.PARAMETER Name
+    Specifies the names of skills to install. If not specified, all available skills are installed.
+    Available skills: analyze, create-procedure, dictation, exec-procedure, html-guidelines, learn, map
+
+.PARAMETER Force
+    Overwrites existing skill files without prompting.
+
+.PARAMETER WhatIf
+    Shows what would happen if the cmdlet runs. The cmdlet is not run.
+
+.PARAMETER PassThru
+    Returns the installed skill file objects.
+
+.EXAMPLE
+    Install-MCPSkill
+    Installs all available skills to ~/.claude/skills/
+
+.EXAMPLE
+    Install-MCPSkill analyze, learn
+    Installs only the 'analyze' and 'learn' skills.
+
+.EXAMPLE
+    Install-MCPSkill -WhatIf
+    Shows which skills would be installed without actually installing them.
+
+.EXAMPLE
+    Install-MCPSkill analyze -Force
+    Installs the 'analyze' skill, overwriting if it exists.
+
+.OUTPUTS
+    System.IO.FileInfo (when -PassThru is specified)
+#>
+function Install-MCPSkill {
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([System.IO.FileInfo])]
+    param(
+        [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [ValidateSet('analyze', 'create-procedure', 'dictation', 'exec-procedure', 'html-guidelines', 'learn', 'map')]
+        [string[]]$Name,
+
+        [switch]$Force,
+
+        [switch]$PassThru
+    )
+
+    begin {
+        $moduleSkillsPath = Join-Path $PSScriptRoot 'Skills'
+        $userSkillsPath = Join-Path $HOME '.claude' 'skills'
+
+        if (-not (Test-Path $moduleSkillsPath)) {
+            throw "Skills directory not found in module: $moduleSkillsPath"
+        }
+
+        if (-not (Test-Path $userSkillsPath)) {
+            New-Item -Path $userSkillsPath -ItemType Directory -Force | Out-Null
+            Write-Verbose "Created directory: $userSkillsPath"
+        }
+
+        $skillsToInstall = @()
+    }
+
+    process {
+        if ($Name) {
+            $skillsToInstall += $Name
+        }
+    }
+
+    end {
+        $availableSkills = Get-ChildItem -Path $moduleSkillsPath -Filter '*.md' -File
+
+        if ($skillsToInstall.Count -eq 0) {
+            $skillsToInstall = $availableSkills | ForEach-Object { $_.BaseName }
+        }
+
+        $installedCount = 0
+        $skippedCount = 0
+
+        foreach ($skillName in $skillsToInstall | Select-Object -Unique) {
+            $sourceFile = Join-Path $moduleSkillsPath "$skillName.md"
+            $destFile = Join-Path $userSkillsPath "$skillName.md"
+
+            if (-not (Test-Path $sourceFile)) {
+                Write-Warning "Skill not found: $skillName"
+                continue
+            }
+
+            $shouldInstall = $true
+            if ((Test-Path $destFile) -and -not $Force) {
+                $sourceHash = (Get-FileHash $sourceFile -Algorithm MD5).Hash
+                $destHash = (Get-FileHash $destFile -Algorithm MD5).Hash
+                
+                if ($sourceHash -eq $destHash) {
+                    Write-Verbose "Skill '$skillName' is already up to date"
+                    $skippedCount++
+                    $shouldInstall = $false
+                }
+                else {
+                    Write-Warning "Skill '$skillName' already exists with different content. Use -Force to overwrite."
+                    $skippedCount++
+                    $shouldInstall = $false
+                }
+            }
+
+            if ($shouldInstall -and $PSCmdlet.ShouldProcess($destFile, "Install skill '$skillName'")) {
+                Copy-Item -Path $sourceFile -Destination $destFile -Force
+                $installedCount++
+                Write-Host "Installed: $skillName" -ForegroundColor Green
+
+                if ($PassThru) {
+                    Get-Item $destFile
+                }
+            }
+        }
+
+        if (-not $WhatIfPreference) {
+            Write-Host "`nInstalled: $installedCount skill(s), Skipped: $skippedCount skill(s)" -ForegroundColor Cyan
+            if ($installedCount -gt 0) {
+                Write-Host "Restart Claude Code to use the new skills." -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
+Export-ModuleMember -Function Get-MCPProxyPath, Get-MCPOwner, Install-MCPSkill
