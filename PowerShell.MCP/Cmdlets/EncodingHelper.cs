@@ -32,56 +32,7 @@ public static class EncodingHelper
             bytesRead = stream.Read(bytes, 0, bufferSize);
         }
 
-        // BOM detection (only need first 4 bytes)
-        if (bytesRead >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-            return new UTF8Encoding(true);
-        if (bytesRead >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-        {
-            // Check for UTF-32 LE
-            if (bytesRead >= 4 && bytes[2] == 0x00 && bytes[3] == 0x00)
-                return Encoding.UTF32;
-            return Encoding.Unicode;
-        }
-        if (bytesRead >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-            return Encoding.BigEndianUnicode;
-
-        // Use Ude library for detection (it's already designed for partial content)
-        try
-        {
-            var detector = new Ude.CharsetDetector();
-            detector.Feed(bytes, 0, bytesRead);
-            detector.DataEnd();
-
-            if (detector.Charset != null)
-            {
-                try
-                {
-                    return Encoding.GetEncoding(detector.Charset);
-                }
-                catch
-                {
-                    // Encoding not found, continue to fallback
-                }
-            }
-        }
-        catch
-        {
-            // Ude library not available or failed, use fallback
-        }
-
-        // Fallback: Check if valid UTF-8
-        // OPTIMIZATION: Use only the bytes we read (64KB max) instead of entire file
-        try
-        {
-            var utf8 = new UTF8Encoding(false, true);
-            utf8.GetString(bytes, 0, bytesRead);  // Throws if not valid UTF-8
-            return new UTF8Encoding(false);
-        }
-        catch
-        {
-            // Not valid UTF-8, assume system default
-            return Encoding.Default;
-        }
+        return FileMetadataHelper.DetectEncodingFromBytes(bytes, bytesRead);
     }
 
 

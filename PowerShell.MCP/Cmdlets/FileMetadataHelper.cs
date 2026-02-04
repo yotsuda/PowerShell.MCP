@@ -89,7 +89,7 @@ internal static class FileMetadataHelper
     /// <summary>
     /// Detect encoding from bytes (without reading entire file)
     /// </summary>
-    private static Encoding DetectEncodingFromBytes(byte[] bytes, int length)
+    internal static Encoding DetectEncodingFromBytes(byte[] bytes, int length)
     {
         if (length == 0)
             return new UTF8Encoding(false);
