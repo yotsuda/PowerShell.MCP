@@ -183,6 +183,14 @@ function Get-MCPOwner {
                     $clientName = 'Claude Desktop'
                     break
                 }
+                elseif ($processName -eq 'node') {
+                    # Check if this is Claude Code by examining command line
+                    $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($currentProcess.Id)" -ErrorAction SilentlyContinue).CommandLine
+                    if ($cmdLine -match 'claude-code') {
+                        $clientName = 'Claude Code'
+                        break
+                    }
+                }
                 elseif ($processName -eq 'code' -or $processName -eq 'code - insiders') {
                     $clientName = 'VS Code'
                     break
