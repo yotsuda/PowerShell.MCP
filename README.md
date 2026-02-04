@@ -94,6 +94,12 @@ This minimalist architecture provides maximum flexibility while maintaining simp
 - Every executed command is visible and auditable
 - Compatible with strict corporate security policies
 
+**🖥️ Multi-Console Support**
+- Multiple AI assistants can work simultaneously with separate PowerShell consoles
+- Each console gets a unique window title (e.g., "#12345 Taxi") for easy identification
+- User-started consoles with PowerShell.MCP module can be automatically adopted by AI assistants
+- `Get-MCPOwner` cmdlet shows which AI client owns the current console
+
 ## Quick Start
 
 ### Prerequisites
