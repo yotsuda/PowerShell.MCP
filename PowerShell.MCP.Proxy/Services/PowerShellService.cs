@@ -5,6 +5,8 @@ namespace PowerShell.MCP.Proxy.Services;
 
 public class PowerShellService : IPowerShellService
 {
+    private const string ResponseSeparator = "\n\n";
+
     private readonly NamedPipeClient _namedPipeClient;
 
     public PowerShellService(NamedPipeClient namedPipeClient)
@@ -24,9 +26,7 @@ public class PowerShellService : IPowerShellService
             throw new InvalidOperationException("PowerShell.MCP module communication failed - no response received");
         }
 
-        // Parse new format: JSON header + "\n\n" + body
-        var separatorIndex = response.IndexOf("\n\n");
-        return separatorIndex >= 0 ? response.Substring(separatorIndex + 2) : response;
+        return ExtractResponseBody(response);
     }
 
     public async Task<string> GetCurrentLocationFromPipeAsync(string pipeName, CancellationToken cancellationToken = default)
@@ -41,9 +41,7 @@ public class PowerShellService : IPowerShellService
             throw new InvalidOperationException($"PowerShell.MCP module communication to pipe '{pipeName}' failed - no response received");
         }
 
-        // Parse new format: JSON header + "\n\n" + body
-        var separatorIndex = response.IndexOf("\n\n");
-        return separatorIndex >= 0 ? response.Substring(separatorIndex + 2) : response;
+        return ExtractResponseBody(response);
     }
 
     public async Task<GetStatusResponse?> GetStatusAsync(CancellationToken cancellationToken = default)
@@ -60,9 +58,7 @@ public class PowerShellService : IPowerShellService
 
         try
         {
-            // Parse new format: JSON header + "\n\n" + body (body is empty for get_status)
-            var separatorIndex = response.IndexOf("\n\n");
-            var jsonHeader = separatorIndex >= 0 ? response.Substring(0, separatorIndex) : response;
+            var jsonHeader = ExtractResponseHeader(response);
             return JsonSerializer.Deserialize(jsonHeader, GetStatusResponseContext.Default.GetStatusResponse);
         }
         catch
@@ -86,9 +82,7 @@ public class PowerShellService : IPowerShellService
 
         try
         {
-            // Parse new format: JSON header + "\n\n" + body (body is empty for get_status)
-            var separatorIndex = response.IndexOf("\n\n");
-            var jsonHeader = separatorIndex >= 0 ? response.Substring(0, separatorIndex) : response;
+            var jsonHeader = ExtractResponseHeader(response);
             return JsonSerializer.Deserialize(jsonHeader, GetStatusResponseContext.Default.GetStatusResponse);
         }
         catch
@@ -104,9 +98,7 @@ public class PowerShellService : IPowerShellService
 
         var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
 
-        // Parse new format: JSON header + "\n\n" + body
-        var separatorIndex = response.IndexOf("\n\n");
-        return separatorIndex >= 0 ? response.Substring(separatorIndex + 2) : response;
+        return ExtractResponseBody(response);
     }
 
     public async Task<string> InvokeExpressionAsync(string pipeline, int timeoutSeconds = 170, CancellationToken cancellationToken = default)
@@ -199,5 +191,23 @@ public class PowerShellService : IPowerShellService
         {
             // Ignore errors - title setting is best effort
         }
+    }
+
+    /// <summary>
+    /// Extracts the body part from a response (content after "\n\n" separator)
+    /// </summary>
+    private static string ExtractResponseBody(string response)
+    {
+        var separatorIndex = response.IndexOf(ResponseSeparator);
+        return separatorIndex >= 0 ? response.Substring(separatorIndex + ResponseSeparator.Length) : response;
+    }
+
+    /// <summary>
+    /// Extracts the header part from a response (content before "\n\n" separator)
+    /// </summary>
+    private static string ExtractResponseHeader(string response)
+    {
+        var separatorIndex = response.IndexOf(ResponseSeparator);
+        return separatorIndex >= 0 ? response.Substring(0, separatorIndex) : response;
     }
 }
