@@ -638,7 +638,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         }
 
         // Collect busy status from Proxy side
-        // sessionManager already declared above
         var newPipeName = sessionManager.ActivePipeName;
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
 
