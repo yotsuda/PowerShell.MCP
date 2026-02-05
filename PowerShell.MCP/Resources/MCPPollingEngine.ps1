@@ -26,10 +26,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     if (-not $env:FORCE_COLOR) {
         $env:FORCE_COLOR = '1'
     }
-    # GitHub CLI (gh) and other tools using CLICOLOR
-    if (-not $env:CLICOLOR_FORCE) {
-        $env:CLICOLOR_FORCE = '1'
-    }
     # Modern terminals supporting 24-bit color (truecolor)
     if (-not $env:COLORTERM) {
         $env:COLORTERM = 'truecolor'
