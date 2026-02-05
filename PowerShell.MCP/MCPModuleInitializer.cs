@@ -116,17 +116,17 @@ namespace PowerShell.MCP
         {
             if (_namedPipeServer == null || _tokenSource == null)
                 return null;
-    
+
             try
             {
                 // Stop current server
                 _tokenSource.Cancel();
                 _namedPipeServer.Dispose();
-    
+
                 // Create new server with proxy PID
                 _namedPipeServer = new NamedPipeServer(proxyPid);
                 _tokenSource = new CancellationTokenSource();
-    
+
                 // Start new server
                 Task.Run(async () =>
                 {
@@ -139,7 +139,7 @@ namespace PowerShell.MCP
                         // Silently ignore Named Pipe server errors
                     }
                 }, _tokenSource.Token);
-    
+
                 return _namedPipeServer.PipeName;
             }
             catch (Exception)
@@ -147,7 +147,7 @@ namespace PowerShell.MCP
                 return null;
             }
         }
-    
+
         /// <summary>
         /// Gets the current pipe name for this console.
         /// </summary>

@@ -18,18 +18,18 @@ public static class PromptTemplateLoader
     public static string Load(string templateName, string? request = null)
     {
         var resourceName = $"PowerShell.MCP.Proxy.Prompts.Templates.{templateName}";
-        
+
         using var stream = Assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException($"Template not found: {templateName}");
-        
+
         using var reader = new StreamReader(stream);
         var template = reader.ReadToEnd();
-        
+
         if (!string.IsNullOrEmpty(request))
         {
             template = template.Replace("{{request}}", request);
         }
-        
+
         return template;
     }
 }

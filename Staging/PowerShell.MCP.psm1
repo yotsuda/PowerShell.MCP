@@ -11,18 +11,18 @@ if (-not $IsWindows) {
 $ExecutionContext.SessionState.Module.OnRemove = {
     try {
         #Write-Host "[PowerShell.MCP] Module removal detected, starting cleanup..." -ForegroundColor Yellow
-        
+
         # Load and execute MCPCleanup.ps1 from embedded resources
         $assembly = [System.Reflection.Assembly]::GetAssembly([PowerShell.MCP.MCPModuleInitializer])
         $resourceName = "PowerShell.MCP.Resources.MCPCleanup.ps1"
-        
+
         $stream = $assembly.GetManifestResourceStream($resourceName)
         if ($stream) {
             $reader = New-Object System.IO.StreamReader($stream)
             $cleanupScript = $reader.ReadToEnd()
             $reader.Close()
             $stream.Close()
-            
+
             # Execute cleanup script
             Invoke-Expression $cleanupScript
             #Write-Host "[PowerShell.MCP] OnRemove cleanup completed" -ForegroundColor Green
@@ -174,7 +174,7 @@ function Get-MCPOwner {
     $clientName = $null
     try {
         $currentProcess = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
-        
+
         for ($i = 0; $currentProcess -and $i -lt 5; $i++) {
             $processName = $currentProcess.ProcessName.ToLower()
             $processPath = $currentProcess.Path
@@ -317,7 +317,7 @@ function Install-ClaudeSkill {
             if ((Test-Path $destFile) -and -not $Force) {
                 $sourceHash = (Get-FileHash $sourceFile -Algorithm MD5).Hash
                 $destHash = (Get-FileHash $destFile -Algorithm MD5).Hash
-                
+
                 if ($sourceHash -eq $destHash) {
                     Write-Verbose "Skill '$skillName' is already up to date"
                     $skippedCount++

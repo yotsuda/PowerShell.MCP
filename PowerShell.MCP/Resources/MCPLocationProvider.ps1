@@ -19,11 +19,11 @@ $locationInfo = [ordered]@{
     # Available drives information
     available_drives = @(
         Get-PSDrive | ForEach-Object {
-            $currentPath = if ($_.CurrentLocation) { 
+            $currentPath = if ($_.CurrentLocation) {
                 $path = [string]$_.CurrentLocation
                 if (-not $path.StartsWith("\")) { "\" + $path } else { $path }
-            } else { 
-                "\" 
+            } else {
+                "\"
             }
 
             # Build drive object with only non-empty properties
