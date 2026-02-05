@@ -62,7 +62,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 var pid = ConsoleSessionManager.GetPidFromPipeName(activePipe);
                 closedMessages.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
             }
-            else if (status.Status == "standby" || status.Status == "completed")
+            else if (status.IsReady())
             {
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(status.Pid);
                 return new PipeDiscoveryResult(activePipe, false, closedMessages, BuildClosedConsoleInfo(closedMessages));
@@ -90,7 +90,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 continue;
             }
 
-            if (status.Status == "standby" || status.Status == "completed")
+            if (status.IsReady())
             {
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(status.Pid);
                 _sessionManager.SetActivePipeName(pipeName);
@@ -112,7 +112,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 continue;
             }
 
-            if (status.Status == "standby" || status.Status == "completed")
+            if (status.IsReady())
             {
                 // Claim this console - response may not be received because pipe closes during rename
                 var pwshPid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
