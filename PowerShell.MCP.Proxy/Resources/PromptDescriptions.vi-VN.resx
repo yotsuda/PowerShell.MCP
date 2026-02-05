@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -63,30 +63,15 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>Phân tích nội dung</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>Đường dẫn đến nội dung để phân tích</value>
-  </data>
   <!-- System Administration Prompt -->
   <!-- Learn Programming Language Prompt -->
   <!-- Create Work Procedure Prompt -->
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>Tạo tài liệu quy trình làm việc</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>Mô tả công việc hoặc dự án</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Thư mục làm việc để phân tích</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>Lĩnh vực tập trung cụ thể</value>
-  </data>
   <!-- Execute Work Procedure Prompt -->
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>Thực thi tài liệu quy trình làm việc</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Thư mục làm việc nơi công việc sẽ được thực hiện</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>Học Lập trình &amp; CLI</value>
@@ -94,31 +79,10 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>Học ngôn ngữ lập trình hoặc công cụ CLI một cách tương tác với thực hành</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>phân nhánh, đa luồng, mẫu thiết kế</value>
-  </data>
   <!-- Learn CLI Tools Prompt -->
   <!-- Foreign Language Dictation Training Prompt -->
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Luyện tập chính tả ngôn ngữ ngoại</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>Ngôn ngữ mục tiêu: Tiếng Anh, Tiếng Pháp, Tiếng Đức, Tiếng Tây Ban Nha, Tiếng Ý, Tiếng Trung, Tiếng Hàn, Tiếng Nhật</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>Ngắn (3-5 từ), Trung bình (6-8 từ), Dài (9-12 từ), Rất dài (13-15 từ)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>Chậm (tốc độ -2), Bình thường (tốc độ 0), Nhanh (tốc độ +2), Rất nhanh (tốc độ +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>Sân bay, Kinh doanh, Thức ăn, Bệnh viện, Trường học, Thời tiết, Sở thú</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>Hiển thị bản dịch bên cạnh ngôn ngữ mục tiêu (bật/tắt)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Phân tích nội dung và cung cấp thông tin chi tiết với các khuyến nghị có thể thực hiện</value>
@@ -138,16 +102,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>Hiển thị bản đồ tương tác theo chủ đề bằng PowerShell.Map (quán cà phê, chợ, di tích, v.v.)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>Điểm tham quan, Quán phở ngon, Quán cà phê</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>Toàn quốc, Hà Nội, TP.HCM</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>Hướng dẫn tạo HTML cho AI</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>Cung cấp hướng dẫn cho AI tạo báo cáo HTML chất lượng cao với định dạng, biểu đồ và kiểu dáng phù hợp</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>Đường dẫn nội dung và yêu cầu phân tích (vd: &apos;C:\logs phân tích lỗi&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Mô tả công việc và thư mục (vd: &apos;dịch tài liệu trong C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Đường dẫn thư mục làm việc (vd: &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>Ngôn ngữ và tùy chọn (vd: &apos;tiếng Anh nhanh ngắn kinh doanh&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>Công nghệ và lĩnh vực học tập (vd: &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>Chủ đề bản đồ và khu vực (vd: &apos;Khám phá di tích các triều đại theo trình tự thời gian&apos;)</value>
   </data>
 </root>

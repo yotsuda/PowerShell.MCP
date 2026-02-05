@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -63,30 +63,15 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>Аналіз вмісту</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>Шлях до вмісту для аналізу</value>
-  </data>
   <!-- System Administration Prompt -->
   <!-- Learn Programming Language Prompt -->
   <!-- Create Work Procedure Prompt -->
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>Створення документа робочої процедури</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>Опис роботи або проєкту</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Робочий каталог для аналізу</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>Конкретна область фокусу</value>
-  </data>
   <!-- Execute Work Procedure Prompt -->
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>Виконання документа робочої процедури</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Робочий каталог, де виконуватиметься робота</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>Вивчення програмування та CLI</value>
@@ -94,31 +79,10 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>Вивчати мови програмування або інструменти CLI в інтерактивному режимі з практичними вправами</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>розгалуження, багатопоточність, шаблони проектування</value>
-  </data>
   <!-- Learn CLI Tools Prompt -->
   <!-- Foreign Language Dictation Training Prompt -->
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Тренування диктантів іноземною мовою</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>Цільова мова: англійська, французька, німецька, іспанська, італійська, китайська, корейська, японська</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>Короткі (3-5 слів), Середні (6-8 слів), Довгі (9-12 слів), Дуже довгі (13-15 слів)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>Повільно (швидкість -2), Нормально (швидкість 0), Швидко (швидкість +2), Дуже швидко (швидкість +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>Аеропорт, Бізнес, Їжа, Лікарня, Школа, Погода, Зоопарк</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>Показувати переклад поруч із цільовою мовою (увімк/вимк)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Аналіз вмісту та надання інсайтів з практичними рекомендаціями</value>
@@ -138,16 +102,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>Показуйте тематичні карти за допомогою PowerShell.Map (кав'ярні, музеї, парки тощо)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>Визначні місця, Ресторани, Затишні кав'ярні</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>Вся Україна, Київ, Львів</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>Посібник зі створення HTML для ШІ</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>Надати посібник для ШІ зі створення високоякісних HTML-звітів з належним форматуванням, діаграмами та стилізацією</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>Шлях до вмісту та вимоги аналізу (напр: &apos;C:\logs аналіз помилок&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Опис роботи та каталог (напр: &apos;перекласти документи в C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Шлях робочого каталогу (напр: &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>Мова та параметри (напр: &apos;англійська швидко коротко бізнес&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>Технологія та сфера вивчення (напр: &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>Тема карти та область (напр: &apos;Міста Київської Русі у хронологічному порядку&apos;)</value>
   </data>
 </root>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -61,26 +61,11 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>콘텐츠 분석</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>분석할 콘텐츠 경로</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>작업 절차서 생성</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>작업 또는 프로젝트 설명</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>분석할 작업 디렉터리</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>특정 중점 영역</value>
-  </data>
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>작업 절차서 실행</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>작업을 수행할 작업 디렉터리</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>프로그래밍 및 CLI 학습</value>
@@ -88,29 +73,8 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>실습을 통해 프로그래밍 언어 또는 CLI 도구를 대화식으로 학습</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>브랜치, 멀티스레딩, 디자인 패턴</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>외국어 받아쓰기 훈련</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>대상 언어: 영어, 프랑스어, 독일어, 스페인어, 이탈리아어, 중국어, 한국어, 일본어</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>짧음(3-5 단어), 보통(6-8 단어), 김(9-12 단어), 매우 김(13-15 단어)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>느림(속도 -2), 보통(속도 0), 빠름(속도 +2), 매우 빠름(속도 +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>공항, 비즈니스, 음식, 병원, 학교, 날씨, 동물원</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>대상 언어와 함께 번역 표시(켜기/끄기)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>콘텐츠를 분석하고 실행 가능한 권장 사항과 함께 통찰력 제공</value>
@@ -130,16 +94,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>PowerShell.Map을 사용하여 테마별 대화형 지도 표시 (카페 투어, 한식당 지도, 역사 유적지 등)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>관광 명소, 맛집 투어, 카페 탐방</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>전국, 서울, 부산</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>AI를 위한 HTML 생성 가이드라인</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>적절한 형식, 차트 및 스타일이 포함된 고품질 HTML 보고서를 AI가 생성하기 위한 가이드라인 제공</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>콘텐츠 경로 및 분석 요구사항 (예: &apos;C:\logs 오류 분석&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>작업 설명 및 디렉토리 (예: &apos;C:\project 문서 번역&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>작업 디렉토리 경로 (예: &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>언어 및 옵션 (예: &apos;영어 빠름 짧음 비즈니스&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>기술 및 학습 분야 (예: &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>지도 테마 및 지역 (예: &apos;삼국시대 고대 왕국의 수도를 연대순으로 탐방&apos;)</value>
   </data>
 </root>

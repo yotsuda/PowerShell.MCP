@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -63,30 +63,15 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>วิเคราะห์เนื้อหา</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>เส้นทางไปยังเนื้อหาสำหรับการวิเคราะห์</value>
-  </data>
   <!-- System Administration Prompt -->
   <!-- Learn Programming Language Prompt -->
   <!-- Create Work Procedure Prompt -->
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>สร้างเอกสารขั้นตอนการทำงาน</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>คำอธิบายงานหรือโครงการ</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>ไดเรกทอรีการทำงานเพื่อวิเคราะห์</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>พื้นที่เน้นเฉพาะ</value>
-  </data>
   <!-- Execute Work Procedure Prompt -->
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>ดำเนินการตามเอกสารขั้นตอนการทำงาน</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>ไดเรกทอรีการทำงานที่จะดำเนินการ</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>เรียนรู้การเขียนโปรแกรมและ CLI</value>
@@ -94,31 +79,10 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>เรียนรู้ภาษาโปรแกรมหรือเครื่องมือ CLI แบบโต้ตอบพร้อมการฝึกปฏิบัติ</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>การแตกสาขา, มัลติเธรด, รูปแบบการออกแบบ</value>
-  </data>
   <!-- Learn CLI Tools Prompt -->
   <!-- Foreign Language Dictation Training Prompt -->
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>การฝึกคัดลอกภาษาต่างประเทศ</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>ภาษาเป้าหมาย: อังกฤษ, ฝรั่งเศส, เยอรมัน, สเปน, อิตาลี, จีน, เกาหลี, ญี่ปุ่น</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>สั้น (3-5 คำ), ปานกลาง (6-8 คำ), ยาว (9-12 คำ), ยาวมาก (13-15 คำ)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>ช้า (อัตรา -2), ปกติ (อัตรา 0), เร็ว (อัตรา +2), เร็วมาก (อัตรา +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>สนามบิน, ธุรกิจ, อาหาร, โรงพยาบาล, โรงเรียน, สภาพอากาศ, สวนสัตว์</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>แสดงคำแปลควบคู่กับภาษาเป้าหมาย (เปิด/ปิด)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>วิเคราะห์เนื้อหาและให้ข้อมูลเชิงลึกพร้อมคำแนะนำที่ปฏิบัติได้</value>
@@ -138,16 +102,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>แสดงแผนที่เชิงโต้ตอบตามธีมโดยใช้ PowerShell.Map (ตลาดนัด, ร้านอาหาร, วัด, ฯลฯ)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>สถานที่ท่องเที่ยว, ร้านอาหารอร่อย, วัดสวยงาม</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>ทั่วประเทศ, กรุงเทพฯ, เชียงใหม่</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>แนวทางการสร้าง HTML สำหรับ AI</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>จัดทำแนวทางสำหรับ AI ในการสร้างรายงาน HTML คุณภาพสูงพร้อมการจัดรูปแบบ แผนภูมิ และสไตล์ที่เหมาะสม</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>เส้นทางเนื้อหาและข้อกำหนดการวิเคราะห์ (เช่น &apos;C:\logs วิเคราะห์ข้อผิดพลาด&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>คำอธิบายงานและไดเรกทอรี (เช่น &apos;แปลเอกสารใน C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>เส้นทางไดเรกทอรีทำงาน (เช่น &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>ภาษาและตัวเลือก (เช่น &apos;อังกฤษ เร็ว สั้น ธุรกิจ&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>เทคโนโลยีและสาขาการเรียนรู้ (เช่น &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>ธีมแผนที่และพื้นที่ (เช่น &apos;สำรวจอาณาจักรอยุธยาตามลำดับเวลา&apos;)</value>
   </data>
 </root>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -61,26 +61,11 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>Analisis konten</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>Jalur ke konten yang akan dianalisis</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>Buat dokumen prosedur kerja</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>Deskripsi pekerjaan atau proyek</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Direktori kerja yang akan dianalisis</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>Area fokus tertentu</value>
-  </data>
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>Jalankan dokumen prosedur kerja</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Direktori kerja tempat pekerjaan akan dilakukan</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>Belajar Pemrograman &amp; CLI</value>
@@ -88,29 +73,8 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>Pelajari bahasa pemrograman atau alat CLI secara interaktif dengan praktik langsung</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>percabangan, multithreading, pola desain</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Latihan dikte bahasa asing</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>Bahasa target: Inggris, Prancis, Jerman, Spanyol, Italia, Tionghoa, Korea, Jepang</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>Pendek (3-5 kata), Sedang (6-8 kata), Panjang (9-12 kata), Sangat Panjang (13-15 kata)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>Lambat (kecepatan -2), Normal (kecepatan 0), Cepat (kecepatan +2), Sangat Cepat (kecepatan +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>Bandara, Bisnis, Makanan, Rumah Sakit, Sekolah, Cuaca, Kebun Binatang</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>Tampilkan terjemahan di samping bahasa target (aktif/nonaktif)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Menganalisis konten dan memberikan wawasan dengan rekomendasi yang dapat ditindaklanjuti</value>
@@ -130,16 +94,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>Tampilkan peta bertema menggunakan PowerShell.Map (warung kopi, pasar, tempat wisata, dll.)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>Tempat wisata, Restoran favorit, Kedai kopi</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>Seluruh Indonesia, Jakarta, Bali</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>Pedoman Pembuatan HTML untuk AI</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>Berikan pedoman bagi AI untuk menghasilkan laporan HTML berkualitas tinggi dengan format, grafik, dan gaya yang tepat</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>Jalur konten dan persyaratan analisis (mis: &apos;C:\logs analisis kesalahan&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Deskripsi pekerjaan dan direktori (mis: &apos;terjemahkan dokumen di C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Jalur direktori kerja (mis: &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>Bahasa dan opsi (mis: &apos;Inggris cepat pendek bisnis&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>Teknologi dan bidang pembelajaran (mis: &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>Tema peta dan area (mis: &apos;Jelajahi candi Majapahit secara kronologis&apos;)</value>
   </data>
 </root>

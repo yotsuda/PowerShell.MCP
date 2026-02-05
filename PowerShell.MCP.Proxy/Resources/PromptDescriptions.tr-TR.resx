@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -61,26 +61,11 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>İçerik analizi</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>Analiz edilecek içerik yolu</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>Çalışma prosedürü belgesi oluştur</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>İş veya proje açıklaması</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Analiz edilecek çalışma dizini</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>Belirli odak alanı</value>
-  </data>
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>Çalışma prosedürü belgesini yürüt</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>İşin gerçekleştirileceği çalışma dizini</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>Programlama ve CLI Öğrenme</value>
@@ -88,29 +73,8 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>Programlama dillerini veya CLI araçlarını uygulamalı olarak etkileşimli şekilde öğren</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>dallanma, çoklu iş parçacığı, tasarım kalıpları</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Yabancı dil dikte eğitimi</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>Hedef dil: İngilizce, Fransızca, Almanca, İspanyolca, İtalyanca, Çince, Korece, Japonca</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>Kısa (3-5 kelime), Orta (6-8 kelime), Uzun (9-12 kelime), Çok Uzun (13-15 kelime)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>Yavaş (hız -2), Normal (hız 0), Hızlı (hız +2), Çok Hızlı (hız +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>Havalimanı, İş, Yemek, Hastane, Okul, Hava Durumu, Hayvanat Bahçesi</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>Hedef dille birlikte çeviriyi göster (açık/kapalı)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>İçeriği analiz et ve uygulanabilir önerilerle içgörüler sağla</value>
@@ -130,16 +94,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>PowerShell.Map ile tematik haritalar görüntüleyin (çay bahçeleri, kebap salonları, pazarlar vb.)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>Turistik yerler, Kebap restoranları, Deniz kenarı kafeler</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>Tüm Türkiye, İstanbul, Ankara</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>Yapay Zeka için HTML Oluşturma Kılavuzu</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>Yapay zekanın uygun biçimlendirme, grafikler ve stil ile yüksek kaliteli HTML raporları oluşturması için kılavuz sağla</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>İçerik yolu ve analiz gereksinimleri (örn: &apos;C:\logs hataları analiz et&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>İş açıklaması ve dizin (örn: &apos;C:\project belgelerini çevir&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Çalışma dizini yolu (örn: &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>Dil ve seçenekler (örn: &apos;İngilizce hızlı kısa iş&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>Teknoloji ve öğrenme alanı (örn: &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>Harita teması ve alan (örn: &apos;Antik Likya şehirlerini kronolojik olarak keşfet&apos;)</value>
   </data>
 </root>

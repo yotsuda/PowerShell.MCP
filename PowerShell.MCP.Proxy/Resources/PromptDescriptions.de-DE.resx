@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -61,26 +61,11 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>Inhaltsanalyse</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>Pfad zum zu analysierenden Inhalt</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>Arbeitsanweisung erstellen</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>Beschreibung der Arbeit oder des Projekts</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Zu analysierendes Arbeitsverzeichnis</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>Spezifischer Schwerpunktbereich</value>
-  </data>
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>Arbeitsanweisung ausführen</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>Arbeitsverzeichnis, in dem die Arbeit ausgeführt wird</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>Programmierung &amp; CLI lernen</value>
@@ -88,29 +73,8 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>Programmiersprachen oder CLI-Tools interaktiv mit praktischen Übungen lernen</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>Verzweigung, Multithreading, Entwurfsmuster</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Fremdsprachendiktattraining</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>Zielsprache: Englisch, Französisch, Deutsch, Spanisch, Italienisch, Chinesisch, Koreanisch, Japanisch</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>Kurz (3-5 Wörter), Mittel (6-8 Wörter), Lang (9-12 Wörter), Sehr Lang (13-15 Wörter)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>Langsam (Rate -2), Normal (Rate 0), Schnell (Rate +2), Sehr Schnell (Rate +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>Flughafen, Geschäft, Essen, Krankenhaus, Schule, Wetter, Zoo</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>Übersetzung neben Zielsprache anzeigen (ein/aus)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>Inhalte analysieren und Einblicke mit umsetzbaren Empfehlungen bieten</value>
@@ -130,16 +94,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>Themenkarten mit PowerShell.Map anzeigen (Biergärten, traditionelle Bäckereien, Weihnachtsmärkte usw.)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>Sehenswürdigkeiten, Biergärten, Historische Orte</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>Ganz Deutschland, Berlin, München</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>HTML-Generierungsrichtlinien für KI</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>Richtlinien für KI zur Erstellung hochwertiger HTML-Berichte mit korrekter Formatierung, Diagrammen und Gestaltung bereitstellen</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>Inhaltspfad und Analyseanforderungen (z.B. &apos;C:\logs Fehler analysieren&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Arbeitsbeschreibung und Verzeichnis (z.B. &apos;Dokumente in C:\project übersetzen&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>Arbeitsverzeichnispfad (z.B. &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>Sprache und Optionen (z.B. &apos;Englisch schnell kurz Business&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>Technologie und Lernbereich (z.B. &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>Kartenthema und Gebiet (z.B. &apos;Mittelalterliche Burgen am Rhein chronologisch erkunden&apos;)</value>
   </data>
 </root>

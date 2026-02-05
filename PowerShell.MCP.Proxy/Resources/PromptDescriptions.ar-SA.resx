@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -61,26 +61,11 @@
   <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
     <value>تحليل المحتوى</value>
   </data>
-  <data name="Prompt_AnalyzeContent_Param_ContentPath" xml:space="preserve">
-    <value>مسار المحتوى المراد تحليله</value>
-  </data>
   <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
     <value>إنشاء وثيقة إجراء العمل</value>
   </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkDescription" xml:space="preserve">
-    <value>وصف العمل أو المشروع</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>دليل العمل المراد تحليله</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_FocusArea" xml:space="preserve">
-    <value>منطقة التركيز المحددة</value>
-  </data>
   <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
     <value>تنفيذ وثيقة إجراء العمل</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_WorkingDirectory" xml:space="preserve">
-    <value>دليل العمل حيث سيتم تنفيذ العمل</value>
   </data>
   <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
     <value>تعلم البرمجة وأدوات CLI</value>
@@ -88,29 +73,8 @@
   <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
     <value>تعلم لغات البرمجة أو أدوات CLI بشكل تفاعلي مع الممارسة العملية</value>
   </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Technology" xml:space="preserve">
-    <value>Python, Git, Docker, C#</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_LearningFocus" xml:space="preserve">
-    <value>التفرع, تعدد الخيوط, أنماط التصميم</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>تدريب الإملاء باللغة الأجنبية</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_TargetLanguage" xml:space="preserve">
-    <value>اللغة المستهدفة: الإنجليزية، الفرنسية، الألمانية، الإسبانية، الإيطالية، الصينية، الكورية، اليابانية</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SentenceLength" xml:space="preserve">
-    <value>قصيرة (3-5 كلمات)، متوسطة (6-8 كلمات)، طويلة (9-12 كلمة)، طويلة جدًا (13-15 كلمة)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_SpeechSpeed" xml:space="preserve">
-    <value>بطيء (السرعة -2)، عادي (السرعة 0)، سريع (السرعة +2)، سريع جدًا (السرعة +4)</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_Topic" xml:space="preserve">
-    <value>المطار، الأعمال، الطعام، المستشفى، المدرسة، الطقس، حديقة الحيوان</value>
-  </data>
-  <data name="Prompt_ForeignLanguageDictationTraining_Param_ShowTranslation" xml:space="preserve">
-    <value>إظهار الترجمة جنبًا إلى جنب مع اللغة المستهدفة (تشغيل/إيقاف)</value>
   </data>
   <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
     <value>تحليل المحتوى وتقديم رؤى مع توصيات قابلة للتنفيذ</value>
@@ -130,16 +94,28 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>عرض خرائط موضوعية باستخدام PowerShell.Map (المقاهي، الأسواق، المعالم، إلخ)</value>
   </data>
-  <data name="Prompt_ShowInteractiveMap_Param_MapTheme" xml:space="preserve">
-    <value>معالم سياحية، مطاعم، مقاهي عصرية</value>
-  </data>
-  <data name="Prompt_ShowInteractiveMap_Param_TargetArea" xml:space="preserve">
-    <value>جميع أنحاء البلد، دبي، الرياض</value>
-  </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
     <value>إرشادات إنشاء HTML للذكاء الاصطناعي</value>
   </data>
   <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
     <value>توفير إرشادات للذكاء الاصطناعي لإنشاء تقارير HTML عالية الجودة بتنسيق ورسوم بيانية وأنماط مناسبة</value>
+  </data>
+  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
+    <value>مسار المحتوى ومتطلبات التحليل (مثال: &apos;C:\logs تحليل الأخطاء&apos;)</value>
+  </data>
+  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
+    <value>وصف العمل والدليل (مثال: &apos;ترجمة المستندات في C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
+    <value>مسار دليل العمل (مثال: &apos;C:\project&apos;)</value>
+  </data>
+  <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
+    <value>اللغة والخيارات (مثال: &apos;الإنجليزية سريع قصير أعمال&apos;)</value>
+  </data>
+  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
+    <value>التقنية ومجال التعلم (مثال: &apos;Python async/await&apos;)</value>
+  </data>
+  <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
+    <value>موضوع الخريطة والمنطقة (مثال: &apos;استكشاف طريق الحرير بالترتيب الزمني&apos;)</value>
   </data>
 </root>
