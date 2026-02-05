@@ -5,7 +5,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.5.1.0</Version>
+    <Version>1.6.0.0</Version>
     <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
 
     <!-- Single File デプロイ設定 -->
@@ -57,5 +57,9 @@
     <EmbeddedResource Update="Resources\PromptDescriptions.resx">
       <LastGenOutput>PromptDescriptions.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+  <!-- プロンプトテンプレートを埋め込みリソースとして追加 -->
+  <ItemGroup>
+    <EmbeddedResource Include="Prompts\Templates\*.md" />
   </ItemGroup>
 </Project>

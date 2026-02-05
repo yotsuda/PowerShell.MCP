@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.dll'
 
 # Version number of this module.
-ModuleVersion = '1.5.1'
+ModuleVersion = '1.6.0'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -69,7 +69,7 @@ RequiredModules = @()
 NestedModules = @('PowerShell.MCP.psm1')
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = @('Get-MCPProxyPath', 'Get-MCPOwner')
+FunctionsToExport = @('Get-MCPProxyPath', 'Get-MCPOwner', 'Install-ClaudeSkill')
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @(
@@ -115,7 +115,7 @@ PrivateData = @{
         Platforms = @('Windows', 'Linux', 'macOS')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.5.0 - Cross-Platform MCP Server
+        ReleaseNotes = 'PowerShell.MCP v1.6.0 - Cross-Platform MCP Server
 
 === Cross-Platform Support ===
 Now available on Windows, Linux, and macOS!
