@@ -97,6 +97,31 @@ if ('Dll' -in $Target) {
 }
 
 # =============================================================================
+# Export Claude Code Skills from templates
+# =============================================================================
+Write-Host "[Skills] Exporting Claude Code skills..." -ForegroundColor Yellow
+
+$exportScript = Join-Path $PSScriptRoot 'Export-ClaudeSkills.ps1'
+if (Test-Path $exportScript) {
+    & $exportScript
+
+    # Copy skills to module directory
+    $skillsSource = Join-Path $stagingPath 'skills'
+    $skillsDest = Join-Path $OutputBase 'skills'
+
+    if (-not (Test-Path $skillsDest)) {
+        New-Item -Path $skillsDest -ItemType Directory -Force | Out-Null
+    }
+
+    Copy-Item (Join-Path $skillsSource '*.md') -Destination $skillsDest -Force
+    $copiedCount = (Get-ChildItem $skillsDest -Filter '*.md').Count
+    Write-Host "  Copied $copiedCount skill(s) to $skillsDest" -ForegroundColor Green
+} else {
+    Write-Warning "  Export-ClaudeSkills.ps1 not found, skipping skill export"
+}
+Write-Host ""
+
+# =============================================================================
 # Build PowerShell.MCP.Proxy (for specified platforms)
 # =============================================================================
 $proxyTargets = $Target | Where-Object { $_ -ne 'Dll' }
@@ -109,13 +134,13 @@ if ($proxyTargets) {
     foreach ($t in $proxyTargets) {
         $rid = $ridMap[$t]
         Write-Host "  [$rid] Publishing..." -ForegroundColor Gray
-        
+
         $outputDir = Join-Path $binBase $rid
-        
+
         if (-not (Test-Path $outputDir)) {
             New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
         }
-        
+
         $publishArgs = @(
             'publish'
             $proxyProjectPath
@@ -124,17 +149,17 @@ if ($proxyTargets) {
             '-o', $outputDir
             '--source', 'https://api.nuget.org/v3/index.json'
         )
-        
+
         & dotnet @publishArgs
-        
+
         if ($LASTEXITCODE -ne 0) {
             Write-Error "[$rid] Build failed!"
             exit 1
         }
-        
+
         $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
         $exePath = Join-Path $outputDir $exeName
-        
+
         if (Test-Path $exePath) {
             $size = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
             Write-Host "  [$rid] Success ($size MB)" -ForegroundColor Green
@@ -195,7 +220,8 @@ $allowedFiles = @(
 
 $allowedDirs = @(
     'bin',
-    'en-US'
+    'en-US',
+    'skills'
 )
 
 $unexpectedItems = @()
@@ -218,13 +244,13 @@ Get-ChildItem $OutputBase -Directory | ForEach-Object {
 $binPath = Join-Path $OutputBase 'bin'
 if (Test-Path $binPath) {
     $allowedPlatforms = @('win-x64', 'linux-x64', 'osx-x64', 'osx-arm64')
-    
+
     Get-ChildItem $binPath -Directory | ForEach-Object {
         if ($_.Name -notin $allowedPlatforms) {
             $unexpectedItems += "bin\$($_.Name)\"
         }
     }
-    
+
     # Check each platform directory
     foreach ($platform in $allowedPlatforms) {
         $platformPath = Join-Path $binPath $platform
