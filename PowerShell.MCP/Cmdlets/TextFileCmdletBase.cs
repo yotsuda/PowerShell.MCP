@@ -78,6 +78,8 @@ public abstract class TextFileCmdletBase : PSCmdlet
     {
         try
         {
+            if (string.IsNullOrEmpty(path)) return false;
+
             // Check if contains :
             if (!path.Contains(':'))
             {
