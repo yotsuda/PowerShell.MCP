@@ -448,3 +448,6 @@ deployRelease.bat
 PowerShell.MCP/PlatyPS/en-US/PowerShell.MCP.md
 
 slack*.txt
+
+# Generated Claude Code skill files (built from Templates/*.md)
+Staging/Skills/ps-*.md
