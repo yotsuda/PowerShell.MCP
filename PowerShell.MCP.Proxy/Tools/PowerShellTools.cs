@@ -7,6 +7,7 @@ using PowerShell.MCP.Proxy.Models;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using PowerShell.MCP.Proxy.Helpers;
 
 namespace PowerShell.MCP.Proxy.Tools;
 
@@ -151,14 +152,7 @@ public class PowerShellTools
     }
 
     private static string FormatBusyStatus(GetStatusResponse status)
-    {
-        // Use statusLine from dll if available, otherwise fallback to old format
-        if (!string.IsNullOrEmpty(status.StatusLine))
-            return status.StatusLine;
-
-        var truncatedPipeline = TruncatePipeline(status.Pipeline ?? "");
-        return $"⧗ | pwsh PID: {status.Pid} | Status: Busy | Pipeline: {truncatedPipeline} | Duration: {status.Duration:F2}s";
-    }
+        => PipelineHelper.FormatBusyStatus(status.StatusLine, status.Pid, status.Pipeline, status.Duration ?? 0);
 
     /// <summary>
     /// Collects cached outputs and busy status from all pipes except excludePipeName.
@@ -214,25 +208,11 @@ public class PowerShellTools
         return (completedOutput.ToString(), busyStatusInfo.ToString());
     }
 
-    private static string TruncatePipeline(string pipeline, int maxLength = 30)
-    {
-        if (string.IsNullOrEmpty(pipeline)) return "";
-
-        // Normalize whitespace
-        var normalized = string.Join(" ", pipeline.Split(default(char[]), StringSplitOptions.RemoveEmptyEntries));
-
-        if (normalized.Length <= maxLength)
-            return normalized;
-
-        return normalized[..(maxLength - 3)] + "...";
-    }
+    private static string TruncatePipeline(string? pipeline, int maxLength = 30)
+        => PipelineHelper.Truncate(pipeline, maxLength);
 
     private static string GetPidString(string? pipeName)
-    {
-        if (pipeName == null) return "unknown";
-        var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
-        return pid?.ToString() ?? "unknown";
-    }
+        => PipelineHelper.GetPidString(pipeName);
 
     /// <summary>
     /// Sets the console window title if not already set
@@ -934,23 +914,5 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     /// Checks for local variable assignments without scope prefix and returns a warning message.
     /// </summary>
     private static string? CheckLocalVariableAssignments(string pipeline)
-    {
-        // Pattern: $varname = (but not $script:, $global:, $env:, $using:, $null, $true, $false)
-        // Also exclude common automatic variables like $_, $?, $^, $$, $args, $input, $foreach, $switch
-        var pattern = @"\$(?!script:|global:|env:|using:|null\b|true\b|false\b|_\b|\?\b|\^\b|\$\b|args\b|input\b|foreach\b|switch\b|Matches\b|PSItem\b)([a-zA-Z_]\w*)\s*=";
-        var matches = Regex.Matches(pipeline, pattern);
-
-        if (matches.Count == 0) return null;
-
-        var vars = matches.Select(m => "$" + m.Groups[1].Value).Distinct().ToList();
-        if (vars.Count == 0) return null;
-
-        var sb = new StringBuilder();
-        sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
-        foreach (var v in vars)
-        {
-            sb.AppendLine($"  {v} → Consider using {v.Replace("$", "$script:")} to preserve across calls");
-        }
-        return sb.ToString().TrimEnd();
-    }
+        => PipelineHelper.CheckLocalVariableAssignments(pipeline);
 }
