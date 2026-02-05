@@ -119,14 +119,15 @@ function Get-MCPProxyPath {
 
 .DESCRIPTION
     Returns ownership information for the current PowerShell console, including
-    whether it is owned by an MCP proxy, the proxy's PID, and the client name
-    (e.g., Claude Desktop, Claude Code, VS Code).
+    whether it is owned by an MCP proxy, the proxy's PID, the agent ID,
+    and the client name (e.g., Claude Desktop, Claude Code, VS Code).
 
 .EXAMPLE
     Get-MCPOwner
 
     Owned      : True
     ProxyPid   : 22208
+    AgentId    : cc19706b
     ClientName : Claude Desktop
 
 .EXAMPLE
@@ -134,10 +135,11 @@ function Get-MCPProxyPath {
 
     Owned      : False
     ProxyPid   :
+    AgentId    :
     ClientName :
 
 .OUTPUTS
-    PSCustomObject with Owned, ProxyPid, and ClientName properties
+    PSCustomObject with Owned, ProxyPid, AgentId, and ClientName properties
 #>
 function Get-MCPOwner {
     [CmdletBinding()]
@@ -150,24 +152,27 @@ function Get-MCPOwner {
         return [PSCustomObject]@{
             Owned      = $false
             ProxyPid   = $null
+            AgentId    = $null
             ClientName = $null
         }
     }
 
     # Parse pipe name segments
     # Unowned: PowerShell.MCP.Communication.{pwshPid} (4 segments)
-    # Owned:   PowerShell.MCP.Communication.{proxyPid}.{pwshPid} (5 segments)
+    # Owned:   PowerShell.MCP.Communication.{proxyPid}.{agentId}.{pwshPid} (6 segments)
     $segments = $pipeName.Split('.')
 
-    if ($segments.Length -ne 5) {
+    if ($segments.Length -ne 6) {
         return [PSCustomObject]@{
             Owned      = $false
             ProxyPid   = $null
+            AgentId    = $null
             ClientName = $null
         }
     }
 
     $proxyPid = [int]$segments[3]
+    $agentId  = $segments[4]
 
     # Determine client name by examining process path and parent chain
     # Uses Get-Process Path and Parent properties (cross-platform, no Win32_Process)
@@ -214,6 +219,7 @@ function Get-MCPOwner {
     return [PSCustomObject]@{
         Owned      = $true
         ProxyPid   = $proxyPid
+        AgentId    = $agentId
         ClientName = $clientName
     }
 }

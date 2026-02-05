@@ -9,6 +9,7 @@ public class PipeDiscoveryServiceTests
 {
     private readonly Mock<IPowerShellService> _mockPowerShellService;
     private readonly PipeDiscoveryService _service;
+    private const string DefaultAgentId = "default";
 
     public PipeDiscoveryServiceTests()
     {
@@ -22,7 +23,7 @@ public class PipeDiscoveryServiceTests
     public void DetectClosedConsoles_NoPreviouslyBusyPids_ReturnsEmptyList()
     {
         // When no PIDs were previously marked as busy, should return empty
-        var result = _service.DetectClosedConsoles();
+        var result = _service.DetectClosedConsoles(DefaultAgentId);
         Assert.Empty(result);
     }
 
@@ -34,8 +35,8 @@ public class PipeDiscoveryServiceTests
     public async Task FindReadyPipeAsync_NoPipes_ReturnsNullPipeName()
     {
         // Setup: No pipes available
-        var result = await _service.FindReadyPipeAsync(CancellationToken.None);
-        
+        var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
+
         Assert.Null(result.ReadyPipeName);
         Assert.False(result.ConsoleSwitched);
     }
@@ -46,22 +47,22 @@ public class PipeDiscoveryServiceTests
         // Setup: Active pipe is in standby state
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.99999";
-        
+        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99999";
+
         // Set the active pipe name (this requires the session manager to be aware of it)
-        sessionManager.SetActivePipeName(testPipeName);
+        sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
         _mockPowerShellService
             .Setup(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GetStatusResponse { Status = "standby", Pid = 99999 });
 
-        var result = await _service.FindReadyPipeAsync(CancellationToken.None);
+        var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
 
         Assert.Equal(testPipeName, result.ReadyPipeName);
         Assert.False(result.ConsoleSwitched);
 
         // Cleanup
-        sessionManager.ClearDeadPipe(testPipeName);
+        sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
     }
 
     [Fact]
@@ -69,21 +70,21 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.99998";
-        
-        sessionManager.SetActivePipeName(testPipeName);
+        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99998";
+
+        sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
         _mockPowerShellService
             .Setup(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GetStatusResponse { Status = "completed", Pid = 99998 });
 
-        var result = await _service.FindReadyPipeAsync(CancellationToken.None);
+        var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
 
         Assert.Equal(testPipeName, result.ReadyPipeName);
         Assert.False(result.ConsoleSwitched);
 
         // Cleanup
-        sessionManager.ClearDeadPipe(testPipeName);
+        sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
     }
 
     [Fact]
@@ -91,15 +92,15 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.99997";
-        
-        sessionManager.SetActivePipeName(testPipeName);
+        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99997";
+
+        sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
         _mockPowerShellService
             .Setup(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync((GetStatusResponse?)null);
 
-        var result = await _service.FindReadyPipeAsync(CancellationToken.None);
+        var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
 
         // Should have detected the closed console
         Assert.Contains(result.ClosedConsoleMessages, m => m.Contains("was closed"));
@@ -112,21 +113,21 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.99996";
-        
-        sessionManager.SetActivePipeName(testPipeName);
+        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99996";
+
+        sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
         _mockPowerShellService
             .Setup(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GetStatusResponse 
-            { 
-                Status = "busy", 
-                Pid = 99996, 
+            .ReturnsAsync(new GetStatusResponse
+            {
+                Status = "busy",
+                Pid = 99996,
                 Pipeline = "Get-Process",
                 Duration = 5.5
             });
 
-        var result = await _service.FindReadyPipeAsync(CancellationToken.None);
+        var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
 
         // No ready pipe found since only pipe is busy
         Assert.Null(result.ReadyPipeName);
@@ -134,7 +135,7 @@ public class PipeDiscoveryServiceTests
         Assert.Contains("Get-Process", result.AllPipesStatusInfo);
 
         // Cleanup
-        sessionManager.ClearDeadPipe(testPipeName);
+        sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
     }
 
     #endregion
@@ -144,7 +145,7 @@ public class PipeDiscoveryServiceTests
     [Fact]
     public async Task CollectAllCachedOutputsAsync_NoPipes_ReturnsEmptyResults()
     {
-        var result = await _service.CollectAllCachedOutputsAsync(null, CancellationToken.None);
+        var result = await _service.CollectAllCachedOutputsAsync(DefaultAgentId, null, CancellationToken.None);
 
         Assert.Equal("", result.CompletedOutput);
         Assert.Equal("", result.BusyStatusInfo);
@@ -155,9 +156,9 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.99995";
-        
-        sessionManager.SetActivePipeName(testPipeName);
+        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99995";
+
+        sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
         _mockPowerShellService
             .Setup(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
@@ -168,13 +169,13 @@ public class PipeDiscoveryServiceTests
             .ReturnsAsync("Test output");
 
         // Exclude the pipe we just set up
-        var result = await _service.CollectAllCachedOutputsAsync(testPipeName, CancellationToken.None);
+        var result = await _service.CollectAllCachedOutputsAsync(DefaultAgentId, testPipeName, CancellationToken.None);
 
         // Should be empty because we excluded the only pipe
         Assert.Equal("", result.CompletedOutput);
 
         // Cleanup
-        sessionManager.ClearDeadPipe(testPipeName);
+        sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
     }
 
     #endregion

@@ -87,6 +87,9 @@ public class ClaimConsoleParams : PowerShellMcpParams
 
     [JsonPropertyName("proxy_pid")]
     public int ProxyPid { get; set; }
+
+    [JsonPropertyName("agent_id")]
+    public string? AgentId { get; set; }
 }
 
 public class ClaimConsoleResponse

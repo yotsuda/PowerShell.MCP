@@ -26,15 +26,15 @@ public interface IPipeDiscoveryService
     /// <summary>
     /// Find a ready pipe for command execution
     /// </summary>
-    Task<PipeDiscoveryResult> FindReadyPipeAsync(CancellationToken cancellationToken);
+    Task<PipeDiscoveryResult> FindReadyPipeAsync(string agentId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Collect cached outputs from all pipes except the specified one
     /// </summary>
-    Task<CachedOutputResult> CollectAllCachedOutputsAsync(string? excludePipeName, CancellationToken cancellationToken);
+    Task<CachedOutputResult> CollectAllCachedOutputsAsync(string agentId, string? excludePipeName, CancellationToken cancellationToken);
 
     /// <summary>
     /// Detect externally closed consoles
     /// </summary>
-    IReadOnlyList<string> DetectClosedConsoles();
+    IReadOnlyList<string> DetectClosedConsoles(string agentId);
 }

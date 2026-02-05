@@ -19,10 +19,11 @@ public class PowerShellTools
     /// </summary>
     private static async Task<(string? readyPipeName, bool consoleSwitched, string? allPipesStatusInfo)> FindReadyPipeAsync(
         IPowerShellService powerShellService,
+        string agentId,
         CancellationToken cancellationToken)
     {
         var service = new PipeDiscoveryService(powerShellService);
-        var result = await service.FindReadyPipeAsync(cancellationToken);
+        var result = await service.FindReadyPipeAsync(agentId, cancellationToken);
         return (result.ReadyPipeName, result.ConsoleSwitched, result.AllPipesStatusInfo);
     }
 
@@ -34,11 +35,12 @@ public class PowerShellTools
     /// </summary>
     private static async Task<(string completedOutput, string busyStatusInfo)> CollectAllCachedOutputsAsync(
         IPowerShellService powerShellService,
+        string agentId,
         string? excludePipeName,
         CancellationToken cancellationToken)
     {
         var service = new PipeDiscoveryService(powerShellService);
-        var result = await service.CollectAllCachedOutputsAsync(excludePipeName, cancellationToken);
+        var result = await service.CollectAllCachedOutputsAsync(agentId, excludePipeName, cancellationToken);
         return (result.CompletedOutput, result.BusyStatusInfo);
     }
 
@@ -63,19 +65,30 @@ public class PowerShellTools
 
 
     [McpServerTool]
+    [Description("Generate a unique agent ID for console isolation. Call this once before using any other PowerShell tools if you are a sub-agent.")]
+    public static string GenerateAgentId()
+    {
+        return Guid.NewGuid().ToString("N")[..8];
+    }
+
+    [McpServerTool]
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
+        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
+        var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
+
         // Find a ready pipe
-        var (readyPipeName, _, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+        var (readyPipeName, _, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
             // No ready pipe - auto-start (StartPowershellConsole includes busy info collection)
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            return await StartPowershellConsole(powerShellService, cancellationToken: cancellationToken);
+            return await StartPowershellConsole(powerShellService, agent_id: agent_id, cancellationToken: cancellationToken);
         }
 
         try
@@ -84,7 +97,7 @@ public class PowerShellTools
             var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
 
             // Collect completed outputs and busy status info from other pipes
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
 
             // Build response: busyStatusInfo + completedOutputs + result
             var response = new StringBuilder();
@@ -127,35 +140,39 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         string pipeline,
         [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next MCP tool call. You can work on other tasks in parallel. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
         int timeout_seconds = 170,
+        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
         // Clamp timeout to valid range
         timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
 
+        var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, cancellationToken);
+        var (readyPipeName, consoleSwitched, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
             // No ready pipe - auto-start
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
+            var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
             if (!success)
             {
                 return locationResult; // Error message
             }
 
             // Set console window title
-            if (sessionManager.ActivePipeName != null)
+            var activeAfterStart = sessionManager.GetActivePipeName(agentId);
+            if (activeAfterStart != null)
             {
-                await SetConsoleTitleAsync(powerShellService, sessionManager.ActivePipeName, cancellationToken);
+                await SetConsoleTitleAsync(powerShellService, activeAfterStart, cancellationToken);
             }
 
             // Collect completed outputs and busy status (after console start, using new pipe as exclude)
-            var newPipeName = sessionManager.ActivePipeName;
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
+            var newPipeName = sessionManager.GetActivePipeName(agentId);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, newPipeName, cancellationToken);
 
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = GetPidString(newPipeName);
@@ -186,7 +203,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             // Set console window title for claimed console
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
 
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = GetPidString(readyPipeName);
@@ -236,26 +253,27 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                         {
                             case "busy":
                                 // Mark this pipe as busy for tracking
-                                if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(jsonResponse.Pid);
+                                if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(agentId, jsonResponse.Pid);
 
                                 if (jsonResponse.Reason == "user_command" || jsonResponse.Reason == "mcp_command")
                                 {
                                     // Auto-start new console
                                     Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-starting new console...");
-                                    var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
+                                    var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
                                     if (!success)
                                     {
                                         return locationResult; // Error message
                                     }
 
                                     // Set console window title
-                                    if (sessionManager.ActivePipeName != null)
+                                    var activeAfterBusy = sessionManager.GetActivePipeName(agentId);
+                                    if (activeAfterBusy != null)
                                     {
-                                        await SetConsoleTitleAsync(powerShellService, sessionManager.ActivePipeName, cancellationToken);
+                                        await SetConsoleTitleAsync(powerShellService, activeAfterBusy, cancellationToken);
                                     }
 
-                                    var newPipeName = sessionManager.ActivePipeName;
-                                    var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
+                                    var newPipeName = sessionManager.GetActivePipeName(agentId);
+                                    var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, newPipeName, cancellationToken);
 
                                     var newPid = GetPidString(newPipeName);
 
@@ -282,13 +300,13 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
                             case "timeout":
                                 // Mark this pipe as busy for tracking
-                                if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(jsonResponse.Pid);
+                                if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(agentId, jsonResponse.Pid);
 
                                 // Consume cached output from current pipe (if any)
                                 var currentPipeCachedOutput = await powerShellService.ConsumeOutputFromPipeAsync(readyPipeName, cancellationToken);
 
                                 // Collect completed outputs and busy status from other pipes
-                                var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+                                var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
 
                                 // Build timeout response: busy status first + closedConsoleInfo + cachedOutput + completedOutput + scopeWarning + timeout message
                                 var timeoutResponse = new StringBuilder();
@@ -327,7 +345,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                             case "completed":
                                 // Result was cached - return status
                                 // Collect busy status from other pipes
-                                var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+                                var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
 
                                 var cachedResponse = new StringBuilder();
                                 if (cachedBusyStatusInfo.Length > 0)
@@ -354,7 +372,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
                             case "success":
                                 // Normal completion - use body as result
-                                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, readyPipeName, cancellationToken);
+                                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
 
                                 var successResponse = new StringBuilder();
                                 if (busyStatusInfo.Length > 0)
@@ -405,9 +423,12 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         IPowerShellService powerShellService,
         [Description("Maximum seconds to wait for completion (1-170, default: 30). Returns early if a console completes.")]
         int timeout_seconds = 30,
+        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
         var sessionManager = ConsoleSessionManager.Instance;
+        var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
 
         timeout_seconds = Math.Clamp(timeout_seconds, 1, 170);
 
@@ -416,8 +437,8 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         // Detect externally closed consoles - return immediately if any previously busy pipe is gone
         var closedConsoleMessages = new List<string>();
-        var previouslyBusyPids = sessionManager.ConsumeKnownBusyPids();
-        var currentPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid).ToList();
+        var previouslyBusyPids = sessionManager.ConsumeKnownBusyPids(agentId);
+        var currentPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid, agentId).ToList();
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
             .Where(p => p.HasValue)
@@ -435,7 +456,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // If any previously busy pipe was closed, collect all cached outputs and return
         if (closedConsoleMessages.Count > 0)
         {
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
             return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
         }
 
@@ -450,24 +471,24 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             if (status == null)
             {
                 // Dead pipe detected - collect all cached outputs and return
-                sessionManager.ClearDeadPipe(pipeName);
+                sessionManager.ClearDeadPipe(agentId, pipeName);
                 var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
                 closedConsoleMessages.Add($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
 
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
             }
 
             if (status.Status == "completed")
             {
                 // Completed - collect all cached outputs (including this one) and return
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
             }
 
             if (status.Status == "busy")
             {
-                if (status.Pid > 0) sessionManager.MarkPipeBusy(status.Pid);
+                if (status.Pid > 0) sessionManager.MarkPipeBusy(agentId, status.Pid);
                 // Only track MCP-initiated commands, not user commands
                 if (status.Pipeline != "(user command)")
                 {
@@ -476,14 +497,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             }
             else if (status.Status == "standby")
             {
-                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
+                if (status.Pid > 0) sessionManager.UnmarkPipeBusy(agentId, status.Pid);
             }
         }
 
         // No MCP-initiated busy pipes - collect any cached outputs and return
         if (busyPipes.Count == 0)
         {
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
 
             // If no completed output and no busy info, return "No commands to wait for completion."
             if (completedOutput.Length == 0 && busyStatusInfo.Length == 0 && closedConsoleMessages.Count == 0)
@@ -510,26 +531,26 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 if (status == null)
                 {
                     // Dead pipe detected - collect all cached outputs and return
-                    sessionManager.ClearDeadPipe(pipeName);
+                    sessionManager.ClearDeadPipe(agentId, pipeName);
                     busyPipes.Remove(pipeName);
                     var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
                     closedConsoleMessages.Add($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
 
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
                     return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
                 }
 
                 if (status.Status == "completed")
                 {
                     // Completed - collect all cached outputs (including this one) and return
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
                     return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
                 }
 
 
                 if (status.Status == "standby")
                 {
-                    if (status.Pid > 0) sessionManager.UnmarkPipeBusy(status.Pid);
+                    if (status.Pid > 0) sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                     // Console returned to standby without caching (unexpected)
                     busyPipes.Remove(pipeName);
                 }
@@ -543,7 +564,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         }
 
         // Timeout - collect final status
-        var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, null, cancellationToken);
+        var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
         return BuildWaitResponse(closedConsoleMessages, finalCompletedOutput, finalBusyStatusInfo);
     }
 
@@ -585,10 +606,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         string? banner = null,
         [Description("Optional starting directory path. If relative, resolved from home directory. Defaults to home directory if not specified.")]
         string? start_location = null,
+        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
+        var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
+
         var (resolvedPath, warningMessage) = ResolveStartLocation(start_location);
-        var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, banner, resolvedPath, cancellationToken);
+        var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, agentId, banner, resolvedPath, cancellationToken);
         if (!success)
         {
             return locationResult; // Error message
@@ -596,14 +621,15 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         // Set console window title
         var sessionManager = ConsoleSessionManager.Instance;
-        if (sessionManager.ActivePipeName != null)
+        var activePipe = sessionManager.GetActivePipeName(agentId);
+        if (activePipe != null)
         {
-            await SetConsoleTitleAsync(powerShellService, sessionManager.ActivePipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, activePipe, cancellationToken);
         }
 
         // Collect busy status from Proxy side
-        var newPipeName = sessionManager.ActivePipeName;
-        var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, newPipeName, cancellationToken);
+        var newPipeName = sessionManager.GetActivePipeName(agentId);
+        var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, newPipeName, cancellationToken);
 
         // Build response: busy status first + completed output + start message + location
         var response = new StringBuilder();
@@ -633,6 +659,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     /// </summary>
     private static async Task<(bool success, string result)> StartPowershellConsoleInternal(
         IPowerShellService powerShellService,
+        string agentId,
         string? banner,
         string startLocation,
         CancellationToken cancellationToken)
@@ -643,7 +670,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             Console.Error.WriteLine("[INFO] Starting PowerShell console...");
             // Start new console
-            var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(banner, startLocation);
+            var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(agentId, banner, startLocation);
 
             if (!success)
             {
@@ -651,7 +678,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
             }
 
             // Register the new console
-            sessionManager.SetActivePipeName(pipeName);
+            sessionManager.SetActivePipeName(agentId, pipeName);
 
             Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), setting title and getting current location...");
 

@@ -19,11 +19,11 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<string> DetectClosedConsoles()
+    public IReadOnlyList<string> DetectClosedConsoles(string agentId)
     {
         var closedMessages = new List<string>();
-        var previouslyBusyPids = _sessionManager.ConsumeKnownBusyPids();
-        var currentPipes = _sessionManager.EnumeratePipes(_sessionManager.ProxyPid).ToList();
+        var previouslyBusyPids = _sessionManager.ConsumeKnownBusyPids(agentId);
+        var currentPipes = _sessionManager.EnumeratePipes(_sessionManager.ProxyPid, agentId).ToList();
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
             .Where(p => p.HasValue)
@@ -42,40 +42,40 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     }
 
     /// <inheritdoc />
-    public async Task<PipeDiscoveryResult> FindReadyPipeAsync(CancellationToken cancellationToken)
+    public async Task<PipeDiscoveryResult> FindReadyPipeAsync(string agentId, CancellationToken cancellationToken)
     {
         var closedMessages = new List<string>();
         var allPipesStatus = new List<string>();
 
         // Detect externally closed consoles
-        closedMessages.AddRange(DetectClosedConsoles());
+        closedMessages.AddRange(DetectClosedConsoles(agentId));
 
         // Step 1: Check ActivePipeName first
-        var activePipe = _sessionManager.ActivePipeName;
+        var activePipe = _sessionManager.GetActivePipeName(agentId);
         if (activePipe != null)
         {
             var status = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
 
             if (status == null)
             {
-                _sessionManager.ClearDeadPipe(activePipe);
+                _sessionManager.ClearDeadPipe(agentId, activePipe);
                 var pid = ConsoleSessionManager.GetPidFromPipeName(activePipe);
                 closedMessages.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
             }
             else if (status.IsReady())
             {
-                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(status.Pid);
+                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                 return new PipeDiscoveryResult(activePipe, false, closedMessages, BuildClosedConsoleInfo(closedMessages));
             }
             else // busy
             {
-                if (status.Pid > 0) _sessionManager.MarkPipeBusy(status.Pid);
+                if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
                 allPipesStatus.Add($"  - {activePipe}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
             }
         }
 
         // Step 2: Check all other pipes via EnumeratePipes
-        var currentPipes = _sessionManager.EnumeratePipes(_sessionManager.ProxyPid).ToList();
+        var currentPipes = _sessionManager.EnumeratePipes(_sessionManager.ProxyPid, agentId).ToList();
         foreach (var pipeName in currentPipes)
         {
             if (pipeName == activePipe) continue; // Already checked
@@ -84,7 +84,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
             if (status == null)
             {
-                _sessionManager.ClearDeadPipe(pipeName);
+                _sessionManager.ClearDeadPipe(agentId, pipeName);
                 var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
                 closedMessages.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
                 continue;
@@ -92,12 +92,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
             if (status.IsReady())
             {
-                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(status.Pid);
-                _sessionManager.SetActivePipeName(pipeName);
+                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
+                _sessionManager.SetActivePipeName(agentId, pipeName);
                 return new PipeDiscoveryResult(pipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages));
             }
 
-            if (status.Pid > 0) _sessionManager.MarkPipeBusy(status.Pid);
+            if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
             allPipesStatus.Add($"  - {pipeName}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
         }
 
@@ -108,7 +108,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
             if (status == null)
             {
-                _sessionManager.ClearDeadPipe(pipeName);
+                _sessionManager.ClearDeadPipe(agentId, pipeName);
                 continue;
             }
 
@@ -119,10 +119,10 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 if (!pwshPid.HasValue) continue;
 
                 // Fire and forget - the pipe will close before response
-                _ = _powerShellService.ClaimConsoleAsync(pipeName, _sessionManager.ProxyPid, cancellationToken);
+                _ = _powerShellService.ClaimConsoleAsync(pipeName, _sessionManager.ProxyPid, agentId, cancellationToken);
 
                 // Calculate the expected new pipe name
-                var newPipeName = ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, pwshPid.Value);
+                var newPipeName = ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pwshPid.Value);
 
                 // Wait for the new pipe to become available (retry with short timeout)
                 for (int i = 0; i < 20; i++)
@@ -132,13 +132,13 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     var newStatus = await _powerShellService.GetStatusFromPipeAsync(newPipeName, cancellationToken);
                     if (newStatus != null)
                     {
-                        _sessionManager.SetActivePipeName(newPipeName);
+                        _sessionManager.SetActivePipeName(agentId, newPipeName);
                         return new PipeDiscoveryResult(newPipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages));
                     }
                 }
             }
 
-            if (status.Pid > 0) _sessionManager.MarkPipeBusy(status.Pid);
+            if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
             allPipesStatus.Add($"  - {pipeName} (unowned): {status.Status}");
         }
 
@@ -150,12 +150,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     }
 
     /// <inheritdoc />
-    public async Task<CachedOutputResult> CollectAllCachedOutputsAsync(string? excludePipeName, CancellationToken cancellationToken)
+    public async Task<CachedOutputResult> CollectAllCachedOutputsAsync(string agentId, string? excludePipeName, CancellationToken cancellationToken)
     {
         var completedOutput = new StringBuilder();
         var busyStatusInfo = new StringBuilder();
 
-        foreach (var pipeName in _sessionManager.EnumeratePipes(_sessionManager.ProxyPid))
+        foreach (var pipeName in _sessionManager.EnumeratePipes(_sessionManager.ProxyPid, agentId))
         {
             if (pipeName == excludePipeName) continue;
 
@@ -163,11 +163,11 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
             if (status == null)
             {
-                _sessionManager.ClearDeadPipe(pipeName);
+                _sessionManager.ClearDeadPipe(agentId, pipeName);
             }
             else if (status.Status == "completed")
             {
-                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(status.Pid);
+                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                 var output = await _powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
                 if (!string.IsNullOrEmpty(output))
                 {
@@ -184,12 +184,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             }
             else if (status.Status == "busy")
             {
-                if (status.Pid > 0) _sessionManager.MarkPipeBusy(status.Pid);
+                if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
                 busyStatusInfo.AppendLine(PipelineHelper.FormatBusyStatus(status.StatusLine, status.Pid, status.Pipeline, status.Duration ?? 0));
             }
             else if (status.Status == "standby")
             {
-                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(status.Pid);
+                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
             }
         }
 

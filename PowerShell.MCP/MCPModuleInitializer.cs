@@ -47,8 +47,20 @@ namespace PowerShell.MCP
                     }
                 }
 
-                // Create Named Pipe server with proxy PID (if available) and pwsh PID
-                _namedPipeServer = new NamedPipeServer(proxyPid);
+                // Read agent ID from global variable (set by PowerShell.MCP.Proxy before Import-Module)
+                string? agentId = null;
+                using (var ps2 = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
+                {
+                    ps2.AddScript("$global:PowerShellMCPAgentId");
+                    var agentResult = ps2.Invoke();
+                    if (agentResult.Count > 0 && agentResult[0]?.BaseObject is string aid)
+                    {
+                        agentId = aid;
+                    }
+                }
+
+                // Create Named Pipe server with proxy PID, agent ID (if available), and pwsh PID
+                _namedPipeServer = new NamedPipeServer(proxyPid, agentId);
                 _tokenSource = new CancellationTokenSource();
 
                 // Load and execute MCP polling engine script
@@ -111,8 +123,9 @@ namespace PowerShell.MCP
         /// Called when a proxy connects to an unowned console.
         /// </summary>
         /// <param name="proxyPid">The PID of the proxy claiming this console</param>
+        /// <param name="agentId">Agent ID for console isolation</param>
         /// <returns>The new pipe name after claiming</returns>
-        public static string? ClaimConsole(int proxyPid)
+        public static string? ClaimConsole(int proxyPid, string? agentId = null)
         {
             if (_namedPipeServer == null || _tokenSource == null)
                 return null;
@@ -123,8 +136,8 @@ namespace PowerShell.MCP
                 _tokenSource.Cancel();
                 _namedPipeServer.Dispose();
 
-                // Create new server with proxy PID
-                _namedPipeServer = new NamedPipeServer(proxyPid);
+                // Create new server with proxy PID and agent ID
+                _namedPipeServer = new NamedPipeServer(proxyPid, agentId);
                 _tokenSource = new CancellationTokenSource();
 
                 // Start new server

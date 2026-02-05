@@ -221,11 +221,18 @@ public class NamedPipeServer : IDisposable
     /// Creates a new Named Pipe server with the specified pipe name
     /// </summary>
     /// <param name="proxyPid">Proxy PID to include in pipe name (null for user-started consoles)</param>
-    public NamedPipeServer(int? proxyPid)
+    /// <param name="agentId">Agent ID for console isolation (null defaults to "default")</param>
+    public NamedPipeServer(int? proxyPid, string? agentId = null)
     {
-        PipeName = proxyPid.HasValue
-            ? $"{BasePipeName}.{proxyPid.Value}.{Environment.ProcessId}"
-            : $"{BasePipeName}.{Environment.ProcessId}";
+        if (proxyPid.HasValue)
+        {
+            var aid = agentId ?? "default";
+            PipeName = $"{BasePipeName}.{proxyPid.Value}.{aid}.{Environment.ProcessId}";
+        }
+        else
+        {
+            PipeName = $"{BasePipeName}.{Environment.ProcessId}";
+        }
     }
 
     /// <summary>
@@ -660,7 +667,9 @@ Please provide how to update the MCP client configuration to the user.";
     private static string ClaimConsole(JsonElement parameters)
     {
         var proxyPid = parameters.GetProperty("proxy_pid").GetInt32();
-        var newPipeName = MCPModuleInitializer.ClaimConsole(proxyPid);
+        string? agentId = parameters.TryGetProperty("agent_id", out var agentIdElement)
+            ? agentIdElement.GetString() : null;
+        var newPipeName = MCPModuleInitializer.ClaimConsole(proxyPid, agentId);
 
         if (newPipeName != null)
         {

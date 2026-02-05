@@ -6,40 +6,6 @@ namespace PowerShell.MCP.Proxy.Services;
 
 public class NamedPipeClient
 {
-    private readonly ConsoleSessionManager _sessionManager = ConsoleSessionManager.Instance;
-
-    public async Task<string> SendRequestAsync(string arguments)
-    {
-        try
-        {
-            // Check if any PowerShell process is running
-            if (!PowerShellProcessManager.IsPowerShellProcessRunning())
-            {
-                return "The PowerShell 7 console is not running. Use start_powershell_console tool to start it first.";
-            }
-
-            // Get active pipe name
-            var pipeName = _sessionManager.ActivePipeName;
-
-            if (pipeName == null)
-            {
-                return ConsoleSessionManager.ErrorModuleNotImported;
-            }
-
-            return await SendRequestToAsync(pipeName, arguments);
-        }
-        catch (TimeoutException)
-        {
-            Console.Error.WriteLine("[WARNING] PowerShell.MCP module connection timeout - module may not be running");
-            return string.Empty;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[ERROR] Named Pipe communication failed: {ex.Message}");
-            return string.Empty;
-        }
-    }
-
     /// <summary>
     /// Sends request to a specific Named Pipe
     /// </summary>

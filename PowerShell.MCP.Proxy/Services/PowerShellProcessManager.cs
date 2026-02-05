@@ -37,21 +37,23 @@ public class PowerShellProcessManager
     /// <summary>
     /// Starts PowerShell process with PowerShell.MCP module imported
     /// </summary>
+    /// <param name="agentId">Agent ID for console isolation</param>
     /// <param name="startupMessage">Optional message to display before module import</param>
     /// <returns>true if startup succeeded</returns>
-    public static async Task<bool> StartPowerShellWithModuleAsync(string? startupMessage = null)
+    public static async Task<bool> StartPowerShellWithModuleAsync(string agentId, string? startupMessage = null)
     {
-        var (success, _) = await StartPowerShellWithModuleAndPipeNameAsync(startupMessage);
+        var (success, _) = await StartPowerShellWithModuleAndPipeNameAsync(agentId, startupMessage);
         return success;
     }
 
     /// <summary>
     /// Starts PowerShell process with PowerShell.MCP module imported and returns pipe name
     /// </summary>
+    /// <param name="agentId">Agent ID for console isolation</param>
     /// <param name="startupMessage">Optional message to display before module import</param>
     /// <param name="startLocation">Starting directory path</param>
     /// <returns>Tuple of (success, pipeName)</returns>
-    public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string? startupMessage = null, string? startLocation = null)
+    public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string agentId, string? startupMessage = null, string? startLocation = null)
     {
         int pid = 0;
         HashSet<string>? existingPipes = null;
@@ -60,20 +62,20 @@ public class PowerShellProcessManager
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             var sessionManager = ConsoleSessionManager.Instance;
-            existingPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid).ToHashSet();
+            existingPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid, agentId).ToHashSet();
         }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            pid = PwshLauncherWindows.LaunchPwsh(startupMessage, startLocation);
+            pid = PwshLauncherWindows.LaunchPwsh(agentId, startupMessage, startLocation);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            PwshLauncherMacOS.LaunchPwsh(startupMessage, startLocation);
+            PwshLauncherMacOS.LaunchPwsh(agentId, startupMessage, startLocation);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            PwshLauncherLinux.LaunchPwsh(startupMessage, startLocation);
+            PwshLauncherLinux.LaunchPwsh(agentId, startupMessage, startLocation);
         }
         else
         {
@@ -84,14 +86,14 @@ public class PowerShellProcessManager
         string? pipeName;
         if (pid != 0)
         {
-            // Windows: We know the PID, construct pipe name with proxy PID and pwsh PID
+            // Windows: We know the PID, construct pipe name with proxy PID, agent ID, and pwsh PID
             var proxyPid = Process.GetCurrentProcess().Id;
-            pipeName = ConsoleSessionManager.GetPipeNameForPids(proxyPid, pid);
+            pipeName = ConsoleSessionManager.GetPipeNameForPids(proxyPid, agentId, pid);
         }
         else
         {
             // macOS/Linux: Poll for a NEW standby pipe (exclude existing pipes)
-            pipeName = await WaitForNewStandbyPipeAsync(existingPipes!, maxWaitSeconds: 30);
+            pipeName = await WaitForNewStandbyPipeAsync(agentId, existingPipes!, maxWaitSeconds: 30);
             if (pipeName == null)
             {
                 return (false, string.Empty);
@@ -107,13 +109,13 @@ public class PowerShellProcessManager
     /// Waits for a NEW standby pipe to become available (for macOS/Linux)
     /// Polls every 500ms until a new standby pipe is found or timeout
     /// </summary>
-    private static async Task<string?> WaitForNewStandbyPipeAsync(HashSet<string> existingPipes, int maxWaitSeconds)
+    private static async Task<string?> WaitForNewStandbyPipeAsync(string agentId, HashSet<string> existingPipes, int maxWaitSeconds)
     {
         var endTime = DateTime.UtcNow.AddSeconds(maxWaitSeconds);
 
         while (DateTime.UtcNow < endTime)
         {
-            var pipe = await FindNewStandbyPipeAsync(existingPipes);
+            var pipe = await FindNewStandbyPipeAsync(agentId, existingPipes);
             if (pipe != null)
             {
                 return pipe;
@@ -128,9 +130,9 @@ public class PowerShellProcessManager
     /// <summary>
     /// Finds a NEW standby pipe from available pipes (excludes existing pipes)
     /// </summary>
-    private static async Task<string?> FindNewStandbyPipeAsync(HashSet<string> existingPipes)
+    private static async Task<string?> FindNewStandbyPipeAsync(string agentId, HashSet<string> existingPipes)
     {
-        foreach (var pipe in ConsoleSessionManager.Instance.EnumeratePipes(ConsoleSessionManager.Instance.ProxyPid))
+        foreach (var pipe in ConsoleSessionManager.Instance.EnumeratePipes(ConsoleSessionManager.Instance.ProxyPid, agentId))
         {
             // Skip pipes that existed before launching
             if (existingPipes.Contains(pipe))
@@ -220,7 +222,7 @@ public static class PwshLauncherWindows
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint CREATE_NEW_CONSOLE = 0x00000010;
 
-    public static int LaunchPwsh(string? startupMessage = null, string? startLocation = null)
+    public static int LaunchPwsh(string agentId, string? startupMessage = null, string? startLocation = null)
     {
         IntPtr hToken = IntPtr.Zero;
         IntPtr env = IntPtr.Zero;
@@ -244,18 +246,18 @@ public static class PwshLauncherWindows
             var pi = new PROCESS_INFORMATION();
 
             // Build command with optional startup message
-            // Set global variable with proxy PID before importing module
+            // Set global variables with proxy PID and agent ID before importing module
             var proxyPid = Process.GetCurrentProcess().Id;
             string command;
             if (!string.IsNullOrEmpty(startupMessage))
             {
                 // Escape single quotes for PowerShell
                 var escaped = startupMessage.Replace("'", "''");
-                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; Write-Host '{escaped}' -ForegroundColor Green; Write-Host ''; Import-Module PowerShell.MCP,PSReadLine";
+                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{escaped}' -ForegroundColor Green; Write-Host ''; Import-Module PowerShell.MCP,PSReadLine";
             }
             else
             {
-                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; Import-Module PowerShell.MCP,PSReadLine";
+                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP,PSReadLine";
             }
             string commandLine = $"pwsh.exe -NoExit -Command \"{command}\"";
 
@@ -301,7 +303,7 @@ public static class PwshLauncherWindows
 /// </summary>
 public static class PwshLauncherMacOS
 {
-    public static void LaunchPwsh(string? startupMessage = null, string? startLocation = null)
+    public static void LaunchPwsh(string agentId, string? startupMessage = null, string? startLocation = null)
     {
         // Use osascript with stdin to avoid shell quoting issues
         var psi = new ProcessStartInfo
@@ -313,18 +315,18 @@ public static class PwshLauncherMacOS
         };
 
         // Build command with optional startup message
-        // Set global variable with proxy PID before importing module
+        // Set global variables with proxy PID and agent ID before importing module
         var proxyPid = Process.GetCurrentProcess().Id;
         string command;
         if (!string.IsNullOrEmpty(startupMessage))
         {
             // Escape single quotes for PowerShell (doubled for AppleScript string)
             var escaped = startupMessage.Replace("'", "''");
-            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         }
         else
         {
-            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         }
 
         var workingDir = string.IsNullOrEmpty(startLocation) ? "~" : startLocation.Replace("'", "'\\''");
@@ -366,11 +368,11 @@ public static class PwshLauncherLinux
         "kitty",
     ];
 
-    public static void LaunchPwsh(string? startupMessage = null, string? startLocation = null)
+    public static void LaunchPwsh(string agentId, string? startupMessage = null, string? startLocation = null)
     {
         foreach (var terminal in SupportedTerminals)
         {
-            if (TryLaunchTerminal(terminal, startupMessage, startLocation))
+            if (TryLaunchTerminal(terminal, agentId, startupMessage, startLocation))
             {
                 return;
             }
@@ -381,7 +383,7 @@ public static class PwshLauncherLinux
             string.Join(", ", SupportedTerminals));
     }
 
-    private static bool TryLaunchTerminal(string terminal, string? startupMessage, string? startLocation)
+    private static bool TryLaunchTerminal(string terminal, string agentId, string? startupMessage, string? startLocation)
     {
         try
         {
@@ -418,18 +420,18 @@ public static class PwshLauncherLinux
             };
 
             // Build command with optional startup message
-            // Set global variable with proxy PID before importing module
+            // Set global variables with proxy PID and agent ID before importing module
             var proxyPid = Process.GetCurrentProcess().Id;
             string initCommand;
             if (!string.IsNullOrEmpty(startupMessage))
             {
                 // Escape single quotes for PowerShell (doubled for shell string)
                 var escaped = startupMessage.Replace("'", "''");
-                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
             }
             else
             {
-                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
             }
 
             // Resolve working directory

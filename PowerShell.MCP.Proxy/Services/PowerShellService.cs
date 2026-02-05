@@ -82,9 +82,9 @@ public class PowerShellService : IPowerShellService
         return response;
     }
 
-    public async Task<ClaimConsoleResponse?> ClaimConsoleAsync(string pipeName, int proxyPid, CancellationToken cancellationToken = default)
+    public async Task<ClaimConsoleResponse?> ClaimConsoleAsync(string pipeName, int proxyPid, string agentId, CancellationToken cancellationToken = default)
     {
-        var requestParams = new ClaimConsoleParams { ProxyPid = proxyPid };
+        var requestParams = new ClaimConsoleParams { ProxyPid = proxyPid, AgentId = agentId };
         var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.ClaimConsoleParams);
 
         try

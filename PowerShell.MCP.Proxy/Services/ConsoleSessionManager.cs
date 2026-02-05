@@ -30,14 +30,15 @@ public class ConsoleSessionManager
     public int ProxyPid { get; } = Process.GetCurrentProcess().Id;
 
     /// <summary>
-    /// Currently active (ready) Named Pipe name
+    /// Per-agent session state (ActivePipeName and KnownBusyPids)
     /// </summary>
-    public string? ActivePipeName { get; private set; }
+    private class AgentSessionState
+    {
+        public string? ActivePipeName { get; set; }
+        public readonly HashSet<int> KnownBusyPids = new();
+    }
 
-    /// <summary>
-    /// Known busy pipe PIDs (tracked across tool calls to detect externally closed consoles)
-    /// </summary>
-    private readonly HashSet<int> _knownBusyPids = new();
+    private readonly Dictionary<string, AgentSessionState> _agentSessions = new();
 
     /// <summary>
     /// Category index assigned to this proxy instance
@@ -149,9 +150,23 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Generates a pipe name for proxy-started consoles (format: {name}.{proxyPid}.{pwshPid})
+    /// Gets the session state for the specified agent, creating it if necessary.
+    /// Must be called within lock(_lock).
     /// </summary>
-    public static string GetPipeNameForPids(int proxyPid, int pwshPid) => $"{DefaultPipeName}.{proxyPid}.{pwshPid}";
+    private AgentSessionState GetOrCreateAgentState(string agentId)
+    {
+        if (!_agentSessions.TryGetValue(agentId, out var state))
+        {
+            state = new AgentSessionState();
+            _agentSessions[agentId] = state;
+        }
+        return state;
+    }
+
+    /// <summary>
+    /// Generates a pipe name for proxy-started consoles (format: {name}.{proxyPid}.{agentId}.{pwshPid})
+    /// </summary>
+    public static string GetPipeNameForPids(int proxyPid, string agentId, int pwshPid) => $"{DefaultPipeName}.{proxyPid}.{agentId}.{pwshPid}";
 
     /// <summary>
     /// Extracts pwsh PID from pipe name (last segment: {name}.{pwshPid} or {name}.{proxyPid}.{pwshPid})
@@ -167,73 +182,92 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Sets the active pipe name
+    /// Gets the active pipe name for the specified agent
     /// </summary>
-    public void SetActivePipeName(string? pipeName)
+    public string? GetActivePipeName(string agentId)
     {
         lock (_lock)
         {
-            ActivePipeName = pipeName;
+            return GetOrCreateAgentState(agentId).ActivePipeName;
+        }
+    }
+
+    /// <summary>
+    /// Sets the active pipe name for the specified agent
+    /// </summary>
+    public void SetActivePipeName(string agentId, string? pipeName)
+    {
+        lock (_lock)
+        {
+            GetOrCreateAgentState(agentId).ActivePipeName = pipeName;
             if (pipeName != null)
             {
-                Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Active pipe set to '{pipeName}'");
+                Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Active pipe set to '{pipeName}' (agent={agentId})");
             }
         }
     }
 
     /// <summary>
-    /// Marks a pipe as busy
+    /// Marks a pipe as busy for the specified agent
     /// </summary>
-    public void MarkPipeBusy(int pid)
+    public void MarkPipeBusy(string agentId, int pid)
     {
         lock (_lock)
         {
-            _knownBusyPids.Add(pid);
+            GetOrCreateAgentState(agentId).KnownBusyPids.Add(pid);
         }
     }
 
     /// <summary>
-    /// Removes a pipe from busy tracking
+    /// Removes a pipe from busy tracking for the specified agent
     /// </summary>
-    public void UnmarkPipeBusy(int pid)
+    public void UnmarkPipeBusy(string agentId, int pid)
     {
         lock (_lock)
         {
-            _knownBusyPids.Remove(pid);
+            GetOrCreateAgentState(agentId).KnownBusyPids.Remove(pid);
         }
     }
 
     /// <summary>
-    /// Gets known busy PIDs and clears the set. Returns PIDs that were tracked as busy.
+    /// Gets known busy PIDs and clears the set for the specified agent
     /// </summary>
-    public HashSet<int> ConsumeKnownBusyPids()
+    public HashSet<int> ConsumeKnownBusyPids(string agentId)
     {
         lock (_lock)
         {
-            var result = new HashSet<int>(_knownBusyPids);
-            _knownBusyPids.Clear();
+            var state = GetOrCreateAgentState(agentId);
+            var result = new HashSet<int>(state.KnownBusyPids);
+            state.KnownBusyPids.Clear();
             return result;
         }
     }
 
     /// <summary>
-    /// Clears a dead pipe from active pipe and busy tracking
+    /// Clears a dead pipe from active pipe and busy tracking for the specified agent
     /// </summary>
-    public void ClearDeadPipe(string pipeName)
+    public void ClearDeadPipe(string agentId, string pipeName)
     {
         lock (_lock)
         {
-            if (ActivePipeName == pipeName)
+            var state = GetOrCreateAgentState(agentId);
+            if (state.ActivePipeName == pipeName)
             {
-                ActivePipeName = null;
+                state.ActivePipeName = null;
             }
             var pid = GetPidFromPipeName(pipeName);
             if (pid.HasValue)
             {
-                _knownBusyPids.Remove(pid.Value);
+                state.KnownBusyPids.Remove(pid.Value);
                 _titledPids.Remove(pid.Value);
             }
-            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}'");
+            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}' (agent={agentId})");
+
+            // Remove empty agent session to prevent memory accumulation
+            if (agentId != "default" && state.ActivePipeName == null && state.KnownBusyPids.Count == 0)
+            {
+                _agentSessions.Remove(agentId);
+            }
         }
     }
 
@@ -243,16 +277,21 @@ public class ConsoleSessionManager
     /// Windows: \\.\pipe\PowerShell.MCP.Communication.*
     /// Linux/macOS: /tmp/CoreFxPipe_PowerShell.MCP.Communication.*
     /// </summary>
-    /// <param name="proxyPid">If specified, only returns pipes owned by this proxy (format: {name}.{proxyPid}.*)</param>
-    public IEnumerable<string> EnumeratePipes(int? proxyPid = null)
+    /// <param name="proxyPid">If specified, only returns pipes owned by this proxy</param>
+    /// <param name="agentId">If specified with proxyPid, only returns pipes for this agent (format: {name}.{proxyPid}.{agentId}.*)</param>
+    public IEnumerable<string> EnumeratePipes(int? proxyPid = null, string? agentId = null)
     {
         IEnumerable<string> paths;
         bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
-        // Build filter pattern based on proxyPid
-        string filterPattern = proxyPid.HasValue
-            ? $"{DefaultPipeName}.{proxyPid.Value}.*"
-            : $"{DefaultPipeName}*";
+        // Build filter pattern based on proxyPid and agentId
+        string filterPattern;
+        if (proxyPid.HasValue && agentId != null)
+            filterPattern = $"{DefaultPipeName}.{proxyPid.Value}.{agentId}.*";
+        else if (proxyPid.HasValue)
+            filterPattern = $"{DefaultPipeName}.{proxyPid.Value}.*";
+        else
+            filterPattern = $"{DefaultPipeName}*";
 
         try
         {
@@ -306,7 +345,7 @@ public class ConsoleSessionManager
     /// <summary>
     /// Enumerates unowned PowerShell.MCP Named Pipes (user-started consoles not yet claimed by any proxy).
     /// Unowned pipes have 4 segments: {name}.{pwshPid}
-    /// Owned pipes have 5 segments: {name}.{proxyPid}.{pwshPid}
+    /// Owned pipes have 6 segments: {name}.{proxyPid}.{agentId}.{pwshPid}
     /// </summary>
     public IEnumerable<string> EnumerateUnownedPipes()
     {
@@ -321,7 +360,7 @@ public class ConsoleSessionManager
 
             // Count segments after DefaultPipeName
             // Unowned: PowerShell.MCP.Communication.{pwshPid} = 4 segments
-            // Owned:   PowerShell.MCP.Communication.{proxyPid}.{pwshPid} = 5 segments
+            // Owned:   PowerShell.MCP.Communication.{proxyPid}.{agentId}.{pwshPid} = 6 segments
             var segments = baseName.Split('.');
             if (segments.Length == 4 && int.TryParse(segments[^1], out _))
             {
