@@ -252,25 +252,25 @@ function Get-MCPOwner {
     Returns the installed skill file objects.
 
 .EXAMPLE
-    Install-MCPSkill
+    Install-ClaudeSkill
     Installs all available skills to ~/.claude/skills/
 
 .EXAMPLE
-    Install-MCPSkill analyze, learn
+    Install-ClaudeSkill analyze, learn
     Installs only the 'analyze' and 'learn' skills.
 
 .EXAMPLE
-    Install-MCPSkill -WhatIf
+    Install-ClaudeSkill -WhatIf
     Shows which skills would be installed without actually installing them.
 
 .EXAMPLE
-    Install-MCPSkill analyze -Force
+    Install-ClaudeSkill analyze -Force
     Installs the 'analyze' skill, overwriting if it exists.
 
 .OUTPUTS
     System.IO.FileInfo (when -PassThru is specified)
 #>
-function Install-MCPSkill {
+function Install-ClaudeSkill {
     [CmdletBinding(SupportsShouldProcess)]
     [OutputType([System.IO.FileInfo])]
     param(
@@ -361,4 +361,4 @@ function Install-MCPSkill {
     }
 }
 
-Export-ModuleMember -Function Get-MCPProxyPath, Get-MCPOwner, Install-MCPSkill
+Export-ModuleMember -Function Get-MCPProxyPath, Get-MCPOwner, Install-ClaudeSkill
