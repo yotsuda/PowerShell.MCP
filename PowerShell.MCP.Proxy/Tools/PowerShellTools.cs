@@ -110,52 +110,16 @@ public class PowerShellTools
     [McpServerTool]
     [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help. Commands visible in history for user learning.
 
+💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
+
 ⚠️ CRITICAL - Variable Scope:
 Local variables are NOT preserved between invoke_expression calls. Use $script: or $global: scope to share variables across calls.
 
 ⚠️ CRITICAL - Verbose/Debug Output:
 Verbose and Debug streams are NOT visible to you. If you need verbose/debug information, ask the user to copy it from the console and share it with you.
 
-⚠ CRITICAL - File Operations:
-For user-provided paths (like C:\), use PowerShell.MCP tools ONLY. Server-side tools (such as str_replace) cannot access them.
-When calling invoke_expression for file operations, ALWAYS use these cmdlets. NEVER use Set-Content, Get-Content, or Out-File:
-
-• Show-TextFile [-Path] <string[]> [-Recurse] [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>]
-  Displays file contents with line numbers. Filter by line range and/or matching text (literal or regex).
-  Use -Recurse with -Pattern/-Contains to search subdirectories.
-  Use negative LineRange to show tail: -LineRange -10 shows last 10 lines, -LineRange -10,-1 is equivalent.
-
-• Add-LinesToFile [-Path] <string[]> [-LineNumber <int>] [-Content] <Object[]> [-Encoding <string>] [-Backup]
-  Inserts lines at specified position or appends to end or creates new file. Accepts pipeline input for Content.
-
-• Update-LinesInFile [-Path] <string[]> [[-LineRange] <int[]>] [-Content <Object[]>] [-Encoding <string>] [-Backup]
-  Replaces ENTIRE LINES in specified range with new content. Use for replacing whole lines.
-  Use -Content @() to delete lines. Accepts pipeline input for Content.
-
-• Update-MatchInFile [-Path] <string[]> [-LineRange <int[]>] [-OldText <string>] [-Pattern <regex>] [-Replacement <string>] [-Encoding <string>] [-Backup]
-  Replaces ONLY THE MATCHED PORTION within lines, not entire lines. Rest of line is preserved.
-  ⚠️ Use -WhatIf first to preview changes.
-
-• Remove-LinesFromFile [-Path] <string[]> [-LineRange <int[]>] [-Contains <string>] [-Pattern <regex>] [-Encoding <string>] [-Backup]
-  Removes lines matching text (literal or regex) within optional range. Use negative LineRange to remove tail (e.g., -LineRange -10).
-  ⚠️ With -Contains/-Pattern, use -WhatIf first to preview.
-
-⚠️ Update-LinesInFile vs Update-MatchInFile:
-  - Replace WHOLE LINE → Update-LinesInFile -LineRange N,N -Content 'new line'
-  - Replace PART OF LINE → Update-MatchInFile -OldText 'old' -Replacement 'new'
-
-Note: All cmdlets support -LiteralPath for exact paths and accept arrays directly (no loops needed). For LineRange, use -1 or 0 for end of file (e.g., 100,-1).
-
-Examples:
-  ✅ CORRECT: invoke_expression('Add-LinesToFile -Path file.cs -Content $code')
-  ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 10,20')
-  ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange 100,-1')  # To end of file
-  ✅ CORRECT: invoke_expression('Show-TextFile file.txt -LineRange -10')     # Last 10 lines
-  ✅ CORRECT: invoke_expression('Update-LinesInFile file.md -LineRange 5,5 -Content ""new line""')  # Replace entire line 5
-  ✅ CORRECT: invoke_expression('Update-MatchInFile file.md -OldText ""TODO"" -Replacement ""DONE""')  # Replace only ""TODO"" → ""DONE""
-  ❌ WRONG: invoke_expression('Set-Content -Path file.cs -Value $code')
-  ❌ WRONG: invoke_expression('Get-Content file.txt | Select-Object -Skip 9 -First 11')
-
+📝 Text File Operations:
+For text file editing, use Get-Help to learn the specialized cmdlets: Show-TextFile, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
