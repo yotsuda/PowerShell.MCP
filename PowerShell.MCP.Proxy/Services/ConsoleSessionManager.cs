@@ -81,13 +81,13 @@ public class ConsoleSessionManager
         // Animals
         new[] { "Cat", "Dog", "Fox", "Wolf", "Bear", "Lion", "Tiger", "Panda", "Koala", "Rabbit" },
         // Zodiac
-        new[] { "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Aquarius", "Pisces" },
+        new[] { "Aries", "Taurus", "Gemini", "Capricorn", "Leo", "Virgo", "Libra", "Scorpio", "Aquarius", "Pisces" },
         // Gems
         new[] { "Sapphire", "Emerald", "Diamond", "Pearl", "Opal", "Topaz", "Amber", "Ruby", "Amethyst", "Quartz" },
         // Planets & Moons
         new[] { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Neptune", "Pluto", "Titan", "Europa", "Luna" },
         // Colors
-        new[] { "Red", "Blue", "Green", "Yellow", "Cyan", "Pink", "Purple", "Gold", "Silver", "White" },
+        new[] { "Red", "Blue", "Green", "Yellow", "Cyan", "Pink", "Purple", "Brown", "Gray", "White" },
         // Birds
         new[] { "Robin", "Sparrow", "Falcon", "Raven", "Phoenix", "Crane", "Swan", "Finch", "Jay", "Dove" },
         // Flowers
@@ -107,13 +107,13 @@ public class ConsoleSessionManager
         // Fruits
         new[] { "Mango", "Apple", "Peach", "Grape", "Kiwi", "Papaya", "Melon", "Guava", "Banana", "Plum" },
         // Fish & Sea Creatures
-        new[] { "Salmon", "Tuna", "Shark", "Swordfish", "Catfish", "Goldfish", "Piranha", "Angelfish", "Koi", "Sardine" },
+        new[] { "Salmon", "Tuna", "Shark", "Swordfish", "Catfish", "Trout", "Piranha", "Angelfish", "Koi", "Sardine" },
         // Vegetables
         new[] { "Carrot", "Potato", "Tomato", "Onion", "Garlic", "Pumpkin", "Bean", "Corn", "Broccoli", "Radish" },
         // Dinosaurs
         new[] { "Rex", "Raptor", "Stego", "Diplo", "Tricera", "Ankylo", "Bronto", "Ptera", "Spino", "Pachy" },
         // Cheese
-        new[] { "Cheddar", "Gouda", "Brie", "Feta", "Mozza", "Parma", "Ricotta", "Camembert", "Cream", "Swiss" },
+        new[] { "Cheddar", "Gouda", "Brie", "Feta", "Mozza", "Parma", "Ricotta", "Camembert", "Edam", "Mascarpone" },
         // Sports
         new[] { "Soccer", "Tennis", "Golf", "Baseball", "Basketball", "Rugby", "Hockey", "Volleyball", "Bowling", "Softball" },
         // Spices & Herbs
