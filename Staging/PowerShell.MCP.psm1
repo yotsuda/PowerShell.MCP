@@ -169,53 +169,42 @@ function Get-MCPOwner {
 
     $proxyPid = [int]$segments[3]
 
-    # Determine client name by traversing process tree
+    # Determine client name by examining process path and parent chain
+    # Uses Get-Process Path and Parent properties (cross-platform, no Win32_Process)
     $clientName = $null
     try {
-        $process = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
-        if ($process) {
-            # Check parent processes to find MCP client
-            $currentProcess = $process
-            for ($i = 0; $i -lt 5; $i++) {
-                $processName = $currentProcess.ProcessName.ToLower()
+        $currentProcess = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
+        
+        for ($i = 0; $currentProcess -and $i -lt 5; $i++) {
+            $processName = $currentProcess.ProcessName.ToLower()
+            $processPath = $currentProcess.Path
 
-                if ($processName -eq 'claude') {
-                    $clientName = 'Claude Desktop'
-                    break
-                }
-                elseif ($processName -eq 'node') {
-                    # Check if this is Claude Code by examining command line
-                    $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($currentProcess.Id)" -ErrorAction SilentlyContinue).CommandLine
-                    if ($cmdLine -match 'claude-code') {
-                        $clientName = 'Claude Code'
-                        break
-                    }
-                }
-                elseif ($processName -eq 'code' -or $processName -eq 'code - insiders') {
-                    $clientName = 'VS Code'
-                    break
-                }
-                elseif ($processName -match 'cursor') {
-                    $clientName = 'Cursor'
-                    break
-                }
-
-                # Try to get parent process
-                try {
-                    $parentId = (Get-CimInstance Win32_Process -Filter "ProcessId = $($currentProcess.Id)" -ErrorAction SilentlyContinue).ParentProcessId
-                    if ($parentId) {
-                        $currentProcess = Get-Process -Id $parentId -ErrorAction SilentlyContinue
-                        if (-not $currentProcess) { break }
-                    }
-                    else { break }
-                }
-                catch { break }
+            # Check process name and path for known clients
+            if ($processName -eq 'claude' -or $processPath -match 'AnthropicClaude') {
+                $clientName = 'Claude Desktop'
+                break
+            }
+            elseif ($processName -eq 'node' -or $processPath -match 'claude-code|claude_code') {
+                $clientName = 'Claude Code'
+                break
+            }
+            elseif ($processName -match '^code$|^code - insiders$') {
+                $clientName = 'VS Code'
+                break
+            }
+            elseif ($processName -match 'cursor') {
+                $clientName = 'Cursor'
+                break
             }
 
-            # If not identified, use proxy process name
-            if (-not $clientName) {
-                $clientName = $process.ProcessName
-            }
+            # Get parent process (PowerShell 7.4+, cross-platform)
+            $currentProcess = $currentProcess.Parent
+        }
+
+        # Fallback to proxy process name
+        if (-not $clientName) {
+            $process = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
+            if ($process) { $clientName = $process.ProcessName }
         }
     }
     catch {
