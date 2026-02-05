@@ -31,7 +31,6 @@ public class InvokeExpressionParams : PowerShellMcpParams
 }
 
 
-
 public class StartPowerShellConsoleParams : PowerShellMcpParams
 {
     [JsonPropertyName("name")]

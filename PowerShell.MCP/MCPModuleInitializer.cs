@@ -106,55 +106,55 @@ namespace PowerShell.MCP
                 return $"Error getting current location: {ex.Message}";
             }
         }
-    /// <summary>
-    /// Claims this console for a specific proxy by restarting the Named Pipe server with new name.
-    /// Called when a proxy connects to an unowned console.
-    /// </summary>
-    /// <param name="proxyPid">The PID of the proxy claiming this console</param>
-    /// <returns>The new pipe name after claiming</returns>
-    public static string? ClaimConsole(int proxyPid)
-    {
-        if (_namedPipeServer == null || _tokenSource == null)
-            return null;
-
-        try
+        /// <summary>
+        /// Claims this console for a specific proxy by restarting the Named Pipe server with new name.
+        /// Called when a proxy connects to an unowned console.
+        /// </summary>
+        /// <param name="proxyPid">The PID of the proxy claiming this console</param>
+        /// <returns>The new pipe name after claiming</returns>
+        public static string? ClaimConsole(int proxyPid)
         {
-            // Stop current server
-            _tokenSource.Cancel();
-            _namedPipeServer.Dispose();
-
-            // Create new server with proxy PID
-            _namedPipeServer = new NamedPipeServer(proxyPid);
-            _tokenSource = new CancellationTokenSource();
-
-            // Start new server
-            Task.Run(async () =>
+            if (_namedPipeServer == null || _tokenSource == null)
+                return null;
+    
+            try
             {
-                try
+                // Stop current server
+                _tokenSource.Cancel();
+                _namedPipeServer.Dispose();
+    
+                // Create new server with proxy PID
+                _namedPipeServer = new NamedPipeServer(proxyPid);
+                _tokenSource = new CancellationTokenSource();
+    
+                // Start new server
+                Task.Run(async () =>
                 {
-                    await _namedPipeServer.StartAsync(_tokenSource.Token);
-                }
-                catch (Exception)
-                {
-                    // Silently ignore Named Pipe server errors
-                }
-            }, _tokenSource.Token);
-
-            return _namedPipeServer.PipeName;
+                    try
+                    {
+                        await _namedPipeServer.StartAsync(_tokenSource.Token);
+                    }
+                    catch (Exception)
+                    {
+                        // Silently ignore Named Pipe server errors
+                    }
+                }, _tokenSource.Token);
+    
+                return _namedPipeServer.PipeName;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
-        catch (Exception)
+    
+        /// <summary>
+        /// Gets the current pipe name for this console.
+        /// </summary>
+        /// <returns>The pipe name, or null if not initialized</returns>
+        public static string? GetPipeName()
         {
-            return null;
+            return _namedPipeServer?.PipeName;
         }
-    }
-
-    /// <summary>
-    /// Gets the current pipe name for this console.
-    /// </summary>
-    /// <returns>The pipe name, or null if not initialized</returns>
-    public static string? GetPipeName()
-    {
-        return _namedPipeServer?.PipeName;
-    }
     }
 }

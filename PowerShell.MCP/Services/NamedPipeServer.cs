@@ -777,7 +777,7 @@ Please provide how to update the MCP client configuration to the user.";
         var firstSegment = firstLine.Split('|').FirstOrDefault()?.Trim() ?? firstLine;
 
         // Truncate if too long
-        const int maxLength = 30;
+        const int maxLength = 30; // Max chars for status line display
         if (firstSegment.Length > maxLength)
             return firstSegment[..(maxLength - 3)] + "...";
 
