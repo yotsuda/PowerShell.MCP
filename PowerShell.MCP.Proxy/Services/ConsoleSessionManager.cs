@@ -95,7 +95,7 @@ public class ConsoleSessionManager
         // Trees
         new[] { "Oak", "Pine", "Maple", "Cedar", "Willow", "Birch", "Elm", "Ash", "Cherry", "Cypress" },
         // Mountains
-        new[] { "Fuji", "Everest", "K2", "Kilimanjaro", "Olympus", "Alps", "Blanc", "Matterhorn", "Eiger", "Elbrus" },
+        new[] { "Mt.Fuji", "Everest", "K2", "Kilimanjaro", "Mt.Olympus", "Denali", "Mt.Blanc", "Matterhorn", "Eiger", "Elbrus" },
         // Seas & Oceans
         new[] { "Pacific", "Atlantic", "Arctic", "Baltic", "Aegean", "Caspian", "Adriatic", "Nordic", "Arabian", "Tasman" },
         // Greek Mythology
