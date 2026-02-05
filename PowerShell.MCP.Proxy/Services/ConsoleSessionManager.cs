@@ -99,7 +99,7 @@ public class ConsoleSessionManager
         // Seas & Oceans
         new[] { "Pacific", "Atlantic", "Arctic", "Baltic", "Aegean", "Caspian", "Adriatic", "Nordic", "Arabian", "Tasman" },
         // Greek Mythology
-        new[] { "Apollo", "Athena", "Hermes", "Artemis", "Hera", "Hades", "Poseidon", "Demeter", "Hestia", "Ares" },
+        new[] { "Zeus", "Athena", "Hermes", "Artemis", "Hera", "Hades", "Poseidon", "Demeter", "Hestia", "Ares" },
         // Music Genres
         new[] { "Jazz", "Blues", "Rock", "Soul", "Funk", "Reggae", "Pop", "Metal", "Punk", "Classical" },
         // Weather
