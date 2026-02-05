@@ -30,7 +30,7 @@ CompanyName = 'Yoshifumi Tsuda'
 Copyright = '(c) Yoshifumi Tsuda. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Enables AI assistants (such as Claude Desktop) to execute PowerShell commands and CLI tools within a persistent PowerShell console. Supports Windows, Linux, and macOS.'
+Description = 'The universal MCP server for Claude Code and other MCP-compatible clients. One installation gives AI access to 10,000+ PowerShell modules and any CLI tool. You and AI collaborate in the same console with full transparency. Supports Windows, Linux, and macOS.'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '7.2'
@@ -115,80 +115,12 @@ PrivateData = @{
         Platforms = @('Windows', 'Linux', 'macOS')
 
         # ReleaseNotes of this module
-        ReleaseNotes = 'PowerShell.MCP v1.6.0 - Cross-Platform MCP Server
+        ReleaseNotes = 'PowerShell.MCP - Cross-Platform MCP Server
 
-=== Cross-Platform Support ===
-Now available on Windows, Linux, and macOS!
-• Windows: x64
-• Linux: x64 (gnome-terminal, konsole, xfce4-terminal, xterm, and more)
-• macOS: x64 (Intel), arm64 (Apple Silicon)
+Enables AI assistants to execute PowerShell commands and CLI tools
+within a persistent PowerShell console.
 
-=== Key Features ===
-• 🤝 Shared Console Experience
-• 🔄 Persistent Session State
-• ⚡ Instant Response, Zero Overhead
-• 🔍 Comprehensive Output Stream Capture
-• 📝 LLM-Optimized Text File Operations
-• 🔗 PowerShell Pipeline Composability
-• 🌐 Universal Modules & CLI Tools Integration
-• 📚 No RAG or Context Grounding Required
-• 🎯 Ready-to-Use Built-in Prompts
-• 🔐 Enterprise-Ready Security
-
-=== First-Time Demo ===
-• "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
-• "Try out different styles of notifications using the BurntToast module"
-• "Automate Notepad: type text and smoothly move the window in a circle"
-• "Tell me how to use Git in PowerShell"
-• "How does it feel now that you have a tool like PowerShell.MCP?"
-
-=== Popular Examples ===
-• "Review git changes and suggest a commit message"
-• "Generate system performance HTML report and open in browser"
-• "Show processes consuming more than 100MB memory, sorted by CPU usage"
-• "Create colorful disk usage analysis charts and visualizations"
-• "Export installed programs to CSV and open in Excel"
-• "Review code files and generate development documentation"
-
-=== Quick Setup (Windows) ===
-1. Install PowerShell 7.2+
-2. Install-Module PowerShell.MCP
-3. Get proxy path: Get-MCPProxyPath -Escape
-4. Add to Claude Desktop config (%APPDATA%\Claude\claude_desktop_config.json):
-   {
-     "mcpServers": {
-       "PowerShell": {
-         "command": "C:\\Users\\YourName\\...\\PowerShell.MCP.Proxy.exe"
-       }
-     }
-   }
-   Replace "command" value with output from step 3.
-5. Restart Claude Desktop
-
-=== Quick Setup (Linux / macOS) ===
-1. Install PowerShell 7.2+
-2. pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser -Force"
-3. chmod +x $(pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath")
-4. Get proxy path: Get-MCPProxyPath
-5. Add to Claude Desktop config (~/.config/Claude/claude_desktop_config.json):
-   {
-     "mcpServers": {
-       "PowerShell": {
-         "command": "/home/yourname/.local/.../PowerShell.MCP.Proxy"
-       }
-     }
-   }
-   Replace "command" value with output from step 4.
-6. Restart Claude Desktop
-
-=== Requirements ===
-PowerShell 7.2+, PSReadLine 2.3.4+ (Windows only, auto-loaded)
-
-=== Documentation ===
-Full examples & setup guide: https://github.com/yotsuda/PowerShell.MCP#examples
-Security policy: https://github.com/yotsuda/PowerShell.MCP/blob/main/SECURITY.md
-
-⚠  Provides complete PowerShell access. Use in trusted environments only.
+Full documentation: https://github.com/yotsuda/PowerShell.MCP
 '
 
         # Prerelease string of this module

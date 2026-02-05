@@ -229,7 +229,7 @@ function Get-MCPOwner {
 
 .PARAMETER Name
     Specifies the names of skills to install. If not specified, all available skills are installed.
-    Available skills: analyze, create-procedure, dictation, exec-procedure, html-guidelines, learn, map
+    Available skills: ps-analyze, ps-create-procedure, ps-dictation, ps-exec-procedure, ps-html-guidelines, ps-learn, ps-map
 
 .PARAMETER Force
     Overwrites existing skill files without prompting.
@@ -245,16 +245,16 @@ function Get-MCPOwner {
     Installs all available skills to ~/.claude/skills/
 
 .EXAMPLE
-    Install-ClaudeSkill analyze, learn
-    Installs only the 'analyze' and 'learn' skills.
+    Install-ClaudeSkill ps-analyze, ps-learn
+    Installs only the 'ps-analyze' and 'ps-learn' skills.
 
 .EXAMPLE
     Install-ClaudeSkill -WhatIf
     Shows which skills would be installed without actually installing them.
 
 .EXAMPLE
-    Install-ClaudeSkill analyze -Force
-    Installs the 'analyze' skill, overwriting if it exists.
+    Install-ClaudeSkill ps-analyze -Force
+    Installs the 'ps-analyze' skill, overwriting if it exists.
 
 .OUTPUTS
     System.IO.FileInfo (when -PassThru is specified)
@@ -264,7 +264,7 @@ function Install-ClaudeSkill {
     [OutputType([System.IO.FileInfo])]
     param(
         [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
-        [ValidateSet('analyze', 'create-procedure', 'dictation', 'exec-procedure', 'html-guidelines', 'learn', 'map')]
+        [ValidateSet('ps-analyze', 'ps-create-procedure', 'ps-dictation', 'ps-exec-procedure', 'ps-html-guidelines', 'ps-learn', 'ps-map')]
         [string[]]$Name,
 
         [switch]$Force,
@@ -273,7 +273,7 @@ function Install-ClaudeSkill {
     )
 
     begin {
-        $moduleSkillsPath = Join-Path $PSScriptRoot 'Skills'
+        $moduleSkillsPath = Join-Path $PSScriptRoot 'skills'
         $userSkillsPath = Join-Path $HOME '.claude' 'skills'
 
         if (-not (Test-Path $moduleSkillsPath)) {
