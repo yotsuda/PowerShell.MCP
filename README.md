@@ -146,7 +146,7 @@ Install-Module PowerShell.MCP
 **For Claude Code:**
 ```powershell
 Get-MCPProxyPath
-# Example: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.4.1\bin\win-x64\PowerShell.MCP.Proxy.exe
+# Example: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.6.0\bin\win-x64\PowerShell.MCP.Proxy.exe
 ```
 ```bash
 claude mcp add PowerShell -- "C:\path\to\PowerShell.MCP.Proxy.exe"
@@ -160,7 +160,7 @@ Get-MCPProxyPath -Escape  # Returns JSON-escaped path (e.g., C:\\Users\\...\\Pow
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.4.1\\bin\\win-x64\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.6.0\\bin\\win-x64\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
@@ -192,7 +192,7 @@ pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
 #### 3. Get your Proxy path and set permissions
 ```bash
 pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
-# Example: /home/username/.local/share/powershell/Modules/PowerShell.MCP/1.4.1/bin/linux-x64/PowerShell.MCP.Proxy
+# Example: /home/username/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/linux-x64/PowerShell.MCP.Proxy
 
 chmod +x /path/to/PowerShell.MCP.Proxy
 ```
@@ -224,8 +224,8 @@ pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
 #### 3. Get your Proxy path and set permissions
 ```bash
 pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
-# Apple Silicon: ~/.local/share/powershell/Modules/PowerShell.MCP/1.4.1/bin/osx-arm64/PowerShell.MCP.Proxy
-# Intel Mac: ~/.local/share/powershell/Modules/PowerShell.MCP/1.4.1/bin/osx-x64/PowerShell.MCP.Proxy
+# Apple Silicon: ~/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/osx-arm64/PowerShell.MCP.Proxy
+# Intel Mac: ~/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/osx-x64/PowerShell.MCP.Proxy
 
 chmod +x /path/to/PowerShell.MCP.Proxy
 ```
@@ -242,7 +242,7 @@ claude mcp add PowerShell -- /path/to/PowerShell.MCP.Proxy
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "/Users/YourName/.local/share/powershell/Modules/PowerShell.MCP/1.4.1/bin/osx-arm64/PowerShell.MCP.Proxy"
+      "command": "/Users/YourName/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/osx-arm64/PowerShell.MCP.Proxy"
     }
   }
 }
