@@ -33,7 +33,7 @@ Copyright = '(c) Yoshifumi Tsuda. All rights reserved.'
 Description = 'The universal MCP server for Claude Code and other MCP-compatible clients. One installation gives AI access to 10,000+ PowerShell modules and any CLI tool. You and AI collaborate in the same console with full transparency. Supports Windows, Linux, and macOS.'
 
 # Minimum version of the PowerShell engine required by this module
-PowerShellVersion = '7.2'
+PowerShellVersion = '7.5'
 
 # Name of the PowerShell host required by this module
 # PowerShellHostName = ''
