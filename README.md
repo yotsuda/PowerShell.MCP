@@ -6,119 +6,132 @@
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Security Warning
-**This module provides complete PowerShell access to your system.**  
-Malicious use could result in severe damage. Use responsibly and only in trusted environments.
+**Security Warning:** This module provides complete PowerShell access to your system. Malicious use could result in severe damage. Use responsibly and only in trusted environments.
 
 ## Overview
 
-PowerShell.MCP is a tool that enables AI assistants (such as Claude Desktop) to execute any PowerShell commands and CLI tools within a PowerShell console. Users can also execute cmdlets/.ps1/.bat/CLI tools in the same console, allowing AI and users to work collaboratively. It operates at high speed without needing to launch a new console each time, while preserving the state of imported modules, functions and variables.
+*The universal MCP server—one installation gives AI access to 10,000+ PowerShell modules and any CLI tool.*
 
-Despite its powerful capabilities, PowerShell.MCP is built with just four carefully designed tools:
-- **start_powershell_console:** launching a persistent console
-- **get_current_location:** retrieving the current working directory
-- **invoke_expression:** executing any cmdlets/.ps1/.bat/CLI tools (chainable with pipes) in the PS console
-- **wait_for_completion:** waiting for busy console(s) to complete and retrieving cached results
+PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through a single MCP server. You and AI collaborate in the same PowerShell console—every command is visible, auditable, and saved to history.
 
-This minimalist architecture provides maximum flexibility while maintaining simplicity.
+## Why PowerShell.MCP?
 
-### What Makes It Powerful
+**A universal gateway to the PowerShell ecosystem.**
+
+PowerShell.MCP takes a different approach from service-specific MCP servers. Rather than providing curated tools for individual services, it gives AI assistants direct access to PowerShell—letting them use the same modules and CLI tools that professionals use every day.
+
+This means:
+- **One MCP server replaces many** — no need for separate servers for each service
+- **Immediate access** to 10,000+ modules on [PowerShell Gallery](https://www.powershellgallery.com/) without waiting for dedicated MCP servers
+- **Cross-service workflows** combining multiple services in a single pipeline
+- **API exploration** — prototype and verify API behavior with immediate feedback before writing production code
+- **Self-evolving capabilities** — AI writes PowerShell scripts that both AI and users can execute, continuously extending what's possible
+- **Industry-standard skills** — commands you learn transfer directly to your own work
+
+**Examples: PowerShell pipeline processing**
+
+*"Show me bug issues from the PowerShell repo with their authors"*
+
+```powershell
+gh issue list --repo PowerShell/PowerShell --json title,author,labels |
+    ConvertFrom-Json |
+    Where-Object { $_.labels.name -contains "Issue-Bug" } |
+    Select-Object title, @{N='by';E={$_.author.login}}
+```
+
+*"List my running Azure VMs with their sizes"*
+
+```powershell
+Get-AzVM -Status | Where-Object PowerState -eq "VM running" |
+    Select-Object Name, @{N='Size';E={$_.HardwareProfile.VmSize}}, Location
+```
+
+*"Check if GitHub's API returns rate limit info"*
+
+```powershell
+Invoke-RestMethod https://api.github.com/rate_limit |
+    Select-Object -ExpandProperty rate
+```
+
+*"Get the current user's Windows username via Win32 API"*
+
+```powershell
+Add-Type -MemberDefinition '[DllImport("advapi32.dll")] public static extern bool GetUserName(System.Text.StringBuilder sb, ref int len);' -Name Win32 -Namespace API
+$sb = [System.Text.StringBuilder]::new(256); $len = 256
+[API.Win32]::GetUserName($sb, [ref]$len); $sb.ToString()
+```
+
+PowerShell.MCP complements your existing MCP setup by providing a flexible, general-purpose foundation.
+
+## What Makes It Powerful
+
+**🖥️ Multi-Client Architecture**
+- Each client instance gets its own exclusive console—run multiple Claude Code sessions in parallel
+- Safe parallel operation with no resource conflicts
+- Unique window titles (e.g., "#12345 Taxi") for easy identification
+- `Get-MCPOwner` cmdlet shows which client owns the current console
 
 **🤝 Shared Console Experience**
-- You and AI collaborate in the same PowerShell session
-- Every command the AI executes appears in your console in real-time
-- PowerShell cmdlets display colorful output
-- You can respond to input requests from AI-executed commands directly in the console
-- You can run your own commands between AI operations
-- AI-executed commands are saved to history, allowing you to recall and modify parameters for re-execution
-- Complete transparency - see exactly what's happening
+- You and AI collaborate in the same PowerShell session with full transparency
+- Every command AI executes appears in your console in real-time
+- You can respond to interactive prompts directly in the console
+- Commands are saved to history—learn by watching AI work
 
 **🔄 Persistent Session State**
-- Current directory persists across all commands and interactions
-- Imported modules and authenticated sessions remain active throughout the entire session
-- Variables, functions, and mounted PSDrives stay available throughout the session
-- No need to re-initialize or re-authenticate between commands
-- True model context protocol implementation preserves your entire working state
+- Authenticate once, stay authenticated: Azure, AWS, Microsoft 365, and more
+- Modules, variables, and functions persist across commands
+- No re-initialization overhead
 
-**⚡ Instant Response, Zero Overhead**
-- Commands execute immediately without launching new PowerShell processes
-- Eliminates the typical 1-5 second startup delay per cmdlet
-- Fast initial feedback to users with instant acknowledgment before full results
-- Real-time streaming of output as commands run
+**🌐 Universal Access**
+- [PowerShell Gallery](https://www.powershellgallery.com/): 10,000+ modules including [Az](https://www.powershellgallery.com/packages/Az), [AWS.Tools](https://www.powershellgallery.com/packages/AWS.Tools.Common), [Microsoft.Graph](https://www.powershellgallery.com/packages/Microsoft.Graph)
+- Any CLI tool: git, docker, kubectl, terraform, gh, az cli, aws cli
+- AI learns syntax automatically via `Get-Help`
 
-**🔍 Comprehensive Output Stream Capture**
-- Command output is captured and returned to the AI assistant, with PowerShell's critical streams (error, warning, success, information) completely separated
-- Verbose and debug streams display naturally in the console under user control, and can be shared manually when needed
-- Clear execution statistics for every command: duration, error count, warning count, and info count
+**🔗 Pipeline Composability**
+- Describe what you want in natural language—AI constructs the optimal pipeline
+- "Top 5 largest logs" → `Get-ChildItem *.log | Sort-Object Length -Descending | Select-Object -First 5`
+- Chain any commands across any services
 
-**🌐 Universal Modules & CLI Integration**
-- PowerShell.MCP acts as a universal bridge, instantly making any PowerShell modules or CLI tools available as fully functional MCP servers
-- Access the vast ecosystem of PowerShell Gallery with over 3,000 pre-built modules, instantly integrating with everything from cloud services like [Azure](https://www.powershellgallery.com/packages/Az), [AWS](https://www.powershellgallery.com/packages/AWSPowerShell.NetCore), [Google Cloud](https://www.powershellgallery.com/packages/GoogleCloud) or [UiPath Orchestrator](https://www.powershellgallery.com/packages/UiPathOrch) to enterprise tools like [Active Directory](https://learn.microsoft.com/powershell/module/activedirectory/), [Exchange](https://www.powershellgallery.com/packages/ExchangeOnlineManagement) or [SQL Server](https://www.powershellgallery.com/packages/SqlServer)
-- Uses `Get-Help` to automatically learn each cmdlet's syntax, parameters, and usage patterns for immediate productive use
-- AI effectively leverages well-known command-line tools like [Git](https://git-scm.com/) or [Docker](https://www.docker.com/)
-- PowerShell.MCP fundamentally transforms the MCP ecosystem by making virtually any command-line tool AI-accessible without custom development
-
-**🔗 PowerShell Pipeline Composability**
-- PowerShell naturally chains commands together, passing rich data between them
-- AI assistants leverage this composability to build sophisticated workflows from simple building blocks
-- Example: "Show me the top 5 largest log files" becomes `Get-ChildItem *.log | sort Length -Descending | select -First 5`
-- Unlike approaches that expose each cmdlet/CLI tool as individual MCP tools, PowerShell.MCP enables AI to freely combine any commands into flexible pipelines
-- You describe what you want in natural language - AI constructs the optimal pipeline automatically
-- No need to understand pipeline syntax yourself - just tell AI what you need
-
-**📝 LLM-Optimized Text File Operations**
-- Traditional Get/Set-Content cmdlets frequently fail for LLMs due to line number confusion and poor performance
-- To address this, PowerShell.MCP includes 5 specialized cmdlets designed specifically for AI assistants to handle text file operations reliably
-- Single-pass processing architecture enables up to 100x faster performance than Get/Set-Content on large files
-- 1-based line numbering eliminates array index confusion and matches compiler error messages
-- Automatic encoding detection and preservation (UTF-8/16/32, Shift-JIS, line endings)
-- Pattern matching with regex support and capture groups
-
-**📚 No RAG or Context Grounding Required**
-- Simply gather necessary documents and files in a folder
-- Tell the AI assistant "Check this folder" in your prompt
-- AI instantly accesses all the knowledge needed for the task
-- Works with any content: documentation, project templates, code samples, configurations, and more
-- No need for complex RAG systems or context grounding infrastructure
-- Natural and intuitive way to provide domain-specific knowledge to AI
-
-**🎯 Ready-to-Use Built-in Prompts**
-- 7 specialized prompts for development, analysis, administration, and learning scenarios
-- Intelligent automation with native language support and interactive guidance
-- Built-in safety measures, progress tracking, and hands-on learning environments
-- Accessible directly through MCP client prompts list - no command writing required
+**⚡ Instant Execution**
+- Commands execute immediately in an existing console
+- No process startup overhead per command
+- Real-time streaming output
 
 **🔐 Enterprise-Ready Security**
-- Local-only communication through named pipes
-- No network exposure or remote connections
-- Every executed command is visible and auditable
-- Compatible with strict corporate security policies
+- Local-only named pipe communication—no network exposure
+- Every command visible and auditable
+- Integrates with existing security policies
 
-**🖥️ Multi-Console Support**
-- Multiple AI assistants can work simultaneously with separate PowerShell consoles
-- Each console gets a unique window title (e.g., "#12345 Taxi") for easy identification
-- User-started consoles with PowerShell.MCP module can be automatically adopted by AI assistants
-- `Get-MCPOwner` cmdlet shows which AI client owns the current console
+## Architecture
+
+Five tools provide maximum flexibility with minimum complexity:
+
+| Tool | Purpose |
+|------|---------|
+| `start_powershell_console` | Launch a persistent console for the MCP client |
+| `get_current_location` | Get current directory and available drives |
+| `invoke_expression` | Execute any PowerShell command or CLI tool |
+| `wait_for_completion` | Wait for long-running commands to complete |
+| `generate_agent_id` | Generate a unique agent ID for sub-agent console isolation |
 
 ## Quick Start
 
 ### Prerequisites
 
-| Platform | Requirements |
-|----------|-------------|
-| **Windows** | Windows 10/11 or Windows Server 2016+ |
-| **Linux** | Ubuntu 22.04+, Debian 11+, RHEL 8+, or other distributions with GUI desktop |
-| **macOS** | macOS 12 (Monterey) or later, Intel or Apple Silicon |
-
 **All platforms require:**
-- PowerShell 7.5 or higher ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
-- Claude Desktop ([download](https://claude.ai/download)), Claude Code, or any MCP client
+- PowerShell 7.5+ ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
+- Claude Desktop, Claude Code, or any MCP client
 
-> **Note:** Claude Desktop and Claude Code are recommended. Claude Code is ideal for development work with its multi-console support. Other MCP clients may not deliver optimal performance.
+| Platform | OS Requirements |
+|----------|-----------------|
+| Windows | Windows 10/11 or Windows Server 2016+ |
+| Linux | Ubuntu 22.04+, Debian 11+, RHEL 8+, or distributions with GUI desktop |
+| macOS | macOS 12 (Monterey)+, Intel or Apple Silicon |
 
 ---
 
-### Windows Setup
+<details>
+<summary><b>Windows Setup</b></summary>
 
 #### 1. Open PowerShell 7
 Press `Win + R`, type `pwsh`, press `Enter`
@@ -126,17 +139,23 @@ Press `Win + R`, type `pwsh`, press `Enter`
 #### 2. Install PowerShell.MCP
 ```powershell
 Install-Module PowerShell.MCP
-Import-Module PowerShell.MCP
 ```
 
-#### 3. Get your Proxy path
+#### 3. Configure your MCP client
+
+**For Claude Code:**
 ```powershell
 Get-MCPProxyPath
 # Example: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.4.1\bin\win-x64\PowerShell.MCP.Proxy.exe
 ```
+```bash
+claude mcp add PowerShell -- "C:\path\to\PowerShell.MCP.Proxy.exe"
+```
 
-#### 4. Configure Claude Desktop
-Add to `%APPDATA%\Claude\claude_desktop_config.json`:
+**For Claude Desktop** — Add to `%APPDATA%\Claude\claude_desktop_config.json`:
+```powershell
+Get-MCPProxyPath -Escape  # Returns JSON-escaped path (e.g., C:\\Users\\...\\PowerShell.MCP.Proxy.exe)
+```
 ```json
 {
   "mcpServers": {
@@ -146,12 +165,12 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
   }
 }
 ```
+#### 4. Restart your MCP client
 
-#### 5. Restart Claude Desktop
+</details>
 
----
-
-### Linux Setup
+<details>
+<summary><b>Linux Setup</b></summary>
 
 #### 1. Install PowerShell 7
 ```bash
@@ -170,35 +189,31 @@ sudo apt-get install -y powershell
 pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
 ```
 
-#### 3. Get your Proxy path
+#### 3. Get your Proxy path and set permissions
 ```bash
 pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
 # Example: /home/username/.local/share/powershell/Modules/PowerShell.MCP/1.4.1/bin/linux-x64/PowerShell.MCP.Proxy
-```
 
-#### 4. Set execute permission
-```bash
 chmod +x /path/to/PowerShell.MCP.Proxy
 ```
 
-#### 5. Configure Claude Code
+#### 4. Configure your MCP client
+
+**For Claude Code:**
 ```bash
-claude mcp add powershell-mcp -- /path/to/PowerShell.MCP.Proxy
+claude mcp add PowerShell -- /path/to/PowerShell.MCP.Proxy
 ```
 
-Or edit `~/.claude.json` manually.
+**For Claude Desktop** — Edit `~/.config/Claude/claude_desktop_config.json`
 
----
+</details>
 
-### macOS Setup
+<details>
+<summary><b>macOS Setup</b></summary>
 
 #### 1. Install PowerShell 7
 ```bash
-# Using Homebrew
 brew install powershell/tap/powershell
-
-# Or download the official pkg installer from:
-# https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-macos
 ```
 
 #### 2. Install PowerShell.MCP
@@ -206,20 +221,23 @@ brew install powershell/tap/powershell
 pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
 ```
 
-#### 3. Get your Proxy path
+#### 3. Get your Proxy path and set permissions
 ```bash
 pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
 # Apple Silicon: ~/.local/share/powershell/Modules/PowerShell.MCP/1.4.1/bin/osx-arm64/PowerShell.MCP.Proxy
 # Intel Mac: ~/.local/share/powershell/Modules/PowerShell.MCP/1.4.1/bin/osx-x64/PowerShell.MCP.Proxy
-```
 
-#### 4. Set execute permission
-```bash
 chmod +x /path/to/PowerShell.MCP.Proxy
 ```
 
-#### 5. Configure Claude Desktop
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+#### 4. Configure your MCP client
+
+**For Claude Code:**
+```bash
+claude mcp add PowerShell -- /path/to/PowerShell.MCP.Proxy
+```
+
+**For Claude Desktop** — Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
@@ -230,19 +248,22 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-#### 6. Restart Claude Desktop
+#### 5. Restart your MCP client
+
+</details>
 
 ---
 
 ## First-Time Demo
-🎨 Experience PowerShell.MCP's capabilities with these engaging demonstrations:
+
+Experience PowerShell.MCP's capabilities:
 
 - "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
 - "Try out different styles of notifications using the BurntToast module"
 - "Automate Notepad: type text and smoothly move the window in a circle"
 - "How does it feel now that you have a tool like PowerShell.MCP?"
 
-After trying these demos, explore the 7 built-in prompts below or ask AI to explain any command - learning by doing is the best approach.
+After trying these demos, explore the built-in prompts below or ask AI to explain any command.
 
 ## Built-in Prompts
 
@@ -406,21 +427,26 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 ---
 
 ## Limitations
-- **AI Command Cancellation**: Commands executed by AI assistants cannot be cancelled with Ctrl+C. To cancel AI-executed commands, close the PowerShell console
-- **User Command Privacy**: Commands executed by users are not visible to AI assistants
-- **Verbose/Debug Streams**: Verbose and Debug output streams are not captured. Users can share this information with AI assistants via clipboard if needed
-- **Standard Error (stderr)**: Standard error output from CLI programs is not displayed in the PowerShell console and is not visible to AI assistants. To capture stderr, explicitly redirect it to a variable (e.g., `$result = & command.exe 2>&1`)
-- **External Command Colors**: Color output from external commands (e.g., git.exe) is lost and displayed without colors in the PowerShell console
+
+- **AI Command Cancellation**: Commands executed by AI cannot be cancelled with Ctrl+C. Close the console to stop.
+- **User Command Privacy**: Commands you execute are not visible to AI assistants.
+- **Verbose/Debug Streams**: Not captured. Share via clipboard if needed.
+- **CLI stderr**: Not captured by default. Use `$result = & command.exe 2>&1` to capture.
+- **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
 
 ## Disclaimer
-This software is provided "AS IS" without warranty of any kind, either expressed or implied.  
+
+This software is provided "AS IS" without warranty of any kind, either expressed or implied.
 The author assumes no responsibility for any damages arising from the use of this software.
 
 ## License
+
 MIT License - see [LICENSE](LICENSE) for details.
 
 ## Author
+
 Yoshifumi Tsuda
 
 ---
+
 **For enterprise use, ensure compliance with your organization's security policies.**
