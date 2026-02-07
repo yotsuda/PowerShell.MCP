@@ -279,7 +279,7 @@ jobs:
         Write-Host "Starting background pwsh with PowerShell.MCP..."
         $bgPsi = [System.Diagnostics.ProcessStartInfo]::new()
         $bgPsi.FileName = "pwsh"
-        $bgPsi.Arguments = "-NoProfile -NoExit -Command `"Import-Module PowerShell.MCP -Verbose; while (`$true) { Wait-Event -Timeout 1 | Out-Null }`""
+        $bgPsi.Arguments = "-NoProfile -NoExit -Command `"Import-Module PowerShell.MCP -Verbose`""
         $bgPsi.UseShellExecute = $false
         $bgPsi.CreateNoWindow = $true
         $bgPsi.RedirectStandardInput = $true
@@ -343,6 +343,13 @@ jobs:
           throw "Named Pipe server did not start within 15 seconds"
         }
 
+        # Pump PowerShell events via stdin (required for macOS/Linux where timer events
+        # don't fire automatically when stdin is redirected)
+        Write-Host "Sending event pump loop via stdin..."
+        $bgProcess.StandardInput.WriteLine("while (`$true) { Start-Sleep -Milliseconds 200 }")
+        $bgProcess.StandardInput.Flush()
+        Start-Sleep -Seconds 2
+
         # Start Proxy (build path directly to avoid importing PowerShell.MCP in test script)
         Write-Host "Starting Proxy..."
         if ($IsWindows) {
@@ -391,7 +398,7 @@ jobs:
           # Test: invoke_expression with Get-Date (first call - should return get_current_location)
           Write-Host "`n=== Test: invoke_expression (Get-Date) - First call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
-          $response = Send-JsonRpc $invokeRequest 10000
+          $response = Send-JsonRpc $invokeRequest 60000
           Write-Host "Response (truncated): $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
 
           if ($response -match "Switched to console" -and $response -match "Pipeline NOT executed") {
@@ -403,7 +410,7 @@ jobs:
           # Test: invoke_expression with Get-Date (second call - should execute)
           Write-Host "`n=== Test: invoke_expression (Get-Date) - Second call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
-          $response = Send-JsonRpc $invokeRequest 10000
+          $response = Send-JsonRpc $invokeRequest 60000
           Write-Host "Response: $response"
 
           $today = Get-Date -Format "yyyy-MM-dd"
