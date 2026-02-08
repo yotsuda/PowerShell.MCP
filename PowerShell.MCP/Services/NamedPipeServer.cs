@@ -803,14 +803,22 @@ Please provide how to update the MCP client configuration to the user.";
     /// </summary>
     private static string GetWindowTitle()
     {
-        try
+        if (OperatingSystem.IsWindows())
         {
-            return Console.Title;
+            try { return Console.Title; }
+            catch { }
         }
-        catch
+        else
         {
-            return $"#{System.Diagnostics.Process.GetCurrentProcess().Id}";
+            try
+            {
+                var result = McpServerHost.ExecuteSilentCommand("$Host.UI.RawUI.WindowTitle");
+                if (!string.IsNullOrEmpty(result))
+                    return result.Trim();
+            }
+            catch { }
         }
+        return $"#{System.Diagnostics.Process.GetCurrentProcess().Id}";
     }
 
     /// <summary>
