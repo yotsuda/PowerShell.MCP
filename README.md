@@ -144,12 +144,8 @@ Install-Module PowerShell.MCP
 #### 3. Configure your MCP client
 
 **For Claude Code:**
-```powershell
-Get-MCPProxyPath
-# Example: C:\Users\YourName\Documents\PowerShell\Modules\PowerShell.MCP\1.6.0\bin\win-x64\PowerShell.MCP.Proxy.exe
-```
 ```bash
-claude mcp add PowerShell -- "C:\path\to\PowerShell.MCP.Proxy.exe"
+claude mcp add PowerShell -- "$(Get-MCPProxyPath)"
 ```
 
 **For Claude Desktop** — Add to `%APPDATA%\Claude\claude_desktop_config.json`:
