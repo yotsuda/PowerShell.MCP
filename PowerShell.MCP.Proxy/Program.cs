@@ -27,7 +27,8 @@ namespace PowerShell.MCP.Proxy
 
             builder.Services
                 .AddSingleton<NamedPipeClient>()
-                .AddSingleton<IPowerShellService, PowerShellService>();
+                .AddSingleton<IPowerShellService, PowerShellService>()
+                .AddSingleton<IPipeDiscoveryService, PipeDiscoveryService>();
 
             builder.Services
                 .AddMcpServer()

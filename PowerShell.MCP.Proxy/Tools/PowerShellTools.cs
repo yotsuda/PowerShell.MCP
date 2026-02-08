@@ -18,12 +18,11 @@ public class PowerShellTools
     /// Finds a ready pipe. Delegates to PipeDiscoveryService.
     /// </summary>
     private static async Task<(string? readyPipeName, bool consoleSwitched, string? allPipesStatusInfo)> FindReadyPipeAsync(
-        IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
         string agentId,
         CancellationToken cancellationToken)
     {
-        var service = new PipeDiscoveryService(powerShellService);
-        var result = await service.FindReadyPipeAsync(agentId, cancellationToken);
+        var result = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
         return (result.ReadyPipeName, result.ConsoleSwitched, result.AllPipesStatusInfo);
     }
 
@@ -34,13 +33,12 @@ public class PowerShellTools
     /// Collects cached outputs and busy status from all pipes. Delegates to PipeDiscoveryService.
     /// </summary>
     private static async Task<(string completedOutput, string busyStatusInfo)> CollectAllCachedOutputsAsync(
-        IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
         string agentId,
         string? excludePipeName,
         CancellationToken cancellationToken)
     {
-        var service = new PipeDiscoveryService(powerShellService);
-        var result = await service.CollectAllCachedOutputsAsync(agentId, excludePipeName, cancellationToken);
+        var result = await pipeDiscoveryService.CollectAllCachedOutputsAsync(agentId, excludePipeName, cancellationToken);
         return (result.CompletedOutput, result.BusyStatusInfo);
     }
 
@@ -75,6 +73,7 @@ public class PowerShellTools
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
         [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
@@ -82,13 +81,13 @@ public class PowerShellTools
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
 
         // Find a ready pipe
-        var (readyPipeName, _, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, agentId, cancellationToken);
+        var (readyPipeName, _, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
             // No ready pipe - auto-start (StartPowershellConsole includes busy info collection)
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            return await StartPowershellConsole(powerShellService, agent_id: agent_id, cancellationToken: cancellationToken);
+            return await StartPowershellConsole(powerShellService, pipeDiscoveryService, agent_id: agent_id, cancellationToken: cancellationToken);
         }
 
         try
@@ -97,7 +96,7 @@ public class PowerShellTools
             var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
 
             // Collect completed outputs and busy status info from other pipes
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
             // Build response: busyStatusInfo + completedOutputs + result
             var response = new StringBuilder();
@@ -136,6 +135,7 @@ For text file editing, use Get-Help to learn the specialized cmdlets: Show-TextF
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
         [Description("The PowerShell command or pipeline to execute. Both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks.")]
         string pipeline,
         [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next MCP tool call. You can work on other tasks in parallel. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
@@ -151,7 +151,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, allPipesStatusInfo) = await FindReadyPipeAsync(powerShellService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -172,7 +172,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             // Collect completed outputs and busy status (after console start, using new pipe as exclude)
             var newPipeName = sessionManager.GetActivePipeName(agentId);
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, newPipeName, cancellationToken);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = GetPidString(newPipeName);
@@ -203,7 +203,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
             // Set console window title for claimed console
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
+            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
             // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
             var pid = GetPidString(readyPipeName);
@@ -276,7 +276,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                     }
 
                                     var newPipeName = sessionManager.GetActivePipeName(agentId);
-                                    var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, newPipeName, cancellationToken);
+                                    var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
                                     var newPid = GetPidString(newPipeName);
 
@@ -309,7 +309,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 var currentPipeCachedOutput = await powerShellService.ConsumeOutputFromPipeAsync(readyPipeName, cancellationToken);
 
                                 // Collect completed outputs and busy status from other pipes
-                                var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
+                                var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
                                 // Build timeout response: busy status first + closedConsoleInfo + cachedOutput + completedOutput + scopeWarning + timeout message
                                 var timeoutResponse = new StringBuilder();
@@ -354,7 +354,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                             case "completed":
                                 // Result was cached - return status
                                 // Collect busy status from other pipes
-                                var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
+                                var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
                                 var cachedResponse = new StringBuilder();
                                 if (cachedBusyStatusInfo.Length > 0)
@@ -381,7 +381,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
                             case "success":
                                 // Normal completion - use body as result
-                                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
+                                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
                                 // Split body into status line and output
                                 var statusLine = body;
@@ -449,6 +449,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     [Description("Wait for busy console(s) to complete and retrieve cached results. Use this after receiving 'Pipeline is still running' response instead of executing Start-Sleep (which would open a new console).")]
     public static async Task<string> WaitForCompletion(
         IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
         [Description("Maximum seconds to wait for completion (1-170, default: 30). Returns early if a console completes.")]
         int timeout_seconds = 30,
         [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
@@ -484,7 +485,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // If any previously busy pipe was closed, collect all cached outputs and return
         if (closedConsoleMessages.Count > 0)
         {
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
             return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
         }
 
@@ -503,14 +504,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
                 closedConsoleMessages.Add($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
 
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
+                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
             }
 
             if (status.Status == "completed")
             {
                 // Completed - collect all cached outputs (including this one) and return
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
+                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
             }
 
@@ -532,7 +533,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // No MCP-initiated busy pipes - collect any cached outputs and return
         if (busyPipes.Count == 0)
         {
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
 
             // If no completed output and no busy info, return "No commands to wait for completion."
             if (completedOutput.Length == 0 && busyStatusInfo.Length == 0 && closedConsoleMessages.Count == 0)
@@ -564,14 +565,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                     var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
                     closedConsoleMessages.Add($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
 
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
+                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                     return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
                 }
 
                 if (status.Status == "completed")
                 {
                     // Completed - collect all cached outputs (including this one) and return
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
+                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                     return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
                 }
 
@@ -592,7 +593,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         }
 
         // Timeout - collect final status
-        var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, null, cancellationToken);
+        var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
         return BuildWaitResponse(closedConsoleMessages, finalCompletedOutput, finalBusyStatusInfo);
     }
 
@@ -630,6 +631,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     [Description("Launch a new PowerShell console window with PowerShell.MCP module imported. This tool should only be executed when explicitly requested by the user or when other tool executions fail.")]
     public static async Task<string> StartPowershellConsole(
         IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
         [Description("Message displayed at console startup (e.g. greeting, joke, fun fact). Be creative and make the user smile!")]
         string? banner = null,
         [Description("Optional starting directory path. If relative, resolved from home directory. Defaults to home directory if not specified.")]
@@ -657,7 +659,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         // Collect busy status from Proxy side
         var newPipeName = sessionManager.GetActivePipeName(agentId);
-        var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, newPipeName, cancellationToken);
+        var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
         // Build response: busy status first + completed output + start message + location
         var response = new StringBuilder();
