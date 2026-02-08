@@ -357,4 +357,4 @@ function Install-ClaudeSkill {
     }
 }
 
-Export-ModuleMember -Function Get-MCPProxyPath, Get-MCPOwner, Install-ClaudeSkill
+
