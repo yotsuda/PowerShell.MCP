@@ -121,7 +121,7 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help. Commands visible in history for user learning.
+    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help. Single-line commands are added to console history for user learning. Multi-line commands are NOT added to history.
 
 💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
 
@@ -232,6 +232,9 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
 
         // Check for local variable assignments without scope prefix
         var scopeWarning = CheckLocalVariableAssignments(pipeline);
+        // Check if multi-line command (not added to console history)
+        var historyWarning = PipelineHelper.CheckMultiLineHistory(pipeline);
+
 
         // Execute the command
         try
@@ -328,16 +331,22 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 {
                                     timeoutResponse.Append(timeoutCompletedOutput);
                                 }
-                                if (!string.IsNullOrEmpty(scopeWarning))
-                                {
-                                    timeoutResponse.AppendLine(scopeWarning);
-                                    timeoutResponse.AppendLine();
-                                }
-                                // Use statusLine from dll if available
+                                // Status line first
                                 var timeoutStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
                                     ? jsonResponse.StatusLine
                                     : $"⧗ Pipeline is still running | pwsh PID: {jsonResponse.Pid} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 timeoutResponse.AppendLine(timeoutStatusLine);
+                                // Then warnings (history warning before scope warning for user visibility)
+                                if (!string.IsNullOrEmpty(historyWarning))
+                                {
+                                    timeoutResponse.AppendLine();
+                                    timeoutResponse.AppendLine(historyWarning);
+                                }
+                                if (!string.IsNullOrEmpty(scopeWarning))
+                                {
+                                    timeoutResponse.AppendLine();
+                                    timeoutResponse.AppendLine(scopeWarning);
+                                }
                                 timeoutResponse.AppendLine();
                                 timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
                                 return timeoutResponse.ToString();
@@ -374,6 +383,16 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 // Normal completion - use body as result
                                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(powerShellService, agentId, readyPipeName, cancellationToken);
 
+                                // Split body into status line and output
+                                var statusLine = body;
+                                var output = "";
+                                var bodyNewlineIndex = body.IndexOf('\n');
+                                if (bodyNewlineIndex >= 0)
+                                {
+                                    statusLine = body[..bodyNewlineIndex];
+                                    output = body[(bodyNewlineIndex + 1)..];
+                                }
+
                                 var successResponse = new StringBuilder();
                                 if (busyStatusInfo.Length > 0)
                                 {
@@ -387,16 +406,25 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 {
                                     successResponse.Append(completedOutput);
                                 }
+                                // Status line first
+                                successResponse.AppendLine(statusLine);
+                                // Then warnings (history warning before scope warning for user visibility)
+                                if (!string.IsNullOrEmpty(historyWarning))
+                                {
+                                    successResponse.AppendLine();
+                                    successResponse.AppendLine(historyWarning);
+                                }
                                 if (!string.IsNullOrEmpty(scopeWarning))
                                 {
-                                    successResponse.AppendLine(scopeWarning);
                                     successResponse.AppendLine();
+                                    successResponse.AppendLine(scopeWarning);
                                 }
-                                if (successResponse.Length > 0 && string.IsNullOrEmpty(scopeWarning))
+                                // Then output
+                                if (output.Length > 0)
                                 {
                                     successResponse.AppendLine();
+                                    successResponse.Append(output);
                                 }
-                                successResponse.Append(body);
                                 return successResponse.ToString();
                         }
                     }

@@ -6,6 +6,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     $global:McpTimer = New-Object System.Timers.Timer 100
     $global:McpTimer.AutoReset = $true
 
+    # Trim PSReadLine history file if it exceeds 1MB to prevent input lag
+    if ($IsWindows) {
+        try {
+            $histPath = (Invoke-Expression 'Get-PSReadLineOption').HistorySavePath
+            if ($histPath -and (Test-Path $histPath) -and (Get-Item $histPath).Length -gt 1MB) {
+                $lines = Get-Content $histPath -Tail 4096
+                [System.IO.File]::WriteAllLines($histPath, $lines)
+            }
+        } catch {}
+    }
+
     # Enable ANSI colors for common development CLI tools
     # These environment variables force color output even when stdout is not a TTY
 
@@ -376,7 +387,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
             if ($cmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
-                if ($IsWindows) { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' }
+                if ($IsWindows -and -not ($cmd.Contains("`n") -or $cmd.Contains("`r"))) { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' }
 
                 $mcpOutput = $null
                 try {

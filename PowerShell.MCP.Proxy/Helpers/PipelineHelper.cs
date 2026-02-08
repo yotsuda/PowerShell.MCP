@@ -60,6 +60,17 @@ public static partial class PipelineHelper
     private static partial Regex LocalVariableRegex();
 
     /// <summary>
+    /// Check if pipeline contains newlines (multi-line command not added to history) and return warning message
+    /// </summary>
+    public static string? CheckMultiLineHistory(string pipeline)
+    {
+        if (!pipeline.Contains('\n') && !pipeline.Contains('\r'))
+            return null;
+
+        return "⚠️ HISTORY NOTE: Multi-line command was NOT added to console history. To keep it in history, save as a .ps1 file and execute it, or rewrite as a single-line command using semicolons.";
+    }
+
+    /// <summary>
     /// Format busy status line
     /// </summary>
     public static string FormatBusyStatus(string? statusLine, int pid, string? pipeline, double duration)
