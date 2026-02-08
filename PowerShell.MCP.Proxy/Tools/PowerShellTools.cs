@@ -252,7 +252,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                     {
                         switch (jsonResponse.Status)
                         {
-                            case "busy":
+                            case PipeStatus.Busy:
                                 // Mark this pipe as busy for tracking
                                 if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(agentId, jsonResponse.Pid);
 
@@ -349,7 +349,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
                                 return timeoutResponse.ToString();
 
-                            case "completed":
+                            case PipeStatus.Completed:
                                 // Result was cached - return status
                                 // Collect busy status from other pipes
                                 var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
@@ -506,14 +506,14 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
             }
 
-            if (status.Status == "completed")
+            if (status.Status == PipeStatus.Completed)
             {
                 // Completed - collect all cached outputs (including this one) and return
                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
             }
 
-            if (status.Status == "busy")
+            if (status.Status == PipeStatus.Busy)
             {
                 if (status.Pid > 0) sessionManager.MarkPipeBusy(agentId, status.Pid);
                 // Only track MCP-initiated commands, not user commands
@@ -522,7 +522,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                     busyPipes.Add(pipeName);
                 }
             }
-            else if (status.Status == "standby")
+            else if (status.Status == PipeStatus.Standby)
             {
                 if (status.Pid > 0) sessionManager.UnmarkPipeBusy(agentId, status.Pid);
             }
@@ -567,7 +567,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                     return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
                 }
 
-                if (status.Status == "completed")
+                if (status.Status == PipeStatus.Completed)
                 {
                     // Completed - collect all cached outputs (including this one) and return
                     var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
@@ -575,7 +575,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                 }
 
 
-                if (status.Status == "standby")
+                if (status.Status == PipeStatus.Standby)
                 {
                     if (status.Pid > 0) sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                     // Console returned to standby without caching (unexpected)

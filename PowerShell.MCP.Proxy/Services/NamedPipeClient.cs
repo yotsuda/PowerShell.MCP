@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
+using PowerShell.MCP.Proxy.Models;
 
 namespace PowerShell.MCP.Proxy.Services;
 
@@ -96,7 +97,7 @@ public class NamedPipeClient
                 using var doc = JsonDocument.Parse(response);
                 var status = doc.RootElement.GetProperty("status").GetString();
 
-                if (status == "standby" || status == "completed")
+                if (status == PipeStatus.Standby || status == PipeStatus.Completed)
                 {
                     Console.Error.WriteLine($"[INFO] Named Pipe '{pipeName}' ready with status '{status}' after {attempt} attempts");
                     return true;

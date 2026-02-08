@@ -165,7 +165,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 _sessionManager.ClearDeadPipe(agentId, pipeName);
             }
-            else if (status.Status == "completed")
+            else if (status.Status == PipeStatus.Completed)
             {
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                 var output = await _powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
@@ -182,12 +182,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     completedOutput.AppendLine();
                 }
             }
-            else if (status.Status == "busy")
+            else if (status.Status == PipeStatus.Busy)
             {
                 if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
                 busyStatusInfo.AppendLine(PipelineHelper.FormatBusyStatus(status.StatusLine, status.Pid, status.Pipeline, status.Duration ?? 0));
             }
-            else if (status.Status == "standby")
+            else if (status.Status == PipeStatus.Standby)
             {
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
             }

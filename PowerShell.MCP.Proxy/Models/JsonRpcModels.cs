@@ -49,7 +49,7 @@ public class GetStatusResponse
     public int Pid { get; set; }
 
     [JsonPropertyName("status")]
-    public string Status { get; set; } = "standby";
+    public string Status { get; set; } = PipeStatus.Standby;
 
     [JsonPropertyName("pipeline")]
     public string? Pipeline { get; set; }

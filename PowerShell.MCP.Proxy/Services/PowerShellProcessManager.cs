@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using PowerShell.MCP.Proxy.Models;
 
 namespace PowerShell.MCP.Proxy.Services;
 
@@ -150,7 +151,7 @@ public class PowerShellProcessManager
                 using var doc = System.Text.Json.JsonDocument.Parse(response);
                 var status = doc.RootElement.GetProperty("status").GetString();
 
-                if (status == "standby" || status == "completed")
+                if (status == PipeStatus.Standby || status == PipeStatus.Completed)
                 {
                     return pipe;
                 }
