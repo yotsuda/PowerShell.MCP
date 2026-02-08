@@ -146,7 +146,7 @@ Install-Module PowerShell.MCP
 **For Claude Code:**
 ```powershell
 # Run in PowerShell (pwsh)
-claude mcp add PowerShell -- "$(Get-MCPProxyPath)"
+claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
 ```
 
 **For Claude Desktop** — Edit `%APPDATA%\Claude\claude_desktop_config.json`:
@@ -190,7 +190,7 @@ sudo apt-get install -y powershell
 # Run in PowerShell (pwsh)
 Install-Module PowerShell.MCP
 chmod +x "$(Get-MCPProxyPath)"
-claude mcp add PowerShell -- "$(Get-MCPProxyPath)"
+claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
 ```
 
 **For Claude Desktop** — Edit `~/.config/Claude/claude_desktop_config.json`:
@@ -228,7 +228,7 @@ brew install powershell/tap/powershell
 # Run in PowerShell (pwsh)
 Install-Module PowerShell.MCP
 chmod +x "$(Get-MCPProxyPath)"
-claude mcp add PowerShell -- "$(Get-MCPProxyPath)"
+claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
 ```
 
 **For Claude Desktop** — Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
