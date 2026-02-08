@@ -178,7 +178,8 @@ function Get-MCPOwner {
     # Uses Get-Process Path and Parent properties (cross-platform, no Win32_Process)
     $clientName = $null
     try {
-        $currentProcess = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
+        $proxyProcess = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
+        $currentProcess = $proxyProcess
 
         for ($i = 0; $currentProcess -and $i -lt 5; $i++) {
             $processName = $currentProcess.ProcessName.ToLower()
@@ -207,9 +208,8 @@ function Get-MCPOwner {
         }
 
         # Fallback to proxy process name
-        if (-not $clientName) {
-            $process = Get-Process -Id $proxyPid -ErrorAction SilentlyContinue
-            if ($process) { $clientName = $process.ProcessName }
+        if (-not $clientName -and $proxyProcess) {
+            $clientName = $proxyProcess.ProcessName
         }
     }
     catch {
