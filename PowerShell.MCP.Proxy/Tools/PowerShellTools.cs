@@ -61,7 +61,6 @@ public class PowerShellTools
         await powerShellService.SetWindowTitleAsync(pipeName, title, cancellationToken);
     }
 
-
     [McpServerTool]
     [Description("Generate a unique agent ID for console isolation. Call this once before using any other PowerShell tools if you are a sub-agent.")]
     public static string GenerateAgentId()
@@ -234,7 +233,6 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         var scopeWarning = CheckLocalVariableAssignments(pipeline);
         // Check if multi-line command (not added to console history)
         var historyWarning = PipelineHelper.CheckMultiLineHistory(pipeline);
-
 
         // Execute the command
         try
