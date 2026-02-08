@@ -1,6 +1,17 @@
 # PowerShell.MCP Module Script
 # Provides automatic cleanup when Remove-Module is executed
 
+# Load the correct binary module for the current .NET runtime
+Add-Type -Path (Join-Path $PSScriptRoot 'Ude.NetStandard.dll')
+$netMajor = [System.Environment]::Version.Major
+$tfm = "net$netMajor.0"
+$dllPath = Join-Path $PSScriptRoot 'lib' $tfm 'PowerShell.MCP.dll'
+if (-not (Test-Path $dllPath)) {
+    # Fallback to net8.0 (forward compatible with .NET 9+)
+    $dllPath = Join-Path $PSScriptRoot 'lib' 'net8.0' 'PowerShell.MCP.dll'
+}
+Import-Module $dllPath
+
 # On Linux/macOS, PSReadLine interferes with timer events
 # Remove it to ensure MCP polling works correctly
 if (-not $IsWindows) {

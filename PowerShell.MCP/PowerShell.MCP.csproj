@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>1.6.1.0</Version>
@@ -22,9 +22,16 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management.Automation" Version="7.2.15" />
-    <PackageReference Include="System.Formats.Asn1" Version="9.0.9" />
     <!-- Ude.NetStandard を出力ディレクトリにコピー -->
     <PackageReference Include="Ude.NetStandard" Version="1.2.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="System.Formats.Asn1" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="System.Formats.Asn1" Version="9.0.9" />
   </ItemGroup>
 
   <!-- Ude.NetStandard.dll のみを出力ディレクトリにコピー -->

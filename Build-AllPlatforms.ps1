@@ -77,13 +77,29 @@ if ('Dll' -in $Target) {
     # Copy required files to OutputBase
     Write-Host "  Copying module files..." -ForegroundColor Gray
 
-    # Source paths
-    $buildOutputPath = Join-Path $moduleProjectPath "bin\$Configuration\net9.0"
+    # Copy DLLs for each target framework to lib/<tfm>/
+    foreach ($tfm in @('net8.0', 'net9.0')) {
+        $buildOutputPath = Join-Path $moduleProjectPath "bin\$Configuration\$tfm"
+        $libDir = Join-Path $OutputBase 'lib' $tfm
 
-    # Copy DLLs from build output
-    Copy-Item (Join-Path $buildOutputPath 'PowerShell.MCP.dll') -Destination $OutputBase -Force
-    Copy-Item (Join-Path $buildOutputPath 'Ude.NetStandard.dll') -Destination $OutputBase -Force
-    Write-Host "  Copied: PowerShell.MCP.dll" -ForegroundColor Green
+        if (-not (Test-Path $libDir)) {
+            New-Item -Path $libDir -ItemType Directory -Force | Out-Null
+        }
+
+        Copy-Item (Join-Path $buildOutputPath 'PowerShell.MCP.dll') -Destination $libDir -Force
+        Write-Host "  Copied: lib/$tfm/PowerShell.MCP.dll" -ForegroundColor Green
+    }
+
+    # Copy Ude.NetStandard.dll to module root (netstandard2.0 — shared across all TFMs)
+    $udeDll = Join-Path $env:USERPROFILE '.nuget\packages\ude.netstandard\1.2.0\lib\netstandard2.0\Ude.NetStandard.dll'
+    $udeBuildPath = Join-Path $moduleProjectPath "bin\$Configuration\net9.0\Ude.NetStandard.dll"
+    if (Test-Path $udeBuildPath) {
+        Copy-Item $udeBuildPath -Destination $OutputBase -Force
+    } elseif (Test-Path $udeDll) {
+        Copy-Item $udeDll -Destination $OutputBase -Force
+    } else {
+        Write-Warning "  Ude.NetStandard.dll not found!"
+    }
     Write-Host "  Copied: Ude.NetStandard.dll" -ForegroundColor Green
 
     # Copy manifest and script from Staging
@@ -180,10 +196,11 @@ $expectedFiles = @()
 
 if ('Dll' -in $Target) {
     $expectedFiles += @(
-        'PowerShell.MCP.dll',
         'PowerShell.MCP.psd1',
         'PowerShell.MCP.psm1',
-        'Ude.NetStandard.dll'
+        'Ude.NetStandard.dll',
+        'lib\net8.0\PowerShell.MCP.dll',
+        'lib\net9.0\PowerShell.MCP.dll'
     )
 }
 
@@ -212,7 +229,6 @@ if ($allPresent -and $expectedFiles.Count -gt 0) {
 Write-Host "[Cleanup] Checking for unexpected files..." -ForegroundColor Yellow
 
 $allowedFiles = @(
-    'PowerShell.MCP.dll',
     'PowerShell.MCP.psd1',
     'PowerShell.MCP.psm1',
     'Ude.NetStandard.dll'
@@ -221,6 +237,7 @@ $allowedFiles = @(
 $allowedDirs = @(
     'bin',
     'en-US',
+    'lib',
     'skills'
 )
 
@@ -259,6 +276,31 @@ if (Test-Path $binPath) {
             Get-ChildItem $platformPath -File | ForEach-Object {
                 if ($_.Name -ne $expectedExe) {
                     $unexpectedItems += "bin\$platform\$($_.Name)"
+                }
+            }
+        }
+    }
+}
+
+# Check lib directory structure
+$libPath = Join-Path $OutputBase 'lib'
+if (Test-Path $libPath) {
+    $allowedTfms = @('net8.0', 'net9.0')
+
+    Get-ChildItem $libPath -Directory | ForEach-Object {
+        if ($_.Name -notin $allowedTfms) {
+            $unexpectedItems += "lib\$($_.Name)\"
+        }
+    }
+
+    # Check each TFM directory
+    foreach ($tfm in $allowedTfms) {
+        $tfmPath = Join-Path $libPath $tfm
+        if (Test-Path $tfmPath) {
+            $allowedDlls = @('PowerShell.MCP.dll')
+            Get-ChildItem $tfmPath -File | ForEach-Object {
+                if ($_.Name -notin $allowedDlls) {
+                    $unexpectedItems += "lib\$tfm\$($_.Name)"
                 }
             }
         }

@@ -39,13 +39,15 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '9.0.x'
+        dotnet-version: |
+          8.0.x
+          9.0.x
 
     - name: Install PowerShell 7.5 (Windows)
       if: runner.os == 'Windows'
       run: |
         # GitHub Actions has PowerShell 7.4 which uses .NET 8
-        # PowerShell.MCP requires .NET 9, so we need PowerShell 7.5+
+        # Install PowerShell 7.5+ (.NET 9) to test both runtimes via net9.0 path
         # Use ZIP package to avoid MSI installation issues
         $ErrorActionPreference = "Stop"
         $url = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.zip"
@@ -90,9 +92,9 @@ jobs:
         Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
         Write-Host "PowerShell Path: $((Get-Process -Id $PID).Path)"
         Write-Host "OS: $($PSVersionTable.OS)"
-        # On Windows, verify we're using 7.5+
-        if ($IsWindows -and $PSVersionTable.PSVersion.Major -eq 7 -and $PSVersionTable.PSVersion.Minor -lt 5) {
-          throw "Expected PowerShell 7.5+, got $($PSVersionTable.PSVersion)"
+        # On Windows, verify we're using 7.4+
+        if ($IsWindows -and $PSVersionTable.PSVersion.Major -eq 7 -and $PSVersionTable.PSVersion.Minor -lt 4) {
+          throw "Expected PowerShell 7.4+, got $($PSVersionTable.PSVersion)"
         }
 
     - name: Build PowerShell.MCP module
@@ -113,11 +115,15 @@ jobs:
       run: |
         $modulePath = "$env:USERPROFILE\Documents\PowerShell\Modules\PowerShell.MCP"
         New-Item -Path "$modulePath\bin\${{ matrix.rid }}" -ItemType Directory -Force | Out-Null
+        New-Item -Path "$modulePath\lib\net8.0" -ItemType Directory -Force | Out-Null
+        New-Item -Path "$modulePath\lib\net9.0" -ItemType Directory -Force | Out-Null
 
-        Copy-Item "PowerShell.MCP\bin\Release\net9.0\PowerShell.MCP.dll" -Destination $modulePath
-        Copy-Item "PowerShell.MCP\bin\Release\net9.0\Ude.NetStandard.dll" -Destination $modulePath
+        Copy-Item "PowerShell.MCP\bin\Release\net8.0\PowerShell.MCP.dll" -Destination "$modulePath\lib\net8.0"
+        Copy-Item "PowerShell.MCP\bin\Release\net9.0\PowerShell.MCP.dll" -Destination "$modulePath\lib\net9.0"
         Copy-Item "Staging\PowerShell.MCP.psd1" -Destination $modulePath
         Copy-Item "Staging\PowerShell.MCP.psm1" -Destination $modulePath
+        # Ude.NetStandard.dll is netstandard2.0 — single copy at module root
+        Copy-Item "PowerShell.MCP\bin\Release\net9.0\Ude.NetStandard.dll" -Destination $modulePath
         Copy-Item "PowerShell.MCP.Proxy\bin\Release\net9.0\${{ matrix.rid }}\publish\${{ matrix.exe }}" -Destination "$modulePath\bin\${{ matrix.rid }}"
 
         Write-Host "Module files:"
@@ -128,11 +134,15 @@ jobs:
       run: |
         MODULE_PATH="$HOME/.local/share/powershell/Modules/PowerShell.MCP"
         mkdir -p "$MODULE_PATH/bin/${{ matrix.rid }}"
+        mkdir -p "$MODULE_PATH/lib/net8.0"
+        mkdir -p "$MODULE_PATH/lib/net9.0"
 
-        cp PowerShell.MCP/bin/Release/net9.0/PowerShell.MCP.dll "$MODULE_PATH/"
-        cp PowerShell.MCP/bin/Release/net9.0/Ude.NetStandard.dll "$MODULE_PATH/"
+        cp PowerShell.MCP/bin/Release/net8.0/PowerShell.MCP.dll "$MODULE_PATH/lib/net8.0/"
+        cp PowerShell.MCP/bin/Release/net9.0/PowerShell.MCP.dll "$MODULE_PATH/lib/net9.0/"
         cp Staging/PowerShell.MCP.psd1 "$MODULE_PATH/"
         cp Staging/PowerShell.MCP.psm1 "$MODULE_PATH/"
+        # Ude.NetStandard.dll is netstandard2.0 — single copy at module root
+        cp PowerShell.MCP/bin/Release/net9.0/Ude.NetStandard.dll "$MODULE_PATH/"
         cp "PowerShell.MCP.Proxy/bin/Release/net9.0/${{ matrix.rid }}/publish/${{ matrix.exe }}" "$MODULE_PATH/bin/${{ matrix.rid }}/"
         chmod +x "$MODULE_PATH/bin/${{ matrix.rid }}/${{ matrix.exe }}"
 
