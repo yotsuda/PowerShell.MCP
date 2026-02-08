@@ -35,6 +35,19 @@ namespace PowerShell.MCP
         {
             try
             {
+                // Clean up existing server if module is being re-imported (e.g., profile loaded it first)
+                if (_namedPipeServer != null)
+                {
+                    try
+                    {
+                        _tokenSource?.Cancel();
+                        _namedPipeServer.Dispose();
+                    }
+                    catch { }
+                    _namedPipeServer = null;
+                    _tokenSource = null;
+                }
+
                 // Read proxy PID from global variable (set by PowerShell.MCP.Proxy before Import-Module)
                 int? proxyPid = null;
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))

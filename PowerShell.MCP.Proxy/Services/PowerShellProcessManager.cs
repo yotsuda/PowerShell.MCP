@@ -256,11 +256,11 @@ public static class PwshLauncherWindows
             {
                 // Escape single quotes for PowerShell
                 var escaped = startupMessage.Replace("'", "''");
-                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{escaped}' -ForegroundColor Green; Write-Host ''; Import-Module PowerShell.MCP,PSReadLine";
+                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{escaped}' -ForegroundColor Green; Write-Host ''; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
             }
             else
             {
-                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP,PSReadLine";
+                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
             }
             string commandLine = $"pwsh.exe -NoExit -Command \"{command}\"";
 
@@ -325,11 +325,11 @@ public static class PwshLauncherMacOS
         {
             // Escape single quotes for PowerShell (doubled for AppleScript string)
             var escaped = startupMessage.Replace("'", "''");
-            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         }
         else
         {
-            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         }
 
         var workingDir = string.IsNullOrEmpty(startLocation) ? "~" : startLocation.Replace("'", "'\\''");
@@ -381,9 +381,9 @@ public static class PwshLauncherLinux
             }
         }
 
-        throw new InvalidOperationException(
-            "No supported terminal emulator found. Please install one of: " +
-            string.Join(", ", SupportedTerminals));
+        // No terminal emulator found - launch pwsh directly (headless/CI mode)
+        Console.Error.WriteLine("[INFO] No terminal emulator found, launching pwsh directly");
+        LaunchPwshDirectly(agentId, startupMessage, startLocation);
     }
 
     private static bool TryLaunchTerminal(string terminal, string agentId, string? startupMessage, string? startLocation)
@@ -430,11 +430,11 @@ public static class PwshLauncherLinux
             {
                 // Escape single quotes for PowerShell (doubled for shell string)
                 var escaped = startupMessage.Replace("'", "''");
-                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
             }
             else
             {
-                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
             }
 
             // Resolve working directory
@@ -510,5 +510,34 @@ public static class PwshLauncherLinux
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Launches pwsh directly without a terminal emulator (for CI/headless environments)
+    /// </summary>
+    private static void LaunchPwshDirectly(string agentId, string? startupMessage, string? startLocation)
+    {
+        var proxyPid = Process.GetCurrentProcess().Id;
+        var initCommand = string.IsNullOrEmpty(startupMessage)
+            ? $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force"
+            : $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{startupMessage.Replace("'", "''")}' -ForegroundColor Green; Import-Module PowerShell.MCP -Force";
+
+        var workingDir = string.IsNullOrEmpty(startLocation)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : startLocation;
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "pwsh",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add("-NoExit");
+        psi.ArgumentList.Add("-WorkingDirectory");
+        psi.ArgumentList.Add(workingDir);
+        psi.ArgumentList.Add("-Command");
+        psi.ArgumentList.Add(initCommand);
+
+        Process.Start(psi);
     }
 }
