@@ -27,5 +27,8 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <ProjectReference Include="..\PowerShell.MCP.Proxy\PowerShell.MCP.Proxy.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <Compile Remove="Unit\Proxy\**" />
+  </ItemGroup>
 
 </Project>

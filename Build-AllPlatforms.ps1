@@ -156,6 +156,7 @@ if ($proxyTargets) {
             '-c', $Configuration
             '-r', $rid
             '-o', $outputDir
+            '--self-contained'
             '--source', 'https://api.nuget.org/v3/index.json'
         )
 

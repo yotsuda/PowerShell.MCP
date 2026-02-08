@@ -107,7 +107,7 @@ jobs:
 
     - name: Run unit tests
       run: |
-        dotnet test Tests/PowerShell.MCP.Tests.csproj -c Release --no-restore -v normal
+        dotnet test Tests/PowerShell.MCP.Tests.csproj -c Release -v normal
 
     - name: Setup module directory (Windows)
       if: runner.os == 'Windows'
@@ -115,15 +115,11 @@ jobs:
       run: |
         $modulePath = "$env:USERPROFILE\Documents\PowerShell\Modules\PowerShell.MCP"
         New-Item -Path "$modulePath\bin\${{ matrix.rid }}" -ItemType Directory -Force | Out-Null
-        New-Item -Path "$modulePath\lib\net8.0" -ItemType Directory -Force | Out-Null
-        New-Item -Path "$modulePath\lib\net9.0" -ItemType Directory -Force | Out-Null
 
-        Copy-Item "PowerShell.MCP\bin\Release\net8.0\PowerShell.MCP.dll" -Destination "$modulePath\lib\net8.0"
-        Copy-Item "PowerShell.MCP\bin\Release\net9.0\PowerShell.MCP.dll" -Destination "$modulePath\lib\net9.0"
+        Copy-Item "PowerShell.MCP\bin\Release\net8.0\PowerShell.MCP.dll" -Destination $modulePath
+        Copy-Item "PowerShell.MCP\bin\Release\net8.0\Ude.NetStandard.dll" -Destination $modulePath
         Copy-Item "Staging\PowerShell.MCP.psd1" -Destination $modulePath
         Copy-Item "Staging\PowerShell.MCP.psm1" -Destination $modulePath
-        # Ude.NetStandard.dll is netstandard2.0 — single copy at module root
-        Copy-Item "PowerShell.MCP\bin\Release\net9.0\Ude.NetStandard.dll" -Destination $modulePath
         Copy-Item "PowerShell.MCP.Proxy\bin\Release\net9.0\${{ matrix.rid }}\publish\${{ matrix.exe }}" -Destination "$modulePath\bin\${{ matrix.rid }}"
 
         Write-Host "Module files:"
@@ -134,15 +130,11 @@ jobs:
       run: |
         MODULE_PATH="$HOME/.local/share/powershell/Modules/PowerShell.MCP"
         mkdir -p "$MODULE_PATH/bin/${{ matrix.rid }}"
-        mkdir -p "$MODULE_PATH/lib/net8.0"
-        mkdir -p "$MODULE_PATH/lib/net9.0"
 
-        cp PowerShell.MCP/bin/Release/net8.0/PowerShell.MCP.dll "$MODULE_PATH/lib/net8.0/"
-        cp PowerShell.MCP/bin/Release/net9.0/PowerShell.MCP.dll "$MODULE_PATH/lib/net9.0/"
+        cp PowerShell.MCP/bin/Release/net8.0/PowerShell.MCP.dll "$MODULE_PATH/"
+        cp PowerShell.MCP/bin/Release/net8.0/Ude.NetStandard.dll "$MODULE_PATH/"
         cp Staging/PowerShell.MCP.psd1 "$MODULE_PATH/"
         cp Staging/PowerShell.MCP.psm1 "$MODULE_PATH/"
-        # Ude.NetStandard.dll is netstandard2.0 — single copy at module root
-        cp PowerShell.MCP/bin/Release/net9.0/Ude.NetStandard.dll "$MODULE_PATH/"
         cp "PowerShell.MCP.Proxy/bin/Release/net9.0/${{ matrix.rid }}/publish/${{ matrix.exe }}" "$MODULE_PATH/bin/${{ matrix.rid }}/"
         chmod +x "$MODULE_PATH/bin/${{ matrix.rid }}/${{ matrix.exe }}"
 

@@ -1,4 +1,5 @@
 using System.Management.Automation;
+using System.Runtime.InteropServices;
 using Xunit;
 using PowerShell.MCP.Cmdlets;
 
@@ -58,6 +59,10 @@ public class TextFileCmdletBaseTests
     [InlineData("", false)]
     public void IsPSDrivePath_NonPSDrivePaths_ReturnsFalse(string path, bool expected)
     {
+        // On non-Windows, single-letter drive paths look like PSDrive paths
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && path.Length >= 2 && path[1] == ':' && char.IsLetter(path[0]))
+            return;
+
         // Act
         var result = TestCmdlet.PublicIsPSDrivePath(path);
 
@@ -156,7 +161,7 @@ public class TextFileCmdletBaseTests
         // Arrange
         var cmdlet = new TestCmdlet();
         var pattern = "*.txt";
-        var resolved = "C:\\\\temp\\\\file.txt";
+        var resolved = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\\temp\\file.txt" : "/tmp/file.txt";
 
         // Act
         var result = cmdlet.PublicGetDisplayPathForWildcard(pattern, resolved);

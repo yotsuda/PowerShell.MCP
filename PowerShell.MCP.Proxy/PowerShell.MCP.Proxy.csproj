@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -10,7 +10,6 @@
 
     <!-- Single File デプロイ設定 -->
     <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
 
     <!-- ファイルサイズ最適化設定 -->
     <PublishTrimmed>true</PublishTrimmed>
