@@ -144,19 +144,22 @@ Install-Module PowerShell.MCP
 #### 3. Configure your MCP client
 
 **For Claude Code:**
-```bash
+```powershell
+# Run in PowerShell (pwsh)
 claude mcp add PowerShell -- "$(Get-MCPProxyPath)"
 ```
 
-**For Claude Desktop** — Add to `%APPDATA%\Claude\claude_desktop_config.json`:
+**For Claude Desktop** — Edit `%APPDATA%\Claude\claude_desktop_config.json`:
 ```powershell
-Get-MCPProxyPath -Escape  # Returns JSON-escaped path (e.g., C:\\Users\\...\\PowerShell.MCP.Proxy.exe)
+# Run in PowerShell (pwsh)
+Get-MCPProxyPath -Escape  # Example output: C:\\Users\\YourName\\...\\PowerShell.MCP\\...\\PowerShell.MCP.Proxy.exe
 ```
+Paste the output into `claude_desktop_config.json` (replace the example path below with your actual output):
 ```json
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "C:\\Users\\YourName\\Documents\\PowerShell\\Modules\\PowerShell.MCP\\1.6.0\\bin\\win-x64\\PowerShell.MCP.Proxy.exe"
+      "command": "C:\\Users\\YourName\\...\\PowerShell.MCP\\...\\PowerShell.MCP.Proxy.exe"
     }
   }
 }
@@ -180,27 +183,33 @@ sudo apt-get update
 sudo apt-get install -y powershell
 ```
 
-#### 2. Install PowerShell.MCP
-```bash
-pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
-```
-
-#### 3. Get your Proxy path and set permissions
-```bash
-pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
-# Example: /home/username/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/linux-x64/PowerShell.MCP.Proxy
-
-chmod +x /path/to/PowerShell.MCP.Proxy
-```
-
-#### 4. Configure your MCP client
+#### 2. Install PowerShell.MCP, set permissions, and configure your MCP client
 
 **For Claude Code:**
-```bash
-claude mcp add PowerShell -- /path/to/PowerShell.MCP.Proxy
+```powershell
+# Run in PowerShell (pwsh)
+Install-Module PowerShell.MCP
+chmod +x "$(Get-MCPProxyPath)"
+claude mcp add PowerShell -- "$(Get-MCPProxyPath)"
 ```
 
-**For Claude Desktop** — Edit `~/.config/Claude/claude_desktop_config.json`
+**For Claude Desktop** — Edit `~/.config/Claude/claude_desktop_config.json`:
+```powershell
+# Run in PowerShell (pwsh)
+Get-MCPProxyPath -Escape  # Example output: /home/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy
+```
+Paste the output into `claude_desktop_config.json` (replace the example path below with your actual output):
+```json
+{
+  "mcpServers": {
+    "PowerShell": {
+      "command": "/home/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy"
+    }
+  }
+}
+```
+
+#### 3. Restart your MCP client
 
 </details>
 
@@ -212,39 +221,33 @@ claude mcp add PowerShell -- /path/to/PowerShell.MCP.Proxy
 brew install powershell/tap/powershell
 ```
 
-#### 2. Install PowerShell.MCP
-```bash
-pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
-```
-
-#### 3. Get your Proxy path and set permissions
-```bash
-pwsh -Command "Import-Module PowerShell.MCP; Get-MCPProxyPath"
-# Apple Silicon: ~/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/osx-arm64/PowerShell.MCP.Proxy
-# Intel Mac: ~/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/osx-x64/PowerShell.MCP.Proxy
-
-chmod +x /path/to/PowerShell.MCP.Proxy
-```
-
-#### 4. Configure your MCP client
+#### 2. Install PowerShell.MCP, set permissions, and configure your MCP client
 
 **For Claude Code:**
-```bash
-claude mcp add PowerShell -- /path/to/PowerShell.MCP.Proxy
+```powershell
+# Run in PowerShell (pwsh)
+Install-Module PowerShell.MCP
+chmod +x "$(Get-MCPProxyPath)"
+claude mcp add PowerShell -- "$(Get-MCPProxyPath)"
 ```
 
-**For Claude Desktop** — Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**For Claude Desktop** — Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```powershell
+# Run in PowerShell (pwsh)
+Get-MCPProxyPath -Escape  # Example output: /Users/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy
+```
+Paste the output into `claude_desktop_config.json` (replace the example path below with your actual output):
 ```json
 {
   "mcpServers": {
     "PowerShell": {
-      "command": "/Users/YourName/.local/share/powershell/Modules/PowerShell.MCP/1.6.0/bin/osx-arm64/PowerShell.MCP.Proxy"
+      "command": "/Users/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy"
     }
   }
 }
 ```
 
-#### 5. Restart your MCP client
+#### 3. Restart your MCP client
 
 </details>
 
