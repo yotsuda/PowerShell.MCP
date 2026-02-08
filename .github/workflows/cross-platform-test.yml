@@ -8,6 +8,7 @@ on:
       - 'PowerShell.MCP/**'
       - 'PowerShell.MCP.Proxy/**'
       - 'Staging/**'
+      - 'Tests/**'
 
 
 permissions:
@@ -101,6 +102,10 @@ jobs:
     - name: Build Proxy
       run: |
         dotnet publish PowerShell.MCP.Proxy -c Release -r ${{ matrix.rid }} --self-contained
+
+    - name: Run unit tests
+      run: |
+        dotnet test Tests/PowerShell.MCP.Tests.csproj -c Release --no-restore -v normal
 
     - name: Setup module directory (Windows)
       if: runner.os == 'Windows'
