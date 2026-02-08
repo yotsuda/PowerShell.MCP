@@ -84,13 +84,14 @@ public class NamedPipeClient
     public static async Task<bool> WaitForPipeReadyAsync(string pipeName)
     {
         const int maxAttempts = 600; // Wait up to 60 seconds (100ms * 600)
+        var client = new NamedPipeClient();
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
                 var request = "{\"name\":\"get_status\"}";
-                var response = await new NamedPipeClient().SendRequestToAsync(pipeName, request);
+                var response = await client.SendRequestToAsync(pipeName, request);
 
                 using var doc = JsonDocument.Parse(response);
                 var status = doc.RootElement.GetProperty("status").GetString();

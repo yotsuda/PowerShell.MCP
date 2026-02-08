@@ -132,6 +132,8 @@ public class PowerShellProcessManager
     /// </summary>
     private static async Task<string?> FindNewStandbyPipeAsync(string agentId, HashSet<string> existingPipes)
     {
+        var client = new NamedPipeClient();
+
         foreach (var pipe in ConsoleSessionManager.Instance.EnumeratePipes(ConsoleSessionManager.Instance.ProxyPid, agentId))
         {
             // Skip pipes that existed before launching
@@ -143,7 +145,7 @@ public class PowerShellProcessManager
             try
             {
                 var request = "{\"name\":\"get_status\"}";
-                var response = await new NamedPipeClient().SendRequestToAsync(pipe, request);
+                var response = await client.SendRequestToAsync(pipe, request);
 
                 using var doc = System.Text.Json.JsonDocument.Parse(response);
                 var status = doc.RootElement.GetProperty("status").GetString();
