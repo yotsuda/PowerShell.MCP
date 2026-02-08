@@ -30,13 +30,6 @@ public class InvokeExpressionParams : PowerShellMcpParams
     public int TimeoutSeconds { get; set; } = 170;
 }
 
-
-public class StartPowerShellConsoleParams : PowerShellMcpParams
-{
-    [JsonPropertyName("name")]
-    public override string Name { get; } = "start_powershell_console";
-}
-
 public class GetStatusParams : PowerShellMcpParams
 {
     [JsonPropertyName("name")]
