@@ -422,13 +422,13 @@ public class NamedPipeServer : IDisposable
                 var output = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath");
                 string proxyExePath = output[(output.LastIndexOfAny(['\r', '\n']) + 1)..];
 
-                string versionErrorResponse;
+                string message;
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
                     var escapedPath = McpServerHost.ExecuteSilentCommand("Get-MCPProxyPath -Escape");
                     escapedPath = escapedPath[(escapedPath.LastIndexOfAny(['\r', '\n']) + 1)..];
 
-                    versionErrorResponse =
+                    message =
 $@"PowerShell MCP Configuration Error
 
 ISSUE: PowerShell.MCP.Proxy version is outdated.
@@ -445,7 +445,7 @@ Please provide how to update the MCP client configuration to the user.";
                 }
                 else
                 {
-                    versionErrorResponse =
+                    message =
 $@"PowerShell MCP Configuration Error
 
 ISSUE: PowerShell.MCP.Proxy version is outdated.
@@ -460,6 +460,14 @@ TIP: Run 'Get-MCPProxyPath' in PowerShell to get the path for MCP client configu
 Please provide how to update the MCP client configuration to the user.";
                 }
 
+                var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                var versionErrorResponse = JsonSerializer.Serialize(new
+                {
+                    status = "error",
+                    pid,
+                    error = "version_mismatch",
+                    message
+                });
                 await SendMessageAsync(pipeServer, versionErrorResponse, cancellationToken);
                 return;
             }

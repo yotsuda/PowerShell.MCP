@@ -68,6 +68,12 @@ public class GetStatusResponse
 
     [JsonPropertyName("statusLine")]
     public string? StatusLine { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; set; }
 }
 
 [JsonSerializable(typeof(GetStatusResponse))]

@@ -377,6 +377,9 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
                                 cachedResponse.Append("Result cached. Will be returned on next tool call.");
                                 return cachedResponse.ToString();
 
+                            case "error":
+                                return jsonResponse.Message ?? $"Error from PowerShell.MCP module: {jsonResponse.Error}";
+
                             case "success":
                                 // Normal completion - use body as result
                                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);

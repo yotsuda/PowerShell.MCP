@@ -425,16 +425,18 @@ public static class PwshLauncherLinux
             // Build command with optional startup message
             // Set global variables with proxy PID and agent ID before importing module
             var proxyPid = Process.GetCurrentProcess().Id;
+            // Fix module directory case sensitivity on Linux: Install-PSResource may create lowercase 'powershell.mcp'
+            var caseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { $lc = Join-Path $p ''powershell.mcp''; $uc = Join-Path $p ''PowerShell.MCP''; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
             string initCommand;
             if (!string.IsNullOrEmpty(startupMessage))
             {
                 // Escape single quotes for PowerShell (doubled for shell string)
                 var escaped = startupMessage.Replace("'", "''");
-                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; {caseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
             }
             else
             {
-                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; {caseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
             }
 
             // Resolve working directory
@@ -518,9 +520,11 @@ public static class PwshLauncherLinux
     private static void LaunchPwshDirectly(string agentId, string? startupMessage, string? startLocation)
     {
         var proxyPid = Process.GetCurrentProcess().Id;
+        // Fix module directory case sensitivity on Linux: Install-PSResource may create lowercase 'powershell.mcp'
+        var caseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { $lc = Join-Path $p 'powershell.mcp'; $uc = Join-Path $p 'PowerShell.MCP'; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
         var initCommand = string.IsNullOrEmpty(startupMessage)
-            ? $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force"
-            : $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{startupMessage.Replace("'", "''")}' -ForegroundColor Green; Import-Module PowerShell.MCP -Force";
+            ? $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force"
+            : $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{startupMessage.Replace("'", "''")}' -ForegroundColor Green; {caseFix}Import-Module PowerShell.MCP -Force";
 
         var workingDir = string.IsNullOrEmpty(startLocation)
             ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
@@ -531,6 +535,9 @@ public static class PwshLauncherLinux
             FileName = "pwsh",
             UseShellExecute = false,
             CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
         psi.ArgumentList.Add("-NoExit");
         psi.ArgumentList.Add("-WorkingDirectory");
@@ -538,6 +545,15 @@ public static class PwshLauncherLinux
         psi.ArgumentList.Add("-Command");
         psi.ArgumentList.Add(initCommand);
 
-        Process.Start(psi);
+        var process = Process.Start(psi);
+        if (process != null)
+        {
+            // Drain stdout/stderr asynchronously to prevent buffer deadlocks
+            // Log to stderr (which is separate from MCP stdio transport)
+            process.OutputDataReceived += (_, e) => { if (e.Data != null) Console.Error.WriteLine($"[HEADLESS] {e.Data}"); };
+            process.ErrorDataReceived += (_, e) => { if (e.Data != null) Console.Error.WriteLine($"[HEADLESS-ERR] {e.Data}"); };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+        }
     }
 }
