@@ -55,6 +55,9 @@ public static class McpServerHost
     public static volatile string? executeCommand;
     public static volatile string? executeCommandSilent;
 
+    // Lock to prevent concurrent ExecuteCommand/ExecuteSilentCommand
+    private static readonly SemaphoreSlim _executionLock = new(1, 1);
+
     /// <summary>
     /// Command execution (state management is handled by NamedPipeServer)
     /// </summary>
@@ -62,6 +65,7 @@ public static class McpServerHost
     /// <param name="timeoutSeconds">Timeout in seconds (1-170)</param>
     public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command, int timeoutSeconds = 170)
     {
+        _executionLock.Wait();
         try
         {
             executeCommand = command;
@@ -71,6 +75,10 @@ public static class McpServerHost
         {
             return (false, false);
         }
+        finally
+        {
+            _executionLock.Release();
+        }
     }
 
     /// <summary>
@@ -78,6 +86,7 @@ public static class McpServerHost
     /// </summary>
     public static string ExecuteSilentCommand(string command)
     {
+        _executionLock.Wait();
         try
         {
             executeCommandSilent = command;
@@ -89,6 +98,10 @@ public static class McpServerHost
         catch (Exception ex)
         {
             return $"Error executing silent command: {ex.Message}";
+        }
+        finally
+        {
+            _executionLock.Release();
         }
     }
 }
