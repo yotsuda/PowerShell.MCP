@@ -1,5 +1,5 @@
 ---
-external help file: PowerShell.MCP.dll-help.xml
+external help file: PowerShell.MCP.dll-Help.xml
 Module Name: PowerShell.MCP
 online version:
 schema: 2.0.0
@@ -13,16 +13,43 @@ Gets the path to the PowerShell.MCP.Proxy executable for the current platform.
 ## SYNTAX
 
 ```
-Get-MCPProxyPath [-Escape]
+Get-MCPProxyPath [-Escape] [<CommonParameters>]
 ```
+
+## DESCRIPTION
+Returns the full path to the platform-specific PowerShell.MCP.Proxy executable.
+
+    Get-MCPProxyPath                    # C:\...\PowerShell.MCP.Proxy.exe
+
+    Get-MCPProxyPath -Escape            # C:\\...\\PowerShell.MCP.Proxy.exe (for JSON)
 
 ## EXAMPLES
 
-### Example 1: Basic usage
+### Example 1: Get proxy path
 ```powershell
-Get-MCPProxyPath                    # C:\...\PowerShell.MCP.Proxy.exe
-Get-MCPProxyPath -Escape            # C:\\...\\PowerShell.MCP.Proxy.exe (for JSON)
+Get-MCPProxyPath
+Get-MCPProxyPath -Escape
 ```
 
+## PARAMETERS
+
+### -Escape
+Escapes backslashes for JSON config files.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### CommonParameters
+This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
+
 ## NOTES
-- `-Escape` doubles backslashes for JSON config files
+- Use `-Escape` for JSON config files (doubles backslashes)
