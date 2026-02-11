@@ -81,12 +81,13 @@ Write-Host "Target frameworks: $($targetFrameworks -join ', ')" -ForegroundColor
 Write-Host ""
 
 # Build help to temporary directory first
+# NOTE: New-ExternalHelp emits a harmless .NET stderr "already exists" when generating
+# multiple help files (DLL + script module) because it calls mkdir twice internally.
+# This cannot be suppressed from PowerShell and does not affect the output.
 $tempOutputPath = Join-Path $env:TEMP "PowerShell.MCP-Help-Build"
-
 if (Test-Path $tempOutputPath) {
     Remove-Item -Path $tempOutputPath -Recurse -Force
 }
-New-Item -Path $tempOutputPath -ItemType Directory -Force | Out-Null
 
 Write-Host "Building help file..." -ForegroundColor Cyan
 try {
@@ -100,8 +101,8 @@ try {
 
 Write-Host ""
 
-# Copy to all target framework directories
-$helpFile = Join-Path $tempOutputPath "PowerShell.MCP.dll-Help.xml"
+# Help files to copy (DLL binary cmdlets + script module cmdlets)
+$helpFiles = Get-ChildItem -Path $tempOutputPath -Filter "*.xml"
 $copiedCount = 0
 
 foreach ($tfm in $targetFrameworks) {
@@ -112,8 +113,9 @@ foreach ($tfm in $targetFrameworks) {
             New-Item -Path $targetPath -ItemType Directory -Force | Out-Null
         }
         
-        $destination = Join-Path $targetPath "PowerShell.MCP.dll-Help.xml"
-        Copy-Item -Path $helpFile -Destination $destination -Force
+        foreach ($hf in $helpFiles) {
+            Copy-Item -Path $hf.FullName -Destination (Join-Path $targetPath $hf.Name) -Force
+        }
         $copiedCount++
         
         Write-Host "  [COPY] $config/$tfm/en-US/" -ForegroundColor Gray
@@ -127,8 +129,9 @@ try {
         New-Item -Path $psModulePath -ItemType Directory -Force | Out-Null
     }
     
-    $psModuleDestination = Join-Path $psModulePath "PowerShell.MCP.dll-Help.xml"
-    Copy-Item -Path $helpFile -Destination $psModuleDestination -Force
+    foreach ($hf in $helpFiles) {
+        Copy-Item -Path $hf.FullName -Destination (Join-Path $psModulePath $hf.Name) -Force
+    }
     $copiedCount++
     
     Write-Host "  [COPY] PowerShell\7\Modules\PowerShell.MCP\en-US\" -ForegroundColor Gray
@@ -145,3 +148,6 @@ Write-Host ""
 Write-Host "To test the help:" -ForegroundColor Yellow
 Write-Host "  Import-Module .\bin\Debug\$primaryTfm\PowerShell.MCP.dll -Force" -ForegroundColor Gray
 Write-Host "  Get-Help Show-TextFile -Full" -ForegroundColor Gray
+
+# Cleanup temporary directory
+Remove-Item -Path $tempOutputPath -Recurse -Force -ErrorAction SilentlyContinue
