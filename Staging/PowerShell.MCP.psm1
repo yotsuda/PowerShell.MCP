@@ -360,33 +360,30 @@ function Install-ClaudeSkill {
 
 <#
 .SYNOPSIS
-    Kills all pwsh processes and restarts a fresh session with PowerShell.MCP.
+    Kills all pwsh processes to release DLL locks.
 
 .DESCRIPTION
-    Terminates every pwsh process on the system, then starts a new pwsh session
-    with PowerShell.MCP loaded. The MCP Proxy automatically reconnects to the
-    new session.
+    Terminates all pwsh processes on the system to release DLL locks.
+    Useful for PowerShell module developers before dotnet build.
 
-    This is essential for:
-    - PowerShell module developers who need to release DLL locks after rebuilding
-    - PowerShell repository contributors who need to switch to a newly built pwsh binary
+    With -PwshPath: starts a new pwsh session from the specified binary with
+    PowerShell.MCP loaded, then kills all other pwsh processes.
 
     WARNING: This kills ALL pwsh processes, including those used by other users
     or other MCP clients on the same machine.
 
 .PARAMETER PwshPath
-    Path to the pwsh binary to start. If not specified, uses the same pwsh as
-    the current process.
+    Path to the pwsh binary to start. If specified, a new session is started
+    from this binary with PowerShell.MCP imported before killing other processes.
 
 .EXAMPLE
     Kill-AllPwsh
-    Kills all pwsh processes and starts a new session using the current pwsh binary.
-    Use this after rebuilding a PowerShell module to release DLL locks.
+    Kills all pwsh processes. Use after rebuilding a PowerShell module to release DLL locks.
 
 .EXAMPLE
     Kill-AllPwsh -PwshPath (Get-PSOutput)
-    Kills all pwsh processes and starts a new session using the built pwsh binary.
-    Use this in the PowerShell repository after Start-PSBuild.
+    Starts a new session using the built pwsh binary, then kills all other pwsh processes.
+    Use in the PowerShell repository after Start-PSBuild.
 #>
 function Kill-AllPwsh {
     [CmdletBinding()]
@@ -395,24 +392,28 @@ function Kill-AllPwsh {
         [string]$PwshPath
     )
 
-    if (-not $PwshPath) {
-        $PwshPath = (Get-Process -Id $PID).Path
+    if ($PwshPath) {
+        if (-not (Test-Path $PwshPath)) {
+            throw "pwsh not found at: $PwshPath"
+        }
+
+        # Start new pwsh with PowerShell.MCP loaded
+        $newProc = Start-Process $PwshPath -ArgumentList '-NoExit', '-Command', 'Import-Module PowerShell.MCP' -PassThru
+        Start-Sleep -Seconds 3
+
+        # Kill all other pwsh processes (except the new one and self)
+        Get-Process pwsh -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -notin @($newProc.Id, $PID) } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+    else {
+        # Kill all other pwsh processes
+        Get-Process pwsh -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -ne $PID } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
     }
 
-    if (-not (Test-Path $PwshPath)) {
-        throw "pwsh not found at: $PwshPath"
-    }
-
-    # Start new pwsh with PowerShell.MCP loaded
-    $newProc = Start-Process $PwshPath -ArgumentList '-NoExit', '-Command', 'Import-Module PowerShell.MCP' -PassThru
-    Start-Sleep -Seconds 3
-
-    # Kill all other pwsh processes
-    Get-Process pwsh -ErrorAction SilentlyContinue |
-        Where-Object { $_.Id -notin @($newProc.Id, $PID) } |
-        Stop-Process -Force -ErrorAction SilentlyContinue
-
-    # Kill self last — MCP Proxy reconnects to the new pwsh
+    # Kill self last
     Stop-Process -Id $PID -Force
 }
 

@@ -39,9 +39,7 @@ Displays file contents with line numbers. Matching lines highlighted with contex
 
     Show-TextFiles file.txt -Contains "line1`nline2" # multiline literal search (whole-file mode)
 
-    Show-TextFiles . -Recurse -Pattern "TODO"        # recursive directory search
-
-    Show-TextFiles *.cs -Recurse -Pattern "TODO"     # recursive search filtered by extension
+    Show-TextFiles *.md,*.txt -Recurse -Pattern "TODO" # recursive search with multiple extensions
 
 ## EXAMPLES
 
@@ -50,14 +48,13 @@ Displays file contents with line numbers. Matching lines highlighted with contex
 Show-TextFiles file.txt
 Show-TextFiles file.txt -LineRange 10,20
 Show-TextFiles file.txt -Pattern "error"
-Show-TextFiles . -Recurse -Contains "TODO"
-Show-TextFiles *.cs -Recurse -Pattern "TODO"
+Show-TextFiles *.md,*.txt -Recurse -Pattern "TODO"
 ```
 
 ## PARAMETERS
 
 ### -Path
-File path(s). Supports wildcards. With `-Recurse`, wildcard patterns (e.g., `*.cs`) filter files by extension across all subdirectories.
+File path(s). Supports wildcards. With `-Recurse`, wildcard patterns (e.g., `*.md,*.txt`) filter files by extension across all subdirectories.
 
 ```yaml
 Type: String[]
