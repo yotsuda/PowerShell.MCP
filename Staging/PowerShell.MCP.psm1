@@ -360,32 +360,32 @@ function Install-ClaudeSkill {
 
 <#
 .SYNOPSIS
-    Kills all pwsh processes to release DLL locks.
+    Stops all pwsh processes to release DLL locks.
 
 .DESCRIPTION
-    Terminates all pwsh processes on the system to release DLL locks.
+    Stops all pwsh processes on the system to release DLL locks.
     Useful for PowerShell module developers before dotnet build.
 
     With -PwshPath: starts a new pwsh session from the specified binary with
-    PowerShell.MCP loaded, then kills all other pwsh processes.
+    PowerShell.MCP loaded, then stops all other pwsh processes.
 
-    WARNING: This kills ALL pwsh processes, including those used by other users
+    WARNING: This stops ALL pwsh processes, including those used by other users
     or other MCP clients on the same machine.
 
 .PARAMETER PwshPath
     Path to the pwsh binary to start. If specified, a new session is started
-    from this binary with PowerShell.MCP imported before killing other processes.
+    from this binary with PowerShell.MCP imported before stopping other processes.
 
 .EXAMPLE
-    Kill-AllPwsh
-    Kills all pwsh processes. Use after rebuilding a PowerShell module to release DLL locks.
+    Stop-AllPwsh
+    Stops all pwsh processes. Use before rebuilding a PowerShell module to release DLL locks.
 
 .EXAMPLE
-    Kill-AllPwsh -PwshPath (Get-PSOutput)
-    Starts a new session using the built pwsh binary, then kills all other pwsh processes.
+    Stop-AllPwsh -PwshPath (Get-PSOutput)
+    Starts a new session using the built pwsh binary, then stops all other pwsh processes.
     Use in the PowerShell repository after Start-PSBuild.
 #>
-function Kill-AllPwsh {
+function Stop-AllPwsh {
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)]
@@ -401,19 +401,19 @@ function Kill-AllPwsh {
         $newProc = Start-Process $PwshPath -ArgumentList '-NoExit', '-Command', 'Import-Module PowerShell.MCP' -PassThru
         Start-Sleep -Seconds 3
 
-        # Kill all other pwsh processes (except the new one and self)
+        # Stop all other pwsh processes (except the new one and self)
         Get-Process pwsh -ErrorAction SilentlyContinue |
             Where-Object { $_.Id -notin @($newProc.Id, $PID) } |
             Stop-Process -Force -ErrorAction SilentlyContinue
     }
     else {
-        # Kill all other pwsh processes
+        # Stop all other pwsh processes
         Get-Process pwsh -ErrorAction SilentlyContinue |
             Where-Object { $_.Id -ne $PID } |
             Stop-Process -Force -ErrorAction SilentlyContinue
     }
 
-    # Kill self last
+    # Stop self last
     Stop-Process -Id $PID -Force
 }
 
