@@ -1,4 +1,4 @@
-﻿# Add-LinesToFile.PipelineInput.Tests.ps1
+# Add-LinesToFile.PipelineInput.Tests.ps1
 # Add-LinesToFile と Update-LinesInFile のパイプライン入力テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }

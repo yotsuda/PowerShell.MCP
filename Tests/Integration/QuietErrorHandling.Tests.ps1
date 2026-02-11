@@ -1,4 +1,4 @@
-﻿#Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
+#Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
 BeforeAll {
     Import-Module "$PSScriptRoot/../Shared/TestHelpers.psm1" -Force
@@ -7,7 +7,7 @@ BeforeAll {
 Describe "ファイル操作エラーの検証" {
     Context "ファイル操作エラーの検証" {
         It "存在しないファイルでエラー" {
-            { Show-TextFile -Path "C:\NonExistent\file.txt" -ErrorAction Stop } | Should -Throw -ExpectedMessage "*File not found*"
+            { Show-TextFiles -Path "C:\NonExistent\file.txt" -ErrorAction Stop } | Should -Throw -ExpectedMessage "*File not found*"
         }
         
         It "無効なパスでエラー" {
@@ -18,7 +18,7 @@ Describe "ファイル操作エラーの検証" {
             $temp = New-TemporaryFile
             "test" | Out-File $temp
             try {
-                { Show-TextFile -Path $temp -LineRange @(10, 5) } | Should -Throw -ExpectedMessage "*must be less than or equal to*"
+                { Show-TextFiles -Path $temp -LineRange @(10, 5) } | Should -Throw -ExpectedMessage "*must be less than or equal to*"
             } finally {
                 Remove-Item $temp -Force
             }

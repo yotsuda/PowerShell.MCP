@@ -1,4 +1,4 @@
-Describe "Show-TextFile -Contains duplicate detection" {
+Describe "Show-TextFiles -Contains duplicate detection" {
     BeforeAll {
         $script:testFile = New-TemporaryFile
         "line1
@@ -15,7 +15,7 @@ line5" | Set-Content -Path $script:testFile.FullName
     }
     
     It "連続するマッチ行で重複出力がないこと" {
-        $result = Show-TextFile -Path $script:testFile.FullName -Pattern "line"
+        $result = Show-TextFiles -Path $script:testFile.FullName -Pattern "line"
         # ヘッダー + 5行のマッチ行 = 6行（コンテキスト行は重複しない）
         $result.Count | Should -Be 6
         

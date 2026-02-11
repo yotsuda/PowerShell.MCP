@@ -1,4 +1,4 @@
-Describe "Show-TextFile FileShare ReadWrite" {
+Describe "Show-TextFiles FileShare ReadWrite" {
     BeforeAll {
         $script:testDir = Join-Path $env:TEMP "PSMCPTests_FileShare_$([System.Random]::new().Next())"
         New-Item -ItemType Directory -Path $script:testDir -Force | Out-Null
@@ -20,8 +20,8 @@ Describe "Show-TextFile FileShare ReadWrite" {
         $fs = [System.IO.File]::Open($testFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::Read)
         
         try {
-            # Show-TextFile should still be able to read the file
-            $result = Show-TextFile -Path $testFile
+            # Show-TextFiles should still be able to read the file
+            $result = Show-TextFiles -Path $testFile
             $resultText = $result -join "`n"
             
             $resultText | Should -Match "Line 1"
@@ -42,7 +42,7 @@ Describe "Show-TextFile FileShare ReadWrite" {
         $fs = [System.IO.File]::Open($testFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::Read)
         
         try {
-            $result = Show-TextFile -Path $testFile -Pattern "ERROR"
+            $result = Show-TextFiles -Path $testFile -Pattern "ERROR"
             $resultText = $result -join "`n"
             
             $resultText | Should -Match "ERROR"

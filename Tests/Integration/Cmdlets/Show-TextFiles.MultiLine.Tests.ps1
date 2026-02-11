@@ -1,4 +1,4 @@
-Describe "Show-TextFile Multi-Line Support" {
+Describe "Show-TextFiles Multi-Line Support" {
 
     Context "Multi-line literal text search" {
         It "Should find and highlight multi-line text with -Contains" {
@@ -18,7 +18,7 @@ Line 3: Middle Block
 Line 4: End Block
 "@
 
-                $output = Show-TextFile $testFile -Contains $searchText | Out-String
+                $output = Show-TextFiles $testFile -Contains $searchText | Out-String
 
                 $output | Should -Match "Line 1: Start"
                 $output | Should -Match "Line 2: First Block"
@@ -47,7 +47,7 @@ Match Line 1
 Match Line 2
 "@
 
-                $output = Show-TextFile $testFile -Contains $searchText | Out-String
+                $output = Show-TextFiles $testFile -Contains $searchText | Out-String
 
                 $output | Should -Match "Context Before"
                 $output | Should -Match "Match Line"
@@ -67,7 +67,7 @@ Match Line 2
                 # Search with CRLF in pattern (should be normalized to LF)
                 $searchText = "Line 2`r`nLine 3"
 
-                $output = Show-TextFile $testFile -Contains $searchText | Out-String
+                $output = Show-TextFiles $testFile -Contains $searchText | Out-String
 
                 $output | Should -Match "Line 2"
                 $output | Should -Match "Line 3"
@@ -92,7 +92,7 @@ Final
 
                 $pattern = "Line A:.*`nLine B:.*"
 
-                { Show-TextFile $testFile -Pattern $pattern -ErrorAction Stop } | Should -Throw "*Pattern cannot contain newline*"
+                { Show-TextFiles $testFile -Pattern $pattern -ErrorAction Stop } | Should -Throw "*Pattern cannot contain newline*"
             }
             finally {
                 if (Test-Path $testFile) { Remove-Item $testFile -Force }
@@ -118,7 +118,7 @@ Block A
 Block B
 "@
 
-                $output = Show-TextFile $testFile -Contains $searchText | Out-String
+                $output = Show-TextFiles $testFile -Contains $searchText | Out-String
 
                 # Should show both occurrences
                 ($output -split "Block A").Count - 1 | Should -BeGreaterOrEqual 2
@@ -149,7 +149,7 @@ Match B
 "@
 
                 # Should only find first occurrence (lines 1-4)
-                $output = Show-TextFile $testFile -Contains $searchText -LineRange 1,4 | Out-String
+                $output = Show-TextFiles $testFile -Contains $searchText -LineRange 1,4 | Out-String
 
                 $output | Should -Match "Match A"
                 $output | Should -Not -Match "Line 7"
@@ -175,7 +175,7 @@ Not Found
 Also Not Found
 "@
 
-                $output = Show-TextFile $testFile -Contains $searchText | Out-String
+                $output = Show-TextFiles $testFile -Contains $searchText | Out-String
 
                 $output | Should -BeNullOrEmpty
             }
@@ -191,7 +191,7 @@ Also Not Found
 
                 $searchText = "Line 1`nLine 2"
 
-                { Show-TextFile $testFile -Contains $searchText -Recurse -ErrorAction Stop } | Should -Throw
+                { Show-TextFiles $testFile -Contains $searchText -Recurse -ErrorAction Stop } | Should -Throw
             }
             finally {
                 if (Test-Path $testFile) { Remove-Item $testFile -Force }

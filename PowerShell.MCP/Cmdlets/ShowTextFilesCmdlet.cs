@@ -9,8 +9,8 @@ namespace PowerShell.MCP.Cmdlets;
 /// Displays text file content with line numbers
 /// LLM-optimized: 3-digit line numbers, : for matches, - for context (grep standard), shows relative path
 /// </summary>
-[Cmdlet(VerbsCommon.Show, "TextFile")]
-public class ShowTextFileCmdlet : TextFileCmdletBase
+[Cmdlet(VerbsCommon.Show, "TextFiles")]
+public class ShowTextFilesCmdlet : TextFileCmdletBase
 {
     [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
@@ -46,7 +46,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        // Contains and Pattern can be combined (OR condition) for Show-TextFile
+        // Contains and Pattern can be combined (OR condition) for Show-TextFiles
 
         // -Recurse requires -Pattern or -Contains
         if (Recurse && string.IsNullOrEmpty(Pattern) && string.IsNullOrEmpty(Contains))
@@ -644,7 +644,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
             if (Directory.Exists(resolvedPath))
             {
-                // Directory: enumerate files recursively
+                // Directory: enumerate all files recursively
                 IEnumerable<string> files;
                 try
                 {
@@ -678,11 +678,43 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
             }
             else
             {
-                WriteError(new ErrorRecord(
-                    new FileNotFoundException($"Path not found: {inputPath}"),
-                    "PathNotFound",
-                    ErrorCategory.ObjectNotFound,
-                    inputPath));
+                // Check if path contains wildcard pattern (e.g., *.cs -> C:\path\*.cs)
+                var directory = System.IO.Path.GetDirectoryName(resolvedPath);
+                var filePattern = System.IO.Path.GetFileName(resolvedPath);
+
+                if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory) &&
+                    !string.IsNullOrEmpty(filePattern) && (filePattern.Contains('*') || filePattern.Contains('?')))
+                {
+                    // Wildcard: enumerate matching files recursively
+                    IEnumerable<string> files;
+                    try
+                    {
+                        files = Directory.EnumerateFiles(directory, filePattern, SearchOption.AllDirectories);
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(new ErrorRecord(ex, "DirectoryEnumerationFailed", ErrorCategory.ReadError, directory));
+                        continue;
+                    }
+
+                    foreach (var filePath in files)
+                    {
+                        yield return new ResolvedFileInfo
+                        {
+                            InputPath = inputPath,
+                            ResolvedPath = filePath,
+                            IsNewFile = false
+                        };
+                    }
+                }
+                else
+                {
+                    WriteError(new ErrorRecord(
+                        new FileNotFoundException($"Path not found: {inputPath}"),
+                        "PathNotFound",
+                        ErrorCategory.ObjectNotFound,
+                        inputPath));
+                }
             }
         }
     }

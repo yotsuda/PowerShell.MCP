@@ -1,4 +1,4 @@
-﻿# Run-AllTests.ps1
+# Run-AllTests.ps1
 # すべてのテストを実行するヘルパースクリプト
 
 [CmdletBinding()]

@@ -1,4 +1,4 @@
-﻿# Remove-LinesFromFile.Tests.ps1
+# Remove-LinesFromFile.Tests.ps1
 # Remove-LinesFromFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }

@@ -130,7 +130,7 @@ Local variables are NOT preserved between invoke_expression calls. Use $script: 
 Verbose and Debug streams are NOT visible to you. If you need verbose/debug information, ask the user to copy it from the console and share it with you.
 
 📝 Text File Operations:
-For text file editing, use Get-Help to learn the specialized cmdlets: Show-TextFile, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
+For text file editing, use Get-Help to learn the specialized cmdlets: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,

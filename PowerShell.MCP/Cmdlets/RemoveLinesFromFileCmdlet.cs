@@ -42,7 +42,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
-        // Contains and Pattern can be combined (OR condition), same as Show-TextFile
+        // Contains and Pattern can be combined (OR condition), same as Show-TextFiles
 
         // Check that at least one of LineRange, Contains, or Pattern is specified
         if (LineRange == null && string.IsNullOrEmpty(Contains) && string.IsNullOrEmpty(Pattern))

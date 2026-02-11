@@ -1,4 +1,4 @@
-﻿# Test-AdvancedCmdlets.ps1
+# Test-AdvancedCmdlets.ps1
 # Update-LinesInFile, Remove-LinesFromFile, Update-MatchInFile の HIGH優先度テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }

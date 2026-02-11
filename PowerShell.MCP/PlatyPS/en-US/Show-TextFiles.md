@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# Show-TextFile
+# Show-TextFiles
 
 ## SYNOPSIS
 Display text file contents with line numbers
@@ -14,47 +14,50 @@ Display text file contents with line numbers
 
 ### Path
 ```
-Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse]
+Show-TextFiles [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse]
  [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
+Show-TextFiles -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
  [-Recurse] [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
 Displays file contents with line numbers. Matching lines highlighted with context.
 
-    Show-TextFile file.txt                          # entire file
+    Show-TextFiles file.txt                          # entire file
 
-    Show-TextFile file.txt -LineRange 10,20         # lines 10-20
+    Show-TextFiles file.txt -LineRange 10,20         # lines 10-20
 
-    Show-TextFile file.txt -LineRange -10           # last 10 lines
+    Show-TextFiles file.txt -LineRange -10           # last 10 lines
 
-    Show-TextFile file.txt -Pattern "error"         # regex search with context
+    Show-TextFiles file.txt -Pattern "error"         # regex search with context
 
-    Show-TextFile file.txt -Contains "[Error]"      # literal search (no escaping needed)
+    Show-TextFiles file.txt -Contains "[Error]"      # literal search (no escaping needed)
 
-    Show-TextFile file.txt -Contains "line1`nline2" # multiline literal search (whole-file mode)
+    Show-TextFiles file.txt -Contains "line1`nline2" # multiline literal search (whole-file mode)
 
-    Show-TextFile . -Recurse -Pattern "TODO"        # recursive directory search
+    Show-TextFiles . -Recurse -Pattern "TODO"        # recursive directory search
+
+    Show-TextFiles *.cs -Recurse -Pattern "TODO"     # recursive search filtered by extension
 
 ## EXAMPLES
 
 ### Example 1: Basic usage
 ```powershell
-Show-TextFile file.txt
-Show-TextFile file.txt -LineRange 10,20
-Show-TextFile file.txt -Pattern "error"
-Show-TextFile . -Recurse -Contains "TODO"
+Show-TextFiles file.txt
+Show-TextFiles file.txt -LineRange 10,20
+Show-TextFiles file.txt -Pattern "error"
+Show-TextFiles . -Recurse -Contains "TODO"
+Show-TextFiles *.cs -Recurse -Pattern "TODO"
 ```
 
 ## PARAMETERS
 
 ### -Path
-File path(s). Supports wildcards.
+File path(s). Supports wildcards. With `-Recurse`, wildcard patterns (e.g., `*.cs`) filter files by extension across all subdirectories.
 
 ```yaml
 Type: String[]
@@ -186,6 +189,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 - `-Contains` supports multiline strings for whole-file search mode (like `Update-MatchInFile -OldText`)
 - Multiline `-Contains` cannot be combined with `-Pattern` or `-Recurse`
 - `-Recurse` requires `-Pattern` or `-Contains`
+- `-Recurse` with wildcard `-Path` (e.g., `*.cs`) filters files by extension
 - `-LiteralPath` for paths with `[`, `]`, `*`, `?`
 
 ## RELATED LINKS

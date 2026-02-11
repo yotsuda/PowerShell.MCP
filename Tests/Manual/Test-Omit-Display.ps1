@@ -1,4 +1,4 @@
-﻿# Add-LinesToFile / Update-LinesInFile の省略表示機能テスト
+# Add-LinesToFile / Update-LinesInFile の省略表示機能テスト
 Write-Host "=== 省略表示機能テスト ===" -ForegroundColor Cyan
 
 $baseContent = @"

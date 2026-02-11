@@ -1,4 +1,4 @@
-﻿# Trailing Newline Preservation Tests
+# Trailing Newline Preservation Tests
 # Add-LinesToFile が元のファイルの末尾改行を保持することを確認する統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }

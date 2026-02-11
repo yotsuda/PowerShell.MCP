@@ -387,10 +387,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
             if ($cmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
-                if ($IsWindows -and -not ($cmd.Contains("`n") -or $cmd.Contains("`r"))) { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' }
 
                 $mcpOutput = $null
                 try {
+                    # Add to PSReadLine history (best-effort, before command display)
+                    if ($IsWindows -and -not ($cmd.Contains("`n") -or $cmd.Contains("`r"))) { try { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' } catch {} }
+
                     # Display command in console
                     [Console]::WriteLine()
                     try {

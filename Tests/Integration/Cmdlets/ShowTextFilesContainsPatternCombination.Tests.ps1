@@ -1,4 +1,4 @@
-Describe "Show-TextFile Contains and Pattern Combination" {
+Describe "Show-TextFiles Contains and Pattern Combination" {
     BeforeAll {
         $script:testDir = Join-Path $env:TEMP "PSMCPTests_ContainsPattern_$([System.Random]::new().Next())"
         New-Item -ItemType Directory -Path $script:testDir -Force | Out-Null
@@ -33,7 +33,7 @@ Line 7: Critical failure
 "@ | Set-Content $script:testFile -NoNewline
         
         # Search with Contains "[Error]" OR Pattern "Warning|Critical"
-        $result = Show-TextFile -Path $script:testFile -Contains "[Error]" -Pattern "Warning|Critical"
+        $result = Show-TextFiles -Path $script:testFile -Contains "[Error]" -Pattern "Warning|Critical"
         $resultText = $result -join "`n"
         
         # Should match lines 2, 4, 6, 7
@@ -50,7 +50,7 @@ Line 2: [special] text
 Line 3: normal
 "@ | Set-Content $script:testFile -NoNewline
         
-        $result = Show-TextFile -Path $script:testFile -Contains "[special]"
+        $result = Show-TextFiles -Path $script:testFile -Contains "[special]"
         $resultText = $result -join "`n"
         
         $resultText | Should -Match "Line 2.*\[special\]"
@@ -63,7 +63,7 @@ Line 2: error here
 Line 3: normal
 "@ | Set-Content $script:testFile -NoNewline
         
-        $result = Show-TextFile -Path $script:testFile -Pattern "error"
+        $result = Show-TextFiles -Path $script:testFile -Pattern "error"
         $resultText = $result -join "`n"
         
         $resultText | Should -Match "Line 2.*error"
@@ -79,7 +79,7 @@ Line 4: normal
 "@ | Set-Content $script:testFile -NoNewline
         
         # "(test)" should match literally, "test" should match via pattern
-        $result = Show-TextFile -Path $script:testFile -Contains "(test)" -Pattern "^Line 3"
+        $result = Show-TextFiles -Path $script:testFile -Contains "(test)" -Pattern "^Line 3"
         $resultText = $result -join "`n"
         
         $resultText | Should -Match "Line 2.*\(test\)"

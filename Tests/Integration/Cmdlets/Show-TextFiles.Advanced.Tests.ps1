@@ -1,4 +1,4 @@
-Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
+Describe "Show-TextFiles - Context Display and ANSI Highlighting Tests" {
     BeforeAll {
         $script:testFile = [System.IO.Path]::GetTempFileName()
     }
@@ -21,7 +21,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
                 "Line 9"
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # ヘッダー行 + 前2行 + マッチ行 + 後2行 = 6行
             $result.Count | Should -Be 6
@@ -40,7 +40,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
                 "Line 4"
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # ヘッダー行をスキップして検証
             $contentLines = $result | Select-Object -Skip 1
@@ -57,7 +57,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
                 "Target Line 4"
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # ヘッダー行をスキップして検証
             $contentLines = $result | Select-Object -Skip 1
@@ -76,7 +76,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
                 "Line 6"
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # 2つのマッチが近接しているため、範囲がマージされて連続表示
             # 空行が挿入されない（ヘッダー行以外）
@@ -97,7 +97,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
                 "Target Line 9"
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # 2つのマッチが離れているため、空行で区切られる
             $contentLines = $result | Select-Object -Skip 1
@@ -109,7 +109,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
     Context "ANSI エスケープシーケンスによるハイライト" {
         It "Contains マッチ部分に ANSI 反転表示が適用される" {
             Set-Content -Path $script:testFile -Value "This is a Target word" -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # ANSI エスケープシーケンス \e[7m (反転ON) と \e[0m (リセット) が含まれる
             $matchLine = $result | Where-Object { $_ -match "^\s*\d+:" }
@@ -119,7 +119,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
 
         It "Pattern マッチ部分に ANSI 反転表示が適用される" {
             Set-Content -Path $script:testFile -Value "Error: Something went wrong" -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Pattern "Error:"
+            $result = Show-TextFiles -Path $script:testFile -Pattern "Error:"
             
             $matchLine = $result | Where-Object { $_ -match "^\s*\d+:" }
             $matchLine | Should -Match "$([char]27)\[33m"
@@ -133,7 +133,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
                 "Line 3"
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # コンテキスト行（*マークなし、ヘッダーでもない）には ANSI エスケープが含まれない
             $contextLines = $result | Where-Object { 
@@ -157,7 +157,7 @@ Describe "Show-TextFile - Context Display and ANSI Highlighting Tests" {
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             # 3-6行目の範囲でのみ検索
-            $result = Show-TextFile -Path $script:testFile -LineRange 3,6 -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -LineRange 3,6 -Contains "Target"
             
             # Line 5 のみがマッチ（Line 1 は範囲外）
             $result | Where-Object { $_ -match "^\s*\d+:" } | Should -HaveCount 1
@@ -187,10 +187,10 @@ Describe "LineRange - Negative Values Support (End of File)" {
         Remove-Item $script:testFile -Force -ErrorAction SilentlyContinue
     }
 
-    Context "Show-TextFile での負の LineRange" {
+    Context "Show-TextFiles での負の LineRange" {
         It "-LineRange 5,-1 で5行目から最後まで表示" {
             Set-Content -Path $script:testFile -Value $script:content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -LineRange 5,-1
+            $result = Show-TextFiles -Path $script:testFile -LineRange 5,-1
             
             # ヘッダー行 + 6行（Line 5-10）
             $result.Count | Should -Be 7
@@ -201,7 +201,7 @@ Describe "LineRange - Negative Values Support (End of File)" {
 
         It "-LineRange 8,0 で8行目から最後まで表示（0も末尾を意味する）" {
             Set-Content -Path $script:testFile -Value $script:content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -LineRange 8,0
+            $result = Show-TextFiles -Path $script:testFile -LineRange 8,0
             
             # ヘッダー行 + 3行（Line 8-10）
             $result.Count | Should -Be 4
@@ -212,7 +212,7 @@ Describe "LineRange - Negative Values Support (End of File)" {
 
         It "-LineRange 1,-1 でファイル全体を表示" {
             Set-Content -Path $script:testFile -Value $script:content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -LineRange 1,-1
+            $result = Show-TextFiles -Path $script:testFile -LineRange 1,-1
             
             # ヘッダー行 + 10行
             $result.Count | Should -Be 11

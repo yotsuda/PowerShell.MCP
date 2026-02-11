@@ -38,7 +38,7 @@ public static class EncodingHelper
 
     /// <summary>
     /// Fast encoding detection for read-only operations (BOM check only, defaults to UTF-8)
-    /// Use this for Show-TextFile where exact encoding detection is not critical
+    /// Use this for Show-TextFiles where exact encoding detection is not critical
     /// </summary>
     public static Encoding GetEncodingForReading(string filePath, string? encodingName)
     {

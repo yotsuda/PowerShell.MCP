@@ -1,4 +1,4 @@
-﻿# Test-AddLinesToFileCmdlet.ps1
+# Test-AddLinesToFileCmdlet.ps1
 # Add-LinesToFile コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }

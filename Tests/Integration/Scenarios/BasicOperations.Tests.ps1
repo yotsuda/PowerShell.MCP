@@ -1,4 +1,4 @@
-﻿# Test-AllCmdlets.ps1
+# Test-AllCmdlets.ps1
 # すべてのテキストファイル操作コマンドレットの統合テスト
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
@@ -30,8 +30,8 @@ Describe "All Text File Cmdlets Integration Tests" {
     }
 
     Context "完全なワークフロー: 表示 → 追加 → 更新 → 削除" {
-        It "ステップ1: Show-TextFile でファイル内容を確認" {
-            $content = Show-TextFile -Path $script:testFile
+        It "ステップ1: Show-TextFiles でファイル内容を確認" {
+            $content = Show-TextFiles -Path $script:testFile
             $content | Should -Not -BeNullOrEmpty
             # ヘッダー行 + 7行のコンテンツ = 8行
             $content.Count | Should -Be 8
@@ -68,8 +68,8 @@ Describe "All Text File Cmdlets Integration Tests" {
             }
         }
 
-        It "複数ファイルに対して Show-TextFile を実行" {
-            $results = Show-TextFile -Path $script:multiFiles
+        It "複数ファイルに対して Show-TextFiles を実行" {
+            $results = Show-TextFiles -Path $script:multiFiles
             $results | Should -Not -BeNullOrEmpty
             # 各ファイルごとにヘッダー行 + コンテンツ行
             # 3ファイル × (1ヘッダー + 1コンテンツ) = 6行
@@ -86,16 +86,16 @@ Describe "All Text File Cmdlets Integration Tests" {
     }
 
     Context "パイプライン処理" {
-        It "Get-ChildItem | Show-TextFile のパイプラインが動作" {
+        It "Get-ChildItem | Show-TextFiles のパイプラインが動作" {
             $results = Get-ChildItem -Path $script:testDir -Filter "*.txt" | 
                 Select-Object -First 1 |
-                Show-TextFile
+                Show-TextFiles
             $results | Should -Not -BeNullOrEmpty
         }
 
-        It "ファイルオブジェクトを Show-TextFile にパイプできる" {
+        It "ファイルオブジェクトを Show-TextFiles にパイプできる" {
             $files = Get-ChildItem -Path $script:testDir -Filter "multi_*.txt" | Select-Object -First 1
-            $results = $files | Show-TextFile
+            $results = $files | Show-TextFiles
             $results | Should -Not -BeNullOrEmpty
         }
     }
@@ -114,19 +114,19 @@ Describe "All Text File Cmdlets Integration Tests" {
         }
 
         It "UTF-8 ファイルを正しく読み取れる" {
-            $content = Show-TextFile -Path $script:utf8File -Encoding "utf-8"
+            $content = Show-TextFiles -Path $script:utf8File -Encoding "utf-8"
             # 実データ行（ヘッダーの次）に日本語が含まれる
             ($content -join "`n") | Should -Match "日本語"
         }
 
         It "Shift-JIS ファイルを正しく読み取れる" {
-            $content = Show-TextFile -Path $script:sjisFile -Encoding "shift_jis"
+            $content = Show-TextFiles -Path $script:sjisFile -Encoding "shift_jis"
             # 実データ行（ヘッダーの次）に日本語が含まれる
             ($content -join "`n") | Should -Match "日本語"
         }
 
         It "エンコーディング自動検出が動作する" {
-            $content = Show-TextFile -Path $script:utf8File
+            $content = Show-TextFiles -Path $script:utf8File
             # 自動検出でも日本語が読める
             ($content -join "`n") | Should -Match "UTF-8"
         }

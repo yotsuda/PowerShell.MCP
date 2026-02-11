@@ -1,4 +1,4 @@
-﻿Describe "Show-TextFile - Additional Edge Cases" {
+Describe "Show-TextFiles - Additional Edge Cases" {
     BeforeAll {
         $script:testFile = [System.IO.Path]::GetTempFileName()
     }
@@ -10,7 +10,7 @@
     Context "小さいファイルでのコンテキスト表示" {
         It "1行ファイルでマッチした場合、コンテキストなしで表示" {
             Set-Content -Path $script:testFile -Value "Target" -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # ヘッダー + マッチ行のみ
             $result.Count | Should -Be 2
@@ -20,7 +20,7 @@
         It "2行ファイルの1行目マッチ" {
             $content = @("Target Line 1", "Line 2")
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # ヘッダー + マッチ行 + 後コンテキスト1行
             $result.Count | Should -Be 3
@@ -29,7 +29,7 @@
         It "2行ファイルの2行目マッチ" {
             $content = @("Line 1", "Target Line 2")
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Target"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Target"
             
             # ヘッダー + 前コンテキスト1行 + マッチ行
             $result.Count | Should -Be 3
@@ -39,7 +39,7 @@
     Context "同一行内の複数マッチ" {
         It "Contains: 同一行内の複数マッチがすべてハイライトされる" {
             Set-Content -Path $script:testFile -Value "Test and Test and Test" -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Test"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Test"
             
             $matchLine = $result | Where-Object { $_ -match ":" }
             # 3箇所の "Test" がすべてハイライトされる
@@ -49,7 +49,7 @@
 
         It "Pattern: 同一行内の複数マッチがすべてハイライトされる" {
             Set-Content -Path $script:testFile -Value "abc123def456ghi789" -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Pattern '\d+'
+            $result = Show-TextFiles -Path $script:testFile -Pattern '\d+'
             
             $matchLine = $result | Where-Object { $_ -match ":" }
             # 3箇所の数字がすべてハイライトされる
@@ -64,7 +64,7 @@
             $content[0] = "Match Line 1"
             $content[7] = "Match Line 8"  # 7行離れている
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Match"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Match"
             
             # マージされるため空行なし
             $contentLines = $result | Select-Object -Skip 1
@@ -76,7 +76,7 @@
             $content[0] = "Match Line 1"
             $content[8] = "Match Line 9"  # 8行離れている
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "Match"
+            $result = Show-TextFiles -Path $script:testFile -Contains "Match"
             
             # 分離されるため空行あり
             $contentLines = $result | Select-Object -Skip 1
@@ -89,9 +89,9 @@
             $content = 1..10 | ForEach-Object { "Line $_" }
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
-            $result1 = Show-TextFile -Path $script:testFile -LineRange 5,-1
-            $result2 = Show-TextFile -Path $script:testFile -LineRange 5,0
-            $result3 = Show-TextFile -Path $script:testFile -LineRange 5,-99
+            $result1 = Show-TextFiles -Path $script:testFile -LineRange 5,-1
+            $result2 = Show-TextFiles -Path $script:testFile -LineRange 5,0
+            $result3 = Show-TextFiles -Path $script:testFile -LineRange 5,-99
             
             # すべて同じ結果（5行目から末尾まで = 6行 + ヘッダー1行 = 7行）
             $result1.Count | Should -Be 7
@@ -103,8 +103,8 @@
             $content = 1..10 | ForEach-Object { "Line $_" }
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
-            $result1 = Show-TextFile -Path $script:testFile -LineRange 5,-1
-            $result2 = Show-TextFile -Path $script:testFile -LineRange 5,0
+            $result1 = Show-TextFiles -Path $script:testFile -LineRange 5,-1
+            $result2 = Show-TextFiles -Path $script:testFile -LineRange 5,0
             
             $result1.Count | Should -Be $result2.Count
         }
@@ -113,12 +113,12 @@
     Context "バリデーションエラー" {
         It "第1引数が負の値の場合はバリデーションエラーになる" {
             Set-Content -Path $script:testFile -Value "Test" -Encoding UTF8
-            { Show-TextFile -Path $script:testFile -LineRange -1,5 } | Should -Throw
+            { Show-TextFiles -Path $script:testFile -LineRange -1,5 } | Should -Throw
         }
 
         It "第1引数が0の場合もバリデーションエラーになる" {
             Set-Content -Path $script:testFile -Value "Test" -Encoding UTF8
-            { Show-TextFile -Path $script:testFile -LineRange 0,5 } | Should -Throw
+            { Show-TextFiles -Path $script:testFile -LineRange 0,5 } | Should -Throw
         }
     }
 
@@ -126,7 +126,7 @@
         It "空行がマッチする場合も正しく表示" {
             $content = @("Line 1", "", "Line 3")
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Pattern '^$'
+            $result = Show-TextFiles -Path $script:testFile -Pattern '^$'
             
             # 空行がマッチとして表示される
             $result | Where-Object { $_ -match "^\s+2:" } | Should -Not -BeNullOrEmpty
@@ -135,7 +135,7 @@
         It "非常に長い行でもハイライトが正しく適用される" {
             $longLine = "a" * 1000 + "TARGET" + "b" * 1000
             Set-Content -Path $script:testFile -Value $longLine -Encoding UTF8
-            $result = Show-TextFile -Path $script:testFile -Contains "TARGET"
+            $result = Show-TextFiles -Path $script:testFile -Contains "TARGET"
             
             $matchLine = $result | Where-Object { $_ -match "^\s+\d+:" }
             $matchLine | Should -Match "$([char]27)\[33mTARGET$([char]27)\[0m"
@@ -151,7 +151,7 @@
                 @("Line 1", "Target", "Line 3") | Set-Content $file1 -Encoding UTF8
                 @("Line A", "Target", "Line C") | Set-Content $file2 -Encoding UTF8
                 
-                $result = Show-TextFile -Path $file1,$file2 -Contains "Target"
+                $result = Show-TextFiles -Path $file1,$file2 -Contains "Target"
                 
                 # 両方のファイルでヘッダーとコンテキストが表示される
                 ($result | Where-Object { $_ -match "==>" }).Count | Should -Be 2
@@ -169,7 +169,7 @@
             try {
                 "Line 1`nLine 2" | Set-Content $testFile -Encoding UTF8
                 
-                { Show-TextFile -Path $testFile -Pattern "Line`nLine" } | Should -Throw "*newline*"
+                { Show-TextFiles -Path $testFile -Pattern "Line`nLine" } | Should -Throw "*newline*"
             }
             finally {
                 Remove-Item $testFile -Force -ErrorAction SilentlyContinue
@@ -190,7 +190,7 @@ Line 3
 Line 1
 Line 2
 "@
-                $output = Show-TextFile -Path $testFile -Contains $searchText | Out-String
+                $output = Show-TextFiles -Path $testFile -Contains $searchText | Out-String
                 $output | Should -Match "Line 1"
                 $output | Should -Match "Line 2"
             }

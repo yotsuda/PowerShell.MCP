@@ -1,4 +1,4 @@
-﻿# Test Net Display in Summary Messages
+# Test Net Display in Summary Messages
 
 Describe "Net Display in Summary Messages" {
     BeforeAll {

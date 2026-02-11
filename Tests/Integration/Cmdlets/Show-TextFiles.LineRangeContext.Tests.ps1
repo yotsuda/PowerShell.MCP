@@ -1,7 +1,7 @@
-﻿# Show-TextFile: LineRange with Pattern/Contains should display context lines
+# Show-TextFiles: LineRange with Pattern/Contains should display context lines
 # Issue: When using -LineRange with -Pattern or -Contains, context lines are not displayed
 
-Describe "Show-TextFile LineRange Context Display" {
+Describe "Show-TextFiles LineRange Context Display" {
     BeforeAll {
         $script:testFile = Join-Path $env:TEMP "test_linerange_context.txt"
         $content = @(
@@ -26,7 +26,7 @@ Describe "Show-TextFile LineRange Context Display" {
         It "Should display context lines (before and after) when match is in LineRange" {
             # LineRange 4,4 を指定（4行目だけ）
             # 期待：2,3行目（前2行）と5,6行目（後2行）もコンテキストとして表示される
-            $result = Show-TextFile -Path $script:testFile -Pattern "MATCH" -LineRange 4,4
+            $result = Show-TextFiles -Path $script:testFile -Pattern "MATCH" -LineRange 4,4
             
             # ヘッダーを除外
             $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
@@ -49,7 +49,7 @@ Describe "Show-TextFile LineRange Context Display" {
 
     Context "Contains with LineRange should show context" {
         It "Should display context lines when match is in LineRange" {
-            $result = Show-TextFile -Path $script:testFile -Contains "MATCH" -LineRange 4,4
+            $result = Show-TextFiles -Path $script:testFile -Contains "MATCH" -LineRange 4,4
             
             $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
             
@@ -66,7 +66,7 @@ Describe "Show-TextFile LineRange Context Display" {
 
     Context "Pattern without LineRange should show context (baseline)" {
         It "Should display context lines when LineRange is not specified" {
-            $result = Show-TextFile -Path $script:testFile -Pattern "MATCH"
+            $result = Show-TextFiles -Path $script:testFile -Pattern "MATCH"
             
             $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
             

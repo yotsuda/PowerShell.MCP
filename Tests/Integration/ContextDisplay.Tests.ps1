@@ -251,7 +251,7 @@ Describe "Context Display Feature Tests" {
         }
     }
 
-    Context "Show-TextFile GapLine Duplicate Fix" {
+    Context "Show-TextFiles GapLine Duplicate Fix" {
         # Issue: 近接するマッチでgapLine出力後にprevLineが重複出力される不具合の修正を検証
         BeforeEach {
             $script:testFile = Join-Path $script:testDir "gapline-test.txt"
@@ -274,7 +274,7 @@ Describe "Context Display Feature Tests" {
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
-            $output = Show-TextFile -Path $script:testFile -Contains "MATCH_" | Out-String
+            $output = Show-TextFiles -Path $script:testFile -Contains "MATCH_" | Out-String
             
             # 各行が1回だけ出力されることを確認（行番号でカウント）
             # Line 8 が2回出力されていないことを確認
@@ -301,7 +301,7 @@ Describe "Context Display Feature Tests" {
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
-            $output = Show-TextFile -Path $script:testFile -Contains "MATCH_" | Out-String
+            $output = Show-TextFiles -Path $script:testFile -Contains "MATCH_" | Out-String
             
             # Line 5 と Line 6 が1回だけ出力されることを確認
             $line5Matches = [regex]::Matches($output, "^\s*5[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
@@ -330,7 +330,7 @@ Describe "Context Display Feature Tests" {
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
-            $output = Show-TextFile -Path $script:testFile -Contains "MATCH_" | Out-String
+            $output = Show-TextFiles -Path $script:testFile -Contains "MATCH_" | Out-String
             
             # 重複がないことを確認
             # Line 8 と Line 9 が1回だけ出力される（重複していない）
@@ -356,7 +356,7 @@ Describe "Context Display Feature Tests" {
             )
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
-            $output = Show-TextFile -Path $script:testFile -Pattern "TARGET_\w+" | Out-String
+            $output = Show-TextFiles -Path $script:testFile -Pattern "TARGET_\w+" | Out-String
             
             # 各行が最大1回だけ出力される
             foreach ($lineNum in 1..7) {

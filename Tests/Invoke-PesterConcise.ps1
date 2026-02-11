@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Pesterテストを実行し、エラー出力を簡潔に表示するラッパースクリプト
 
@@ -21,7 +21,7 @@
     # Integration ディレクトリの全テストを実行（簡潔な出力）
 
 .EXAMPLE
-    .\Invoke-PesterConcise.ps1 -Path Integration/Cmdlets/Show-TextFile.Tests.ps1
+    .\Invoke-PesterConcise.ps1 -Path Integration/Cmdlets/Show-TextFiles.Tests.ps1
     # 特定のテストファイルのみ実行
 
 .EXAMPLE

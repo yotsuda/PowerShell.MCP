@@ -12,7 +12,7 @@ Tests/
 │   │   ├── TextFileCmdletBaseTests.cs         # 基底クラス (8テスト)
 │   │   └── ValidationAttributesTests.cs       # バリデーション属性 (5テスト)
 │   └── Cmdlets/                               # Cmdlet個別テスト
-│       ├── ShowTextFileCmdletTests.cs         # Show-TextFile (4テスト)
+│       ├── ShowTextFilesCmdletTests.cs         # Show-TextFiles (4テスト)
 │       ├── AddLinesToFileCmdletTests.cs       # Add-LinesToFile (5テスト)
 │       ├── UpdateLinesInFileCmdletTests.cs    # Update-LinesInFile (4テスト)
 │       ├── RemoveLinesFromFileCmdletTests.cs  # Remove-LinesFromFile (3テスト)
@@ -27,7 +27,7 @@ Tests/
 │   ├── TestThrowsQuietly.Tests.ps1            # Test-ThrowsQuietly 関数テスト
 │   └── ErrorOutputComparison.Tests.ps1        # エラー出力比較テスト
 ├── Manual/                                    # 手動テスト
-│   └── Show-TextFile.Manual.Tests.ps1         # Show-TextFile 手動テスト
+│   └── Show-TextFiles.Manual.Tests.ps1         # Show-TextFiles 手動テスト
 ├── TestData/                                  # テストデータ
 │   ├── Encodings/                             # エンコーディングテスト用
 │   └── Samples/                               # サンプルファイル
@@ -104,7 +104,7 @@ Invoke-Pester -Path .\Tests\Integration
 .\Tests\Invoke-PesterConcise.ps1
 
 # 特定のテストのみ実行
-.\Tests\Invoke-PesterConcise.ps1 -Path Integration/Cmdlets/Show-TextFile.Tests.ps1
+.\Tests\Invoke-PesterConcise.ps1 -Path Integration/Cmdlets/Show-TextFiles.Tests.ps1
 
 # ヘルプを表示
 Get-Help .\Tests\Invoke-PesterConcise.ps1 -Examples
@@ -211,12 +211,12 @@ Describe "New-Cmdlet Integration Tests" {
 ```powershell
 # 従来の方法（大量のエラー出力が発生）
 It "Should throw on missing file" {
-    { Show-TextFile -Path "missing.txt" } | Should -Throw
+    { Show-TextFiles -Path "missing.txt" } | Should -Throw
 }
 
 # 推奨される方法（エラー出力を抑制）
 It "Should throw on missing file" {
-    Test-ThrowsQuietly { Show-TextFile -Path "missing.txt" }
+    Test-ThrowsQuietly { Show-TextFiles -Path "missing.txt" }
 }
 ```
 
@@ -224,7 +224,7 @@ It "Should throw on missing file" {
 ```powershell
 It "Should throw file not found error" {
     Test-ThrowsQuietly { 
-        Show-TextFile -Path "C:\NonExistent\file.txt" 
+        Show-TextFiles -Path "C:\NonExistent\file.txt" 
     } -ExpectedMessage "File not found"
 }
 ```
@@ -236,7 +236,7 @@ It "Should throw on invalid LineRange" {
     "test" | Out-File $temp
     try {
         Test-ThrowsQuietly {
-            Show-TextFile -Path $temp -LineRange @(10, 5)
+            Show-TextFiles -Path $temp -LineRange @(10, 5)
         } -ExpectedMessage "must be less than or equal to"
     } finally {
         Remove-Item $temp -Force
@@ -273,7 +273,7 @@ Describe "Error Handling Tests" {
         
         It "Invalid LineRange throws" {
             Test-ThrowsQuietly {
-                Show-TextFile -Path "test.txt" -LineRange @(10, 5)
+                Show-TextFiles -Path "test.txt" -LineRange @(10, 5)
             } -ExpectedMessage "less than or equal to"
         }
     }
@@ -281,7 +281,7 @@ Describe "Error Handling Tests" {
     Context "Missing files" {
         It "File not found throws" {
             Test-ThrowsQuietly {
-                Show-TextFile -Path "C:\NonExistent\file.txt"
+                Show-TextFiles -Path "C:\NonExistent\file.txt"
             } -ExpectedMessage "File not found"
         }
     }

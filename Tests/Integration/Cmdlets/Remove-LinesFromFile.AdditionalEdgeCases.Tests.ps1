@@ -1,4 +1,4 @@
-﻿Describe "Remove-LinesFromFile - Additional Edge Cases" {
+Describe "Remove-LinesFromFile - Additional Edge Cases" {
     BeforeAll {
         $script:testDir = Join-Path ([System.IO.Path]::GetTempPath()) "PSMCPTests_$(Get-Random)"
         New-Item -Path $script:testDir -ItemType Directory -Force | Out-Null
