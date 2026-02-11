@@ -64,12 +64,15 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
                 Should -Throw "*cannot contain newline*"
         }
 
-        It "Contains に改行が含まれている場合はエラー" {
+        It "OldText に改行が含まれている場合は multiline モードで成功する" {
             $testFile = Join-Path $script:testDir "newline-contains.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
-            { Update-MatchInFile -Path $testFile -OldText "Line 1`nLine 2" -Replacement "Test" -ErrorAction Stop } |
-                Should -Throw "*cannot contain newline*"
+            { Update-MatchInFile -Path $testFile -OldText "Line 1`nLine 2" -Replacement "Merged" -ErrorAction Stop } |
+                Should -Not -Throw
+            $result = Get-Content $testFile
+            $result[0] | Should -Be "Merged"
+            $result[1] | Should -Be "Line 3"
         }
     }
 }

@@ -221,5 +221,30 @@ Describe "Update-LinesInFile Integration Tests" {
             $message = $output | Out-String
             $message | Should -Match "Removed \d+ line\(s\)"
         }
+
+    Context "Parameter Aliases" {
+        It "-NewLines alias works for -Content with single line" {
+            Update-LinesInFile -Path $script:testFile -LineRange 2 -NewLines "Replaced via alias"
+            $result = Get-Content $script:testFile
+            $result[1] | Should -Be "Replaced via alias"
+            $result.Count | Should -Be 5
+        }
+
+        It "-NewLines alias works for -Content with multiple lines" {
+            Update-LinesInFile -Path $script:testFile -LineRange 2,3 -NewLines @("New A", "New B", "New C")
+            $result = Get-Content $script:testFile
+            $result[1] | Should -Be "New A"
+            $result[2] | Should -Be "New B"
+            $result[3] | Should -Be "New C"
+            $result.Count | Should -Be 6
+        }
+
+        It "-NewLines alias works for deletion with empty array" {
+            Update-LinesInFile -Path $script:testFile -LineRange 3 -NewLines @()
+            $result = Get-Content $script:testFile
+            $result.Count | Should -Be 4
+            $result[2] | Should -Be "Line 4: Fourth line"
+        }
+    }
     }
 }

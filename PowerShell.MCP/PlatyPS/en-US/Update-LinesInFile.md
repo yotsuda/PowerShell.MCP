@@ -14,12 +14,14 @@ Replace or delete specific lines in a text file
 
 ### Path
 ```
-Update-LinesInFile [-Path] <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Update-LinesInFile [-Path] <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>]
+ [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Update-LinesInFile -LiteralPath <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Update-LinesInFile -LiteralPath <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>]
+ [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -95,7 +97,7 @@ New content. Use @() to delete lines.
 ```yaml
 Type: Object[]
 Parameter Sets: (All)
-Aliases:
+Aliases: NewLines
 
 Required: False
 Position: 1
@@ -167,6 +169,13 @@ Accept wildcard characters: False
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
+## INPUTS
+
+## OUTPUTS
+
 ## NOTES
 - `-Content @()` deletes lines (empty array)
 - Omitting `-LineRange` replaces entire file
+
+
+## RELATED LINKS

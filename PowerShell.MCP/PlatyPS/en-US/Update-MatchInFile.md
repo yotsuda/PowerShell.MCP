@@ -14,22 +14,27 @@ Replace text in a file using literal string or regex pattern
 
 ### Path
 ```
-Update-MatchInFile [-Path] <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>] [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Update-MatchInFile [-Path] <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
+ [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Update-MatchInFile -LiteralPath <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>] [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Update-MatchInFile -LiteralPath <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
+ [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
 Replaces matching text (literal or regex) within optional line range.
+OldText supports multiline strings (whole-file replacement mode).
 
     Update-MatchInFile file.txt -OldText "foo" -Replacement "bar"          # literal replacement
 
     Update-MatchInFile file.txt -Pattern "v\d+" -Replacement "v2"          # regex replacement
 
     Update-MatchInFile file.txt -LineRange 10,20 -OldText "old" -Replacement "new"  # within range
+
+    Update-MatchInFile file.txt -LineRange 10 -OldText "old" -Replacement "new"     # single line
 
 ## EXAMPLES
 
@@ -73,7 +78,7 @@ Accept wildcard characters: False
 ```
 
 ### -OldText
-Literal string to find and replace.
+Literal string to find and replace. Supports multiline strings (newlines allowed).
 
 ```yaml
 Type: String
@@ -108,7 +113,7 @@ Replacement text.
 ```yaml
 Type: String
 Parameter Sets: (All)
-Aliases:
+Aliases: NewText
 
 Required: False
 Position: Named
@@ -195,7 +200,15 @@ Accept wildcard characters: False
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
+## INPUTS
+
+## OUTPUTS
+
 ## NOTES
 - `-OldText` (literal) and `-Pattern` (regex) are mutually exclusive
+- `-OldText` supports multiline strings for whole-file replacement mode
 - `-WhatIf` shows detailed preview with highlighting
 - Newlines in `-Replacement` are normalized to match file's newline style
+
+
+## RELATED LINKS

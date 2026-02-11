@@ -25,7 +25,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     [Parameter]
     public string? Pattern { get; set; }
 
-    [Parameter]
+    [Parameter][Alias("NewText")]
     public string? Replacement { get; set; }
 
     [Parameter]
@@ -73,8 +73,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-        // Error if OldText/Pattern includes newline (processing is line-by-line)
-        ValidateNoNewlines(OldText, "OldText");
+        // Error if Pattern includes newline (regex multiline not supported yet)
+        // OldText multiline is supported via whole-file replacement mode
 
         // Regex mode with only one specified
         if (hasRegex && Replacement == null)
@@ -98,7 +98,11 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         {
             try
             {
-                ProcessStringReplacement(fileInfo.InputPath, fileInfo.ResolvedPath);
+                bool isMultiline = !string.IsNullOrEmpty(OldText) && (OldText.Contains('\n') || OldText.Contains('\r'));
+                if (isMultiline)
+                    ProcessMultilineReplacement(fileInfo.InputPath, fileInfo.ResolvedPath);
+                else
+                    ProcessStringReplacement(fileInfo.InputPath, fileInfo.ResolvedPath);
             }
             catch (Exception ex)
             {
@@ -461,5 +465,124 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
 
         return line;
+    }
+
+    /// <summary>
+    /// Process multiline literal string replacement (whole-file mode)
+    /// Used when OldText contains newline characters
+    /// </summary>
+    private void ProcessMultilineReplacement(string originalPath, string resolvedPath)
+    {
+        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
+
+        // Read entire file content
+        var content = File.ReadAllText(resolvedPath, metadata.Encoding);
+
+        // Normalize OldText newlines to match file's newline sequence
+        var normalizedOldText = OldText!
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n")
+            .Replace("\n", metadata.NewlineSequence);
+
+        // Normalize Replacement newlines
+        var normalizedReplacement = Replacement ?? "";
+        if (normalizedReplacement.Contains('\n') || normalizedReplacement.Contains('\r'))
+        {
+            normalizedReplacement = normalizedReplacement
+                .Replace("\r\n", "\n")
+                .Replace("\r", "\n")
+                .Replace("\n", metadata.NewlineSequence);
+        }
+
+        // If Replacement contains non-ASCII chars, upgrade encoding to UTF-8
+        if (!string.IsNullOrEmpty(Replacement) &&
+            EncodingHelper.TryUpgradeEncodingIfNeeded(metadata, [Replacement], Encoding != null, out var upgradeMessage))
+        {
+            WriteInformation(upgradeMessage, ["EncodingUpgrade"]);
+        }
+
+        // Count occurrences
+        int replacementCount = 0;
+        int idx = 0;
+        while ((idx = content.IndexOf(normalizedOldText, idx, StringComparison.Ordinal)) >= 0)
+        {
+            replacementCount++;
+            idx += normalizedOldText.Length;
+        }
+
+        var displayPath = GetDisplayPath(originalPath, resolvedPath);
+
+        if (replacementCount == 0)
+        {
+            WriteObject(AnsiColors.Info($"{displayPath}: 0 replacement(s) made"));
+            return;
+        }
+
+        // Build action description
+        var actionDescription = $"Replace multiline text ({replacementCount} occurrence(s))";
+
+        bool isWhatIf = IsWhatIfMode();
+        if (!ShouldProcess(resolvedPath, actionDescription))
+        {
+            if (!isWhatIf) return;
+        }
+
+        bool dryRun = isWhatIf;
+
+        // Backup
+        if (!dryRun && Backup)
+        {
+            var backupPath = TextFileUtility.CreateBackup(resolvedPath);
+            WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
+        }
+
+        // Perform replacement
+        var newContent = content.Replace(normalizedOldText, normalizedReplacement);
+
+        // Display header and diff context
+        WriteObject(AnsiColors.Header(displayPath));
+
+        // Find affected line numbers for context display
+        var oldLines = content.Split(metadata.NewlineSequence).ToArray();
+
+        // Show simple before/after for first occurrence
+        var firstIdx = content.IndexOf(normalizedOldText, StringComparison.Ordinal);
+        if (firstIdx >= 0)
+        {
+            int startLineNum = content[..firstIdx].Split(metadata.NewlineSequence).Length;
+            var oldTextLines = normalizedOldText.Split(metadata.NewlineSequence);
+            for (int i = 0; i < oldTextLines.Length && startLineNum + i <= oldLines.Length; i++)
+            {
+                WriteObject($"{startLineNum + i,3}: {AnsiColors.Red}{oldLines[startLineNum + i - 1]}{AnsiColors.Reset}");
+            }
+            var replacementLines = normalizedReplacement.Split(metadata.NewlineSequence);
+            for (int i = 0; i < replacementLines.Length; i++)
+            {
+                WriteObject($"   : {AnsiColors.Green}{replacementLines[i]}{AnsiColors.Reset}");
+            }
+        }
+
+        WriteObject("");
+
+        if (dryRun)
+        {
+            WriteObject(AnsiColors.WhatIf($"What if: Would update {displayPath}: {replacementCount} replacement(s)"));
+        }
+        else
+        {
+            // Write atomically
+            var tempFile = System.IO.Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(tempFile, newContent, metadata.Encoding);
+                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
+                WriteObject(AnsiColors.Success($"Updated {displayPath}: {replacementCount} replacement(s) made"));
+            }
+            catch
+            {
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+                throw;
+            }
+        }
     }
 }

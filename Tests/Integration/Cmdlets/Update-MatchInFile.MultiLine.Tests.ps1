@@ -1,7 +1,4 @@
 Describe "Update-MatchInFile Multi-Line Support" {
-    BeforeAll {
-        Import-Module "$PSScriptRoot/../../../PowerShell.MCP/bin/Debug/net9.0/PowerShell.MCP.dll" -Force
-    }
 
     Context "Multi-line literal text replacement" {
         It "Should replace multi-line text block with OldText" {
@@ -88,8 +85,8 @@ Block B
         }
     }
 
-    Context "Multi-line regex pattern replacement" {
-        It "Should replace multi-line pattern match" {
+    Context "Pattern with multiline content" {
+        It "Pattern operates line-by-line even in files with many lines" {
             $testFile = [System.IO.Path]::GetTempFileName()
             try {
                 @"
@@ -100,15 +97,13 @@ Line C: End
 Final
 "@ | Set-Content $testFile
 
-                $pattern = "Line A:.*\nLine B:.*\nLine C:"
-                $replacement = "Lines A-C:"
+                # Pattern replaces within each line independently
+                Update-MatchInFile -Path $testFile -Pattern "Line [ABC]:" -Replacement "Row:"
 
-                Update-MatchInFile -Path $testFile -Pattern $pattern -Replacement $replacement
-
-                $result = Get-Content $testFile -Raw
-                $result | Should -Match "Lines A-C:"
-                $result | Should -Not -Match "Line A:"
-                $result | Should -Not -Match "Line B:"
+                $result = Get-Content $testFile
+                $result[1] | Should -Be "Row: Data"
+                $result[2] | Should -Be "Row: More"
+                $result[3] | Should -Be "Row: End"
             }
             finally {
                 if (Test-Path $testFile) { Remove-Item $testFile -Force }
@@ -193,7 +188,7 @@ Also Not Found
 
                 $output = Update-MatchInFile -Path $testFile -OldText $oldText -Replacement "X" 2>&1 | Out-String
 
-                $output | Should -Match "No matches found"
+                $output | Should -Match "0 replacement\(s\) made"
                 
                 # File should not be modified
                 $result = Get-Content $testFile -Raw

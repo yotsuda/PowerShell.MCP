@@ -451,3 +451,7 @@ slack*.txt
 
 # Generated Claude Code skill files (built from Templates/*.md)
 Staging/Skills/ps-*.md
+
+# Work procedure files
+work_procedure.md
+work_progress.md

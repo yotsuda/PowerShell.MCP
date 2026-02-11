@@ -14,12 +14,14 @@ Display text file contents with line numbers
 
 ### Path
 ```
-Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse] [-Encoding <String>] [<CommonParameters>]
+Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse]
+ [-Encoding <String>] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse] [-Encoding <String>] [<CommonParameters>]
+Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
+ [-Recurse] [-Encoding <String>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -157,8 +159,15 @@ Accept wildcard characters: False
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
+## INPUTS
+
+## OUTPUTS
+
 ## NOTES
 - `-LineRange -10` = last 10 lines (single negative value = tail)
 - `-Contains` and `-Pattern` can be combined (OR condition)
 - `-Recurse` requires `-Pattern` or `-Contains`
 - `-LiteralPath` for paths with `[`, `]`, `*`, `?`
+
+
+## RELATED LINKS

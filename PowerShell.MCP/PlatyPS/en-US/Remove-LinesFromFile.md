@@ -14,12 +14,14 @@ Remove lines from a text file by line range or pattern matching
 
 ### Path
 ```
-Remove-LinesFromFile [-Path] <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Remove-LinesFromFile [-Path] <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
+ [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
+ [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -184,7 +186,14 @@ Accept wildcard characters: False
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
+## INPUTS
+
+## OUTPUTS
+
 ## NOTES
 - At least one of `-LineRange`, `-Contains`, or `-Pattern` required
 - `-Contains` and `-Pattern` are mutually exclusive
 - `-LineRange` + `-Pattern`/`-Contains` = AND condition
+
+
+## RELATED LINKS

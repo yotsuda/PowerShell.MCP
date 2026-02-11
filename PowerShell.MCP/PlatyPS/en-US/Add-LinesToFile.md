@@ -14,12 +14,14 @@ Insert lines into a text file at a specific position or at the end
 
 ### Path
 ```
-Add-LinesToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineNumber <Int32>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Add-LinesToFile [-Path] <String[]> [[-Content] <Object[]>] [-LineNumber <Int32>] [-Encoding <String>] [-Backup]
+ [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Add-LinesToFile -LiteralPath <String[]> [[-Content] <Object[]>] [-LineNumber <Int32>] [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+Add-LinesToFile -LiteralPath <String[]> [[-Content] <Object[]>] [-LineNumber <Int32>] [-Encoding <String>]
+ [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -167,7 +169,14 @@ Accept wildcard characters: False
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
+## INPUTS
+
+## OUTPUTS
+
 ## NOTES
 - Omitting `-LineNumber` appends to end
 - `-LineNumber 1` inserts at beginning (existing lines shift down)
 - Wildcards cannot create new files
+
+
+## RELATED LINKS

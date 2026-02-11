@@ -298,5 +298,38 @@ Describe "Update-MatchInFile Integration Tests" {
             $result.Trim() | Should -Be "Test"
         }
     }
+
+    Context "Parameter Aliases" {
+        It "-NewText alias works for -Replacement" {
+            Update-MatchInFile -Path $script:testFile -OldText "localhost" -NewText "production.example.com"
+            $result = Get-Content $script:testFile
+            $result[0] | Should -Be "Server: production.example.com"
+        }
+
+        It "-NewText alias works with -Pattern" {
+            Update-MatchInFile -Path $script:testFile -Pattern "\d+" -NewText "9999" -LineRange 2
+            $result = Get-Content $script:testFile
+            $result[1] | Should -Be "Port: 9999"
+        }
+
+        It "-NewText alias works with multiline OldText" {
+            $testFile = [System.IO.Path]::GetTempFileName()
+            try {
+                @"
+Block A
+Block B
+Block C
+"@ | Set-Content $testFile
+                Update-MatchInFile -Path $testFile -OldText "Block A`nBlock B" -NewText "Merged"
+                $result = Get-Content $testFile -Raw
+                $result | Should -Match "Merged"
+                $result | Should -Not -Match "Block A"
+                $result | Should -Not -Match "Block B"
+            }
+            finally {
+                if (Test-Path $testFile) { Remove-Item $testFile -Force }
+            }
+        }
+    }
     }
 }

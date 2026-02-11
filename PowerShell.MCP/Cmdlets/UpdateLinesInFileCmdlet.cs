@@ -49,7 +49,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
     [ValidateLineRange]
     public int[]? LineRange { get; set; }
 
-    [Parameter(ValueFromPipeline = true)]
+    [Parameter(ValueFromPipeline = true)][Alias("NewLines")]
     public object[]? Content { get; set; }
 
     /// <summary>
