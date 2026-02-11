@@ -15,13 +15,13 @@ Remove lines from a text file by line range or pattern matching
 ### Path
 ```
 Remove-LinesFromFile [-Path] <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
- [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
 Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
- [-Encoding <String>] [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -34,6 +34,10 @@ Removes lines by range, literal match, or regex. Range + pattern = AND condition
     Remove-LinesFromFile file.txt -Pattern "^#"                     # remove all comment lines
 
     Remove-LinesFromFile file.txt -Contains "DEBUG"                 # remove lines containing "DEBUG"
+
+    Remove-LinesFromFile file.txt -Contains "DEBUG" -Pattern "^#"   # OR condition (either match)
+
+    Remove-LinesFromFile file.txt -Contains "line1`nline2"          # multiline removal (whole-file mode)
 
     Remove-LinesFromFile file.txt -LineRange 1,100 -Pattern "TODO"  # AND condition
 
@@ -94,7 +98,7 @@ Accept wildcard characters: False
 ```
 
 ### -Contains
-Literal string to match lines for removal.
+Literal string to match lines for removal. Can be combined with `-Pattern` (OR condition). Supports multiline strings (newlines allowed) for whole-file removal mode. Cannot be combined with `-Pattern` when multiline.
 
 ```yaml
 Type: String
@@ -183,6 +187,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -ProgressAction
+{{ Fill ProgressAction Description }}
+
+```yaml
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -192,8 +211,9 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## NOTES
 - At least one of `-LineRange`, `-Contains`, or `-Pattern` required
-- `-Contains` and `-Pattern` are mutually exclusive
+- `-Contains` and `-Pattern` can be combined (OR condition)
+- `-Contains` supports multiline strings for whole-file removal mode (like `Update-MatchInFile -OldText`)
+- Multiline `-Contains` cannot be combined with `-Pattern` or tail `-LineRange`
 - `-LineRange` + `-Pattern`/`-Contains` = AND condition
-
 
 ## RELATED LINKS

@@ -198,6 +198,24 @@ public static class TextFileUtility
     }
 
     /// <summary>
+    /// Gets 0-based line number for a character offset using binary search on line start offsets.
+    /// lineStartOffsets[i] = character offset where line i (0-based) begins.
+    /// </summary>
+    public static int GetLineNumberFromOffset(int[] lineStartOffsets, int charOffset)
+    {
+        int lo = 0, hi = lineStartOffsets.Length - 1;
+        while (lo <= hi)
+        {
+            int mid = (lo + hi) / 2;
+            if (lineStartOffsets[mid] <= charOffset)
+                lo = mid + 1;
+            else
+                hi = mid - 1;
+        }
+        return hi;
+    }
+
+    /// <summary>
     /// Replaces entire file with new content
     /// For LLM: simple and predictable behavior
     /// </summary>

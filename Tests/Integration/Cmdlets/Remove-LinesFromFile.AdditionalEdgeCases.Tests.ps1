@@ -67,12 +67,15 @@
                 Should -Throw "*cannot contain newline*"
         }
 
-        It "Contains に改行が含まれている場合はエラー" {
+        It "Contains に改行が含まれている場合は multiline モードで動作する" {
             $testFile = Join-Path $script:testDir "newline-contains.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
-            { Remove-LinesFromFile -Path $testFile -Contains "Line 1`nLine 2" -ErrorAction Stop } |
-                Should -Throw "*cannot contain newline*"
+            # Multiline Contains is now supported (no error, removes matching text)
+            Remove-LinesFromFile -Path $testFile -Contains "Line 1`r`nLine 2"
+            $result = Get-Content $testFile -Raw
+            $result | Should -Not -Match "Line 1"
+            $result | Should -Match "Line 3"
         }
     }
 }

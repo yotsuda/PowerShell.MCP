@@ -176,12 +176,23 @@
             }
         }
         
-        It "Contains に改行が含まれている場合はエラー" {
+        It "Contains に改行が含まれている場合は multiline モードで動作する" {
             $testFile = [System.IO.Path]::GetTempFileName()
             try {
-                "Line 1`nLine 2" | Set-Content $testFile -Encoding UTF8
-                
-                { Show-TextFile -Path $testFile -Contains "Line`nLine" } | Should -Throw "*newline*"
+                @"
+Line 1
+Line 2
+Line 3
+"@ | Set-Content $testFile -Encoding UTF8
+
+                # Multiline Contains is now supported (no error)
+                $searchText = @"
+Line 1
+Line 2
+"@
+                $output = Show-TextFile -Path $testFile -Contains $searchText | Out-String
+                $output | Should -Match "Line 1"
+                $output | Should -Match "Line 2"
             }
             finally {
                 Remove-Item $testFile -Force -ErrorAction SilentlyContinue

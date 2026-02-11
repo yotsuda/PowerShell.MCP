@@ -41,6 +41,7 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
 
     private bool _lastFileHadOutput = false;
     private Regex? _compiledRegex = null;
+    private bool _isMultilineContains = false;
 
 
     protected override void BeginProcessing()
@@ -57,13 +58,36 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                 null));
         }
 
-        // Error if pattern/contains contains newlines (never matches in line-by-line processing)
+        // Error if Pattern contains newlines (regex multiline not supported)
         ValidateNoNewlines(Pattern, "Pattern");
-        ValidateNoNewlines(Contains, "Contains");
+        // Contains with newlines is allowed (multiline mode)
+
+        // Detect multiline Contains mode
+        _isMultilineContains = !string.IsNullOrEmpty(Contains) && (Contains.Contains('\n') || Contains.Contains('\r'));
+
+        // multiline Contains + Pattern is not supported
+        if (_isMultilineContains && !string.IsNullOrEmpty(Pattern))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("Multi-line -Contains cannot be combined with -Pattern."),
+                "MultilineContainsWithPattern",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+
+        // -Recurse + multiline Contains is not supported
+        if (Recurse && _isMultilineContains)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("-Recurse cannot be combined with multi-line -Contains."),
+                "RecurseWithMultilineContains",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
 
         // Pre-compile regex for performance (used across all files)
-        // Combine Contains and Pattern with OR if both specified
-        if (!string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains))
+        // Combine Contains and Pattern with OR if both specified (single-line mode only)
+        if (!_isMultilineContains && (!string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains)))
         {
             string combinedPattern;
             if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
@@ -129,7 +153,11 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
                     continue;
                 }
 
-                if (!string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains))
+                if (_isMultilineContains)
+                {
+                    _lastFileHadOutput = ShowWithContainsMultiline(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
+                }
+                else if (!string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains))
                 {
                     // Both Pattern and Contains use _compiledRegex (combined with OR if both specified)
                     _lastFileHadOutput = ShowWithPattern(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
@@ -229,9 +257,112 @@ public class ShowTextFileCmdlet : TextFileCmdletBase
         return ShowWithMatch(inputPath, filePath, encoding, line => _compiledRegex!.IsMatch(line), Pattern ?? "", _compiledRegex);
     }
 
-    private bool ShowWithContains(string inputPath, string filePath, System.Text.Encoding? encoding)
+    /// <summary>
+    /// Multiline Contains search: reads entire file content and finds multi-line literal matches.
+    /// Displays matched lines with yellow highlighting and context lines.
+    /// </summary>
+    private bool ShowWithContainsMultiline(string inputPath, string filePath, System.Text.Encoding? encoding)
     {
-        return ShowWithMatch(inputPath, filePath, encoding, line => line.Contains(Contains!, StringComparison.Ordinal), Contains!, null);
+        var metadata = TextFileUtility.DetectFileMetadata(filePath, Encoding);
+        var content = File.ReadAllText(filePath, encoding ?? metadata.Encoding);
+
+        // Normalize Contains newlines to match file's newline sequence
+        var normalizedContains = Contains!
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n")
+            .Replace("\n", metadata.NewlineSequence);
+
+        // Find all occurrences
+        var matches = new List<(int startIdx, int endIdx)>();
+        int searchIdx = 0;
+        while ((searchIdx = content.IndexOf(normalizedContains, searchIdx, StringComparison.Ordinal)) >= 0)
+        {
+            matches.Add((searchIdx, searchIdx + normalizedContains.Length));
+            searchIdx += normalizedContains.Length;
+        }
+
+        if (matches.Count == 0) return false;
+
+        // Split content into lines for display
+        var allLines = content.Split(metadata.NewlineSequence);
+
+        // Calculate line number for each character offset
+        // Build cumulative offset array: lineStartOffsets[i] = start offset of line i (0-based)
+        var lineStartOffsets = new int[allLines.Length];
+        int offset = 0;
+        for (int i = 0; i < allLines.Length; i++)
+        {
+            lineStartOffsets[i] = offset;
+            offset += allLines[i].Length + metadata.NewlineSequence.Length;
+        }
+
+        // Parse LineRange
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
+
+        var displayPath = GetDisplayPath(inputPath, filePath);
+        var outputBuffer = new List<string>();
+        outputBuffer.Add(AnsiColors.Header(displayPath));
+
+        int lastOutputLine = 0; // 1-based
+
+        foreach (var (matchStart, matchEnd) in matches)
+        {
+            // Find start and end line numbers (1-based)
+            int matchStartLine = TextFileUtility.GetLineNumberFromOffset(lineStartOffsets, matchStart) + 1;
+            int matchEndLine = TextFileUtility.GetLineNumberFromOffset(lineStartOffsets, matchEnd > 0 ? matchEnd - 1 : matchEnd) + 1;
+
+            // LineRange filter: match start line must be within range
+            if (matchStartLine < startLine || matchStartLine > endLine) continue;
+
+            // Context: 2 lines before
+            int contextStart = Math.Max(1, matchStartLine - 2);
+            // Context: 2 lines after
+            int contextEnd = Math.Min(allLines.Length, matchEndLine + 2);
+
+            // Gap detection
+            if (lastOutputLine > 0 && contextStart > lastOutputLine + 1)
+            {
+                outputBuffer.Add("");
+            }
+
+            // Pre-context lines
+            for (int ln = contextStart; ln < matchStartLine; ln++)
+            {
+                if (ln > lastOutputLine)
+                {
+                    outputBuffer.Add($"{ln,3}- {allLines[ln - 1]}");
+                    lastOutputLine = ln;
+                }
+            }
+
+            // Match lines (highlighted in yellow)
+            for (int ln = matchStartLine; ln <= matchEndLine && ln <= allLines.Length; ln++)
+            {
+                if (ln > lastOutputLine)
+                {
+                    // Highlight entire matched line in yellow
+                    outputBuffer.Add($"{ln,3}: {AnsiColors.Yellow}{allLines[ln - 1]}{AnsiColors.Reset}");
+                    lastOutputLine = ln;
+                }
+            }
+
+            // Post-context lines
+            for (int ln = matchEndLine + 1; ln <= contextEnd; ln++)
+            {
+                if (ln > lastOutputLine)
+                {
+                    outputBuffer.Add($"{ln,3}- {allLines[ln - 1]}");
+                    lastOutputLine = ln;
+                }
+            }
+        }
+
+        if (outputBuffer.Count > 1) // More than just header
+        {
+            WriteObject(outputBuffer, enumerateCollection: true);
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

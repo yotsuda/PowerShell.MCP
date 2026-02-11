@@ -37,10 +37,12 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
     [Parameter]
     public SwitchParameter Backup { get; set; }
 
+    private bool _isMultilineContains = false;
+    private Regex? _compiledRegex = null;
+
     protected override void BeginProcessing()
     {
-        // Check for simultaneous -Contains and -Pattern specification
-        ValidateContainsAndPatternMutuallyExclusive(Contains, Pattern);
+        // Contains and Pattern can be combined (OR condition), same as Show-TextFile
 
         // Check that at least one of LineRange, Contains, or Pattern is specified
         if (LineRange == null && string.IsNullOrEmpty(Contains) && string.IsNullOrEmpty(Pattern))
@@ -48,9 +50,34 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             throw new PSArgumentException("At least one of -LineRange, -Contains, or -Pattern must be specified.");
         }
 
-        // Error if Contains/Pattern includes newline (processing is line-by-line)
-        ValidateNoNewlines(Contains, "Contains");
+        // Error if Pattern includes newline (regex multiline not supported)
         ValidateNoNewlines(Pattern, "Pattern");
+        // Contains with newlines is allowed (multiline mode)
+
+        // Detect multiline Contains mode
+        _isMultilineContains = !string.IsNullOrEmpty(Contains) && (Contains.Contains('\n') || Contains.Contains('\r'));
+
+        // multiline Contains + Pattern is not supported
+        if (_isMultilineContains && !string.IsNullOrEmpty(Pattern))
+        {
+            throw new PSArgumentException("Multi-line -Contains cannot be combined with -Pattern.");
+        }
+
+        // Pre-compile regex for performance (used across all files)
+        // Combine Contains and Pattern with OR if both specified (single-line mode only)
+        if (!_isMultilineContains)
+        {
+            bool useContains = !string.IsNullOrEmpty(Contains);
+            bool usePattern = !string.IsNullOrEmpty(Pattern);
+            if (useContains && usePattern)
+            {
+                _compiledRegex = new Regex(Regex.Escape(Contains!) + "|" + Pattern!, RegexOptions.Compiled);
+            }
+            else if (usePattern)
+            {
+                _compiledRegex = new Regex(Pattern!, RegexOptions.Compiled);
+            }
+        }
 
         // LineRange validation
         if (LineRange != null)
@@ -73,6 +100,13 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
         {
             try
             {
+                // Multiline Contains: whole-file mode
+                if (_isMultilineContains)
+                {
+                    RemoveMultilineContains(fileInfo.InputPath, fileInfo.ResolvedPath);
+                    continue;
+                }
+
                 var metadata = TextFileUtility.DetectFileMetadata(fileInfo.ResolvedPath, Encoding);
                 // Tail N lines deletion mode (negative LineRange)
                 if (LineRange != null && LineRange.Length > 0 && LineRange[0] < 0)
@@ -83,39 +117,30 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                 int startLine = int.MaxValue;
                 int endLine = int.MaxValue;
-                Regex? regex = null;
 
                 // Prepare deletion conditions
                 bool useLineRange = LineRange != null;
                 bool useContains = !string.IsNullOrEmpty(Contains);
                 bool usePattern = !string.IsNullOrEmpty(Pattern);
 
+                if (useLineRange)
+                {
+                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
+                }
+
+                // Build action description
                 string actionDescription;
-                if (useLineRange && useContains)
-                {
-                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
-                    actionDescription = $"Remove lines {startLine}-{endLine} containing: {Contains}";
-                }
-                else if (useLineRange && usePattern)
-                {
-                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
-                    regex = new Regex(Pattern!, RegexOptions.Compiled);
-                    actionDescription = $"Remove lines {startLine}-{endLine} matching pattern: {Pattern}";
-                }
+                string matchDesc = useContains && usePattern
+                    ? $"containing '{Contains}' or matching: {Pattern}"
+                    : useContains ? $"containing: {Contains}"
+                    : usePattern ? $"matching pattern: {Pattern}"
+                    : "";
+                if (useLineRange && (useContains || usePattern))
+                    actionDescription = $"Remove lines {startLine}-{endLine} {matchDesc}";
                 else if (useLineRange)
-                {
-                    (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange!);
                     actionDescription = $"Remove lines {startLine}-{endLine}";
-                }
-                else if (useContains)
-                {
-                    actionDescription = $"Remove lines containing: {Contains}";
-                }
-                else // usePattern only
-                {
-                    regex = new Regex(Pattern!, RegexOptions.Compiled);
-                    actionDescription = $"Remove lines matching pattern: {Pattern}";
-                }
+                else
+                    actionDescription = $"Remove lines {matchDesc}";
 
                 bool isWhatIf = IsWhatIfMode();
 
@@ -186,32 +211,23 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 bool shouldRemove = false;
                                 Match? currentMatch = null;
 
-                                // Condition check
-                                if (useLineRange && useContains)
+                                // Condition check (unified: LineRange is AND, Contains/Pattern is OR via regex)
+                                bool inRange = !useLineRange || (lineNumber >= startLine && lineNumber <= endLine);
+                                if (_compiledRegex != null)
                                 {
-                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) &&
-                                                  currentLine.Contains(Contains!);
-                                }
-                                else if (useLineRange && usePattern)
-                                {
-                                    // Use Match instead of IsMatch to cache result for highlighting
-                                    currentMatch = regex!.Match(currentLine);
-                                    shouldRemove = (lineNumber >= startLine && lineNumber <= endLine) &&
-                                                  currentMatch.Success;
-                                }
-                                else if (useLineRange)
-                                {
-                                    shouldRemove = lineNumber >= startLine && lineNumber <= endLine;
+                                    // Pattern, or Contains+Pattern combined as regex
+                                    currentMatch = _compiledRegex.Match(currentLine);
+                                    shouldRemove = inRange && currentMatch.Success;
                                 }
                                 else if (useContains)
                                 {
-                                    shouldRemove = currentLine.Contains(Contains!);
+                                    // Contains only (no regex needed)
+                                    shouldRemove = inRange && currentLine.Contains(Contains!);
                                 }
-                                else // usePattern only
+                                else
                                 {
-                                    // Use Match instead of IsMatch to cache result for highlighting
-                                    currentMatch = regex!.Match(currentLine);
-                                    shouldRemove = currentMatch.Success;
+                                    // LineRange only
+                                    shouldRemove = inRange;
                                 }
 
                                 // Detect start of deletion range
@@ -257,15 +273,9 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     {
                                         // -WhatIf: display deleted lines in red (highlight match in yellow background)
                                         string displayLine;
-                                        if (useContains)
+                                        if (_compiledRegex != null)
                                         {
-                                            // Contains: highlight match in yellow background
-                                            displayLine = currentLine.Replace(Contains!,
-                                                $"{AnsiColors.RedOnYellow}{Contains}{AnsiColors.RedOnDefault}");
-                                        }
-                                        else if (usePattern)
-                                        {
-                                            // Pattern: highlight regex match in yellow background using cached Match
+                                            // Pattern or Contains+Pattern combined: highlight regex match in yellow background
                                             var sb = new StringBuilder(currentLine.Length + 32);
                                             int lastEnd = 0;
                                             var match = currentMatch!;
@@ -280,6 +290,12 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                             }
                                             sb.Append(currentLine, lastEnd, currentLine.Length - lastEnd);
                                             displayLine = sb.ToString();
+                                        }
+                                        else if (useContains)
+                                        {
+                                            // Contains only: highlight match in yellow background
+                                            displayLine = currentLine.Replace(Contains!,
+                                                $"{AnsiColors.RedOnYellow}{Contains}{AnsiColors.RedOnDefault}");
                                         }
                                         else
                                         {
@@ -386,6 +402,188 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             catch (Exception ex)
             {
                 WriteError(new ErrorRecord(ex, "RemoveLineFailed", ErrorCategory.WriteError, fileInfo.ResolvedPath));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Process multiline literal string removal (whole-file mode)
+    /// Used when Contains contains newline characters
+    /// </summary>
+    private void RemoveMultilineContains(string inputPath, string resolvedPath)
+    {
+        var metadata = TextFileUtility.DetectFileMetadata(resolvedPath, Encoding);
+
+        // Check for empty file
+        var fileInfoObj = new FileInfo(resolvedPath);
+        if (fileInfoObj.Length == 0)
+        {
+            WriteWarning("File is empty. Nothing to remove.");
+            return;
+        }
+
+        // Read entire file content
+        var content = File.ReadAllText(resolvedPath, metadata.Encoding);
+
+        // Normalize Contains newlines to match file's newline sequence
+        var normalizedContains = Contains!
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n")
+            .Replace("\n", metadata.NewlineSequence);
+
+        // Find all occurrences and filter by LineRange
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(LineRange);
+        var allLines = content.Split(metadata.NewlineSequence);
+
+        // Build line start offsets for line number calculation
+        var lineStartOffsets = new int[allLines.Length];
+        int offset = 0;
+        for (int i = 0; i < allLines.Length; i++)
+        {
+            lineStartOffsets[i] = offset;
+            offset += allLines[i].Length + metadata.NewlineSequence.Length;
+        }
+
+        // Find all matches and their line ranges
+        var matchesToRemove = new List<(int startIdx, int endIdx, int startLine, int endLine)>();
+        int searchIdx = 0;
+        while ((searchIdx = content.IndexOf(normalizedContains, searchIdx, StringComparison.Ordinal)) >= 0)
+        {
+            int matchEndIdx = searchIdx + normalizedContains.Length;
+            int matchStartLine = TextFileUtility.GetLineNumberFromOffset(lineStartOffsets, searchIdx) + 1;
+            int matchEndLine = TextFileUtility.GetLineNumberFromOffset(lineStartOffsets, matchEndIdx > 0 ? matchEndIdx - 1 : matchEndIdx) + 1;
+
+            // LineRange filter
+            if (matchStartLine >= startLine && matchStartLine <= endLine)
+            {
+                matchesToRemove.Add((searchIdx, matchEndIdx, matchStartLine, matchEndLine));
+            }
+            searchIdx += normalizedContains.Length;
+        }
+
+        var displayPath = GetDisplayPath(inputPath, resolvedPath);
+
+        if (matchesToRemove.Count == 0)
+        {
+            WriteWarning("No matches found. File not modified.");
+            return;
+        }
+
+        // Calculate total lines to remove
+        int totalMatchLines = 0;
+        foreach (var m in matchesToRemove)
+        {
+            totalMatchLines += m.endLine - m.startLine + 1;
+        }
+
+        var actionDescription = $"Remove {matchesToRemove.Count} occurrence(s) of multiline text ({totalMatchLines} lines)";
+
+        bool isWhatIf = IsWhatIfMode();
+        if (!ShouldProcess(resolvedPath, actionDescription))
+        {
+            if (!isWhatIf) return;
+        }
+
+        bool dryRun = isWhatIf;
+
+        if (!dryRun && Backup)
+        {
+            var backupPath = TextFileUtility.CreateBackup(resolvedPath);
+            WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
+        }
+
+        // Display header and context
+        WriteObject(AnsiColors.Header(displayPath));
+
+        int lastOutputLine = 0;
+        foreach (var (matchStart, matchEnd, matchStartLine, matchEndLine) in matchesToRemove)
+        {
+            // Context: 2 lines before
+            int contextStart = Math.Max(1, matchStartLine - 2);
+            // Context: 2 lines after
+            int contextEnd = Math.Min(allLines.Length, matchEndLine + 2);
+
+            // Gap detection
+            if (lastOutputLine > 0 && contextStart > lastOutputLine + 1)
+            {
+                WriteObject("");
+            }
+
+            // Pre-context lines
+            for (int ln = contextStart; ln < matchStartLine; ln++)
+            {
+                if (ln > lastOutputLine)
+                {
+                    WriteObject($"{ln,3}- {allLines[ln - 1]}");
+                    lastOutputLine = ln;
+                }
+            }
+
+            // Match lines
+            if (dryRun)
+            {
+                // WhatIf: show matched lines in red with match highlighted
+                for (int ln = matchStartLine; ln <= matchEndLine && ln <= allLines.Length; ln++)
+                {
+                    if (ln > lastOutputLine)
+                    {
+                        WriteObject($"{ln,3}: {AnsiColors.Red}{allLines[ln - 1]}{AnsiColors.Reset}");
+                        lastOutputLine = ln;
+                    }
+                }
+            }
+            else
+            {
+                // Normal: position marker
+                if (matchStartLine > lastOutputLine)
+                {
+                    WriteObject("   :");
+                    lastOutputLine = matchEndLine;
+                }
+            }
+
+            // Post-context lines
+            for (int ln = matchEndLine + 1; ln <= contextEnd; ln++)
+            {
+                if (ln > lastOutputLine)
+                {
+                    WriteObject($"{ln,3}- {allLines[ln - 1]}");
+                    lastOutputLine = ln;
+                }
+            }
+        }
+
+        WriteObject("");
+
+        if (dryRun)
+        {
+            WriteObject(AnsiColors.WhatIf($"What if: Would remove {matchesToRemove.Count} occurrence(s) ({totalMatchLines} lines) from {displayPath}"));
+        }
+        else
+        {
+            // Perform removal: forward-copy segments between matches (O(M) with StringBuilder)
+            var sb = new StringBuilder(content.Length);
+            int lastEnd = 0;
+            foreach (var (startIdx, endIdx, _, _) in matchesToRemove)
+            {
+                sb.Append(content, lastEnd, startIdx - lastEnd);
+                lastEnd = endIdx;
+            }
+            sb.Append(content, lastEnd, content.Length - lastEnd);
+            var newContent = sb.ToString();
+
+            // Write atomically
+            var tempFile = System.IO.Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(tempFile, newContent, metadata.Encoding);
+                TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
+                WriteObject(AnsiColors.Success($"Removed {matchesToRemove.Count} occurrence(s) ({totalMatchLines} lines) from {displayPath}"));
+            }
+            catch
+            {
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+                throw;
             }
         }
     }

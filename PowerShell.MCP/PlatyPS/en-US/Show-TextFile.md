@@ -15,13 +15,13 @@ Display text file contents with line numbers
 ### Path
 ```
 Show-TextFile [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse]
- [-Encoding <String>] [<CommonParameters>]
+ [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
 Show-TextFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
- [-Recurse] [-Encoding <String>] [<CommonParameters>]
+ [-Recurse] [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -36,6 +36,8 @@ Displays file contents with line numbers. Matching lines highlighted with contex
     Show-TextFile file.txt -Pattern "error"         # regex search with context
 
     Show-TextFile file.txt -Contains "[Error]"      # literal search (no escaping needed)
+
+    Show-TextFile file.txt -Contains "line1`nline2" # multiline literal search (whole-file mode)
 
     Show-TextFile . -Recurse -Pattern "TODO"        # recursive directory search
 
@@ -112,7 +114,7 @@ Accept wildcard characters: False
 ```
 
 ### -Contains
-Literal string search. No regex escaping needed.
+Literal string search. No regex escaping needed. Supports multiline strings (newlines allowed) for whole-file search mode. Cannot be combined with `-Pattern` when multiline. Cannot be used with `-Recurse` when multiline.
 
 ```yaml
 Type: String
@@ -156,6 +158,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -ProgressAction
+{{ Fill ProgressAction Description }}
+
+```yaml
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -166,8 +183,9 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## NOTES
 - `-LineRange -10` = last 10 lines (single negative value = tail)
 - `-Contains` and `-Pattern` can be combined (OR condition)
+- `-Contains` supports multiline strings for whole-file search mode (like `Update-MatchInFile -OldText`)
+- Multiline `-Contains` cannot be combined with `-Pattern` or `-Recurse`
 - `-Recurse` requires `-Pattern` or `-Contains`
 - `-LiteralPath` for paths with `[`, `]`, `*`, `?`
-
 
 ## RELATED LINKS
