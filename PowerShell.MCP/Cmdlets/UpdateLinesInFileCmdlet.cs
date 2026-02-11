@@ -45,11 +45,11 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
     [Alias("PSPath")]
     public string[] LiteralPath { get; set; } = null!;
 
-    [Parameter(Position = 1)]
+    [Parameter]
     [ValidateLineRange]
     public int[]? LineRange { get; set; }
 
-    [Parameter(ValueFromPipeline = true)][Alias("NewLines")]
+    [Parameter(Position = 1, ValueFromPipeline = true)][Alias("NewLines")]
     public object[]? Content { get; set; }
 
     /// <summary>
