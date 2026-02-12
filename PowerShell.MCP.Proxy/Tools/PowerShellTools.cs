@@ -129,7 +129,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
 Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
 
 🔤 Variables Parameter:
-Use var1/var2 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. This avoids unintended expansion of $, backtick, or double-quote characters. Reference them as $var1/$var2 in the pipeline.
+Use var1/var2/var3/var4 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. This avoids unintended expansion of $, backtick, or double-quote characters. Reference them as $var1/$var2/$var3/$var4 in the pipeline.
 When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
@@ -142,6 +142,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         string? var1 = null,
         [Description("Literal string value injected as $var2 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
         string? var2 = null,
+        [Description("Literal string value injected as $var3 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        string? var3 = null,
+        [Description("Literal string value injected as $var4 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        string? var4 = null,
         [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
@@ -149,13 +153,15 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // Clamp timeout to valid range
         timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
 
-        // Build variables dictionary from var1/var2 parameters
+        // Build variables dictionary from var1/var2/var3/var4 parameters
         Dictionary<string, string>? parsedVariables = null;
-        if (var1 != null || var2 != null)
+        if (var1 != null || var2 != null || var3 != null || var4 != null)
         {
             parsedVariables = new Dictionary<string, string>();
             if (var1 != null) parsedVariables["var1"] = var1;
             if (var2 != null) parsedVariables["var2"] = var2;
+            if (var3 != null) parsedVariables["var3"] = var3;
+            if (var4 != null) parsedVariables["var4"] = var4;
         }
 
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
