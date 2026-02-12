@@ -1,4 +1,6 @@
 using System.IO.Pipes;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -307,6 +309,25 @@ public class NamedPipeServer : IDisposable
     /// </summary>
     private NamedPipeServerStream CreateNamedPipeServer()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            var pipeSecurity = new PipeSecurity();
+            pipeSecurity.AddAccessRule(new PipeAccessRule(
+                WindowsIdentity.GetCurrent().User!,
+                PipeAccessRights.FullControl,
+                AccessControlType.Allow));
+
+            return NamedPipeServerStreamAcl.Create(
+                PipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous,
+                0,
+                0,
+                pipeSecurity);
+        }
+
         return new NamedPipeServerStream(
             PipeName,
             PipeDirection.InOut,

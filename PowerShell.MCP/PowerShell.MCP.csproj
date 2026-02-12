@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
     <PackageReference Include="System.Management.Automation" Version="7.2.15" />
     <!-- Ude.NetStandard を出力ディレクトリにコピー -->
     <PackageReference Include="Ude.NetStandard" Version="1.2.0" />
