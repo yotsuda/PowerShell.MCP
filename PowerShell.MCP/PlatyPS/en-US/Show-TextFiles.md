@@ -8,7 +8,7 @@ schema: 2.0.0
 # Show-TextFiles
 
 ## SYNOPSIS
-Display text file contents with line numbers
+Display file contents with line numbers, or search across files with regex or literal patterns
 
 ## SYNTAX
 
@@ -25,7 +25,7 @@ Show-TextFiles -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>
 ```
 
 ## DESCRIPTION
-Displays file contents with line numbers. Matching lines highlighted with context.
+Display file contents with line numbers, or search across files using regex/literal patterns with highlighted matches and context lines.
 
     Show-TextFiles file.txt                          # entire file
 
@@ -48,7 +48,8 @@ Displays file contents with line numbers. Matching lines highlighted with contex
 Show-TextFiles file.txt
 Show-TextFiles file.txt -LineRange 10,20
 Show-TextFiles file.txt -Pattern "error"
-Show-TextFiles *.md,*.txt -Recurse -Pattern "TODO"
+Show-TextFiles *.cs -Recurse -Pattern "class\s+\w+"
+Show-TextFiles *.log -Recurse -Contains "[FATAL]"
 ```
 
 ## PARAMETERS
