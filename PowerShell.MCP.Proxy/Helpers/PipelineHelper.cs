@@ -142,24 +142,24 @@ public static partial class PipelineHelper
     [GeneratedRegex(@"\b(Get-Help|Get-Command)\b", RegexOptions.IgnoreCase)]
     private static partial Regex HelpOrGetCommandRegex();
 
-    [GeneratedRegex(@"\bAdd-LinesToFile\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![/\\])\bAdd-LinesToFile\b", RegexOptions.IgnoreCase)]
     private static partial Regex AddLinesToFileRegex();
 
-    [GeneratedRegex(@"\bUpdate-LinesInFile\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![/\\])\bUpdate-LinesInFile\b", RegexOptions.IgnoreCase)]
     private static partial Regex UpdateLinesInFileRegex();
 
-    [GeneratedRegex(@"\bUpdate-MatchInFile\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![/\\])\bUpdate-MatchInFile\b", RegexOptions.IgnoreCase)]
     private static partial Regex UpdateMatchInFileRegex();
 
-    [GeneratedRegex(@"\bRemove-LinesFromFile\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![/\\])\bRemove-LinesFromFile\b", RegexOptions.IgnoreCase)]
     private static partial Regex RemoveLinesFromFileRegex();
 
     [GeneratedRegex(@"-Pattern\b|-Contains\b", RegexOptions.IgnoreCase)]
     private static partial Regex PatternOrContainsParamRegex();
 
-    [GeneratedRegex(@"\bSet-Content\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![/\\])\bSet-Content\b", RegexOptions.IgnoreCase)]
     private static partial Regex SetContentRegex();
 
-    [GeneratedRegex(@"\bAdd-Content\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![/\\])\bAdd-Content\b", RegexOptions.IgnoreCase)]
     private static partial Regex AddContentRegex();
 }

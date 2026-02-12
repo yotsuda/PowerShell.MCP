@@ -251,5 +251,27 @@ public class PipelineHelperTests
         Assert.Contains("var2", result);
     }
 
+    [Theory]
+    [InlineData(@"Show-TextFiles ""C:\PlatyPS\en-US\Add-LinesToFile.md""")]
+    [InlineData(@"Show-TextFiles ""C:\PlatyPS\en-US\Update-LinesInFile.md"" -LineRange 1,55")]
+    [InlineData(@"Show-TextFiles ""C:\PlatyPS\en-US\Update-MatchInFile.md""")]
+    [InlineData(@"Show-TextFiles ""C:\PlatyPS\en-US\Remove-LinesFromFile.md""")]
+    [InlineData(@"Get-Content ""C:\path\Set-Content.md""")]
+    [InlineData(@"Get-Content ""C:\path\Add-Content.md""")]
+    public void CheckVar1Enforcement_CmdletNameInPath_ReturnsNull(string pipeline)
+    {
+        var result = PipelineHelper.CheckVar1Enforcement(pipeline, null, null);
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData(@"Show-TextFiles C:\path\Add-LinesToFile.md -LineRange 1,55")]
+    [InlineData(@"Show-TextFiles C:\path\Update-MatchInFile.md")]
+    public void CheckVar1Enforcement_CmdletNameInUnquotedPath_ReturnsNull(string pipeline)
+    {
+        var result = PipelineHelper.CheckVar1Enforcement(pipeline, null, null);
+        Assert.Null(result);
+    }
+
     #endregion
 }
