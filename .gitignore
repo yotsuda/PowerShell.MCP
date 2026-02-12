@@ -455,3 +455,6 @@ Staging/Skills/ps-*.md
 # Work procedure files
 work_procedure.md
 work_progress.md
+
+# Release plan files
+v*-plan.md
