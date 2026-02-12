@@ -39,7 +39,7 @@ Display file contents with line numbers, or search across files using regex/lite
 
     Show-TextFiles file.txt -Contains "line1`nline2" # multiline literal search (whole-file mode)
 
-    Show-TextFiles *.md,*.txt -Recurse -Pattern "TODO" # recursive search with multiple extensions
+    Show-TextFiles app.?? -Recurse -Pattern "TODO"   # recursive wildcard search
 
 ## EXAMPLES
 
@@ -55,7 +55,7 @@ Show-TextFiles *.log -Recurse -Contains "[FATAL]"
 ## PARAMETERS
 
 ### -Path
-File path(s). Supports wildcards. With `-Recurse`, wildcard patterns (e.g., `*.md,*.txt`) filter files by extension across all subdirectories.
+File path(s). Supports wildcards. With `-Recurse`, wildcard patterns filter files by extension across all subdirectories.
 
 ```yaml
 Type: String[]
@@ -187,7 +187,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 - `-Contains` supports multiline strings for whole-file search mode (like `Update-MatchInFile -OldText`)
 - Multiline `-Contains` cannot be combined with `-Pattern` or `-Recurse`
 - `-Recurse` requires `-Pattern` or `-Contains`
-- `-Recurse` with wildcard `-Path` (e.g., `*.cs`) filters files by extension
+- `-Recurse` with wildcard `-Path` (e.g., `\*.cs`) filters files by extension
 - `-LiteralPath` for paths with `[`, `]`, `*`, `?`
 
 ## RELATED LINKS
