@@ -197,4 +197,59 @@ public class PipelineHelperTests
     }
 
     #endregion
+
+    #region CheckVar1Enforcement Tests
+
+    [Theory]
+    [InlineData("Get-Help Update-LinesInFile")]
+    [InlineData("Get-Help Add-LinesToFile -Examples")]
+    [InlineData("Get-Help Update-MatchInFile -Full")]
+    [InlineData("Get-Help Remove-LinesFromFile")]
+    [InlineData("Get-Help Set-Content -Detailed")]
+    [InlineData("Get-Help Add-Content")]
+    [InlineData("Get-Command Update-LinesInFile")]
+    [InlineData("Get-Command Add-LinesToFile")]
+    public void CheckVar1Enforcement_GetHelpOrGetCommand_ReturnsNull(string pipeline)
+    {
+        var result = PipelineHelper.CheckVar1Enforcement(pipeline, null, null);
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData("Add-LinesToFile -Path test.txt -Content $var1")]
+    [InlineData("Update-LinesInFile -Path test.txt -LineRange 1 -Content $var1")]
+    public void CheckVar1Enforcement_WithVar1_ReturnsNull(string pipeline)
+    {
+        var result = PipelineHelper.CheckVar1Enforcement(pipeline, "some content", null);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckVar1Enforcement_UpdateMatchInFile_WithBothVars_ReturnsNull()
+    {
+        var result = PipelineHelper.CheckVar1Enforcement(
+            "Update-MatchInFile -Path test.txt -OldText $var1 -Replacement $var2", "old", "new");
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData("Add-LinesToFile -Path test.txt -Content 'hello'")]
+    [InlineData("Update-LinesInFile -Path test.txt -LineRange 1 -Content 'hello'")]
+    public void CheckVar1Enforcement_WithoutVar1_ReturnsError(string pipeline)
+    {
+        var result = PipelineHelper.CheckVar1Enforcement(pipeline, null, null);
+        Assert.NotNull(result);
+        Assert.StartsWith("ERROR:", result);
+    }
+
+    [Fact]
+    public void CheckVar1Enforcement_UpdateMatchInFile_WithoutVar2_ReturnsError()
+    {
+        var result = PipelineHelper.CheckVar1Enforcement(
+            "Update-MatchInFile -Path test.txt -OldText $var1 -Replacement 'new'", "old", null);
+        Assert.NotNull(result);
+        Assert.Contains("var2", result);
+    }
+
+    #endregion
 }

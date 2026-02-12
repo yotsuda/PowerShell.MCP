@@ -90,6 +90,10 @@ public static partial class PipelineHelper
     /// </summary>
     public static string? CheckVar1Enforcement(string pipeline, string? var1, string? var2)
     {
+        // Skip validation when cmdlet is used as argument to Get-Help or Get-Command
+        if (HelpOrGetCommandRegex().IsMatch(pipeline))
+            return null;
+
         // Add-LinesToFile: always requires var1 (for -Content)
         if (AddLinesToFileRegex().IsMatch(pipeline) && var1 == null)
         {
@@ -134,6 +138,9 @@ public static partial class PipelineHelper
 
         return null; // No issues
     }
+
+    [GeneratedRegex(@"\b(Get-Help|Get-Command)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex HelpOrGetCommandRegex();
 
     [GeneratedRegex(@"\bAdd-LinesToFile\b", RegexOptions.IgnoreCase)]
     private static partial Regex AddLinesToFileRegex();
