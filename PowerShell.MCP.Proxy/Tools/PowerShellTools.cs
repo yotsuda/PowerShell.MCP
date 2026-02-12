@@ -129,7 +129,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
 Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
 
 🔤 Variables Parameter:
-Use the variables parameter to pass literal string values that contain PowerShell special characters ($, backtick, double-quote). Variables are injected as-is before pipeline execution, bypassing the PowerShell parser. Reference injected variables in the pipeline with $ prefix.
+Use var1/var2 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. This avoids unintended expansion of $, backtick, or double-quote characters. Reference them as $var1/$var2 in the pipeline.
 When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
@@ -138,8 +138,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         string pipeline,
         [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next MCP tool call. You can work on other tasks in parallel. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
         int timeout_seconds = 170,
-        [Description("JSON object mapping variable names to literal string values. Use this when passing text containing PowerShell special characters ($, backtick, double-quote) to cmdlet parameters. Variables are injected as-is before pipeline execution, bypassing the PowerShell parser. Reference injected variables in the pipeline with $ prefix.")]
-        string? variables = null,
+        [Description("Literal string value injected as $var1 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        string? var1 = null,
+        [Description("Literal string value injected as $var2 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        string? var2 = null,
         [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
@@ -147,18 +149,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // Clamp timeout to valid range
         timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
 
-        // Parse variables JSON string into Dictionary
+        // Build variables dictionary from var1/var2 parameters
         Dictionary<string, string>? parsedVariables = null;
-        if (!string.IsNullOrEmpty(variables))
+        if (var1 != null || var2 != null)
         {
-            try
-            {
-                parsedVariables = (Dictionary<string, string>?)JsonSerializer.Deserialize(variables, typeof(Dictionary<string, string>), PowerShellJsonRpcContext.Default);
-            }
-            catch (JsonException)
-            {
-                return "Invalid variables JSON. Expected a JSON object mapping variable names to string values. Example: {\"__old\": \"$x = 1\"}";
-            }
+            parsedVariables = new Dictionary<string, string>();
+            if (var1 != null) parsedVariables["var1"] = var1;
+            if (var2 != null) parsedVariables["var2"] = var2;
         }
 
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
