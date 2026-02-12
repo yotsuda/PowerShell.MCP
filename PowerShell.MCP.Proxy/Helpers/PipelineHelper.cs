@@ -60,14 +60,15 @@ public static partial class PipelineHelper
     private static partial Regex LocalVariableRegex();
 
     /// <summary>
-    /// Check if pipeline contains newlines (multi-line command not added to history) and return warning message
+    /// Check if pipeline is 3+ lines (not added to history) and return warning message
     /// </summary>
     public static string? CheckMultiLineHistory(string pipeline)
     {
-        if (!pipeline.Contains('\n') && !pipeline.Contains('\r'))
+        var lineCount = pipeline.Split('\n').Length;
+        if (lineCount <= 2)
             return null;
 
-        return "⚠️ HISTORY NOTE: Multi-line command was NOT added to console history. To keep it in history, save as a .ps1 file and execute it, or rewrite as a single-line command using semicolons.";
+        return "⚠️ HISTORY NOTE: Multi-line command (3+ lines) was NOT added to console history. To keep it in history, save as a .ps1 file and execute it, or rewrite as a single-line command using semicolons.";
     }
 
     /// <summary>

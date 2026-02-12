@@ -400,7 +400,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $mcpOutput = $null
                 try {
                     # Add to PSReadLine history (best-effort, before command display)
-                    if ($IsWindows -and -not ($cmd.Contains("`n") -or $cmd.Contains("`r"))) { try { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' } catch {} }
+                    if ($IsWindows -and ($cmd -split "`n").Count -le 2) { try { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' } catch {} }
 
                     # Display command in console
                     [Console]::WriteLine()

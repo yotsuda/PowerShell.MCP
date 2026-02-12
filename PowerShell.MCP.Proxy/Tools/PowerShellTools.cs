@@ -1,12 +1,9 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Text;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Models;
-using System.Runtime.InteropServices;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using PowerShell.MCP.Proxy.Helpers;
 
 namespace PowerShell.MCP.Proxy.Tools;
@@ -41,9 +38,6 @@ public class PowerShellTools
         var result = await pipeDiscoveryService.CollectAllCachedOutputsAsync(agentId, excludePipeName, cancellationToken);
         return (result.CompletedOutput, result.BusyStatusInfo);
     }
-
-    private static string TruncatePipeline(string? pipeline, int maxLength = 30)
-        => PipelineHelper.Truncate(pipeline, maxLength);
 
     private static string GetPidString(string? pipeName)
         => PipelineHelper.GetPidString(pipeName);
@@ -119,7 +113,7 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help. Single-line commands are added to console history for user learning. Multi-line commands are NOT added to history.
+    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help. Single-line and 2-line commands are added to console history for user learning. Multi-line commands (3+ lines) are NOT added to history.
 
 💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
 

@@ -169,7 +169,7 @@ public class PowerShellToolsTests
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.15 });
         var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready | Pipeline: Get-Date | Duration: 0.15s";
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Get-Date", 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n" + statusLine + "\n2025-01-15");
 
         _mockPipeDiscoveryService
@@ -205,7 +205,7 @@ public class PowerShellToolsTests
             statusLine = "⧗ Pipeline is still running | Window: #2000 Cat | Status: Busy | Pipeline: Start-Sleep 300 | Duration: 170.00s"
         });
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Start-Sleep 300", 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Start-Sleep 300", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson);
 
         _mockPowerShellService
@@ -245,7 +245,7 @@ public class PowerShellToolsTests
             statusLine = "✓ Pipeline completed (cached) | Window: #2000 Cat | Status: Completed"
         });
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Get-Process", 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson);
 
         _mockPipeDiscoveryService
@@ -308,7 +308,7 @@ public class PowerShellToolsTests
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "$x = 1", duration = 0.01 });
         var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready | Pipeline: $x = 1 | Duration: 0.01s";
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "$x = 1", 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "$x = 1", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n" + statusLine);
 
         _mockPipeDiscoveryService
@@ -339,7 +339,7 @@ public class PowerShellToolsTests
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "if ($true) {...", duration = 0.05 });
         var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready";
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, multiLineCmd, 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, multiLineCmd, It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n" + statusLine);
 
         _mockPipeDiscoveryService
@@ -368,7 +368,7 @@ public class PowerShellToolsTests
 
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "test", duration = 0.01 });
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "test", 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
@@ -385,7 +385,7 @@ public class PowerShellToolsTests
 
         // Assert: should have been clamped to 170
         _mockPowerShellService.Verify(
-            s => s.InvokeExpressionToPipeAsync(TestPipeName, "test", 170, It.IsAny<CancellationToken>()),
+            s => s.InvokeExpressionToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -398,7 +398,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
 
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "bad-cmd", 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "bad-cmd", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Connection lost"));
 
         // Act
@@ -423,7 +423,7 @@ public class PowerShellToolsTests
 
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "test", duration = 0.01 });
         _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "test", 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
