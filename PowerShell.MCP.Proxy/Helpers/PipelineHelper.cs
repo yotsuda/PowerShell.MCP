@@ -83,4 +83,76 @@ public static partial class PipelineHelper
         var truncatedPipeline = Truncate(pipeline);
         return $"⧗ | pwsh PID: {pid} | Status: Busy | Pipeline: {truncatedPipeline} | Duration: {duration:F2}s";
     }
+
+    /// <summary>
+    /// Checks if bundled text editing cmdlets are used without var1/var2 parameters.
+    /// Returns an error message if validation fails, null if OK.
+    /// </summary>
+    public static string? CheckVar1Enforcement(string pipeline, string? var1, string? var2)
+    {
+        // Add-LinesToFile: always requires var1 (for -Content)
+        if (AddLinesToFileRegex().IsMatch(pipeline) && var1 == null)
+        {
+            return "ERROR: Add-LinesToFile requires the var1 parameter for -Content to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the content via var1 and reference it as $var1 in the pipeline.";
+        }
+
+        // Update-LinesInFile: always requires var1 (for -Content)
+        if (UpdateLinesInFileRegex().IsMatch(pipeline) && var1 == null)
+        {
+            return "ERROR: Update-LinesInFile requires the var1 parameter for -Content to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the content via var1 and reference it as $var1 in the pipeline.";
+        }
+
+        // Update-MatchInFile: requires var1 (-OldText) and var2 (-Replacement)
+        if (UpdateMatchInFileRegex().IsMatch(pipeline))
+        {
+            if (var1 == null)
+                return "ERROR: Update-MatchInFile requires the var1 parameter for -OldText to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the old text via var1 and reference it as $var1 in the pipeline.";
+            if (var2 == null)
+                return "ERROR: Update-MatchInFile requires the var2 parameter for -Replacement to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the replacement text via var2 and reference it as $var2 in the pipeline.";
+        }
+
+        // Remove-LinesFromFile: requires var1 only when -Pattern or -Contains is used
+        if (RemoveLinesFromFileRegex().IsMatch(pipeline))
+        {
+            if (PatternOrContainsParamRegex().IsMatch(pipeline) && var1 == null)
+            {
+                return "ERROR: Remove-LinesFromFile with -Pattern or -Contains requires the var1 parameter to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the pattern/text via var1 and reference it as $var1 in the pipeline.";
+            }
+        }
+
+        // Set-Content: requires var1 (for -Value)
+        if (SetContentRegex().IsMatch(pipeline) && var1 == null)
+        {
+            return "ERROR: Set-Content requires the var1 parameter for -Value to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the value via var1 and reference it as $var1 in the pipeline.";
+        }
+
+        // Add-Content: requires var1 (for -Value)
+        if (AddContentRegex().IsMatch(pipeline) && var1 == null)
+        {
+            return "ERROR: Add-Content requires the var1 parameter for -Value to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the value via var1 and reference it as $var1 in the pipeline.";
+        }
+
+        return null; // No issues
+    }
+
+    [GeneratedRegex(@"\bAdd-LinesToFile\b", RegexOptions.IgnoreCase)]
+    private static partial Regex AddLinesToFileRegex();
+
+    [GeneratedRegex(@"\bUpdate-LinesInFile\b", RegexOptions.IgnoreCase)]
+    private static partial Regex UpdateLinesInFileRegex();
+
+    [GeneratedRegex(@"\bUpdate-MatchInFile\b", RegexOptions.IgnoreCase)]
+    private static partial Regex UpdateMatchInFileRegex();
+
+    [GeneratedRegex(@"\bRemove-LinesFromFile\b", RegexOptions.IgnoreCase)]
+    private static partial Regex RemoveLinesFromFileRegex();
+
+    [GeneratedRegex(@"-Pattern\b|-Contains\b", RegexOptions.IgnoreCase)]
+    private static partial Regex PatternOrContainsParamRegex();
+
+    [GeneratedRegex(@"\bSet-Content\b", RegexOptions.IgnoreCase)]
+    private static partial Regex SetContentRegex();
+
+    [GeneratedRegex(@"\bAdd-Content\b", RegexOptions.IgnoreCase)]
+    private static partial Regex AddContentRegex();
 }

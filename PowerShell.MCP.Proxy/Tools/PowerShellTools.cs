@@ -246,6 +246,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // Check if multi-line command (not added to console history)
         var historyWarning = PipelineHelper.CheckMultiLineHistory(pipeline);
 
+        // Enforce var1/var2 usage for text editing cmdlets
+        var var1Error = PipelineHelper.CheckVar1Enforcement(pipeline, var1, var2);
+        if (var1Error != null)
+        {
+            return var1Error;
+        }
+
         // Execute the command
         try
         {
