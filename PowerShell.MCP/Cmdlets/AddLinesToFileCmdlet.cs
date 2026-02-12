@@ -262,55 +262,15 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                     }
 
                     // Output inserted lines
-                    if (contentLines.Length <= 5)
+                    for (int i = 0; i < contentLines.Length; i++)
                     {
-                        // 1-5 lines: show all
-                        for (int i = 0; i < contentLines.Length; i++)
-                        {
-                            writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
+                        writer.Write(contentLines[i]);
+                        WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
 
-                            if (i < contentLines.Length - 1)
-                            {
-                                writer.Write(metadata.NewlineSequence);
-                                outputLineNumber++;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // 6+ lines: show only first 2 and last 2
-                        // First 2 lines
-                        for (int i = 0; i < 2; i++)
+                        if (i < contentLines.Length - 1)
                         {
-                            writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
                             writer.Write(metadata.NewlineSequence);
                             outputLineNumber++;
-                        }
-
-                        // Output ellipsis marker
-                        WriteObject("   :");
-
-                        // Write middle lines (no output)
-                        for (int i = 2; i < contentLines.Length - 2; i++)
-                        {
-                            writer.Write(contentLines[i]);
-                            writer.Write(metadata.NewlineSequence);
-                            outputLineNumber++;
-                        }
-
-                        // Last 2 lines
-                        for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
-                        {
-                            writer.Write(contentLines[i]);
-                            WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
-
-                            if (i < contentLines.Length - 1)
-                            {
-                                writer.Write(metadata.NewlineSequence);
-                                outputLineNumber++;
-                            }
                         }
                     }
 
@@ -370,68 +330,22 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                         }
 
                         // Output inserted lines
-                        if (contentLines.Length <= 5)
+                        for (int i = 0; i < contentLines.Length; i++)
                         {
-                            // 1-5 lines: show all
-                            for (int i = 0; i < contentLines.Length; i++)
-                            {
-                                writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
+                            writer.Write(contentLines[i]);
+                            WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
 
-                                if (i < contentLines.Length - 1)
-                                {
-                                    writer.Write(metadata.NewlineSequence);
-                                    outputLineNumber++;
-                                }
-                            }
-
-                            // Preserve original file trailing newline
-                            if (metadata.HasTrailingNewline)
+                            if (i < contentLines.Length - 1)
                             {
                                 writer.Write(metadata.NewlineSequence);
+                                outputLineNumber++;
                             }
                         }
-                        else
+
+                        // Preserve original file trailing newline
+                        if (metadata.HasTrailingNewline)
                         {
-                            // 6+ lines: show only first 2 and last 2
-                            // First 2 lines
-                            for (int i = 0; i < 2; i++)
-                            {
-                                writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
-                                writer.Write(metadata.NewlineSequence);
-                                outputLineNumber++;
-                            }
-
-                            // Output ellipsis marker
-                            WriteObject("   :");
-
-                            // Write middle lines (no output)
-                            for (int i = 2; i < contentLines.Length - 2; i++)
-                            {
-                                writer.Write(contentLines[i]);
-                                writer.Write(metadata.NewlineSequence);
-                                outputLineNumber++;
-                            }
-
-                            // Last 2 lines
-                            for (int i = contentLines.Length - 2; i < contentLines.Length; i++)
-                            {
-                                writer.Write(contentLines[i]);
-                                WriteObject($"{outputLineNumber,3}: {AnsiColors.Inserted(contentLines[i])}");
-
-                                if (i < contentLines.Length - 1)
-                                {
-                                    writer.Write(metadata.NewlineSequence);
-                                    outputLineNumber++;
-                                }
-                            }
-
-                            // Preserve original file trailing newline
-                            if (metadata.HasTrailingNewline)
-                            {
-                                writer.Write(metadata.NewlineSequence);
-                            }
+                            writer.Write(metadata.NewlineSequence);
                         }
 
                         // No trailing context for append, just empty line

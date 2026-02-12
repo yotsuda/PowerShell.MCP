@@ -527,28 +527,13 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             // Empty array: display only :
             WriteObject($"   :");
         }
-        else if (linesInserted <= 5)
+        else
         {
-            // 1-5 lines: display all highlighted
             for (int i = 0; i < linesInserted; i++)
             {
                 int lineNum = startLine + i;
                 WriteObject($"{lineNum,3}: {AnsiColors.Inserted(contentLines[i])}");
             }
-        }
-        else
-        {
-            // 6+ lines: first 2 + ellipsis marker + last 2
-            // First 2 lines
-            WriteObject($"{startLine,3}: {AnsiColors.Inserted(contentLines[0])}");
-            WriteObject($"{startLine + 1,3}: {AnsiColors.Inserted(contentLines[1])}");
-
-            // Ellipsis marker
-            WriteObject("   :");
-
-            // Last 2 lines
-            WriteObject($"{endLine - 1,3}: {AnsiColors.Inserted(contentLines[linesInserted - 2])}");
-            WriteObject($"{endLine,3}: {AnsiColors.Inserted(contentLines[linesInserted - 1])}");
         }
 
         // Next 2 lines context
