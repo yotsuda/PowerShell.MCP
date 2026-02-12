@@ -132,9 +132,11 @@ Verbose and Debug streams are NOT visible to you. If you need verbose/debug info
 📝 Text File Operations:
 For text file editing, use Get-Help to learn the specialized cmdlets: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
+Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
 
 🔤 Variables Parameter:
-Use the variables parameter to pass literal string values that contain PowerShell special characters ($, backtick, double-quote). Variables are injected as-is before pipeline execution, bypassing the PowerShell parser. Reference injected variables in the pipeline with $ prefix.")]
+Use the variables parameter to pass literal string values that contain PowerShell special characters ($, backtick, double-quote). Variables are injected as-is before pipeline execution, bypassing the PowerShell parser. Reference injected variables in the pipeline with $ prefix.
+When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
@@ -142,7 +144,7 @@ Use the variables parameter to pass literal string values that contain PowerShel
         string pipeline,
         [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next MCP tool call. You can work on other tasks in parallel. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
         int timeout_seconds = 170,
-        [Description("JSON object mapping variable names to literal string values. Inject before pipeline execution to bypass PowerShell parser for special characters ($, backtick, double-quote). Reference variables in the pipeline as $varname. Example: {\"__old\": \"$x = 1\"} with pipeline \"Update-MatchInFile -OldText $__old\".")]
+        [Description("JSON object mapping variable names to literal string values. Use this when passing text containing PowerShell special characters ($, backtick, double-quote) to cmdlet parameters. Variables are injected as-is before pipeline execution, bypassing the PowerShell parser. Reference injected variables in the pipeline with $ prefix.")]
         string? variables = null,
         [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
         string? agent_id = null,
