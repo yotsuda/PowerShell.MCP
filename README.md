@@ -1,6 +1,6 @@
 # PowerShell.MCP
 
-[![PowerShell](https://img.shields.io/badge/PowerShell-7.5+-blue.svg)](https://github.com/PowerShell/PowerShell)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7.4+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen.svg)](#prerequisites)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
@@ -119,7 +119,7 @@ Five tools provide maximum flexibility with minimum complexity:
 ### Prerequisites
 
 **All platforms require:**
-- PowerShell 7.5+ ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
+- PowerShell 7.4+ ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
 - Claude Desktop, Claude Code, or any MCP client
 
 | Platform | OS Requirements |
