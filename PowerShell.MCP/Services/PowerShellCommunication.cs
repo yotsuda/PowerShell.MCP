@@ -54,6 +54,7 @@ public static class McpServerHost
     // Communication properties
     public static volatile string? executeCommand;
     public static volatile string? executeCommandSilent;
+    public static volatile Dictionary<string, string>? executeCommandVariables;
 
     // Lock to prevent concurrent ExecuteCommand/ExecuteSilentCommand
     private static readonly SemaphoreSlim _executionLock = new(1, 1);
@@ -63,11 +64,12 @@ public static class McpServerHost
     /// </summary>
     /// <param name="command">PowerShell command to execute</param>
     /// <param name="timeoutSeconds">Timeout in seconds (1-170)</param>
-    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command, int timeoutSeconds = 170)
+    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command, Dictionary<string, string>? variables = null, int timeoutSeconds = 170)
     {
         _executionLock.Wait();
         try
         {
+            executeCommandVariables = variables;  // Set variables before command (timer triggers on executeCommand)
             executeCommand = command;
             return PowerShellCommunication.WaitForResult(timeoutSeconds);
         }

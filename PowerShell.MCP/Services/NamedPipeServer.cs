@@ -719,7 +719,18 @@ Please provide how to update the MCP client configuration to the user.";
         // Clamp to valid range
         timeoutSeconds = Math.Clamp(timeoutSeconds, 0, 170);
 
-        return McpServerHost.ExecuteCommand(pipeline, timeoutSeconds);
+        // Extract variables if present
+        Dictionary<string, string>? variables = null;
+        if (parameters.TryGetProperty("variables", out var variablesElement) && variablesElement.ValueKind == JsonValueKind.Object)
+        {
+            variables = new Dictionary<string, string>();
+            foreach (var property in variablesElement.EnumerateObject())
+            {
+                variables[property.Name] = property.Value.GetString() ?? "";
+            }
+        }
+
+        return McpServerHost.ExecuteCommand(pipeline, variables, timeoutSeconds);
     }
 
 

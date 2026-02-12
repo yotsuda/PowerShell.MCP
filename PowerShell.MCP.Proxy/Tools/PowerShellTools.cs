@@ -131,7 +131,10 @@ Verbose and Debug streams are NOT visible to you. If you need verbose/debug info
 
 📝 Text File Operations:
 For text file editing, use Get-Help to learn the specialized cmdlets: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
-For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
+For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
+
+🔤 Variables Parameter:
+Use the variables parameter to pass literal string values that contain PowerShell special characters ($, backtick, double-quote). Variables are injected as-is before pipeline execution, bypassing the PowerShell parser. Reference injected variables in the pipeline with $ prefix.")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
@@ -139,12 +142,28 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         string pipeline,
         [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next MCP tool call. You can work on other tasks in parallel. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
         int timeout_seconds = 170,
+        [Description("JSON object mapping variable names to literal string values. Inject before pipeline execution to bypass PowerShell parser for special characters ($, backtick, double-quote). Reference variables in the pipeline as $varname. Example: {\"__old\": \"$x = 1\"} with pipeline \"Update-MatchInFile -OldText $__old\".")]
+        string? variables = null,
         [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
         // Clamp timeout to valid range
         timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
+
+        // Parse variables JSON string into Dictionary
+        Dictionary<string, string>? parsedVariables = null;
+        if (!string.IsNullOrEmpty(variables))
+        {
+            try
+            {
+                parsedVariables = (Dictionary<string, string>?)JsonSerializer.Deserialize(variables, typeof(Dictionary<string, string>), PowerShellJsonRpcContext.Default);
+            }
+            catch (JsonException)
+            {
+                return "Invalid variables JSON. Expected a JSON object mapping variable names to string values. Example: {\"__old\": \"$x = 1\"}";
+            }
+        }
 
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
 
@@ -237,7 +256,7 @@ For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')")]
         // Execute the command
         try
         {
-            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, timeout_seconds, cancellationToken);
+            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, parsedVariables, timeout_seconds, cancellationToken);
             // Parse response: header JSON (first line) + "\n\n" + body
             var separatorIndex = result.IndexOf("\n\n");
             var jsonHeader = separatorIndex >= 0 ? result.Substring(0, separatorIndex) : result;

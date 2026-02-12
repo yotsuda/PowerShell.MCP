@@ -388,6 +388,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             if ($cmd) {
                 [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
 
+                # Inject variables if provided (set before pipeline execution to bypass parser)
+                $cmdVariables = [PowerShell.MCP.Services.McpServerHost]::executeCommandVariables
+                [PowerShell.MCP.Services.McpServerHost]::executeCommandVariables = $null
+                if ($cmdVariables) {
+                    foreach ($kvp in $cmdVariables.GetEnumerator()) {
+                        Set-Variable -Name $kvp.Key -Value $kvp.Value
+                    }
+                }
+
                 $mcpOutput = $null
                 try {
                     # Add to PSReadLine history (best-effort, before command display)

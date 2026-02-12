@@ -28,6 +28,9 @@ public class InvokeExpressionParams : PowerShellMcpParams
 
     [JsonPropertyName("timeout_seconds")]
     public int TimeoutSeconds { get; set; } = 170;
+
+    [JsonPropertyName("variables")]
+    public Dictionary<string, string>? Variables { get; set; }
 }
 
 public class GetStatusParams : PowerShellMcpParams
