@@ -65,7 +65,6 @@ public class GetStatusResponse
     [JsonPropertyName("result")]
     public string? Result { get; set; }
 
-
     [JsonPropertyName("output")]
     public string? Output { get; set; }
 
