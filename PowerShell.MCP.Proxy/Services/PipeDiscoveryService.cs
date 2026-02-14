@@ -46,12 +46,13 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     {
         // Fast path: check active pipe before any expensive operations (EnumeratePipes, DetectClosedConsoles)
         var activePipe = _sessionManager.GetActivePipeName(agentId);
+        GetStatusResponse? activePipeStatus = null;
         if (activePipe != null)
         {
-            var status = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
-            if (status != null && status.IsReady())
+            activePipeStatus = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
+            if (activePipeStatus != null && activePipeStatus.IsReady())
             {
-                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
+                if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
                 return new PipeDiscoveryResult(activePipe, false, [], null);
             }
         }
@@ -63,27 +64,25 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         // Detect externally closed consoles
         closedMessages.AddRange(DetectClosedConsoles(agentId));
 
-        // Re-check active pipe status for closed/busy tracking
+        // Process cached active pipe status for closed/busy tracking
         if (activePipe != null)
         {
-            var status = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
-
-            if (status == null)
+            if (activePipeStatus == null)
             {
                 _sessionManager.ClearDeadPipe(agentId, activePipe);
                 var pid = ConsoleSessionManager.GetPidFromPipeName(activePipe);
                 closedMessages.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
             }
-            else if (status.IsReady())
+            else if (activePipeStatus.IsReady())
             {
-                // Became ready between fast path and slow path
-                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
+                // Became ready between fast path and slow path (after DetectClosedConsoles)
+                if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
                 return new PipeDiscoveryResult(activePipe, false, closedMessages, BuildClosedConsoleInfo(closedMessages));
             }
             else // busy
             {
-                if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
-                allPipesStatus.Add($"  - {activePipe}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
+                if (activePipeStatus.Pid > 0) _sessionManager.MarkPipeBusy(agentId, activePipeStatus.Pid);
+                allPipesStatus.Add($"  - {activePipe}: {activePipeStatus.Status} (pipeline: {activePipeStatus.Pipeline ?? "unknown"}, duration: {activePipeStatus.Duration:F1}s)");
             }
         }
 

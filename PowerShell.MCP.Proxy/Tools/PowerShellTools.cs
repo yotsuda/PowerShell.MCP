@@ -688,27 +688,27 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                         cancellationToken);
                 }
 
-                var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
+                var reuseLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
 
-                var response = new StringBuilder();
+                var reuseResponse = new StringBuilder();
                 // Always collect cached outputs - any console may have completed work
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, discoveryResult.ReadyPipeName, cancellationToken);
-                if (busyStatusInfo.Length > 0)
+                var (reuseCompletedOutput, reuseBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, discoveryResult.ReadyPipeName, cancellationToken);
+                if (reuseBusyStatusInfo.Length > 0)
                 {
-                    response.Append(busyStatusInfo);
-                    response.AppendLine();
+                    reuseResponse.Append(reuseBusyStatusInfo);
+                    reuseResponse.AppendLine();
                 }
-                if (completedOutput.Length > 0)
+                if (reuseCompletedOutput.Length > 0)
                 {
-                    response.Append(completedOutput);
+                    reuseResponse.Append(reuseCompletedOutput);
                 }
                 if (discoveryResult.ConsoleSwitched)
                 {
-                    response.AppendLine("No reason was provided, so an existing standby console was used instead of launching a new one. If you need a new console, specify why in the reason parameter.");
+                    reuseResponse.AppendLine("No reason was provided, so an existing standby console was used instead of launching a new one. If you need a new console, specify why in the reason parameter.");
                 }
-                response.AppendLine();
-                response.Append(locationResult);
-                return response.ToString();
+                reuseResponse.AppendLine();
+                reuseResponse.Append(reuseLocationResult);
+                return reuseResponse.ToString();
             }
             // No standby console found, fall through to create a new one
         }
@@ -722,42 +722,35 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         }
 
         // Set console window title
+        var newPipeName = ConsoleSessionManager.Instance.GetActivePipeName(agentId);
+        if (newPipeName != null)
         {
-            var sessionManager = ConsoleSessionManager.Instance;
-            var activePipe = sessionManager.GetActivePipeName(agentId);
-            if (activePipe != null)
-            {
-                await SetConsoleTitleAsync(powerShellService, activePipe, cancellationToken);
-            }
+            await SetConsoleTitleAsync(powerShellService, newPipeName, cancellationToken);
         }
 
         // Collect busy status from Proxy side
-        {
-            var sessionManager = ConsoleSessionManager.Instance;
-            var newPipeName = sessionManager.GetActivePipeName(agentId);
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
+        var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
-            // Build response: busy status first + completed output + start message + location
-            var response = new StringBuilder();
-            if (busyStatusInfo.Length > 0)
-            {
-                response.Append(busyStatusInfo);
-                response.AppendLine();
-            }
-            if (completedOutput.Length > 0)
-            {
-                response.Append(completedOutput);
-            }
-            if (!string.IsNullOrEmpty(warningMessage))
-            {
-                response.Append(warningMessage);
-                response.AppendLine();
-            }
-            response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
+        // Build response: busy status first + completed output + start message + location
+        var response = new StringBuilder();
+        if (busyStatusInfo.Length > 0)
+        {
+            response.Append(busyStatusInfo);
             response.AppendLine();
-            response.Append(startResult);
-            return response.ToString();
         }
+        if (completedOutput.Length > 0)
+        {
+            response.Append(completedOutput);
+        }
+        if (!string.IsNullOrEmpty(warningMessage))
+        {
+            response.Append(warningMessage);
+            response.AppendLine();
+        }
+        response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
+        response.AppendLine();
+        response.Append(startResult);
+        return response.ToString();
     }
 
     /// <summary>
