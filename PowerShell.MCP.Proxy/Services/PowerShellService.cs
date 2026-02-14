@@ -120,6 +120,21 @@ public class PowerShellService : IPowerShellService
         }
     }
 
+    public async Task ExecuteSilentAsync(string pipeName, string pipeline, CancellationToken cancellationToken = default)
+    {
+        var request = new ExecuteSilentParams { Pipeline = pipeline };
+        var jsonRequest = JsonSerializer.Serialize(request, PowerShellJsonRpcContext.Default.ExecuteSilentParams);
+
+        try
+        {
+            await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+        }
+        catch
+        {
+            // Ignore errors - silent execution is best effort
+        }
+    }
+
     /// <summary>
     /// Extracts the body part from a response (content after "\n\n" separator)
     /// </summary>

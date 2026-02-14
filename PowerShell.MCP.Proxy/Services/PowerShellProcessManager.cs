@@ -39,11 +39,11 @@ public class PowerShellProcessManager
     /// Starts PowerShell process with PowerShell.MCP module imported
     /// </summary>
     /// <param name="agentId">Agent ID for console isolation</param>
-    /// <param name="startupMessage">Optional message to display before module import</param>
+    /// <param name="startupCommands">Optional PowerShell commands to execute after module import (e.g. Write-Host statements)</param>
     /// <returns>true if startup succeeded</returns>
-    public static async Task<bool> StartPowerShellWithModuleAsync(string agentId, string? startupMessage = null)
+    public static async Task<bool> StartPowerShellWithModuleAsync(string agentId, string? startupCommands = null)
     {
-        var (success, _) = await StartPowerShellWithModuleAndPipeNameAsync(agentId, startupMessage);
+        var (success, _) = await StartPowerShellWithModuleAndPipeNameAsync(agentId, startupCommands);
         return success;
     }
 
@@ -51,10 +51,10 @@ public class PowerShellProcessManager
     /// Starts PowerShell process with PowerShell.MCP module imported and returns pipe name
     /// </summary>
     /// <param name="agentId">Agent ID for console isolation</param>
-    /// <param name="startupMessage">Optional message to display before module import</param>
+    /// <param name="startupCommands">Optional PowerShell commands to execute after module import (e.g. Write-Host statements)</param>
     /// <param name="startLocation">Starting directory path</param>
     /// <returns>Tuple of (success, pipeName)</returns>
-    public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string agentId, string? startupMessage = null, string? startLocation = null)
+    public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string agentId, string? startupCommands = null, string? startLocation = null)
     {
         int pid = 0;
         HashSet<string>? existingPipes = null;
@@ -68,15 +68,15 @@ public class PowerShellProcessManager
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            pid = PwshLauncherWindows.LaunchPwsh(agentId, startupMessage, startLocation);
+            pid = PwshLauncherWindows.LaunchPwsh(agentId, startupCommands, startLocation);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            PwshLauncherMacOS.LaunchPwsh(agentId, startupMessage, startLocation);
+            PwshLauncherMacOS.LaunchPwsh(agentId, startupCommands, startLocation);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            PwshLauncherLinux.LaunchPwsh(agentId, startupMessage, startLocation);
+            PwshLauncherLinux.LaunchPwsh(agentId, startupCommands, startLocation);
         }
         else
         {
@@ -225,7 +225,7 @@ public static class PwshLauncherWindows
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint CREATE_NEW_CONSOLE = 0x00000010;
 
-    public static int LaunchPwsh(string agentId, string? startupMessage = null, string? startLocation = null)
+    public static int LaunchPwsh(string agentId, string? startupCommands = null, string? startLocation = null)
     {
         IntPtr hToken = IntPtr.Zero;
         IntPtr env = IntPtr.Zero;
@@ -248,15 +248,13 @@ public static class PwshLauncherWindows
             var si = new STARTUPINFOW { cb = (uint)Marshal.SizeOf<STARTUPINFOW>() };
             var pi = new PROCESS_INFORMATION();
 
-            // Build command with optional startup message
+            // Build command with optional startup commands (pre-built Write-Host statements)
             // Set global variables with proxy PID and agent ID before importing module
             var proxyPid = Process.GetCurrentProcess().Id;
             string command;
-            if (!string.IsNullOrEmpty(startupMessage))
+            if (!string.IsNullOrEmpty(startupCommands))
             {
-                // Escape single quotes for PowerShell
-                var escaped = startupMessage.Replace("'", "''");
-                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{escaped}' -ForegroundColor Green; Write-Host ''; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
+                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine; {startupCommands}";
             }
             else
             {
@@ -306,7 +304,7 @@ public static class PwshLauncherWindows
 /// </summary>
 public static class PwshLauncherMacOS
 {
-    public static void LaunchPwsh(string agentId, string? startupMessage = null, string? startLocation = null)
+    public static void LaunchPwsh(string agentId, string? startupCommands = null, string? startLocation = null)
     {
         // Use osascript with stdin to avoid shell quoting issues
         var psi = new ProcessStartInfo
@@ -317,15 +315,15 @@ public static class PwshLauncherMacOS
             CreateNoWindow = true
         };
 
-        // Build command with optional startup message
+        // Build command with optional startup commands (pre-built Write-Host statements, with '' escaping for AppleScript)
         // Set global variables with proxy PID and agent ID before importing module
         var proxyPid = Process.GetCurrentProcess().Id;
         string command;
-        if (!string.IsNullOrEmpty(startupMessage))
+        if (!string.IsNullOrEmpty(startupCommands))
         {
-            // Escape single quotes for PowerShell (doubled for AppleScript string)
-            var escaped = startupMessage.Replace("'", "''");
-            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+            // Double single quotes for AppleScript string context
+            var escaped = startupCommands.Replace("'", "''");
+            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue; {escaped}";
         }
         else
         {
@@ -371,11 +369,11 @@ public static class PwshLauncherLinux
         "kitty",
     ];
 
-    public static void LaunchPwsh(string agentId, string? startupMessage = null, string? startLocation = null)
+    public static void LaunchPwsh(string agentId, string? startupCommands = null, string? startLocation = null)
     {
         foreach (var terminal in SupportedTerminals)
         {
-            if (TryLaunchTerminal(terminal, agentId, startupMessage, startLocation))
+            if (TryLaunchTerminal(terminal, agentId, startupCommands, startLocation))
             {
                 return;
             }
@@ -383,10 +381,10 @@ public static class PwshLauncherLinux
 
         // No terminal emulator found - launch pwsh directly (headless/CI mode)
         Console.Error.WriteLine("[INFO] No terminal emulator found, launching pwsh directly");
-        LaunchPwshDirectly(agentId, startupMessage, startLocation);
+        LaunchPwshDirectly(agentId, startupCommands, startLocation);
     }
 
-    private static bool TryLaunchTerminal(string terminal, string agentId, string? startupMessage, string? startLocation)
+    private static bool TryLaunchTerminal(string terminal, string agentId, string? startupCommands, string? startLocation)
     {
         try
         {
@@ -422,17 +420,17 @@ public static class PwshLauncherLinux
                 CreateNoWindow = true
             };
 
-            // Build command with optional startup message
+            // Build command with optional startup commands (pre-built Write-Host statements, with '' escaping for shell)
             // Set global variables with proxy PID and agent ID before importing module
             var proxyPid = Process.GetCurrentProcess().Id;
             // Fix module directory case sensitivity on Linux: Install-PSResource may create lowercase 'powershell.mcp'
             var caseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { $lc = Join-Path $p ''powershell.mcp''; $uc = Join-Path $p ''PowerShell.MCP''; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
             string initCommand;
-            if (!string.IsNullOrEmpty(startupMessage))
+            if (!string.IsNullOrEmpty(startupCommands))
             {
-                // Escape single quotes for PowerShell (doubled for shell string)
-                var escaped = startupMessage.Replace("'", "''");
-                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Write-Host ''{escaped}'' -ForegroundColor Green; {caseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+                // Double single quotes for shell string context
+                var escaped = startupCommands.Replace("'", "''");
+                initCommand = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; {caseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue; {escaped}";
             }
             else
             {
@@ -517,14 +515,14 @@ public static class PwshLauncherLinux
     /// <summary>
     /// Launches pwsh directly without a terminal emulator (for CI/headless environments)
     /// </summary>
-    private static void LaunchPwshDirectly(string agentId, string? startupMessage, string? startLocation)
+    private static void LaunchPwshDirectly(string agentId, string? startupCommands, string? startLocation)
     {
         var proxyPid = Process.GetCurrentProcess().Id;
         // Fix module directory case sensitivity on Linux: Install-PSResource may create lowercase 'powershell.mcp'
         var caseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { $lc = Join-Path $p 'powershell.mcp'; $uc = Join-Path $p 'PowerShell.MCP'; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
-        var initCommand = string.IsNullOrEmpty(startupMessage)
+        var initCommand = string.IsNullOrEmpty(startupCommands)
             ? $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force"
-            : $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Write-Host '{startupMessage.Replace("'", "''")}' -ForegroundColor Green; {caseFix}Import-Module PowerShell.MCP -Force";
+            : $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force; {startupCommands}";
 
         var workingDir = string.IsNullOrEmpty(startLocation)
             ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)

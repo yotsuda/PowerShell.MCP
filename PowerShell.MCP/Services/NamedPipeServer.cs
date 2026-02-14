@@ -687,6 +687,7 @@ Please provide how to update the MCP client configuration to the user.";
             "get_current_location" => MCPModuleInitializer.GetCurrentLocation(),
             "claim_console" => ClaimConsole(parameters),
             "set_window_title" => SetWindowTitle(parameters),
+            "execute_silent" => ExecuteSilent(parameters),
             _ => throw new ArgumentException($"Unknown method: {method}")
         };
     }
@@ -717,6 +718,23 @@ Please provide how to update the MCP client configuration to the user.";
             var title = parameters.GetProperty("title").GetString() ?? "";
             var escapedTitle = title.Replace("'", "''");
             McpServerHost.ExecuteSilentCommand($"$Host.UI.RawUI.WindowTitle = '{escapedTitle}'");
+            return "{\"success\":true}";
+        }
+        catch (Exception ex)
+        {
+            return $"{{\"success\":false,\"error\":\"{ex.Message.Replace("\"", "\\\"")}\"}}";
+        }
+    }
+
+    /// <summary>
+    /// Handles the execute_silent command - executes a pipeline without echoing the command in the console
+    /// </summary>
+    private static string ExecuteSilent(JsonElement parameters)
+    {
+        try
+        {
+            var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
+            McpServerHost.ExecuteSilentCommand(pipeline);
             return "{\"success\":true}";
         }
         catch (Exception ex)

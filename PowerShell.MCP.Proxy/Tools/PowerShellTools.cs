@@ -67,7 +67,7 @@ public class PowerShellTools
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
-        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
@@ -113,7 +113,7 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help. Single-line and 2-line commands are added to console history for user learning. Multi-line commands (3+ lines) are NOT added to history.
+    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help.
 
 💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
 
@@ -124,29 +124,30 @@ Local variables are NOT preserved between invoke_expression calls. Use $script: 
 Verbose and Debug streams are NOT visible to you. If you need verbose/debug information, ask the user to copy it from the console and share it with you.
 
 📝 Text File Operations:
-For text file editing, use Get-Help to learn the specialized cmdlets: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
+ALWAYS use the specialized cmdlets for text file editing: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
+NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via var1-var4 parameters (e.g., Update-MatchInFile path -Contains $var1 -Replacement $var2).
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
 Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
 
 🔤 Variables Parameter:
-Use var1/var2/var3/var4 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. This avoids unintended expansion of $, backtick, or double-quote characters. Reference them as $var1/$var2/$var3/$var4 in the pipeline.
+Use var1/var2/var3/var4 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. Reference them as $var1/$var2/$var3/$var4 in the pipeline.
 When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]
     public static async Task<string> InvokeExpression(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
-        [Description("The PowerShell command or pipeline to execute. Both single-line and multi-line commands are supported, including if statements, loops, functions, and try-catch blocks.")]
+        [Description("The PowerShell command or pipeline to execute. Multi-line commands (if, loops, try-catch, etc.) are supported.")]
         string pipeline,
-        [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next MCP tool call. You can work on other tasks in parallel. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
+        [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next tool call. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
         int timeout_seconds = 170,
-        [Description("Literal string value injected as $var1 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        [Description("Literal string value injected as $var1 in the pipeline, bypassing the PowerShell parser.")]
         string? var1 = null,
-        [Description("Literal string value injected as $var2 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        [Description("Literal string value injected as $var2 in the pipeline, bypassing the PowerShell parser.")]
         string? var2 = null,
-        [Description("Literal string value injected as $var3 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        [Description("Literal string value injected as $var3 in the pipeline, bypassing the PowerShell parser.")]
         string? var3 = null,
-        [Description("Literal string value injected as $var4 in the pipeline. Use this to pass text containing PowerShell special characters ($, backtick, double-quote) without escaping.")]
+        [Description("Literal string value injected as $var4 in the pipeline, bypassing the PowerShell parser.")]
         string? var4 = null,
-        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
@@ -268,7 +269,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             var jsonHeader = separatorIndex >= 0 ? result.Substring(0, separatorIndex) : result;
             var body = separatorIndex >= 0 ? result.Substring(separatorIndex + 2) : "";
 
-            if (jsonHeader.StartsWith("{"))
+            if (jsonHeader.StartsWith('{'))
             {
                 try
                 {
@@ -478,7 +479,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         IPipeDiscoveryService pipeDiscoveryService,
         [Description("Maximum seconds to wait for completion (1-170, default: 30). Returns early if a console completes.")]
         int timeout_seconds = 30,
-        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
@@ -654,59 +655,136 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     }
 
     [McpServerTool]
-    [Description("Launch a new PowerShell console window with PowerShell.MCP module imported. This tool should only be executed when explicitly requested by the user or when other tool executions fail.")]
+    [Description("Ensure a PowerShell console is available, or launch a new one. When reason is empty or omitted, reuses an existing standby console if one is available. When reason is provided, always launches a new console regardless of existing ones.")]
     public static async Task<string> StartPowershellConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
+        [Description("Optional. Why a new console is needed. Leave empty to reuse an existing standby console when available.")]
+        string? reason = null,
         [Description("Message displayed at console startup (e.g. greeting, joke, fun fact). Be creative and make the user smile!")]
         string? banner = null,
         [Description("Optional starting directory path. If relative, resolved from home directory. Defaults to home directory if not specified.")]
         string? start_location = null,
-        [Description("Agent ID from generate_agent_id. If you are a sub-agent, call generate_agent_id first to get your ID, then include it in every call.")]
+        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
         string? agent_id = null,
         CancellationToken cancellationToken = default)
     {
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
+        var forceNew = !string.IsNullOrEmpty(reason);
+
+        // When no reason is given, try to reuse an existing standby console
+        if (!forceNew)
+        {
+            var discoveryResult = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
+            if (discoveryResult.ReadyPipeName != null)
+            {
+                // Display banner on the existing console silently (message only, no command echo)
+                if (!string.IsNullOrEmpty(banner))
+                {
+                    var escaped = banner.Replace("'", "''");
+                    await powerShellService.ExecuteSilentAsync(
+                        discoveryResult.ReadyPipeName,
+                        $"[Console]::WriteLine(); [Console]::WriteLine(); Write-Host '{escaped}' -ForegroundColor Green; [Console]::WriteLine(); try {{ $p = & {{ prompt }}; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ' + \"`e[0K\") }} catch {{ [Console]::Write(\"PS $((Get-Location).Path)> `e[0K\") }}",
+                        cancellationToken);
+                }
+
+                var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
+
+                var response = new StringBuilder();
+                // Always collect cached outputs - any console may have completed work
+                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, discoveryResult.ReadyPipeName, cancellationToken);
+                if (busyStatusInfo.Length > 0)
+                {
+                    response.Append(busyStatusInfo);
+                    response.AppendLine();
+                }
+                if (completedOutput.Length > 0)
+                {
+                    response.Append(completedOutput);
+                }
+                if (discoveryResult.ConsoleSwitched)
+                {
+                    response.AppendLine("No reason was provided, so an existing standby console was used instead of launching a new one. If you need a new console, specify why in the reason parameter.");
+                }
+                response.AppendLine();
+                response.Append(locationResult);
+                return response.ToString();
+            }
+            // No standby console found, fall through to create a new one
+        }
 
         var (resolvedPath, warningMessage) = ResolveStartLocation(start_location);
-        var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, agentId, banner, resolvedPath, cancellationToken);
+        var startupCommands = BuildStartupCommands(banner, reason);
+        var (success, startResult) = await StartPowershellConsoleInternal(powerShellService, agentId, startupCommands, resolvedPath, cancellationToken);
         if (!success)
         {
-            return locationResult; // Error message
+            return startResult; // Error message
         }
 
         // Set console window title
-        var sessionManager = ConsoleSessionManager.Instance;
-        var activePipe = sessionManager.GetActivePipeName(agentId);
-        if (activePipe != null)
         {
-            await SetConsoleTitleAsync(powerShellService, activePipe, cancellationToken);
+            var sessionManager = ConsoleSessionManager.Instance;
+            var activePipe = sessionManager.GetActivePipeName(agentId);
+            if (activePipe != null)
+            {
+                await SetConsoleTitleAsync(powerShellService, activePipe, cancellationToken);
+            }
         }
 
         // Collect busy status from Proxy side
-        var newPipeName = sessionManager.GetActivePipeName(agentId);
-        var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
+        {
+            var sessionManager = ConsoleSessionManager.Instance;
+            var newPipeName = sessionManager.GetActivePipeName(agentId);
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
-        // Build response: busy status first + completed output + start message + location
-        var response = new StringBuilder();
-        if (busyStatusInfo.Length > 0)
-        {
-            response.Append(busyStatusInfo);
+            // Build response: busy status first + completed output + start message + location
+            var response = new StringBuilder();
+            if (busyStatusInfo.Length > 0)
+            {
+                response.Append(busyStatusInfo);
+                response.AppendLine();
+            }
+            if (completedOutput.Length > 0)
+            {
+                response.Append(completedOutput);
+            }
+            if (!string.IsNullOrEmpty(warningMessage))
+            {
+                response.Append(warningMessage);
+                response.AppendLine();
+            }
+            response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
             response.AppendLine();
+            response.Append(startResult);
+            return response.ToString();
         }
-        if (completedOutput.Length > 0)
+    }
+
+    /// <summary>
+    /// Builds PowerShell commands to display banner and/or reason at console startup.
+    /// Banner is shown in green, reason in dark yellow.
+    /// Returns null if both are empty, or a string of PowerShell commands.
+    /// </summary>
+    private static string? BuildStartupCommands(string? banner, string? reason)
+    {
+        if (string.IsNullOrEmpty(banner) && string.IsNullOrEmpty(reason))
+            return null;
+
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(banner))
         {
-            response.Append(completedOutput);
+            var escaped = banner.Replace("'", "''");
+            parts.Add($"Write-Host '{escaped}' -ForegroundColor Green");
         }
-        if (!string.IsNullOrEmpty(warningMessage))
+        if (!string.IsNullOrEmpty(reason))
         {
-            response.Append(warningMessage);
-            response.AppendLine();
+            if (parts.Count > 0)
+                parts.Add("Write-Host ''");  // blank line between banner and reason
+            var escaped = reason.Replace("'", "''");
+            parts.Add($"Write-Host 'Reason: {escaped}' -ForegroundColor DarkYellow");
         }
-        response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
-        response.AppendLine();
-        response.Append(locationResult);
-        return response.ToString();
+        parts.Add("Write-Host ''");  // blank line before prompt
+        return string.Join("; ", parts);
     }
 
     /// <summary>
@@ -716,7 +794,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     private static async Task<(bool success, string result)> StartPowershellConsoleInternal(
         IPowerShellService powerShellService,
         string agentId,
-        string? banner,
+        string? startupCommands,
         string startLocation,
         CancellationToken cancellationToken)
     {
@@ -726,7 +804,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
             Console.Error.WriteLine("[INFO] Starting PowerShell console...");
             // Start new console
-            var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(agentId, banner, startLocation);
+            var (success, pipeName) = await PowerShellProcessManager.StartPowerShellWithModuleAndPipeNameAsync(agentId, startupCommands, startLocation);
 
             if (!success)
             {

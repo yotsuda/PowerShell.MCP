@@ -117,3 +117,12 @@ public class SetWindowTitleParams : PowerShellMcpParams
     [JsonPropertyName("title")]
     public required string Title { get; set; }
 }
+
+public class ExecuteSilentParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "execute_silent";
+
+    [JsonPropertyName("pipeline")]
+    public required string Pipeline { get; set; }
+}

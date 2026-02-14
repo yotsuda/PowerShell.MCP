@@ -44,14 +44,26 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     /// <inheritdoc />
     public async Task<PipeDiscoveryResult> FindReadyPipeAsync(string agentId, CancellationToken cancellationToken)
     {
+        // Fast path: check active pipe before any expensive operations (EnumeratePipes, DetectClosedConsoles)
+        var activePipe = _sessionManager.GetActivePipeName(agentId);
+        if (activePipe != null)
+        {
+            var status = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
+            if (status != null && status.IsReady())
+            {
+                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
+                return new PipeDiscoveryResult(activePipe, false, [], null);
+            }
+        }
+
+        // Slow path: active pipe is not ready (or doesn't exist) - full discovery
         var closedMessages = new List<string>();
         var allPipesStatus = new List<string>();
 
         // Detect externally closed consoles
         closedMessages.AddRange(DetectClosedConsoles(agentId));
 
-        // Step 1: Check ActivePipeName first
-        var activePipe = _sessionManager.GetActivePipeName(agentId);
+        // Re-check active pipe status for closed/busy tracking
         if (activePipe != null)
         {
             var status = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
@@ -64,6 +76,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             }
             else if (status.IsReady())
             {
+                // Became ready between fast path and slow path
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                 return new PipeDiscoveryResult(activePipe, false, closedMessages, BuildClosedConsoleInfo(closedMessages));
             }
