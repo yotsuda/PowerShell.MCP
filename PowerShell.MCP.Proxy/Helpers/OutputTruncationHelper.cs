@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace PowerShell.MCP.Proxy.Helpers;
 
 /// <summary>
@@ -9,6 +11,19 @@ public static class OutputTruncationHelper
     internal const int TruncationThreshold = 5_000;
     internal const int PreviewHeadSize = 1000;
     internal const int PreviewTailSize = 1000;
+
+    // The threshold must exceed the combined preview sizes; otherwise the head
+    // and tail slices overlap, producing duplicated content in the preview.
+    private static readonly bool _ = Validate();
+    private static bool Validate()
+    {
+        Debug.Assert(
+            TruncationThreshold > PreviewHeadSize + PreviewTailSize,
+            $"TruncationThreshold ({TruncationThreshold}) must be greater than " +
+            $"PreviewHeadSize + PreviewTailSize ({PreviewHeadSize + PreviewTailSize}) " +
+            "to avoid overlapping head/tail previews.");
+        return true;
+    }
     internal const string OutputDirectoryName = "PowerShell.MCP.Output";
     internal const int MaxFileAgeMinutes = 120;
     internal const int NewlineScanLimit = 200;

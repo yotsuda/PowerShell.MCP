@@ -167,8 +167,8 @@ public class OutputTruncationHelperTests : IDisposable
     [Fact]
     public void TruncateIfNeeded_FileSaveFails_StillReturnsPreview()
     {
-        // Use an invalid/non-writable directory path to force save failure
-        var invalidDir = Path.Combine(_testDir, new string('X', 300), "nonexistent", "deeply", "nested");
+        // Null characters are universally invalid in file paths across all platforms
+        var invalidDir = Path.Combine(_testDir, "invalid\0dir");
 
         var output = new string('E', OutputTruncationHelper.TruncationThreshold + 1000);
         var result = OutputTruncationHelper.TruncateIfNeeded(output, invalidDir);
