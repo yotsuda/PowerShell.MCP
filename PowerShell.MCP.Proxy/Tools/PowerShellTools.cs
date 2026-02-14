@@ -115,6 +115,8 @@ public class PowerShellTools
     [McpServerTool]
     [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help.
 
+📌 The console window gives the user real-time visibility into your work. Prefer this tool for file operations, searches, and command execution.
+
 💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
 
 ⚠️ CRITICAL - Variable Scope:
