@@ -138,7 +138,7 @@ Press `Win + R`, type `pwsh`, press `Enter`
 
 #### 2. Install PowerShell.MCP
 ```powershell
-Install-Module PowerShell.MCP
+Install-PSResource PowerShell.MCP
 ```
 
 #### 3. Configure your MCP client
@@ -188,7 +188,7 @@ sudo apt-get install -y powershell
 **For Claude Code:**
 ```powershell
 # Run in PowerShell (pwsh)
-Install-Module PowerShell.MCP
+Install-PSResource PowerShell.MCP
 chmod +x "$(Get-MCPProxyPath)"
 claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
 ```
@@ -226,7 +226,7 @@ brew install powershell/tap/powershell
 **For Claude Code:**
 ```powershell
 # Run in PowerShell (pwsh)
-Install-Module PowerShell.MCP
+Install-PSResource PowerShell.MCP
 chmod +x "$(Get-MCPProxyPath)"
 claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
 ```

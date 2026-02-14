@@ -657,7 +657,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     }
 
     [McpServerTool]
-    [Description("Ensure a PowerShell console is available, or launch a new one. When reason is empty or omitted, reuses an existing standby console if one is available. When reason is provided, always launches a new console regardless of existing ones.")]
+    [Description(@"Ensure a PowerShell console is available, or launch a new one. When reason is empty or omitted, reuses an existing standby console if one is available. When reason is provided, always launches a new console regardless of existing ones.
+
+📌 The console window gives the user real-time visibility into your work. Prefer this tool for file operations, searches, and command execution.
+You can install any PowerShell Gallery module at user scope (Install-PSResource -Scope CurrentUser) without admin privileges, enabling broad automation beyond built-in cmdlets.")]
     public static async Task<string> StartPowershellConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
