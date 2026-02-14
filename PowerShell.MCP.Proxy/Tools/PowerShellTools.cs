@@ -704,10 +704,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 {
                     reuseResponse.Append(reuseCompletedOutput);
                 }
-                if (discoveryResult.ConsoleSwitched)
-                {
-                    reuseResponse.AppendLine("No reason was provided, so an existing standby console was used instead of launching a new one. If you need a new console, specify why in the reason parameter.");
-                }
+                reuseResponse.AppendLine("ℹ️ Did not launch a new console. An existing standby console is available and will be reused. To force a new console, provide the reason parameter.");
                 reuseResponse.AppendLine();
                 reuseResponse.Append(reuseLocationResult);
                 return reuseResponse.ToString();
