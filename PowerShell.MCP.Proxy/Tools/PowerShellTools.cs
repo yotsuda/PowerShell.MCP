@@ -103,7 +103,7 @@ public class PowerShellTools
                 response.Append(completedOutputs);
             }
             response.Append(result);
-            return response.ToString();
+            return OutputTruncationHelper.TruncateIfNeeded(response.ToString());
         }
         catch (Exception ex)
         {
@@ -213,7 +213,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 response.AppendLine();
                 response.Append(completedOutputs);
             }
-            return response.ToString();
+            return OutputTruncationHelper.TruncateIfNeeded(response.ToString());
         }
 
         // Console switched - get location (DLL will automatically include its own cached outputs)
@@ -247,7 +247,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 response.AppendLine();
                 response.Append(completedOutputs);
             }
-            return response.ToString();
+            return OutputTruncationHelper.TruncateIfNeeded(response.ToString());
         }
 
         // Check for local variable assignments without scope prefix
@@ -323,7 +323,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                         busyResponse.AppendLine();
                                         busyResponse.Append(completedOutputs);
                                     }
-                                    return busyResponse.ToString();
+                                    return OutputTruncationHelper.TruncateIfNeeded(busyResponse.ToString());
                                 }
                                 break;
 
@@ -375,7 +375,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 }
                                 timeoutResponse.AppendLine();
                                 timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
-                                return timeoutResponse.ToString();
+                                return OutputTruncationHelper.TruncateIfNeeded(timeoutResponse.ToString());
 
                             case PipeStatus.Completed:
                                 // Result was cached - return status
@@ -403,10 +403,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 cachedResponse.AppendLine(cachedStatusLine);
                                 cachedResponse.AppendLine();
                                 cachedResponse.Append("Result cached. Will be returned on next tool call.");
-                                return cachedResponse.ToString();
+                                return OutputTruncationHelper.TruncateIfNeeded(cachedResponse.ToString());
 
                             case "error":
-                                return jsonResponse.Message ?? $"Error from PowerShell.MCP module: {jsonResponse.Error}";
+                                return OutputTruncationHelper.TruncateIfNeeded(jsonResponse.Message ?? $"Error from PowerShell.MCP module: {jsonResponse.Error}");
 
                             case "success":
                                 // Normal completion - use body as result
@@ -454,7 +454,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     successResponse.AppendLine();
                                     successResponse.Append(output);
                                 }
-                                return successResponse.ToString();
+                                return OutputTruncationHelper.TruncateIfNeeded(successResponse.ToString());
                         }
                     }
                 }
@@ -465,7 +465,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             }
 
             // Fallback: return result as-is (shouldn't happen with new DLL)
-            return result;
+            return OutputTruncationHelper.TruncateIfNeeded(result);
         }
         catch (Exception ex)
         {
@@ -653,7 +653,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             return "No busy consoles or cached results.";
         }
 
-        return response.ToString();
+        return OutputTruncationHelper.TruncateIfNeeded(response.ToString());
     }
 
     [McpServerTool]
@@ -710,7 +710,7 @@ You can install any PowerShell Gallery module at user scope (Install-PSResource 
                 reuseResponse.AppendLine("ℹ️ Did not launch a new console. An existing standby console is available and will be reused. To force a new console, provide the reason parameter.");
                 reuseResponse.AppendLine();
                 reuseResponse.Append(reuseLocationResult);
-                return reuseResponse.ToString();
+                return OutputTruncationHelper.TruncateIfNeeded(reuseResponse.ToString());
             }
             // No standby console found, fall through to create a new one
         }
@@ -752,7 +752,7 @@ You can install any PowerShell Gallery module at user scope (Install-PSResource 
         response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
         response.AppendLine();
         response.Append(startResult);
-        return response.ToString();
+        return OutputTruncationHelper.TruncateIfNeeded(response.ToString());
     }
 
     /// <summary>
