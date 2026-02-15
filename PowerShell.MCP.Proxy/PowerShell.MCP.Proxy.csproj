@@ -61,4 +61,5 @@
   <ItemGroup>
     <EmbeddedResource Include="Prompts\Templates\*.md" />
   </ItemGroup>
+
 </Project>

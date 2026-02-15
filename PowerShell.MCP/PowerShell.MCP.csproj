@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="PowerShell.MCP.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="Resources\MCPLocationProvider.ps1" />
     <None Remove="Resources\MCPPollingEngine.ps1" />
     <None Remove="Resources\MCPCleanup.ps1" />

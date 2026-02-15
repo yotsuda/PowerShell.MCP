@@ -17,7 +17,18 @@ public static class PowerShellCommunication
         // Capture cache flag before AddToCache resets it
         _resultShouldCache = ExecutionState.ShouldCacheOutput;
 
-        // Always add to cache
+        // Truncate large output before caching to reduce pipe transfer and memory overhead
+        var output = OutputTruncationHelper.TruncateIfNeeded(result);
+        ExecutionState.AddToCache(output);
+        ExecutionState.CompleteExecution();
+        _resultReadyEvent.Set();
+    }
+
+    /// <summary>
+    /// Silent command completed — no truncation (internal use, small known outputs)
+    /// </summary>
+    public static void NotifySilentResultReady(string result)
+    {
         ExecutionState.AddToCache(result);
         ExecutionState.CompleteExecution();
         _resultReadyEvent.Set();
