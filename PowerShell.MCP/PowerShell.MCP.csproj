@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="PowerShell.MCP.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="Resources\MCPLocationProvider.ps1" />
     <None Remove="Resources\MCPPollingEngine.ps1" />
     <None Remove="Resources\MCPCleanup.ps1" />
@@ -44,9 +48,5 @@
     <Message Text="Copied Ude.NetStandard.dll to output directory" Importance="High" Condition="'@(UdeDll)' != ''" />
     <Warning Text="Ude.NetStandard.dll not found in NuGet packages!" Condition="'@(UdeDll)' == ''" />
   </Target>
-
-  <ItemGroup>
-    <ProjectReference Include="..\PowerShell.MCP.Shared\PowerShell.MCP.Shared.csproj" />
-  </ItemGroup>
 
 </Project>

@@ -1,5 +1,3 @@
-using PowerShell.MCP.Shared;
-
 namespace PowerShell.MCP.Services;
 
 /// <summary>

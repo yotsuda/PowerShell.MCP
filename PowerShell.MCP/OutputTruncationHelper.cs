@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace PowerShell.MCP.Shared;
+namespace PowerShell.MCP;
 
 /// <summary>
 /// Truncates large command output to preserve AI context window budget.
@@ -54,7 +54,7 @@ public static class OutputTruncationHelper
         if (filePath != null)
         {
             sb.AppendLine($"Output too large ({output.Length} characters). Full output saved to: {filePath}");
-            sb.AppendLine($"Use invoke_expression('Get-Content \"{filePath}\"') or Read tool to access the full output.");
+            sb.AppendLine($"Use invoke_expression('Show-TextFiles \"{filePath}\" -Contains \"search term\"') or -Pattern \"regex\" to search the output.");
         }
         else
         {

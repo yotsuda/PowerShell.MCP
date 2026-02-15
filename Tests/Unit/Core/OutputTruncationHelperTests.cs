@@ -1,7 +1,7 @@
-using PowerShell.MCP.Shared;
+using PowerShell.MCP;
 using Xunit;
 
-namespace PowerShell.MCP.Tests.Unit.Shared;
+namespace PowerShell.MCP.Tests.Unit.Core;
 
 public class OutputTruncationHelperTests : IDisposable
 {
@@ -112,16 +112,21 @@ public class OutputTruncationHelperTests : IDisposable
 
         var result = OutputTruncationHelper.TruncateIfNeeded(output, _testDir);
 
-        // The head preview should end at or near the newline, not at PreviewHeadSize
-        // Extract the head preview section (after the metadata, before "truncated")
-        var truncatedIndex = result.IndexOf("truncated");
+        // Extract the head content: appears after "--- Preview (first ~1000 chars) ---" + newline
+        var headMarker = "--- Preview (first ~1000 chars) ---" + Environment.NewLine;
+        var headStart = result.IndexOf(headMarker);
+        Assert.True(headStart >= 0, "Should contain head preview marker");
+        var headContentStart = headStart + headMarker.Length;
+
+        var truncatedMarker = "--- truncated";
+        var truncatedIndex = result.IndexOf(truncatedMarker, headContentStart);
         Assert.True(truncatedIndex > 0, "Should contain 'truncated' marker");
 
-        // The head preview area should not contain content beyond the newline
-        // (it should have been cut at the \n boundary)
-        var previewSection = result.Substring(0, truncatedIndex);
-        // Head portion should be shorter than PreviewHeadSize since it aligned to newline
-        Assert.Contains("\n", previewSection);
+        // Head content is between the marker and the truncated line (minus trailing newline from AppendLine)
+        var headContent = result.Substring(headContentStart, truncatedIndex - headContentStart)
+            .TrimEnd('\n', '\r');
+        // Head should have been cut at the newline (position 950+1 = 951 chars)
+        Assert.Equal(newlinePos + 1, headContent.Length + 1); // +1 because the \n is the cut point
     }
 
     [Fact]
@@ -140,13 +145,15 @@ public class OutputTruncationHelperTests : IDisposable
 
         var result = OutputTruncationHelper.TruncateIfNeeded(output, _testDir);
 
-        // The tail preview should start at the newline boundary
-        var lastPreviewMarker = result.LastIndexOf("Preview (last");
-        Assert.True(lastPreviewMarker > 0, "Should contain tail preview marker");
+        // Extract the tail content: appears after "--- Preview (last ~1000 chars) ---" + newline
+        var tailMarker = "--- Preview (last ~1000 chars) ---" + Environment.NewLine;
+        var tailMarkerPos = result.LastIndexOf(tailMarker);
+        Assert.True(tailMarkerPos >= 0, "Should contain tail preview marker");
+        var tailContent = result.Substring(tailMarkerPos + tailMarker.Length);
 
-        // The tail section after the marker should start near the newline
-        var tailSection = result.Substring(lastPreviewMarker);
-        Assert.Contains("\n", tailSection);
+        // Tail should start at the character after the planted newline
+        var expectedTail = output[(newlinePos + 1)..];
+        Assert.Equal(expectedTail, tailContent);
     }
 
     [Fact]

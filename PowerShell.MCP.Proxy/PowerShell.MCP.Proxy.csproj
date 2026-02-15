@@ -24,11 +24,6 @@
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
   </PropertyGroup>
 
-  <!-- Allow test project to access internal members -->
-  <ItemGroup>
-    <InternalsVisibleTo Include="PowerShell.MCP.Tests" />
-  </ItemGroup>
-
   <ItemGroup>
     <!-- MCP SDK -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
@@ -67,7 +62,4 @@
     <EmbeddedResource Include="Prompts\Templates\*.md" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\PowerShell.MCP.Shared\PowerShell.MCP.Shared.csproj" />
-  </ItemGroup>
 </Project>

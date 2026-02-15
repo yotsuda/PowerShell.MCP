@@ -22,7 +22,6 @@
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
     <ProjectReference Include="..\PowerShell.MCP\PowerShell.MCP.csproj" />
-    <ProjectReference Include="..\PowerShell.MCP.Shared\PowerShell.MCP.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
