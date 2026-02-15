@@ -66,4 +66,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Prompts\Templates\*.md" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PowerShell.MCP.Shared\PowerShell.MCP.Shared.csproj" />
+  </ItemGroup>
 </Project>

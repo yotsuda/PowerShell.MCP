@@ -4,6 +4,7 @@ using System.Text;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Models;
 using System.Text.Json;
+using PowerShell.MCP.Shared;
 using PowerShell.MCP.Proxy.Helpers;
 
 namespace PowerShell.MCP.Proxy.Tools;

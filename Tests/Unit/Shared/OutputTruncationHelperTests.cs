@@ -1,7 +1,7 @@
-using PowerShell.MCP.Proxy.Helpers;
+using PowerShell.MCP.Shared;
 using Xunit;
 
-namespace PowerShell.MCP.Tests.Unit.Proxy;
+namespace PowerShell.MCP.Tests.Unit.Shared;
 
 public class OutputTruncationHelperTests : IDisposable
 {

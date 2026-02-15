@@ -534,7 +534,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     if ($null -eq $mcpOutput) {
                         $mcpOutput = "Command execution completed"
                     }
-                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
+                    [PowerShell.MCP.Services.PowerShellCommunication]::NotifySilentResultReady($mcpOutput)
                 }
             }
         } | Out-Null

@@ -45,4 +45,8 @@
     <Warning Text="Ude.NetStandard.dll not found in NuGet packages!" Condition="'@(UdeDll)' == ''" />
   </Target>
 
+  <ItemGroup>
+    <ProjectReference Include="..\PowerShell.MCP.Shared\PowerShell.MCP.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

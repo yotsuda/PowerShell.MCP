@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace PowerShell.MCP.Proxy.Helpers;
+namespace PowerShell.MCP.Shared;
 
 /// <summary>
 /// Truncates large command output to preserve AI context window budget.
@@ -8,7 +8,7 @@ namespace PowerShell.MCP.Proxy.Helpers;
 /// </summary>
 public static class OutputTruncationHelper
 {
-    internal const int TruncationThreshold = 5_000;
+    internal const int TruncationThreshold = 15_000;
     internal const int PreviewHeadSize = 1000;
     internal const int PreviewTailSize = 1000;
 
