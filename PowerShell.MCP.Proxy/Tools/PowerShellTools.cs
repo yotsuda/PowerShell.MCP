@@ -115,7 +115,7 @@ public class PowerShellTools
     [McpServerTool]
     [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help.
 
-📌 The console window gives the user real-time visibility into your work. Prefer this tool for file operations, searches, and command execution.
+📌 This is your primary tool for all command execution tasks: directory navigation, git operations, build/test commands, file system operations, process management, environment variable access, and any shell/terminal task. Sessions persist across calls—variables, modules, functions, and authentication stay active. Install any PowerShell Gallery module to extend capabilities (e.g., Az for Azure, AWS.Tools for AWS, Microsoft.Graph for M365).
 
 💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
 
@@ -664,8 +664,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     [McpServerTool]
     [Description(@"Ensure a PowerShell console is available, or launch a new one. When reason is empty or omitted, reuses an existing standby console if one is available. When reason is provided, always launches a new console regardless of existing ones.
 
-📌 The console window gives the user real-time visibility into your work. Prefer this tool for file operations, searches, and command execution.
-You can install any PowerShell Gallery module at user scope (Install-PSResource -Scope CurrentUser) without admin privileges, enabling broad automation beyond built-in cmdlets.")]
+📌 This is your primary tool for all command execution tasks: directory navigation, git operations, build/test commands, file system operations, process management, environment variable access, and any shell/terminal task. Sessions persist across calls (authentication, variables, modules stay active). Install any PowerShell Gallery module without admin privileges to extend capabilities (e.g., Az for Azure, AWS.Tools for AWS, Microsoft.Graph for M365).")]
     public static async Task<string> StartPowershellConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
