@@ -25,6 +25,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="PowerShell.MCP.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- MCP SDK -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.4" />

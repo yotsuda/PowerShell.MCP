@@ -145,8 +145,8 @@ public class OutputTruncationHelperTests : IDisposable
 
         var result = OutputTruncationHelper.TruncateIfNeeded(output, _testDir);
 
-        // Extract the tail content: appears after "--- Preview (last ~1000 chars) ---" + newline
-        var tailMarker = "--- Preview (last ~1000 chars) ---" + Environment.NewLine;
+        // Extract the tail content: appears after "--- Preview (last ~2000 chars) ---" + newline
+        var tailMarker = "--- Preview (last ~2000 chars) ---" + Environment.NewLine;
         var tailMarkerPos = result.LastIndexOf(tailMarker);
         Assert.True(tailMarkerPos >= 0, "Should contain tail preview marker");
         var tailContent = result.Substring(tailMarkerPos + tailMarker.Length);

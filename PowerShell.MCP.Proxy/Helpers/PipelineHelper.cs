@@ -34,8 +34,10 @@ public static partial class PipelineHelper
     }
 
     /// <summary>
-    /// Check for local variable assignments without scope prefix and return warning message
+    /// Check for local variable assignments without scope prefix and return warning message.
+    /// First call returns a detailed warning; subsequent calls return a compact 1-liner.
     /// </summary>
+    private static bool _scopeWarningDetailShown = false;
     public static string? CheckLocalVariableAssignments(string pipeline)
     {
         // Pattern: $varname = (but not $script:, $global:, $env:, $using:, $null, $true, $false)
@@ -44,20 +46,48 @@ public static partial class PipelineHelper
 
         if (matches.Count == 0) return null;
 
-        var vars = matches.Select(m => "$" + m.Groups[1].Value).Distinct().ToList();
-        if (vars.Count == 0) return null;
+        // Exclude variables that are for-loop initializers (e.g., for ($i = 0; ...))
+        var forLoopVars = ForLoopInitializerRegex().Matches(pipeline)
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
-        foreach (var v in vars)
+        var varNames = matches
+            .Select(m => m.Groups[1].Value)
+            .Where(v => !forLoopVars.Contains(v))
+            .Distinct()
+            .ToList();
+
+        if (varNames.Count == 0) return null;
+
+        if (!_scopeWarningDetailShown)
         {
-            sb.AppendLine($"  {v} → Consider using {v.Replace("$", "$script:")} to preserve across calls");
+            _scopeWarningDetailShown = true;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
+            foreach (var name in varNames)
+            {
+                sb.AppendLine($"  ${name} → Consider using $script:{name} to preserve across calls");
+            }
+            return sb.ToString().TrimEnd();
         }
-        return sb.ToString().TrimEnd();
+        else
+        {
+            // Compact reminder for subsequent calls
+            var varList = string.Join(", ", varNames.Select(n => "$" + n));
+            return $"⚠️ SCOPE: Use $script: prefix for: {varList}";
+        }
     }
+
+    /// <summary>
+    /// Resets the scope warning state. For testing only.
+    /// </summary>
+    internal static void ResetScopeWarningState() => _scopeWarningDetailShown = false;
 
     [GeneratedRegex(@"\$(?!script:|global:|env:|using:|null\b|true\b|false\b|_\b|\?\b|\^\b|\$\b|args\b|input\b|foreach\b|switch\b|Matches\b|PSItem\b)([a-zA-Z_]\w*)\s*=")]
     private static partial Regex LocalVariableRegex();
+
+    [GeneratedRegex(@"for\s*\(\s*\$([a-zA-Z_]\w*)\s*=", RegexOptions.IgnoreCase)]
+    private static partial Regex ForLoopInitializerRegex();
 
     /// <summary>
     /// Check if pipeline is 3+ lines (not added to history) and return warning message

@@ -10,7 +10,7 @@ public static class OutputTruncationHelper
 {
     internal const int TruncationThreshold = 15_000;
     internal const int PreviewHeadSize = 1000;
-    internal const int PreviewTailSize = 1000;
+    internal const int PreviewTailSize = 2000;
 
     // The threshold must exceed the combined preview sizes; otherwise the head
     // and tail slices overlap, producing duplicated content in the preview.
@@ -66,7 +66,7 @@ public static class OutputTruncationHelper
         sb.AppendLine("--- Preview (first ~1000 chars) ---");
         sb.AppendLine(head);
         sb.AppendLine($"--- truncated ({omitted} chars omitted) ---");
-        sb.AppendLine("--- Preview (last ~1000 chars) ---");
+        sb.AppendLine("--- Preview (last ~2000 chars) ---");
         sb.Append(tail);
 
         return sb.ToString();

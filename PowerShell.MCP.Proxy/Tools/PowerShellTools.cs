@@ -122,6 +122,9 @@ public class PowerShellTools
 ⚠️ CRITICAL - Variable Scope:
 Local variables are NOT preserved between invoke_expression calls. Use $script: or $global: scope to share variables across calls.
 
+⚠️ CRITICAL - String Interpolation:
+Double-quoted strings expand variables and subexpressions: ""$var"" becomes the value of $var, ""$(expr)"" evaluates expr. Use single quotes for literal strings: '$var' keeps the text $var as-is.
+
 ⚠️ CRITICAL - Verbose/Debug Output:
 Verbose and Debug streams are NOT visible to you. If you need verbose/debug information, ask the user to copy it from the console and share it with you.
 
@@ -362,19 +365,20 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     ? jsonResponse.StatusLine
                                     : $"⧗ Pipeline is still running | pwsh PID: {jsonResponse.Pid} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 timeoutResponse.AppendLine(timeoutStatusLine);
-                                // Then warnings (history warning before scope warning for user visibility)
+                                // History warning (important for user visibility)
                                 if (!string.IsNullOrEmpty(historyWarning))
                                 {
                                     timeoutResponse.AppendLine();
                                     timeoutResponse.AppendLine(historyWarning);
                                 }
+                                timeoutResponse.AppendLine();
+                                timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
+                                // Scope warning at the end (after instruction for better readability)
                                 if (!string.IsNullOrEmpty(scopeWarning))
                                 {
                                     timeoutResponse.AppendLine();
                                     timeoutResponse.AppendLine(scopeWarning);
                                 }
-                                timeoutResponse.AppendLine();
-                                timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
                                 return timeoutResponse.ToString();
 
                             case PipeStatus.Completed:
@@ -437,22 +441,23 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 }
                                 // Status line first
                                 successResponse.AppendLine(statusLine);
-                                // Then warnings (history warning before scope warning for user visibility)
+                                // History warning (important for user visibility)
                                 if (!string.IsNullOrEmpty(historyWarning))
                                 {
                                     successResponse.AppendLine();
                                     successResponse.AppendLine(historyWarning);
-                                }
-                                if (!string.IsNullOrEmpty(scopeWarning))
-                                {
-                                    successResponse.AppendLine();
-                                    successResponse.AppendLine(scopeWarning);
                                 }
                                 // Then output
                                 if (output.Length > 0)
                                 {
                                     successResponse.AppendLine();
                                     successResponse.Append(output);
+                                }
+                                // Scope warning at the end (after output for better readability)
+                                if (!string.IsNullOrEmpty(scopeWarning))
+                                {
+                                    successResponse.AppendLine();
+                                    successResponse.AppendLine(scopeWarning);
                                 }
                                 return successResponse.ToString();
                         }

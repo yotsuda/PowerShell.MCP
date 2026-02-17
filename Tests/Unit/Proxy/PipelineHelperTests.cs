@@ -5,6 +5,12 @@ namespace PowerShell.MCP.Tests.Unit.Proxy;
 
 public class PipelineHelperTests
 {
+    public PipelineHelperTests()
+    {
+        // Reset static state before each test
+        PipelineHelper.ResetScopeWarningState();
+    }
+
     #region Truncate Tests
 
     [Fact]
@@ -157,6 +163,44 @@ public class PipelineHelperTests
         // Count occurrences of "$foo →"
         var count = result.Split("$foo →").Length - 1;
         Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public void CheckLocalVariableAssignments_FirstCall_ReturnsDetailedWarning()
+    {
+        var result = PipelineHelper.CheckLocalVariableAssignments("$foo = 123");
+        Assert.NotNull(result);
+        Assert.Contains("SCOPE WARNING", result);
+        Assert.Contains("Consider using", result);
+    }
+
+    [Fact]
+    public void CheckLocalVariableAssignments_SecondCall_ReturnsCompactWarning()
+    {
+        // First call — detailed
+        PipelineHelper.CheckLocalVariableAssignments("$foo = 1");
+        // Second call — compact
+        var result = PipelineHelper.CheckLocalVariableAssignments("$bar = 2");
+        Assert.NotNull(result);
+        Assert.StartsWith("⚠️ SCOPE:", result);
+        Assert.Contains("$bar", result);
+        Assert.DoesNotContain("Consider using", result);
+    }
+
+    [Fact]
+    public void CheckLocalVariableAssignments_ForLoopInitializer_ReturnsNull()
+    {
+        var result = PipelineHelper.CheckLocalVariableAssignments("for ($i = 0; $i -lt 10; $i++) { Write-Host $i }");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckLocalVariableAssignments_ForLoopInitializer_MixedWithOtherVars_WarnsOnlyNonLoop()
+    {
+        var result = PipelineHelper.CheckLocalVariableAssignments("for ($i = 0; $i -lt 10; $i++) { $result = $i * 2 }");
+        Assert.NotNull(result);
+        Assert.Contains("$result", result);
+        Assert.DoesNotContain("$i →", result);
     }
 
     #endregion
