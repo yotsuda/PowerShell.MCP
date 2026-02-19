@@ -4,7 +4,7 @@
 
 if (-not (Test-Path Variable:global:McpTimer)) {
     $global:McpTimer = New-Object System.Timers.Timer 100
-    $global:McpTimer.AutoReset = $true
+    $global:McpTimer.AutoReset = $false
 
     # Trim PSReadLine history file if it exceeds 1MB to prevent input lag
     if ($IsWindows) {
@@ -62,7 +62,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
         -InputObject    $global:McpTimer `
         -EventName      Elapsed `
         -SourceIdentifier MCP_Poll `
-        -Action {
+        -Action { try {
             # Update heartbeat to indicate runspace is available
             [PowerShell.MCP.Services.ExecutionState]::Heartbeat()
 
@@ -536,6 +536,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                     [PowerShell.MCP.Services.PowerShellCommunication]::NotifySilentResultReady($mcpOutput)
                 }
+            }
+            } finally {
+                # Restart one-shot timer for next poll
+                # (prevents event accumulation when the main runspace is busy with a user command)
+                $global:McpTimer.Start()
             }
         } | Out-Null
     $global:McpTimer.Start()
