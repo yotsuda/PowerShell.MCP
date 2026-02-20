@@ -14,13 +14,15 @@ namespace PowerShell.MCP.Services;
 /// </summary>
 public static class ExecutionState
 {
+    // Unified lock for all shared state (replaces the former _cacheLock)
+    private static readonly object _lock = new();
+
     private static bool _isBusy = false;
     private static readonly Stopwatch _stopwatch = new();
     private static string _currentPipeline = "";
 
     // Cached outputs (multiple outputs can accumulate)
     private static readonly List<string> _cachedOutputs = new();
-    private static readonly object _cacheLock = new();
 
     // Flag: should cache output on completion (set when busy/timeout response is sent)
     private static bool _shouldCacheOutput = false;
@@ -31,26 +33,32 @@ public static class ExecutionState
     private const int HeartbeatTimeoutMs = 10000; // If no heartbeat for 10s, runspace is likely busy
 
     /// <summary>
-    /// Gets the current status (derived from state)
+    /// Gets the current status (derived from state, atomically)
     /// </summary>
     public static string Status
     {
         get
         {
-            if (_isBusy) return "busy";
-            lock (_cacheLock)
+            lock (_lock)
             {
+                if (_isBusy) return "busy";
                 return _cachedOutputs.Count > 0 ? "completed" : "standby";
             }
         }
     }
 
-    public static string CurrentPipeline => _currentPipeline;
+    public static string CurrentPipeline
+    {
+        get { lock (_lock) { return _currentPipeline; } }
+    }
 
     /// <summary>
     /// Gets the elapsed time in seconds since execution started
     /// </summary>
-    public static double ElapsedSeconds => _stopwatch.Elapsed.TotalSeconds;
+    public static double ElapsedSeconds
+    {
+        get { lock (_lock) { return _stopwatch.Elapsed.TotalSeconds; } }
+    }
 
     /// <summary>
     /// Checks if there is cached output
@@ -59,7 +67,7 @@ public static class ExecutionState
     {
         get
         {
-            lock (_cacheLock)
+            lock (_lock)
             {
                 return _cachedOutputs.Count > 0;
             }
@@ -69,28 +77,50 @@ public static class ExecutionState
     /// <summary>
     /// Checks if output should be cached on completion
     /// </summary>
-    public static bool ShouldCacheOutput => _shouldCacheOutput;
+    public static bool ShouldCacheOutput
+    {
+        get { lock (_lock) { return _shouldCacheOutput; } }
+    }
 
     /// <summary>
     /// Updates the heartbeat timestamp. Called from PowerShell timer event.
     /// </summary>
     public static void Heartbeat()
     {
-        _lastHeartbeat = DateTime.UtcNow;
-        _firstHeartbeatReceived = true;
+        lock (_lock)
+        {
+            _lastHeartbeat = DateTime.UtcNow;
+            _firstHeartbeatReceived = true;
+        }
     }
 
     /// <summary>
     /// Checks if the PowerShell runspace is available (heartbeat is recent)
     /// </summary>
-    public static bool IsRunspaceAvailable =>
-        !_firstHeartbeatReceived || (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
+    public static bool IsRunspaceAvailable
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return !_firstHeartbeatReceived || (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
+            }
+        }
+    }
 
     /// <summary>
     /// Gets the estimated elapsed time in seconds since user command started (heartbeat timed out)
     /// </summary>
-    public static double UserCommandElapsedSeconds =>
-        (DateTime.UtcNow - _lastHeartbeat).TotalSeconds;
+    public static double UserCommandElapsedSeconds
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return (DateTime.UtcNow - _lastHeartbeat).TotalSeconds;
+            }
+        }
+    }
 
     /// <summary>
     /// Waits for a heartbeat to confirm runspace availability.
@@ -101,48 +131,57 @@ public static class ExecutionState
     /// </summary>
     public static bool WaitForHeartbeat(int heartbeatTimeoutMs = 10000, int recentThresholdMs = 500)
     {
-        if (!_firstHeartbeatReceived)
+        DateTime lastKnown;
+        double timeSinceLastMs;
+
+        lock (_lock)
         {
-            // No heartbeat received yet, assume available (module just loaded)
-            return true;
+            if (!_firstHeartbeatReceived)
+            {
+                return true;
+            }
+
+            timeSinceLastMs = (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds;
+            if (timeSinceLastMs < recentThresholdMs)
+            {
+                return true;
+            }
+            if (timeSinceLastMs >= heartbeatTimeoutMs)
+            {
+                return false;
+            }
+
+            lastKnown = _lastHeartbeat;
         }
 
-        // Check if heartbeat was received recently
-        var timeSinceLastHeartbeat = (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds;
-        if (timeSinceLastHeartbeat < recentThresholdMs)
-        {
-            return true; // Heartbeat is recent, runspace is available
-        }
-
-        // Check if already timed out (more than heartbeatTimeoutMs since last heartbeat)
-        if (timeSinceLastHeartbeat >= heartbeatTimeoutMs)
-        {
-            return false; // Already timed out, runspace is busy with user command
-        }
-
-        // Wait for remaining time until heartbeatTimeoutMs since last heartbeat
-        var remainingWaitMs = heartbeatTimeoutMs - timeSinceLastHeartbeat;
-        var lastKnownHeartbeat = _lastHeartbeat;
+        // Polling loop - acquire lock briefly each iteration to check state
+        var remainingWaitMs = heartbeatTimeoutMs - timeSinceLastMs;
         var waitEndTime = DateTime.UtcNow.AddMilliseconds(remainingWaitMs);
 
         while (DateTime.UtcNow < waitEndTime)
         {
-            if (_lastHeartbeat > lastKnownHeartbeat)
+            Thread.Sleep(50);
+            lock (_lock)
             {
-                return true; // Runspace is available
+                if (_lastHeartbeat > lastKnown)
+                {
+                    return true;
+                }
             }
-            Thread.Sleep(50); // Poll every 50ms
         }
 
-        return false; // No heartbeat received within timeout, runspace is busy
+        return false;
     }
 
     public static void SetBusy(string pipeline)
     {
-        _stopwatch.Restart();
-        _currentPipeline = pipeline;
-        _shouldCacheOutput = false;  // Reset flag
-        _isBusy = true;
+        lock (_lock)
+        {
+            _stopwatch.Restart();
+            _currentPipeline = pipeline;
+            _shouldCacheOutput = false;
+            _isBusy = true;
+        }
     }
 
     /// <summary>
@@ -151,7 +190,7 @@ public static class ExecutionState
     /// </summary>
     public static void MarkForCaching()
     {
-        _shouldCacheOutput = true;
+        lock (_lock) { _shouldCacheOutput = true; }
     }
 
     /// <summary>
@@ -159,9 +198,12 @@ public static class ExecutionState
     /// </summary>
     public static void CompleteExecution()
     {
-        _stopwatch.Stop();
-        _currentPipeline = "";
-        _isBusy = false;
+        lock (_lock)
+        {
+            _stopwatch.Stop();
+            _currentPipeline = "";
+            _isBusy = false;
+        }
     }
 
     /// <summary>
@@ -169,11 +211,11 @@ public static class ExecutionState
     /// </summary>
     public static void AddToCache(string output)
     {
-        lock (_cacheLock)
+        lock (_lock)
         {
             _cachedOutputs.Add(output);
+            _shouldCacheOutput = false;
         }
-        _shouldCacheOutput = false;
     }
 
     /// <summary>
@@ -181,7 +223,7 @@ public static class ExecutionState
     /// </summary>
     public static IReadOnlyList<string> PeekCachedOutputs()
     {
-        lock (_cacheLock)
+        lock (_lock)
         {
             return _cachedOutputs.ToList();
         }
@@ -192,7 +234,7 @@ public static class ExecutionState
     /// </summary>
     public static IReadOnlyList<string> ConsumeCachedOutputs()
     {
-        lock (_cacheLock)
+        lock (_lock)
         {
             var result = _cachedOutputs.ToList();
             _cachedOutputs.Clear();

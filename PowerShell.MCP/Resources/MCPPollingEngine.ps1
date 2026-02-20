@@ -383,11 +383,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
             # ===== Main Event Processing =====
 
-            # Handle execute command
-            $cmd = [PowerShell.MCP.Services.McpServerHost]::executeCommand
+            # Handle execute command (atomic read-and-clear)
+            $cmdSlot = [PowerShell.MCP.Services.McpServerHost]::ConsumeCommand()
+            $cmd = $cmdSlot.Command
             if ($cmd) {
-                [PowerShell.MCP.Services.McpServerHost]::executeCommand = $null
-
                 # Check for elevation patterns and prepend user consent prompt
                 if ($cmd -match '-Verb\s+RunAs|(?<!\w)runas[\s/]|(?<!\w)gsudo\s|(?<!\w)sudo\s') {
                     $global:__mcpElevationCmd = $cmd
@@ -395,8 +394,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
 
                 # Inject variables if provided (set before pipeline execution to bypass parser)
-                $cmdVariables = [PowerShell.MCP.Services.McpServerHost]::executeCommandVariables
-                [PowerShell.MCP.Services.McpServerHost]::executeCommandVariables = $null
+                $cmdVariables = $cmdSlot.Variables
                 if ($cmdVariables) {
                     foreach ($kvp in $cmdVariables.GetEnumerator()) {
                         Set-Variable -Name $kvp.Key -Value $kvp.Value
@@ -493,10 +491,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
 
-            # Handle silent execute command
-            $silentCmd = [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent
+            # Handle silent execute command (atomic read-and-clear)
+            $silentCmd = [PowerShell.MCP.Services.McpServerHost]::ConsumeSilentCommand()
             if ($silentCmd) {
-                [PowerShell.MCP.Services.McpServerHost]::executeCommandSilent = $null
 
                 $mcpOutput = $null
                 try {
