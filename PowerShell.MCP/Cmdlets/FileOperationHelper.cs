@@ -13,14 +13,15 @@ internal static class FileOperationHelper
     /// </summary>
     public static string CreateBackup(string filePath)
     {
-        var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+        var timestamp = DateTime.Now.ToString("yyyyMMddHHmmssfff");
         var backupPath = $"{filePath}.{timestamp}.bak";
         File.Copy(filePath, backupPath);
         return backupPath;
     }
 
     /// <summary>
-    /// Replace file atomically
+    /// Replace file atomically using File.Replace (NTFS transaction on Windows,
+    /// rename(2) on Unix). Falls back to move-based replacement on error.
     /// </summary>
     public static void ReplaceFileAtomic(string targetPath, string tempFile)
     {
@@ -31,21 +32,24 @@ internal static class FileOperationHelper
             return;
         }
 
-        // For existing files, atomic replacement
+        // File.Replace atomically swaps tempFile → targetPath with backup
         var backupTemp = targetPath + ".tmp";
-        if (File.Exists(backupTemp))
+        try
         {
-            File.Delete(backupTemp);
+            File.Replace(tempFile, targetPath, backupTemp);
         }
-
-        File.Move(targetPath, backupTemp);
-        File.Move(tempFile, targetPath);
-        File.Delete(backupTemp);
+        catch (PlatformNotSupportedException)
+        {
+            // Fallback for platforms where File.Replace is unsupported
+            if (File.Exists(backupTemp)) File.Delete(backupTemp);
+            File.Move(targetPath, backupTemp);
+            File.Move(tempFile, targetPath);
+        }
+        try { File.Delete(backupTemp); } catch { }
     }
 
     /// <summary>
     /// Replace entire file with new content
-    /// OPTIMIZED: Removed unnecessary line counting for better performance
     /// </summary>
     public static (int LinesRemoved, int LinesInserted) ReplaceEntireFile(
         string inputPath,
@@ -53,11 +57,16 @@ internal static class FileOperationHelper
         TextFileUtility.FileMetadata metadata,
         string[] contentLines)
     {
-        // OPTIMIZATION: Skip line counting since it's not critical information
-        // and requires reading the entire file
-        // If line count is needed for reporting, it can be done separately or on-demand
+        // Count original lines for accurate reporting
+        int originalLineCount = 0;
+        if (File.Exists(inputPath))
+        {
+            using var reader = new StreamReader(inputPath, metadata.Encoding, detectEncodingFromByteOrderMarks: true, bufferSize: 65536);
+            while (reader.ReadLine() != null)
+                originalLineCount++;
+        }
 
-        // Write new content directly
+        // Write new content
         using (var writer = new StreamWriter(outputPath, false, metadata.Encoding, 65536))
         {
             writer.NewLine = metadata.NewlineSequence;
@@ -75,9 +84,6 @@ internal static class FileOperationHelper
             }
         }
 
-        // Return 0 for removed lines since we're not counting them
-        // This is acceptable as the operation is "replace entire file"
-        // and the exact count of removed lines is not critical
-        return (0, contentLines.Length);
+        return (originalLineCount, contentLines.Length);
     }
 }

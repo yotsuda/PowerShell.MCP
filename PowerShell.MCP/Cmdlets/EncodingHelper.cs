@@ -75,8 +75,8 @@ public static class EncodingHelper
     }
 
     /// <summary>
-    /// Get encoding by name only (no file detection)
-    /// Returns null if encoding name is invalid
+    /// Canonical encoding alias resolver. Returns null if the name is unrecognized.
+    /// All encoding name → Encoding mappings live here (single source of truth).
     /// </summary>
     private static Encoding? GetEncodingByName(string encodingName)
     {
@@ -87,14 +87,54 @@ public static class EncodingHelper
                 // UTF encodings
                 "utf-8" or "utf8" or "utf8nobom" or "utf-8nobom" or "utf-8-nobom" or "utf8-nobom" => new UTF8Encoding(false),
                 "utf-8-bom" or "utf8-bom" or "utf8bom" or "utf8-sig" or "utf-8-sig" => new UTF8Encoding(true),
-                "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" => Encoding.Unicode,
-                "utf-16be" or "utf16be" => Encoding.BigEndianUnicode,
-                "utf-32" or "utf32" or "utf-32le" or "utf32le" => Encoding.UTF32,
+                "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" or "utf16bom" or "utf-16bom" or "utf16lebom" or "utf-16lebom" => Encoding.Unicode,
+                "utf-16be" or "utf16be" or "utf16bebom" or "utf-16bebom" => Encoding.BigEndianUnicode,
+                "utf-32" or "utf32" or "utf-32le" or "utf32le" or "utf32bom" or "utf-32bom" or "utf32lebom" or "utf-32lebom" => Encoding.UTF32,
+                "utf-32be" or "utf32be" or "utf32bebom" or "utf-32bebom" => new UTF32Encoding(true, true),
 
                 // Japanese encodings
                 "shift_jis" or "shift-jis" or "shiftjis" or "sjis" or "cp932" => Encoding.GetEncoding("shift_jis"),
                 "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
-                "iso-2022-jp" or "iso2022jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
+                "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
+
+                // Chinese encodings
+                "big-5" or "big5hkscs" or "cp950" => Encoding.GetEncoding("big5"),
+                "gb2312" or "gbk" or "gb18030" or "cp936" => Encoding.GetEncoding("gb2312"),
+
+                // Korean encodings
+                "euckr" or "cp949" => Encoding.GetEncoding("euc-kr"),
+
+                // Windows codepages (numeric)
+                "874" => Encoding.GetEncoding("windows-874"),     // Thai
+                "1250" => Encoding.GetEncoding("windows-1250"),   // Central European
+                "1251" => Encoding.GetEncoding("windows-1251"),   // Cyrillic
+                "1252" => Encoding.GetEncoding("windows-1252"),   // Western European
+                "1253" => Encoding.GetEncoding("windows-1253"),   // Greek
+                "1254" => Encoding.GetEncoding("windows-1254"),   // Turkish
+                "1255" => Encoding.GetEncoding("windows-1255"),   // Hebrew
+                "1256" => Encoding.GetEncoding("windows-1256"),   // Arabic
+                "1257" => Encoding.GetEncoding("windows-1257"),   // Baltic
+                "1258" => Encoding.GetEncoding("windows-1258"),   // Vietnamese
+
+                // Windows codepages (cp prefix)
+                "cp874" => Encoding.GetEncoding("windows-874"),
+                "cp1250" => Encoding.GetEncoding("windows-1250"),
+                "cp1251" => Encoding.GetEncoding("windows-1251"),
+                "cp1254" => Encoding.GetEncoding("windows-1254"),
+
+                // ISO-8859 variants
+                "latin-1" or "iso88591" or "iso_8859_1" => Encoding.GetEncoding("iso-8859-1"),   // Latin-1 (Western)
+                "latin-2" or "iso88592" or "iso_8859_2" => Encoding.GetEncoding("iso-8859-2"),   // Latin-2 (Central European)
+                "iso88595" or "iso_8859_5" => Encoding.GetEncoding("iso-8859-5"),                // Cyrillic
+                "iso88596" => Encoding.GetEncoding("iso-8859-6"),                                // Arabic
+                "iso88599" => Encoding.GetEncoding("iso-8859-9"),                                // Turkish
+                "latin-9" or "iso885915" => Encoding.GetEncoding("iso-8859-15"),                 // Latin-9
+
+                // Cyrillic encodings
+                "koi8u" => Encoding.GetEncoding("koi8-u"),       // Ukrainian
+
+                // Thai encodings
+                "tis620" => Encoding.GetEncoding("tis-620"),
 
                 // ASCII
                 "ascii" => Encoding.ASCII,
@@ -109,79 +149,17 @@ public static class EncodingHelper
     }
 
     /// <summary>
-    /// Get encoding from name or detect from file
+    /// Get encoding from name or detect from file.
+    /// Delegates to GetEncodingByName for alias resolution.
     /// </summary>
     public static Encoding GetEncoding(string filePath, string? encodingName)
     {
         if (!string.IsNullOrEmpty(encodingName))
         {
-            try
-            {
-                // Normalize common encoding aliases
-                return encodingName.ToLowerInvariant() switch
-                {
-                    // UTF encodings
-                    "utf-8" or "utf8" or "utf8nobom" or "utf-8nobom" or "utf-8-nobom" or "utf8-nobom" => new UTF8Encoding(false),
-                    "utf-8-bom" or "utf8-bom" or "utf8bom" or "utf8-sig" or "utf-8-sig" => new UTF8Encoding(true),
-                    "utf-16" or "utf16" or "utf-16le" or "utf16le" or "unicode" or "utf16bom" or "utf-16bom" or "utf16lebom" or "utf-16lebom" => Encoding.Unicode,
-                    "utf-16be" or "utf16be" or "utf16bebom" or "utf-16bebom" => Encoding.BigEndianUnicode,
-                    "utf-32" or "utf32" or "utf-32le" or "utf32le" or "utf32bom" or "utf-32bom" or "utf32lebom" or "utf-32lebom" => Encoding.UTF32,
-                    "utf-32be" or "utf32be" or "utf32bebom" or "utf-32bebom" => new UTF32Encoding(true, true),
-
-                    // Japanese encodings
-                    "shift_jis" or "shift-jis" or "shiftjis" or "sjis" or "cp932" => Encoding.GetEncoding("shift_jis"),
-                    "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
-                    "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
-
-                    // Chinese encodings
-                    "big-5" or "big5hkscs" or "cp950" => Encoding.GetEncoding("big5"),
-                    "gb2312" or "gbk" or "gb18030" or "cp936" => Encoding.GetEncoding("gb2312"),
-
-                    // Korean encodings
-                    "euckr" or "cp949" => Encoding.GetEncoding("euc-kr"),
-
-                    // Windows codepages (numeric)
-                    "874" => Encoding.GetEncoding("windows-874"),     // Thai
-                    "1250" => Encoding.GetEncoding("windows-1250"),   // Central European
-                    "1251" => Encoding.GetEncoding("windows-1251"),   // Cyrillic
-                    "1252" => Encoding.GetEncoding("windows-1252"),   // Western European
-                    "1253" => Encoding.GetEncoding("windows-1253"),   // Greek
-                    "1254" => Encoding.GetEncoding("windows-1254"),   // Turkish
-                    "1255" => Encoding.GetEncoding("windows-1255"),   // Hebrew
-                    "1256" => Encoding.GetEncoding("windows-1256"),   // Arabic
-                    "1257" => Encoding.GetEncoding("windows-1257"),   // Baltic
-                    "1258" => Encoding.GetEncoding("windows-1258"),   // Vietnamese
-
-                    // Windows codepages (cp prefix)
-                    "cp874" => Encoding.GetEncoding("windows-874"),
-                    "cp1250" => Encoding.GetEncoding("windows-1250"),
-                    "cp1251" => Encoding.GetEncoding("windows-1251"),
-                    "cp1254" => Encoding.GetEncoding("windows-1254"),
-
-                    // ISO-8859 variants
-                    "latin-1" or "iso88591" or "iso_8859_1" => Encoding.GetEncoding("iso-8859-1"),   // Latin-1 (Western)
-                    "latin-2" or "iso88592" or "iso_8859_2" => Encoding.GetEncoding("iso-8859-2"),   // Latin-2 (Central European)
-                    "iso88595" or "iso_8859_5" => Encoding.GetEncoding("iso-8859-5"),                // Cyrillic
-                    "iso88596" => Encoding.GetEncoding("iso-8859-6"),                                // Arabic
-                    "iso88599" => Encoding.GetEncoding("iso-8859-9"),                                // Turkish
-                    "latin-9" or "iso885915" => Encoding.GetEncoding("iso-8859-15"),                 // Latin-9
-
-                    // Cyrillic encodings
-                    "koi8u" => Encoding.GetEncoding("koi8-u"),       // Ukrainian
-
-                    // Thai encodings
-                    "tis620" => Encoding.GetEncoding("tis-620"),
-
-                    // ASCII
-                    "ascii" => Encoding.ASCII,
-
-                    _ => Encoding.GetEncoding(encodingName)
-                };
-            }
-            catch
-            {
-                // Invalid encoding name specified, fall back to detection
-            }
+            var resolved = GetEncodingByName(encodingName);
+            if (resolved != null)
+                return resolved;
+            // Invalid encoding name, fall back to detection
         }
 
         return DetectEncoding(filePath);

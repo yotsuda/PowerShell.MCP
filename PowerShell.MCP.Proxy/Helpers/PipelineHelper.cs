@@ -37,7 +37,7 @@ public static partial class PipelineHelper
     /// Check for local variable assignments without scope prefix and return warning message.
     /// First call returns a detailed warning; subsequent calls return a compact 1-liner.
     /// </summary>
-    private static bool _scopeWarningDetailShown = false;
+    private static volatile bool _scopeWarningDetailShown = false;
     public static string? CheckLocalVariableAssignments(string pipeline)
     {
         // Pattern: $varname = (but not $script:, $global:, $env:, $using:, $null, $true, $false)
@@ -92,7 +92,7 @@ public static partial class PipelineHelper
     /// <summary>
     /// Check if pipeline is 3+ lines (not added to history) and return warning message
     /// </summary>
-    private static bool _historyNoteShown = false;
+    private static volatile bool _historyNoteShown = false;
     public static string? CheckMultiLineHistory(string pipeline)
     {
         var lineCount = pipeline.Split('\n').Length;

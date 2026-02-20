@@ -19,10 +19,13 @@ $ExecutionContext.SessionState.Module.OnRemove = {
 
         $stream = $assembly.GetManifestResourceStream($resourceName)
         if ($stream) {
-            $reader = New-Object System.IO.StreamReader($stream)
-            $cleanupScript = $reader.ReadToEnd()
-            $reader.Close()
-            $stream.Close()
+            try {
+                $reader = New-Object System.IO.StreamReader($stream)
+                $cleanupScript = $reader.ReadToEnd()
+            } finally {
+                if ($reader) { $reader.Dispose() }
+                if ($stream) { $stream.Dispose() }
+            }
 
             # Execute cleanup script
             Invoke-Expression $cleanupScript
@@ -322,8 +325,8 @@ function Install-ClaudeSkill {
 
             $shouldInstall = $true
             if ((Test-Path $destFile) -and -not $Force) {
-                $sourceHash = (Get-FileHash $sourceFile -Algorithm MD5).Hash
-                $destHash = (Get-FileHash $destFile -Algorithm MD5).Hash
+                $sourceHash = (Get-FileHash $sourceFile -Algorithm SHA256).Hash
+                $destHash = (Get-FileHash $destFile -Algorithm SHA256).Hash
 
                 if ($sourceHash -eq $destHash) {
                     Write-Verbose "Skill '$skillName' is already up to date"

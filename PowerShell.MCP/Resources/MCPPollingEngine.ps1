@@ -263,7 +263,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # Process information
                 foreach($info in $StreamResults.Information) {
                     if ($info -is [System.Management.Automation.InformationRecord]) {
-                        $messageData = if ($info.MessageData -ne $null) {
+                        $messageData = if ($null -ne $info.MessageData) {
                             $info.MessageData.ToString()
                         } else {
                             $info.ToString()

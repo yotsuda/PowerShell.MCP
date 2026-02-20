@@ -27,6 +27,7 @@ namespace PowerShell.MCP
     /// </summary>
     public class MCPModuleInitializer : IModuleAssemblyInitializer
     {
+        private static readonly object _serverLock = new();
         private static CancellationTokenSource? _tokenSource;
         private static NamedPipeServer? _namedPipeServer;
         public static readonly string ServerVersion = Assembly.GetExecutingAssembly().GetName().Version!.ToString();
@@ -35,19 +36,6 @@ namespace PowerShell.MCP
         {
             try
             {
-                // Clean up existing server if module is being re-imported (e.g., profile loaded it first)
-                if (_namedPipeServer != null)
-                {
-                    try
-                    {
-                        _tokenSource?.Cancel();
-                        _namedPipeServer.Dispose();
-                    }
-                    catch { }
-                    _namedPipeServer = null;
-                    _tokenSource = null;
-                }
-
                 // Read proxy PID from global variable (set by PowerShell.MCP.Proxy before Import-Module)
                 int? proxyPid = null;
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
@@ -72,9 +60,25 @@ namespace PowerShell.MCP
                     }
                 }
 
-                // Create Named Pipe server with proxy PID, agent ID (if available), and pwsh PID
-                _namedPipeServer = new NamedPipeServer(proxyPid, agentId);
-                _tokenSource = new CancellationTokenSource();
+                lock (_serverLock)
+                {
+                    // Clean up existing server if module is being re-imported (e.g., profile loaded it first)
+                    if (_namedPipeServer != null)
+                    {
+                        try
+                        {
+                            _tokenSource?.Cancel();
+                            _namedPipeServer.Dispose();
+                        }
+                        catch { }
+                        _namedPipeServer = null;
+                        _tokenSource = null;
+                    }
+
+                    // Create Named Pipe server with proxy PID, agent ID (if available), and pwsh PID
+                    _namedPipeServer = new NamedPipeServer(proxyPid, agentId);
+                    _tokenSource = new CancellationTokenSource();
+                }
 
                 // Load and execute MCP polling engine script
                 var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
@@ -87,24 +91,31 @@ namespace PowerShell.MCP
                 }
 
                 // Start Named Pipe Server
+                CancellationToken token;
+                NamedPipeServer server;
+                lock (_serverLock)
+                {
+                    token = _tokenSource!.Token;
+                    server = _namedPipeServer!;
+                }
                 Task.Run(async () =>
                 {
                     try
                     {
-                        await _namedPipeServer.StartAsync(_tokenSource.Token);
+                        await server.StartAsync(token);
                     }
                     catch (Exception)
                     {
                         // Silently ignore Named Pipe server errors
                     }
-                }, _tokenSource.Token);
+                }, token);
             }
             catch (Exception ex)
             {
                 // Output warning message for errors
                 using (var ps = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace))
                 {
-                    ps.AddScript($"Write-Warning '[PowerShell.MCP] Failed to start: {ex.Message}'");
+                    ps.AddScript($"Write-Warning '[PowerShell.MCP] Failed to start: {ex.Message.Replace("'", "''")}'");
                     ps.Invoke();
                 }
             }
@@ -140,37 +151,44 @@ namespace PowerShell.MCP
         /// <returns>The new pipe name after claiming</returns>
         public static string? ClaimConsole(int proxyPid, string? agentId = null)
         {
-            if (_namedPipeServer == null || _tokenSource == null)
-                return null;
-
-            try
+            lock (_serverLock)
             {
-                // Stop current server
-                _tokenSource.Cancel();
-                _namedPipeServer.Dispose();
+                if (_namedPipeServer == null || _tokenSource == null)
+                    return null;
 
-                // Create new server with proxy PID and agent ID
-                _namedPipeServer = new NamedPipeServer(proxyPid, agentId);
-                _tokenSource = new CancellationTokenSource();
-
-                // Start new server
-                Task.Run(async () =>
+                try
                 {
-                    try
-                    {
-                        await _namedPipeServer.StartAsync(_tokenSource.Token);
-                    }
-                    catch (Exception)
-                    {
-                        // Silently ignore Named Pipe server errors
-                    }
-                }, _tokenSource.Token);
+                    // Stop current server
+                    _tokenSource.Cancel();
+                    _namedPipeServer.Dispose();
 
-                return _namedPipeServer.PipeName;
-            }
-            catch (Exception)
-            {
-                return null;
+                    // Create new server with proxy PID and agent ID
+                    _namedPipeServer = new NamedPipeServer(proxyPid, agentId);
+                    _tokenSource = new CancellationTokenSource();
+
+                    // Capture for closure
+                    var server = _namedPipeServer;
+                    var token = _tokenSource.Token;
+
+                    // Start new server
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await server.StartAsync(token);
+                        }
+                        catch (Exception)
+                        {
+                            // Silently ignore Named Pipe server errors
+                        }
+                    }, token);
+
+                    return _namedPipeServer.PipeName;
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
             }
         }
 
@@ -180,7 +198,10 @@ namespace PowerShell.MCP
         /// <returns>The pipe name, or null if not initialized</returns>
         public static string? GetPipeName()
         {
-            return _namedPipeServer?.PipeName;
+            lock (_serverLock)
+            {
+                return _namedPipeServer?.PipeName;
+            }
         }
     }
 }
