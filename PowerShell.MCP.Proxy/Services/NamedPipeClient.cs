@@ -40,6 +40,8 @@ public class NamedPipeClient
         }
     }
 
+    private const int MaxMessageLength = 10 * 1024 * 1024; // 10 MB
+
     private async Task<string> ReceiveMessageAsync(NamedPipeClientStream pipeClient)
     {
         // 1. Read message length (4 bytes) reliably
@@ -49,9 +51,9 @@ public class NamedPipeClient
         var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
 
         // 2. Validate message length
-        if (messageLength < 0)
+        if (messageLength < 0 || messageLength > MaxMessageLength)
         {
-            throw new InvalidOperationException($"Invalid message length received: {messageLength}");
+            throw new InvalidOperationException($"Invalid message length received: {messageLength} (max {MaxMessageLength})");
         }
 
         // 3. Read message body reliably

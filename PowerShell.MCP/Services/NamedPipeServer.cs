@@ -370,12 +370,28 @@ public class NamedPipeServer : IDisposable
                 pipeSecurity);
         }
 
-        return new NamedPipeServerStream(
+        var pipeServer = new NamedPipeServerStream(
             PipeName,
             PipeDirection.InOut,
             NamedPipeServerStream.MaxAllowedServerInstances,
             PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous);
+
+        // Restrict Unix socket permissions to owner-only (rw-------)
+        try
+        {
+            var socketPath = Path.Combine(Path.GetTempPath(), $"CoreFxPipe_{PipeName}");
+            if (File.Exists(socketPath))
+            {
+                File.SetUnixFileMode(socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+        catch
+        {
+            // Best-effort: permission setting may fail if socket path convention differs
+        }
+
+        return pipeServer;
     }
 
     /// <summary>
@@ -819,6 +835,8 @@ Please provide how to update the MCP client configuration to the user.";
     /// <summary>
     /// Receives a message from Named Pipe
     /// </summary>
+    private const int MaxMessageLength = 10 * 1024 * 1024; // 10 MB
+
     private static async Task<string> ReceiveMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
         // Receive message length (4 bytes)
@@ -826,9 +844,9 @@ Please provide how to update the MCP client configuration to the user.";
         await ReadExactAsync(pipeServer, lengthBytes, cancellationToken);
         var messageLength = BitConverter.ToInt32(lengthBytes, 0);
 
-        if (messageLength <= 0)
+        if (messageLength <= 0 || messageLength > MaxMessageLength)
         {
-            throw new InvalidOperationException($"Invalid message length: {messageLength}");
+            throw new InvalidOperationException($"Invalid message length: {messageLength} (max {MaxMessageLength})");
         }
 
         // Receive message body

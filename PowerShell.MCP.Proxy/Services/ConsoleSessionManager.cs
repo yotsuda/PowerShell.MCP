@@ -496,7 +496,7 @@ public class ConsoleSessionManager
     {
         try
         {
-            Process.GetProcessById(pid);
+            using var process = Process.GetProcessById(pid);
             return true;
         }
         catch (ArgumentException)

@@ -386,11 +386,18 @@ function Install-ClaudeSkill {
     Use in the PowerShell repository after Start-PSBuild.
 #>
 function Stop-AllPwsh {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     param(
         [Parameter(Position = 0)]
         [string]$PwshPath
     )
+
+    $targets = Get-Process pwsh -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID }
+    $count = ($targets | Measure-Object).Count + 1  # +1 for self
+
+    if (-not $PSCmdlet.ShouldProcess("All $count pwsh processes (including this session)", "Stop")) {
+        return
+    }
 
     if ($PwshPath) {
         if (-not (Test-Path $PwshPath)) {
@@ -408,9 +415,7 @@ function Stop-AllPwsh {
     }
     else {
         # Stop all other pwsh processes
-        Get-Process pwsh -ErrorAction SilentlyContinue |
-            Where-Object { $_.Id -ne $PID } |
-            Stop-Process -Force -ErrorAction SilentlyContinue
+        $targets | Stop-Process -Force -ErrorAction SilentlyContinue
     }
 
     # Stop self last

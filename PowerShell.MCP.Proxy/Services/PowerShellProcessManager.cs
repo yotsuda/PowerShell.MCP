@@ -503,7 +503,7 @@ public static class PwshLauncherLinux
                     return false;
             }
 
-            Process.Start(psi);
+            Process.Start(psi)?.Dispose();
             return true;
         }
         catch
