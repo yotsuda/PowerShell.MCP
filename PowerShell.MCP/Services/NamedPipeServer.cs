@@ -4,6 +4,7 @@ using System.Security.Principal;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 
 namespace PowerShell.MCP.Services;
@@ -581,6 +582,8 @@ Please provide how to update the MCP client configuration to the user.";
                 var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement)
                     ? pipelineElement.GetString() ?? "" : "";
 
+                var cmdletWarning = BuildGetSetContentWarning(pipeline);
+
                 // Wait for heartbeat to confirm runspace is available
                 if (!ExecutionState.WaitForHeartbeat())
                 {
@@ -620,7 +623,8 @@ Please provide how to update the MCP client configuration to the user.";
                             status = "timeout",
                             pipeline = runningPipeline,
                             duration = roundedDuration,
-                            statusLine
+                            statusLine,
+                            warning = cmdletWarning
                         });
                         try
                         {
@@ -641,7 +645,8 @@ Please provide how to update the MCP client configuration to the user.";
                             status = "completed",
                             pipeline = runningPipeline,
                             duration = roundedDuration,
-                            statusLine
+                            statusLine,
+                            warning = cmdletWarning
                         });
                         try
                         {
@@ -657,6 +662,8 @@ Please provide how to update the MCP client configuration to the user.";
                         // Normal completion - return header JSON + blank line + body
                         var outputs = ExecutionState.ConsumeCachedOutputs();
                         var resultText = string.Join("\n\n", outputs);
+                        if (cmdletWarning != null)
+                            resultText += "\n\n" + cmdletWarning;
                         var header = JsonSerializer.Serialize(new
                         {
                             pid,
@@ -887,6 +894,26 @@ Please provide how to update the MCP client configuration to the user.";
             }
             totalBytesRead += bytesRead;
         }
+    }
+
+    /// <summary>
+    /// Returns a warning message if the pipeline uses Get-Content or Set-Content,
+    /// encouraging use of the optimized PowerShell.MCP text file cmdlets instead.
+    /// Returns null if no discouraged cmdlets are found.
+    /// </summary>
+    private static string? BuildGetSetContentWarning(string pipeline)
+    {
+        var warnings = new List<string>();
+
+        if (Regex.IsMatch(pipeline, @"\b(Get-Content|gc|cat|type)\b", RegexOptions.IgnoreCase))
+            warnings.Add("• Use Show-TextFiles instead of Get-Content (aliases: gc, cat, type)");
+
+        if (Regex.IsMatch(pipeline, @"\bSet-Content\b", RegexOptions.IgnoreCase))
+            warnings.Add("• Use Update-MatchInFile, Update-LinesInFile, Add-LinesToFile, or Remove-LinesFromFile instead of Set-Content");
+
+        if (warnings.Count == 0) return null;
+
+        return "⚠️ Preferred cmdlets for PowerShell.MCP console:\n" + string.Join("\n", warnings);
     }
 
     /// <summary>
