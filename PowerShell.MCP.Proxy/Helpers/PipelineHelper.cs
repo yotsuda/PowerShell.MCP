@@ -90,20 +90,6 @@ public static partial class PipelineHelper
     private static partial Regex ForLoopInitializerRegex();
 
     /// <summary>
-    /// Check if pipeline is 3+ lines (not added to history) and return warning message
-    /// </summary>
-    private static volatile bool _historyNoteShown = false;
-    public static string? CheckMultiLineHistory(string pipeline)
-    {
-        var lineCount = pipeline.Split('\n').Length;
-        if (_historyNoteShown || lineCount <= 2)
-            return null;
-
-        _historyNoteShown = true;
-        return "⚠️ HISTORY NOTE: Multi-line command (3+ lines) is not added to console history. If the user is learning, prefer single-line commands in subsequent calls so they can recall them with ↑ key.";
-    }
-
-    /// <summary>
     /// Format busy status line
     /// </summary>
     public static string FormatBusyStatus(string? statusLine, int pid, string? pipeline, double duration)

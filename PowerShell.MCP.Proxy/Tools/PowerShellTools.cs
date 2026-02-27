@@ -255,8 +255,6 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         // Check for local variable assignments without scope prefix
         var scopeWarning = CheckLocalVariableAssignments(pipeline);
-        // Check if multi-line command (not added to console history)
-        var historyWarning = PipelineHelper.CheckMultiLineHistory(pipeline);
 
         // Enforce var1/var2 usage for text editing cmdlets
         var var1Error = PipelineHelper.CheckVar1Enforcement(pipeline, var1, var2);
@@ -365,12 +363,6 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     ? jsonResponse.StatusLine
                                     : $"⧗ Pipeline is still running | pwsh PID: {jsonResponse.Pid} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 timeoutResponse.AppendLine(timeoutStatusLine);
-                                // History warning (important for user visibility)
-                                if (!string.IsNullOrEmpty(historyWarning))
-                                {
-                                    timeoutResponse.AppendLine();
-                                    timeoutResponse.AppendLine(historyWarning);
-                                }
                                 timeoutResponse.AppendLine();
                                 timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
                                 // Scope warning at the end (after instruction for better readability)
@@ -441,16 +433,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 }
                                 // Status line first
                                 successResponse.AppendLine(statusLine);
-                                // History warning (important for user visibility)
-                                if (!string.IsNullOrEmpty(historyWarning))
-                                {
-                                    successResponse.AppendLine();
-                                    successResponse.AppendLine(historyWarning);
-                                }
-                                // Then output
+                                // Then output (already starts with \n from body split)
                                 if (output.Length > 0)
                                 {
-                                    successResponse.AppendLine();
                                     successResponse.Append(output);
                                 }
                                 // Scope warning at the end (after output for better readability)

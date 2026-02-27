@@ -328,37 +328,6 @@ public class PowerShellToolsTests
     }
 
     [Fact]
-    public async Task InvokeExpression_MultiLineCommand_IncludesHistoryWarning()
-    {
-        // Arrange: multi-line command
-        var multiLineCmd = "if ($true) {\n    Get-Date\n}";
-        _mockPipeDiscoveryService
-            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
-
-        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "if ($true) {...", duration = 0.05 });
-        var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready";
-        _mockPowerShellService
-            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, multiLineCmd, It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(headerJson + "\n\n" + statusLine);
-
-        _mockPipeDiscoveryService
-            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CachedOutputResult("", ""));
-
-        // Act
-        var result = await PowerShellTools.InvokeExpression(
-            _mockPowerShellService.Object,
-            _mockPipeDiscoveryService.Object,
-            multiLineCmd,
-            agent_id: TestAgentId);
-
-        // Assert
-        Assert.Contains("HISTORY NOTE", result);
-        Assert.Contains("Multi-line command", result);
-    }
-
-    [Fact]
     public async Task InvokeExpression_TimeoutClamped_To170()
     {
         // Arrange
