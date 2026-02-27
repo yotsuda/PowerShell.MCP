@@ -2,10 +2,49 @@
 # Provides automatic cleanup when Remove-Module is executed
 
 
-# On Linux/macOS, PSReadLine interferes with timer events
-# Remove it to ensure MCP polling works correctly
+# On Linux/macOS, PSReadLine interferes with timer events.
+# Remove it and replace with a custom PSConsoleHostReadLine that polls
+# Console.KeyAvailable instead of blocking on Console.ReadLine().
+# This allows the MCP timer event action block to run between input polls.
 if (-not $IsWindows) {
     Remove-Module PSReadLine -ErrorAction SilentlyContinue
+
+    function global:PSConsoleHostReadLine {
+        $line = [System.Text.StringBuilder]::new()
+        while ($true) {
+            if ([Console]::KeyAvailable) {
+                $key = [Console]::ReadKey($true)
+                switch ($key.Key) {
+                    'Enter' {
+                        [Console]::WriteLine()
+                        return $line.ToString()
+                    }
+                    'Backspace' {
+                        if ($line.Length -gt 0) {
+                            $line.Length--
+                            [Console]::Write("`b `b")
+                        }
+                    }
+                    default {
+                        # Ctrl+C: cancel current line
+                        if ($key.Key -eq 'C' -and ($key.Modifiers -band [ConsoleModifiers]::Control)) {
+                            [Console]::WriteLine("^C")
+                            return ""
+                        }
+                        if ($key.KeyChar -ge ' ') {
+                            $line.Append($key.KeyChar) | Out-Null
+                            [Console]::Write($key.KeyChar)
+                        }
+                    }
+                }
+            } else {
+                # No input available - sleep briefly.
+                # PowerShell processes the event queue between pipeline statements,
+                # so the MCP timer action block can run during this Sleep.
+                Start-Sleep -Milliseconds 50
+            }
+        }
+    }
 }
 
 # Set OnRemove script block to execute cleanup automatically
