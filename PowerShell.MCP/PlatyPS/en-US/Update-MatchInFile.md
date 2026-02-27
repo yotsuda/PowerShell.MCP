@@ -169,51 +169,6 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -WhatIf
-Shows detailed preview of changes without modifying.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: wi
-
-Required: False
-Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Confirm
-Prompts for confirmation before running.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
-
-Required: False
-Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -222,9 +177,10 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ## NOTES
-- `-OldText` (literal) and `-Pattern` (regex) are mutually exclusive
-- `-OldText` supports multiline strings for whole-file replacement mode
-- `-WhatIf` shows detailed preview with highlighting
-- Newlines in `-Replacement` are normalized to match file's newline style
+- `-OldText` (literal) and `-Pattern` (regex) are mutually exclusive.
+- `-OldText` supports multiline strings for whole-file replacement mode.
+- `-WhatIf` shows detailed preview with highlighting.
+- Newlines in `-Replacement` are normalized to match file's newline style.
+- To pass text containing `$`, backticks, or quotes, use `var1`/`var2` parameters of `invoke_expression`: `Update-MatchInFile path -OldText $var1 -Replacement $var2`
 
 ## RELATED LINKS

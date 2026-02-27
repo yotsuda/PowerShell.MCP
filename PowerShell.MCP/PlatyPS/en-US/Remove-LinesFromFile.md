@@ -157,51 +157,6 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -WhatIf
-Shows what would happen without modifying.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: wi
-
-Required: False
-Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Confirm
-Prompts for confirmation before running.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
-
-Required: False
-Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -210,10 +165,11 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ## NOTES
-- At least one of `-LineRange`, `-Contains`, or `-Pattern` required
-- `-Contains` and `-Pattern` can be combined (OR condition)
-- `-Contains` supports multiline strings for whole-file removal mode (like `Update-MatchInFile -OldText`)
-- Multiline `-Contains` cannot be combined with `-Pattern` or tail `-LineRange`
-- `-LineRange` + `-Pattern`/`-Contains` = AND condition
+- At least one of `-LineRange`, `-Contains`, or `-Pattern` required.
+- `-Contains` and `-Pattern` can be combined (OR condition).
+- `-Contains` supports multiline strings for whole-file removal mode (like `Update-MatchInFile -OldText`).
+- Multiline `-Contains` cannot be combined with `-Pattern` or tail `-LineRange`.
+- `-LineRange` + `-Pattern`/`-Contains` = AND condition.
+- To pass literal text containing `$`, backticks, or quotes to `-Contains`, use the `var1` parameter of `invoke_expression`: `Remove-LinesFromFile path -Contains $var1`
 
 ## RELATED LINKS
