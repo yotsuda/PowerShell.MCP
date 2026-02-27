@@ -106,31 +106,6 @@ if ('Dll' -in $Target) {
 }
 
 # =============================================================================
-# Export Claude Code Skills from templates
-# =============================================================================
-Write-Host "[Skills] Exporting Claude Code skills..." -ForegroundColor Yellow
-
-$exportScript = Join-Path $PSScriptRoot 'Export-ClaudeSkills.ps1'
-if (Test-Path $exportScript) {
-    & $exportScript
-
-    # Copy skills to module directory
-    $skillsSource = Join-Path $stagingPath 'skills'
-    $skillsDest = Join-Path $OutputBase 'skills'
-
-    if (-not (Test-Path $skillsDest)) {
-        New-Item -Path $skillsDest -ItemType Directory -Force | Out-Null
-    }
-
-    Copy-Item (Join-Path $skillsSource '*.md') -Destination $skillsDest -Force
-    $copiedCount = (Get-ChildItem $skillsDest -Filter '*.md').Count
-    Write-Host "  Copied $copiedCount skill(s) to $skillsDest" -ForegroundColor Green
-} else {
-    Write-Warning "  Export-ClaudeSkills.ps1 not found, skipping skill export"
-}
-Write-Host ""
-
-# =============================================================================
 # Build PowerShell.MCP.Proxy (for specified platforms)
 # =============================================================================
 $proxyTargets = $Target | Where-Object { $_ -ne 'Dll' }
@@ -230,8 +205,7 @@ $allowedFiles = @(
 
 $allowedDirs = @(
     'bin',
-    'en-US',
-    'skills'
+    'en-US'
 )
 
 $unexpectedItems = @()
