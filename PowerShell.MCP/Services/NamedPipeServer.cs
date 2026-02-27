@@ -901,14 +901,17 @@ Please provide how to update the MCP client configuration to the user.";
     /// encouraging use of the optimized PowerShell.MCP text file cmdlets instead.
     /// Returns null if no discouraged cmdlets are found.
     /// </summary>
+    private static readonly Regex GetContentRegex = new(@"\b(Get-Content|gc|cat|type)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex SetContentRegex = new(@"\bSet-Content\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static string? BuildGetSetContentWarning(string pipeline)
     {
         var warnings = new List<string>();
 
-        if (Regex.IsMatch(pipeline, @"\b(Get-Content|gc|cat|type)\b", RegexOptions.IgnoreCase))
+        if (GetContentRegex.IsMatch(pipeline))
             warnings.Add("• Use Show-TextFiles instead of Get-Content (aliases: gc, cat, type)");
 
-        if (Regex.IsMatch(pipeline, @"\bSet-Content\b", RegexOptions.IgnoreCase))
+        if (SetContentRegex.IsMatch(pipeline))
             warnings.Add("• Use Update-MatchInFile, Update-LinesInFile, Add-LinesToFile, or Remove-LinesFromFile instead of Set-Content");
 
         if (warnings.Count == 0) return null;
