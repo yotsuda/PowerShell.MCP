@@ -17,7 +17,7 @@ public class ConsoleSessionManager
     /// <summary>
     /// Base pipe name prefix for PowerShell.MCP
     /// </summary>
-    public const string DefaultPipeName = "PowerShell.MCP.Communication";
+    public const string DefaultPipeName = "PSMCP";
 
     /// <summary>
     /// Error message when module is not imported
@@ -283,8 +283,8 @@ public class ConsoleSessionManager
     /// <summary>
     /// Enumerates PowerShell.MCP Named Pipes lazily by scanning the file system.
     /// Uses yield return for lazy evaluation - stops scanning when caller stops iterating.
-    /// Windows: \\.\pipe\PowerShell.MCP.Communication.*
-    /// Linux/macOS: /tmp/CoreFxPipe_PowerShell.MCP.Communication.*
+    /// Windows: \\.\pipe\PSMCP.*
+    /// Linux/macOS: /tmp/CoreFxPipe_PSMCP.*
     /// </summary>
     /// <param name="proxyPid">If specified, only returns pipes owned by this proxy</param>
     /// <param name="agentId">If specified with proxyPid, only returns pipes for this agent (format: {name}.{proxyPid}.{agentId}.*)</param>
@@ -368,10 +368,10 @@ public class ConsoleSessionManager
                 baseName = baseName.Substring("CoreFxPipe_".Length);
 
             // Count segments after DefaultPipeName
-            // Unowned: PowerShell.MCP.Communication.{pwshPid} = 4 segments
-            // Owned:   PowerShell.MCP.Communication.{proxyPid}.{agentId}.{pwshPid} = 6 segments
+            // Unowned: PSMCP.{pwshPid} = 2 segments
+            // Owned:   PSMCP.{proxyPid}.{agentId}.{pwshPid} = 4 segments
             var segments = baseName.Split('.');
-            if (segments.Length == 4 && int.TryParse(segments[^1], out _))
+            if (segments.Length == 2 && int.TryParse(segments[^1], out _))
             {
                 yield return pipe;
             }

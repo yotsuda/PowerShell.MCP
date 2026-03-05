@@ -76,7 +76,7 @@ public class PipelineHelperTests
     [Fact]
     public void GetPidString_ValidPipeName_ReturnsPid()
     {
-        var pipeName = "PowerShell.MCP.Communication.1234.5678";
+        var pipeName = "PSMCP.1234.5678";
         var result = PipelineHelper.GetPidString(pipeName);
         Assert.Equal("5678", result);
     }

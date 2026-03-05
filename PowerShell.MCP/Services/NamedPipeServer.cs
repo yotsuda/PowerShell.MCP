@@ -250,7 +250,7 @@ public static class ExecutionState
 /// </summary>
 public class NamedPipeServer : IDisposable
 {
-    public const string BasePipeName = "PowerShell.MCP.Communication";
+    public const string BasePipeName = "PSMCP";
     private const int MaxConcurrentConnections = 2; // Two pipe instances
 
     /// <summary>

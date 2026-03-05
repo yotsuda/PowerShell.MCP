@@ -62,7 +62,7 @@ jobs:
         # Wait for Named Pipe to appear
         echo "Waiting for Named Pipe..."
         for i in $(seq 1 60); do
-          PIPE=$(find /tmp -name "CoreFxPipe_PowerShell.MCP.*" 2>/dev/null | head -1)
+          PIPE=$(find /tmp -name "CoreFxPipe_PSMCP.*" 2>/dev/null | head -1)
           if [ -n "$PIPE" ]; then
             echo "Named Pipe found: $PIPE (after ${i}s)"
             break
@@ -86,12 +86,12 @@ jobs:
         $ErrorActionPreference = "Stop"
 
         # Find the Named Pipe
-        $pipes = Get-ChildItem /tmp/CoreFxPipe_PowerShell.MCP.* -ErrorAction SilentlyContinue
+        $pipes = Get-ChildItem /tmp/CoreFxPipe_PSMCP.* -ErrorAction SilentlyContinue
         if (-not $pipes) {
           # Also check TMPDIR
           $tmpdir = $env:TMPDIR
           if ($tmpdir) {
-            $pipes = Get-ChildItem "$tmpdir/CoreFxPipe_PowerShell.MCP.*" -ErrorAction SilentlyContinue
+            $pipes = Get-ChildItem "$tmpdir/CoreFxPipe_PSMCP.*" -ErrorAction SilentlyContinue
           }
         }
         if (-not $pipes) { throw "No Named Pipe found" }

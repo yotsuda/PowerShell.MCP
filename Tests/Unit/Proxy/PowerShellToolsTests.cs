@@ -18,7 +18,7 @@ public class PowerShellToolsTests
     private readonly Mock<IPowerShellService> _mockPowerShellService;
     private readonly Mock<IPipeDiscoveryService> _mockPipeDiscoveryService;
     private const string TestAgentId = "test-agent";
-    private const string TestPipeName = "PowerShell.MCP.Communication.1000.test-agent.2000";
+    private const string TestPipeName = "PSMCP.1000.test-agent.2000";
 
     public PowerShellToolsTests()
     {

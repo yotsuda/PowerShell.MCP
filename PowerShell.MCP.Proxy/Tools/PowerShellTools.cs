@@ -197,7 +197,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             var newPipeName = sessionManager.GetActivePipeName(agentId);
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
-            // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
+            // Extract PID from pipe name (format: PSMCP.{PID})
             var pid = GetPidString(newPipeName);
 
             // Build response: busy status first + message + location + completedOutputs
@@ -228,7 +228,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-            // Extract PID from pipe name (format: PowerShell.MCP.Communication.{PID})
+            // Extract PID from pipe name (format: PSMCP.{PID})
             var pid = GetPidString(readyPipeName);
 
             // Build response: busy status first + closedConsoleInfo + message + locationResult + completedOutputs

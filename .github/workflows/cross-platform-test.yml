@@ -312,7 +312,7 @@ jobs:
         Write-Host "=== Testing Named Pipe Communication ===" -ForegroundColor Cyan
 
         # Clean up any existing Named Pipe socket files (Linux/macOS)
-        $pipeName = "PowerShell.MCP.Communication"
+        $pipeName = "PSMCP"
         if (-not $IsWindows) {
           # Check both /tmp and $TMPDIR (macOS uses $TMPDIR)
           $pipeLocations = @("/tmp/CoreFxPipe_$pipeName")

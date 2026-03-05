@@ -270,6 +270,138 @@ function Get-MCPOwner {
 
 <#
 .SYNOPSIS
+    Installs PowerShell.MCP skills for Claude Code.
+
+.DESCRIPTION
+    Copies skill files from the PowerShell.MCP module to the Claude Code skills directory
+    (~/.claude/skills/). These skills provide slash commands for common PowerShell.MCP operations.
+
+.PARAMETER Name
+    Specifies the names of skills to install. If not specified, all available skills are installed.
+    Available skills: ps-analyze, ps-create-procedure, ps-dictation, ps-exec-procedure, ps-html-guidelines, ps-learn, ps-map
+
+.PARAMETER Force
+    Overwrites existing skill files without prompting.
+
+.PARAMETER WhatIf
+    Shows what would happen if the cmdlet runs. The cmdlet is not run.
+
+.PARAMETER PassThru
+    Returns the installed skill file objects.
+
+.EXAMPLE
+    Install-ClaudeSkill
+    Installs all available skills to ~/.claude/skills/
+
+.EXAMPLE
+    Install-ClaudeSkill ps-analyze, ps-learn
+    Installs only the 'ps-analyze' and 'ps-learn' skills.
+
+.EXAMPLE
+    Install-ClaudeSkill -WhatIf
+    Shows which skills would be installed without actually installing them.
+
+.EXAMPLE
+    Install-ClaudeSkill ps-analyze -Force
+    Installs the 'ps-analyze' skill, overwriting if it exists.
+
+.OUTPUTS
+    System.IO.FileInfo (when -PassThru is specified)
+#>
+function Install-ClaudeSkill {
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([System.IO.FileInfo])]
+    param(
+        [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [ValidateSet('ps-analyze', 'ps-create-procedure', 'ps-dictation', 'ps-exec-procedure', 'ps-html-guidelines', 'ps-learn', 'ps-map')]
+        [string[]]$Name,
+
+        [switch]$Force,
+
+        [switch]$PassThru
+    )
+
+    begin {
+        $moduleSkillsPath = Join-Path $PSScriptRoot 'skills'
+        $userSkillsPath = Join-Path $HOME '.claude' 'skills'
+
+        if (-not (Test-Path $moduleSkillsPath)) {
+            throw "Skills directory not found in module: $moduleSkillsPath"
+        }
+
+        if (-not (Test-Path $userSkillsPath)) {
+            New-Item -Path $userSkillsPath -ItemType Directory -Force | Out-Null
+            Write-Verbose "Created directory: $userSkillsPath"
+        }
+
+        $skillsToInstall = @()
+    }
+
+    process {
+        if ($Name) {
+            $skillsToInstall += $Name
+        }
+    }
+
+    end {
+        $availableSkills = Get-ChildItem -Path $moduleSkillsPath -Filter '*.md' -File
+
+        if ($skillsToInstall.Count -eq 0) {
+            $skillsToInstall = $availableSkills | ForEach-Object { $_.BaseName }
+        }
+
+        $installedCount = 0
+        $skippedCount = 0
+
+        foreach ($skillName in $skillsToInstall | Select-Object -Unique) {
+            $sourceFile = Join-Path $moduleSkillsPath "$skillName.md"
+            $destFile = Join-Path $userSkillsPath "$skillName.md"
+
+            if (-not (Test-Path $sourceFile)) {
+                Write-Warning "Skill not found: $skillName"
+                continue
+            }
+
+            $shouldInstall = $true
+            if ((Test-Path $destFile) -and -not $Force) {
+                $sourceHash = (Get-FileHash $sourceFile -Algorithm SHA256).Hash
+                $destHash = (Get-FileHash $destFile -Algorithm SHA256).Hash
+
+                if ($sourceHash -eq $destHash) {
+                    Write-Verbose "Skill '$skillName' is already up to date"
+                    $skippedCount++
+                    $shouldInstall = $false
+                }
+                else {
+                    Write-Warning "Skill '$skillName' already exists with different content. Use -Force to overwrite."
+                    $skippedCount++
+                    $shouldInstall = $false
+                }
+            }
+
+            if ($shouldInstall -and $PSCmdlet.ShouldProcess($destFile, "Install skill '$skillName'")) {
+                Copy-Item -Path $sourceFile -Destination $destFile -Force
+                $installedCount++
+                Write-Host "Installed: $skillName" -ForegroundColor Green
+
+                if ($PassThru) {
+                    Get-Item $destFile
+                }
+            }
+        }
+
+        if (-not $WhatIfPreference) {
+            Write-Host "`nInstalled: $installedCount skill(s), Skipped: $skippedCount skill(s)" -ForegroundColor Cyan
+            if ($installedCount -gt 0) {
+                Write-Host "Restart Claude Code to use the new skills." -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
+
+<#
+.SYNOPSIS
     Stops all pwsh processes to release DLL locks.
 
 .DESCRIPTION

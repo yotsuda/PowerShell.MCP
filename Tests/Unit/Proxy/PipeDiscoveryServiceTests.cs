@@ -47,7 +47,7 @@ public class PipeDiscoveryServiceTests
         // Setup: Active pipe is in standby state
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99999";
+        var testPipeName = $"PSMCP.{proxyPid}.{DefaultAgentId}.99999";
 
         // Set the active pipe name (this requires the session manager to be aware of it)
         sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
@@ -70,7 +70,7 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99998";
+        var testPipeName = $"PSMCP.{proxyPid}.{DefaultAgentId}.99998";
 
         sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
@@ -92,7 +92,7 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99997";
+        var testPipeName = $"PSMCP.{proxyPid}.{DefaultAgentId}.99997";
 
         sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
@@ -113,7 +113,7 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99996";
+        var testPipeName = $"PSMCP.{proxyPid}.{DefaultAgentId}.99996";
 
         sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
@@ -156,7 +156,7 @@ public class PipeDiscoveryServiceTests
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PowerShell.MCP.Communication.{proxyPid}.{DefaultAgentId}.99995";
+        var testPipeName = $"PSMCP.{proxyPid}.{DefaultAgentId}.99995";
 
         sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
 
