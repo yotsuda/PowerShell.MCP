@@ -24,18 +24,6 @@ jobs:
     - name: Install PowerShell
       run: brew install powershell/tap/powershell
 
-    - name: Grant AppleScript access to Terminal.app
-      run: |
-        # Pre-authorize osascript to control Terminal.app via TCC database
-        # GitHub Actions runner has sudo access
-        sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
-          "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, indirect_object_identifier_type, indirect_object_identifier, flags, last_modified) VALUES ('kTCCServiceAppleEvents', '/usr/bin/osascript', 1, 2, 0, 1, 0, 'com.apple.Terminal', 0, strftime('%s','now'));" 2>&1 || true
-        # Also allow the runner agent
-        RUNNER_PATH=$(which Runner.Listener 2>/dev/null || echo "/Users/runner/runners/*/bin/Runner.Listener")
-        sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
-          "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, indirect_object_identifier_type, indirect_object_identifier, flags, last_modified) VALUES ('kTCCServiceAppleEvents', '/usr/bin/osascript', 1, 2, 0, 1, 1, 'com.apple.Terminal', 0, strftime('%s','now'));" 2>&1 || true
-        echo "TCC database updated"
-
     - name: Build and setup module
       run: |
         dotnet build PowerShell.MCP -c Release --no-incremental
@@ -53,125 +41,131 @@ jobs:
         echo "Module files:"
         ls -laR "$MODULE_PATH/"
 
-    - name: Test Terminal.app launch and invoke_expression (Issue #38)
+    - name: Launch pwsh in Terminal.app manually (bypass AppleScript TCC)
+      run: |
+        # AppleScript requires TCC approval which can't be granted in CI.
+        # Instead, use 'open' command to launch Terminal.app, then run pwsh via .zshrc trick.
+        # Create a launcher script that Terminal.app will execute on open.
+        MODULE_PATH="$HOME/.local/share/powershell/Modules/PowerShell.MCP"
+        PROXY_PID=$$
+
+        cat > /tmp/launch-pwsh.sh << LAUNCHER
+        #!/bin/zsh
+        export PATH="/opt/homebrew/bin:/usr/local/bin:\$PATH"
+        exec pwsh -NoExit -Command "\\\$global:PowerShellMCPProxyPid = ${PROXY_PID}; \\\$global:PowerShellMCPAgentId = 'default'; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue"
+        LAUNCHER
+        chmod +x /tmp/launch-pwsh.sh
+
+        # Open Terminal.app running our script
+        open -a Terminal /tmp/launch-pwsh.sh
+
+        # Wait for Named Pipe to appear
+        echo "Waiting for Named Pipe..."
+        for i in $(seq 1 60); do
+          PIPE=$(find /tmp -name "CoreFxPipe_PowerShell.MCP.*" 2>/dev/null | head -1)
+          if [ -n "$PIPE" ]; then
+            echo "Named Pipe found: $PIPE (after ${i}s)"
+            break
+          fi
+          sleep 1
+        done
+
+        if [ -z "$PIPE" ]; then
+          echo "ERROR: Named Pipe not found after 60s"
+          screencapture -x /tmp/screenshot-error.png 2>/dev/null
+          exit 1
+        fi
+
+        screencapture -x /tmp/screenshot-after-start.png 2>/dev/null
+        echo "Terminal.app with pwsh is running"
+
+    - name: Test invoke_expression via Named Pipe (Issue #38)
       shell: pwsh
-      timeout-minutes: 5
+      timeout-minutes: 3
       run: |
         $ErrorActionPreference = "Stop"
 
-        $proxyPath = Get-MCPProxyPath
-        Write-Host "Proxy path: $proxyPath"
-
-        # Start Proxy process
-        $psi = [System.Diagnostics.ProcessStartInfo]::new()
-        $psi.FileName = $proxyPath
-        $psi.RedirectStandardInput = $true
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.UseShellExecute = $false
-        $psi.CreateNoWindow = $true
-
-        $process = [System.Diagnostics.Process]::Start($psi)
-        Write-Host "Proxy started with PID: $($process.Id)"
-
-        function Send-JsonRpc {
-          param([string]$Json, [int]$TimeoutMs = 30000)
-          Write-Host "Sending: $($Json.Substring(0, [Math]::Min(120, $Json.Length)))..."
-          $process.StandardInput.WriteLine($Json)
-          $process.StandardInput.Flush()
-          $task = $process.StandardOutput.ReadLineAsync()
-          if ($task.Wait($TimeoutMs)) {
-            return $task.Result
-          } else {
-            throw "Timeout waiting for response after ${TimeoutMs}ms"
+        # Find the Named Pipe
+        $pipes = Get-ChildItem /tmp/CoreFxPipe_PowerShell.MCP.* -ErrorAction SilentlyContinue
+        if (-not $pipes) {
+          # Also check TMPDIR
+          $tmpdir = $env:TMPDIR
+          if ($tmpdir) {
+            $pipes = Get-ChildItem "$tmpdir/CoreFxPipe_PowerShell.MCP.*" -ErrorAction SilentlyContinue
           }
         }
+        if (-not $pipes) { throw "No Named Pipe found" }
 
-        try {
-          # 1. Initialize
-          Write-Host "`n=== Step 1: Initialize ===" -ForegroundColor Cyan
-          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-          Write-Host "OK: $($response.Substring(0, [Math]::Min(100, $response.Length)))..."
+        $pipeName = $pipes[0].Name -replace '^CoreFxPipe_', ''
+        Write-Host "Using pipe: $pipeName"
 
-          $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
-          $process.StandardInput.Flush()
-          Start-Sleep -Seconds 1
+        # Import module for NamedPipeClient
+        Import-Module PowerShell.MCP
 
-          # 2. Start console via Terminal.app
-          Write-Host "`n=== Step 2: start_powershell_console (Terminal.app) ===" -ForegroundColor Cyan
-          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"start_powershell_console","arguments":{"reason":"issue38 test","banner":"Issue #38 E2E Test"}}}' 60000
-          Write-Host "Response: $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
+        # Helper to send command via Named Pipe
+        function Send-PipeCommand {
+          param([string]$Pipeline, [int]$TimeoutSec = 30)
+          $client = [System.IO.Pipes.NamedPipeClientStream]::new('.', $pipeName)
+          $client.Connect($TimeoutSec * 1000)
+          $writer = [System.IO.StreamWriter]::new($client)
+          $reader = [System.IO.StreamReader]::new($client)
 
-          if ($response -match '"error"' -or $response -match 'Failed to start') {
-            Write-Host "ERROR in start_powershell_console response:" -ForegroundColor Red
-            Write-Host $response
-            screencapture -x /tmp/screenshot-error.png 2>$null
-            throw "start_powershell_console failed"
-          }
-          Write-Host "Terminal.app console started" -ForegroundColor Green
+          $json = @{ name = "invoke_expression"; pipeline = $Pipeline } | ConvertTo-Json -Compress
+          $writer.WriteLine($json)
+          $writer.Flush()
 
-          # Take screenshot after console start
-          screencapture -x /tmp/screenshot-after-start.png 2>$null
-          Write-Host "Screenshot saved: /tmp/screenshot-after-start.png"
-
-          # 3. Quick command - should execute without manual Enter
-          Write-Host "`n=== Step 3: invoke_expression (quick) ===" -ForegroundColor Cyan
-          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Write-Host TEST-QUICK -ForegroundColor Green"}}}' 30000
-          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
-
-          if ($response -match 'TEST-QUICK') {
-            Write-Host "PASS: Quick command executed without manual Enter" -ForegroundColor Green
-          } else {
-            Write-Host "WARN: TEST-QUICK not in response (may be first-call redirect)" -ForegroundColor Yellow
-          }
-
-          # 4. Delayed command - the main #38 scenario
-          Write-Host "`n=== Step 4: invoke_expression after 5s delay ===" -ForegroundColor Cyan
-          Start-Sleep -Seconds 5
-          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}' 30000
-          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
-
-          $today = Get-Date -Format "yyyy-MM-dd"
-          if ($response -match $today) {
-            Write-Host "PASS: Delayed command returned correct date ($today)" -ForegroundColor Green
-          } else {
-            Write-Host "FAIL: Expected date $today not found in response" -ForegroundColor Red
-            throw "Issue #38 regression: delayed command did not execute automatically"
-          }
-
-          # 5. Long-running command
-          Write-Host "`n=== Step 5: Long-running command (3s sleep) ===" -ForegroundColor Cyan
-          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Start-Sleep -Seconds 3; Write-Host LONG-DONE"}}}' 60000
-          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
-
-          if ($response -match 'LONG-DONE') {
-            Write-Host "PASS: Long-running command completed" -ForegroundColor Green
-          } else {
-            throw "Long-running command did not return expected output"
-          }
-
-          # 6. Command after long-running
-          Write-Host "`n=== Step 6: Command immediately after long-running ===" -ForegroundColor Cyan
-          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Write-Host AFTER-LONG"}}}' 30000
-          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
-
-          if ($response -match 'AFTER-LONG') {
-            Write-Host "PASS: Post-long command executed" -ForegroundColor Green
-          } else {
-            throw "Post-long command did not execute"
-          }
-
-          # Take final screenshot
-          screencapture -x /tmp/screenshot-final.png 2>$null
-
-          Write-Host "`n========================================" -ForegroundColor Green
-          Write-Host "ALL TESTS PASSED - Issue #38 not reproduced" -ForegroundColor Green
-          Write-Host "========================================" -ForegroundColor Green
-
-        } finally {
-          if (-not $process.HasExited) { $process.Kill() }
-          $process.Dispose()
+          $response = $reader.ReadLine()
+          $client.Dispose()
+          return $response
         }
+
+        # Test 1: Quick command
+        Write-Host "`n=== Test 1: Quick command ===" -ForegroundColor Cyan
+        $response = Send-PipeCommand "Write-Host TEST-QUICK -ForegroundColor Green"
+        Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
+        if ($response -match 'TEST-QUICK') {
+          Write-Host "PASS: Quick command executed" -ForegroundColor Green
+        } else {
+          throw "Quick command failed"
+        }
+
+        # Test 2: Delayed command (main #38 scenario)
+        Write-Host "`n=== Test 2: Command after 5s delay ===" -ForegroundColor Cyan
+        Start-Sleep -Seconds 5
+        $response = Send-PipeCommand "Get-Date -Format yyyy-MM-dd"
+        Write-Host "Response: $response"
+        $today = Get-Date -Format "yyyy-MM-dd"
+        if ($response -match $today) {
+          Write-Host "PASS: Delayed command returned correct date" -ForegroundColor Green
+        } else {
+          throw "Issue #38 regression: delayed command did not execute"
+        }
+
+        # Test 3: Long-running command
+        Write-Host "`n=== Test 3: Long-running command (3s) ===" -ForegroundColor Cyan
+        $response = Send-PipeCommand "Start-Sleep -Seconds 3; Write-Host LONG-DONE" 60
+        Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
+        if ($response -match 'LONG-DONE') {
+          Write-Host "PASS: Long-running command completed" -ForegroundColor Green
+        } else {
+          throw "Long-running command failed"
+        }
+
+        # Test 4: Command immediately after long-running
+        Write-Host "`n=== Test 4: Command after long-running ===" -ForegroundColor Cyan
+        $response = Send-PipeCommand "Write-Host AFTER-LONG"
+        Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
+        if ($response -match 'AFTER-LONG') {
+          Write-Host "PASS: Post-long command executed" -ForegroundColor Green
+        } else {
+          throw "Post-long command failed"
+        }
+
+        screencapture -x /tmp/screenshot-final.png 2>$null
+
+        Write-Host "`n========================================" -ForegroundColor Green
+        Write-Host "ALL TESTS PASSED - Issue #38 not reproduced" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Green
 
     - name: Upload screenshots
       if: always()
