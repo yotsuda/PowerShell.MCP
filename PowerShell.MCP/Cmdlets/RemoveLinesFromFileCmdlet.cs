@@ -307,11 +307,8 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     }
                                     else
                                     {
-                                        // Normal execution: display position marker only for first of consecutive deletions (no line number)
-                                        if (!wasRemoving)
-                                        {
-                                            WriteObject("   :");
-                                        }
+                                        // Normal execution: display deleted line in red (no line number)
+                                        WriteObject($"   : {AnsiColors.Deleted(currentLine)}");
                                     }
                                     linesRemoved++;
                                 }
@@ -519,26 +516,27 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 }
             }
 
-            // Match lines
+            // Display deleted lines in red
             if (dryRun)
             {
-                // WhatIf: show matched lines in red with match highlighted
                 for (int ln = matchStartLine; ln <= matchEndLine && ln <= allLines.Length; ln++)
                 {
                     if (ln > lastOutputLine)
                     {
-                        WriteObject($"{ln,3}: {AnsiColors.Red}{allLines[ln - 1]}{AnsiColors.Reset}");
+                        WriteObject($"{ln,3}: {AnsiColors.Deleted(allLines[ln - 1])}");
                         lastOutputLine = ln;
                     }
                 }
             }
             else
             {
-                // Normal: position marker
-                if (matchStartLine > lastOutputLine)
+                for (int ln = matchStartLine; ln <= matchEndLine && ln <= allLines.Length; ln++)
                 {
-                    WriteObject("   :");
-                    lastOutputLine = matchEndLine;
+                    if (ln > lastOutputLine)
+                    {
+                        WriteObject($"   : {AnsiColors.Deleted(allLines[ln - 1])}");
+                        lastOutputLine = ln;
+                    }
                 }
             }
 
@@ -709,19 +707,20 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 }
             }
 
-            // Display lines to be deleted
+            // Display deleted lines in red
             if (dryRun)
             {
-                // WhatIf: display deleted lines in red
                 foreach (var item in tailBuffer)
                 {
-                    WriteObject($"{item.lineNum,3}: {AnsiColors.Red}{item.line}{AnsiColors.Reset}");
+                    WriteObject($"{item.lineNum,3}: {AnsiColors.Deleted(item.line)}");
                 }
             }
             else
             {
-                // Normal execution: position marker only
-                WriteObject("   :");
+                foreach (var item in tailBuffer)
+                {
+                    WriteObject($"   : {AnsiColors.Deleted(item.line)}");
+                }
             }
 
             // Separate context and summary with empty line

@@ -165,6 +165,15 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                 {
                     // New file or empty file: write only new content
                     WriteNewContent(tempFile, contentLines, metadata);
+
+                    // Display all added content
+                    var displayPath = GetDisplayPath(originalPath, resolvedPath);
+                    WriteObject(AnsiColors.Header(displayPath));
+                    for (int i = 0; i < contentLines.Length; i++)
+                    {
+                        WriteObject($"{i + 1,3}: {AnsiColors.Inserted(contentLines[i])}");
+                    }
+                    WriteObject("");
                 }
                 else
                 {

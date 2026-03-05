@@ -10,33 +10,6 @@ namespace PowerShell.MCP.Cmdlets;
 [Cmdlet(VerbsData.Update, "LinesInFile", SupportsShouldProcess = true)]
 public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 {
-    /// <summary>
-    /// Context info collected by rotate buffer
-    /// </summary>
-    private class ContextData
-    {
-        // Previous 2 lines context
-        public string? ContextBefore2 { get; set; }
-        public string? ContextBefore1 { get; set; }
-        public int ContextBefore2Line { get; set; }
-        public int ContextBefore1Line { get; set; }
-
-        // Used only for deletion
-        public string? DeletedFirst { get; set; }
-        public string? DeletedSecond { get; set; }
-        public string? DeletedThirdLast { get; set; }  // Ring buffer (last 3 lines)
-        public string? DeletedSecondLast { get; set; }  // Ring buffer (last 2 lines)
-        public string? DeletedLast { get; set; }
-        public int DeletedCount { get; set; }
-        public int DeletedStartLine { get; set; }
-
-        // Next 2 lines context
-        public string? ContextAfter1 { get; set; }
-        public string? ContextAfter2 { get; set; }
-        public int ContextAfter1Line { get; set; }
-        public int ContextAfter2Line { get; set; }
-    }
-
     [Parameter(ParameterSetName = "Path", Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
     [SupportsWildcards]
     public string[] Path { get; set; } = null!;
@@ -202,37 +175,70 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         int linesRemoved;
         int linesInserted;
 
-        // Context info (collected by rotate buffer)
-        ContextData? context = null;
-        int totalLines = 0;
-
         try
         {
             if (isFullFileReplace)
             {
-                // Replace entire file (same method for new and existing)
-                (linesRemoved, linesInserted) = TextFileUtility.ReplaceEntireFile(
-                    resolvedPath,
-                    tempFile,
-                    metadata,
-                    contentLines);
+                linesRemoved = 0;
+                linesInserted = contentLines.Length;
+                var displayPath = GetDisplayPath(originalPath, resolvedPath);
+                bool headerShown = false;
+
+                // Read old file: display deleted lines + count (single pass)
+                if (fileExists && new FileInfo(resolvedPath).Length > 0)
+                {
+                    WriteObject(AnsiColors.Header(displayPath));
+                    headerShown = true;
+                    foreach (var line in File.ReadLines(resolvedPath, metadata.Encoding))
+                    {
+                        linesRemoved++;
+                        WriteObject($"   : {AnsiColors.Deleted(line)}");
+                    }
+                }
+
+                // Write new content to temp file
+                using (var writer = new StreamWriter(tempFile, false, metadata.Encoding, 65536))
+                {
+                    writer.NewLine = metadata.NewlineSequence;
+                    for (int i = 0; i < contentLines.Length; i++)
+                    {
+                        writer.Write(contentLines[i]);
+                        if (i < contentLines.Length - 1 || metadata.HasTrailingNewline)
+                        {
+                            writer.Write(metadata.NewlineSequence);
+                        }
+                    }
+                }
+
+                // Display new content in green
+                if (contentLines.Length > 0)
+                {
+                    if (!headerShown)
+                    {
+                        WriteObject(AnsiColors.Header(displayPath));
+                        headerShown = true;
+                    }
+                    for (int i = 0; i < contentLines.Length; i++)
+                    {
+                        WriteObject($"{i + 1,3}: {AnsiColors.Inserted(contentLines[i])}");
+                    }
+                }
+
+                if (headerShown) WriteObject("");
             }
             else
             {
-                // Replace line range + collect context (rotate buffer pattern)
-                bool collectContext = fileExists && LineRange != null;
-
+                // Replace line range with real-time display (single pass)
                 string? warningMessage;
-                (linesRemoved, linesInserted, totalLines, warningMessage, context) = ReplaceLineRangeWithContext(
+                (linesRemoved, linesInserted, warningMessage) = ReplaceLineRangeWithDisplay(
+                    originalPath,
                     resolvedPath,
                     tempFile,
                     metadata,
                     startLine,
                     endLine,
-                    contentLines,
-                    collectContext);
+                    contentLines);
 
-                // Output warning if any
                 if (!string.IsNullOrEmpty(warningMessage))
                 {
                     WriteWarning(warningMessage);
@@ -241,17 +247,6 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
             // Replace atomically
             TextFileUtility.ReplaceFileAtomic(resolvedPath, tempFile);
-
-            // Context display (from rotate buffer, no file re-read)
-            if (context != null)
-            {
-                OutputUpdateContext(originalPath, resolvedPath,
-                    context,
-                    startLine,
-                    linesInserted,
-                    totalLines,
-                    contentLines);
-            }
 
             // Result message
             string message = GenerateResultMessage(fileExists, linesRemoved, linesInserted);
@@ -287,35 +282,33 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
     }
 
     /// <summary>
-    /// Replace line range while building context buffer (single pass)
+    /// Replace line range with real-time display (single pass)
+    /// Display order: pre-context → deleted lines (red) → new lines (green) → post-context
     /// </summary>
-    private (int linesRemoved, int linesInserted, int totalLines, string? warningMessage, ContextData? context) ReplaceLineRangeWithContext(
+    private (int linesRemoved, int linesInserted, string? warningMessage) ReplaceLineRangeWithDisplay(
+        string originalPath,
         string inputPath,
         string outputPath,
         TextFileUtility.FileMetadata metadata,
         int startLine,
         int endLine,
-        string[] contentLines,
-        bool collectContext)
+        string[] contentLines)
     {
-        // Initialize variables for Context collection
-        ContextData? context = collectContext ? new ContextData() : null;
-        bool isDelete = contentLines.Length == 0;
+        var displayPath = GetDisplayPath(originalPath, inputPath);
+        bool headerPrinted = false;
+        bool displayedNewContent = false;
 
         int currentLine = 1;
         int outputLine = 1;
-        int linesRemoved = 0;  // Count actually processed lines
+        int linesRemoved = 0;
         int linesInserted = contentLines.Length;
         string? warningMessage = null;
         bool insertedContent = false;
 
-        // For deletion info collection
-        int deletedCount = 0;
+        // Pre-context rotate buffer
+        var preContextBuffer = new RotateBuffer<(string line, int outputLineNum)>(2);
+        int afterContextCounter = 0;
 
-        // After context counter
-        int afterCounter = 0;
-
-        // Record whether lines exist after replacement range
         bool hasLinesAfterRange = false;
 
         using (var reader = new StreamReader(inputPath, metadata.Encoding))
@@ -329,65 +322,43 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             {
                 hasNextLine = reader.Peek() != -1;
 
-                // Collect previous 2 lines context (just before range)
-                if (context != null)
-                {
-                    if (currentLine == startLine - 2)
-                    {
-                        context.ContextBefore2 = line;
-                        context.ContextBefore2Line = currentLine;
-                    }
-                    else if (currentLine == startLine - 1)
-                    {
-                        context.ContextBefore1 = line;
-                        context.ContextBefore1Line = currentLine;
-                    }
-                }
-
-                // Insert new content at start of replacement range
+                // Write new content to FILE at start of replacement range
                 if (currentLine == startLine && !insertedContent)
                 {
                     for (int i = 0; i < contentLines.Length; i++)
                     {
                         writer.Write(contentLines[i]);
-
-                        // Add newline after each line (final line handled separately)
                         if (i < contentLines.Length - 1)
                         {
                             writer.Write(metadata.NewlineSequence);
                         }
-                        // Final line handling determined at end of replacement range
                         outputLine++;
                     }
                     insertedContent = true;
                 }
 
-                // Process lines within replacement range
+                // Lines within replacement range
                 if (currentLine >= startLine && currentLine <= endLine)
                 {
-                    // Deletion: save lines being deleted
-                    if (isDelete && context != null)
+                    // First deleted line: print header + pre-context
+                    if (linesRemoved == 0)
                     {
-                        deletedCount++;
-
-                        // Save first 2 lines
-                        if (deletedCount == 1)
+                        if (!headerPrinted)
                         {
-                            context.DeletedFirst = line;
+                            WriteObject(AnsiColors.Header(displayPath));
+                            headerPrinted = true;
                         }
-                        else if (deletedCount == 2)
+                        foreach (var ctx in preContextBuffer)
                         {
-                            context.DeletedSecond = line;
+                            WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
                         }
-
-                        // Update last 3 lines with ring buffer
-                        context.DeletedThirdLast = context.DeletedSecondLast;
-                        context.DeletedSecondLast = context.DeletedLast;
-                        context.DeletedLast = line;
                     }
-                    linesRemoved++;  // Count actually deleted/replaced lines
 
-                    // At final line of replacement range, check if subsequent lines exist
+                    // Display deleted line in red (no line number)
+                    WriteObject($"   : {AnsiColors.Deleted(line)}");
+                    linesRemoved++;
+
+                    // At final line of replacement range
                     if (currentLine == endLine)
                     {
                         hasLinesAfterRange = hasNextLine;
@@ -397,14 +368,20 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                         {
                             if (hasLinesAfterRange)
                             {
-                                // Always add newline if subsequent lines exist
                                 writer.Write(metadata.NewlineSequence);
                             }
                             else if (metadata.HasTrailingNewline)
                             {
-                                // At file end, add newline only if original file had trailing newline
                                 writer.Write(metadata.NewlineSequence);
                             }
+                        }
+
+                        // If no more lines after range, display new content now
+                        if (!hasLinesAfterRange)
+                        {
+                            DisplayNewContent(contentLines, startLine);
+                            displayedNewContent = true;
+                            WriteObject("");
                         }
                     }
 
@@ -412,39 +389,51 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     continue;
                 }
 
+                // First line after range: display new content in green
+                if (insertedContent && !displayedNewContent)
+                {
+                    DisplayNewContent(contentLines, startLine);
+                    displayedNewContent = true;
+                    afterContextCounter = 2;
+                }
+
                 // Copy lines outside replacement range
                 writer.Write(line);
 
-                // Collect after context (2 lines just after range)
-                if (context != null && currentLine > endLine && afterCounter < 2)
+                // Post-context
+                if (afterContextCounter > 0)
                 {
-                    if (afterCounter == 0)
+                    WriteObject($"{outputLine,3}- {line}");
+                    afterContextCounter--;
+                    if (afterContextCounter == 0)
                     {
-                        context.ContextAfter1 = line;
-                        context.ContextAfter1Line = outputLine;
+                        WriteObject("");
                     }
-                    else if (afterCounter == 1)
-                    {
-                        context.ContextAfter2 = line;
-                        context.ContextAfter2Line = outputLine;
-                    }
-                    afterCounter++;
                 }
+
+                // Update pre-context buffer
+                preContextBuffer.Add((line, outputLine));
 
                 // Determine newline addition
                 if (hasNextLine)
                 {
-                    // Always add newline if subsequent lines exist
                     writer.Write(metadata.NewlineSequence);
                 }
                 else if (metadata.HasTrailingNewline)
                 {
-                    // At final line, add newline only if original file had trailing newline
                     writer.Write(metadata.NewlineSequence);
                 }
 
                 currentLine++;
                 outputLine++;
+            }
+
+            // Handle case where range extends beyond file end
+            if (insertedContent && !displayedNewContent)
+            {
+                DisplayNewContent(contentLines, startLine);
+                displayedNewContent = true;
+                WriteObject("");
             }
 
             // If replacement range not reached at file end
@@ -468,12 +457,10 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                 for (int i = 0; i < contentLines.Length; i++)
                 {
                     writer.Write(contentLines[i]);
-
                     if (i < contentLines.Length - 1)
                     {
                         writer.Write(metadata.NewlineSequence);
                     }
-                    // Final line handling: add newline only if original file had trailing newline
                     else if (metadata.HasTrailingNewline)
                     {
                         writer.Write(metadata.NewlineSequence);
@@ -483,71 +470,19 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
             }
         }
 
-        // Set Context info
-        if (context != null && isDelete)
-        {
-            context.DeletedCount = deletedCount;
-            context.DeletedStartLine = startLine;
-        }
-
-        int totalLines = outputLine - 1;
-        return (linesRemoved, linesInserted, totalLines, warningMessage, context);
+        return (linesRemoved, linesInserted, warningMessage);
     }
 
     /// <summary>
-    /// Display update context (from rotate buffer, no file re-read)
+    /// Display new content lines in green
     /// </summary>
-    private void OutputUpdateContext(string originalPath, string filePath,
-        ContextData context,
-        int startLine,
-        int linesInserted,
-        int totalLines,
-        string[] contentLines)
+    private void DisplayNewContent(string[] contentLines, int startLine)
     {
-        var displayPath = GetDisplayPath(originalPath, filePath);
-
-        // Output header
-        WriteObject(AnsiColors.Header(displayPath));
-
-        int endLine = startLine + linesInserted - 1;
-
-        // Previous 2 lines context
-        if (context.ContextBefore2Line > 0)
+        for (int i = 0; i < contentLines.Length; i++)
         {
-            WriteObject($"{context.ContextBefore2Line,3}- {context.ContextBefore2}");
+            int lineNum = startLine + i;
+            WriteObject($"{lineNum,3}: {AnsiColors.Inserted(contentLines[i])}");
         }
-        if (context.ContextBefore1Line > 0)
-        {
-            WriteObject($"{context.ContextBefore1Line,3}- {context.ContextBefore1}");
-        }
-
-        // Display updated lines
-        if (linesInserted == 0)
-        {
-            // Empty array: display only :
-            WriteObject($"   :");
-        }
-        else
-        {
-            for (int i = 0; i < linesInserted; i++)
-            {
-                int lineNum = startLine + i;
-                WriteObject($"{lineNum,3}: {AnsiColors.Inserted(contentLines[i])}");
-            }
-        }
-
-        // Next 2 lines context
-        if (context.ContextAfter1Line > 0)
-        {
-            WriteObject($"{context.ContextAfter1Line,3}- {context.ContextAfter1}");
-        }
-        if (context.ContextAfter2Line > 0)
-        {
-            WriteObject($"{context.ContextAfter2Line,3}- {context.ContextAfter2}");
-        }
-
-        // Separate context and summary with empty line
-        WriteObject("");
     }
 
     protected override void EndProcessing()
