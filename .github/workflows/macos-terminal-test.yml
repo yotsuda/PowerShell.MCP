@@ -1,0 +1,169 @@
+name: macOS Terminal E2E Test
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+permissions:
+  contents: read
+
+jobs:
+  test-macos-terminal:
+    runs-on: macos-14
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          9.0.x
+
+    - name: Install PowerShell
+      run: brew install powershell/tap/powershell
+
+    - name: Build and setup module
+      run: |
+        dotnet build PowerShell.MCP -c Release --no-incremental
+        dotnet publish PowerShell.MCP.Proxy -c Release -r osx-arm64 --self-contained
+
+        MODULE_PATH="$HOME/.local/share/powershell/Modules/PowerShell.MCP"
+        mkdir -p "$MODULE_PATH/bin/osx-arm64"
+        cp PowerShell.MCP/bin/Release/net8.0/PowerShell.MCP.dll "$MODULE_PATH/"
+        cp PowerShell.MCP/bin/Release/net8.0/Ude.NetStandard.dll "$MODULE_PATH/"
+        cp Staging/PowerShell.MCP.psd1 "$MODULE_PATH/"
+        cp Staging/PowerShell.MCP.psm1 "$MODULE_PATH/"
+        cp PowerShell.MCP.Proxy/bin/Release/net9.0/osx-arm64/publish/PowerShell.MCP.Proxy "$MODULE_PATH/bin/osx-arm64/"
+        chmod +x "$MODULE_PATH/bin/osx-arm64/PowerShell.MCP.Proxy"
+
+        echo "Module files:"
+        ls -laR "$MODULE_PATH/"
+
+    - name: Test Terminal.app launch and invoke_expression (Issue #38)
+      shell: pwsh
+      timeout-minutes: 5
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        $proxyPath = Get-MCPProxyPath
+        Write-Host "Proxy path: $proxyPath"
+
+        # Start Proxy process
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $proxyPath
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+
+        $process = [System.Diagnostics.Process]::Start($psi)
+        Write-Host "Proxy started with PID: $($process.Id)"
+
+        function Send-JsonRpc {
+          param([string]$Json, [int]$TimeoutMs = 30000)
+          Write-Host "Sending: $($Json.Substring(0, [Math]::Min(120, $Json.Length)))..."
+          $process.StandardInput.WriteLine($Json)
+          $process.StandardInput.Flush()
+          $task = $process.StandardOutput.ReadLineAsync()
+          if ($task.Wait($TimeoutMs)) {
+            return $task.Result
+          } else {
+            throw "Timeout waiting for response after ${TimeoutMs}ms"
+          }
+        }
+
+        try {
+          # 1. Initialize
+          Write-Host "`n=== Step 1: Initialize ===" -ForegroundColor Cyan
+          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+          Write-Host "OK: $($response.Substring(0, [Math]::Min(100, $response.Length)))..."
+
+          $process.StandardInput.WriteLine('{"jsonrpc":"2.0","method":"notifications/initialized"}')
+          $process.StandardInput.Flush()
+          Start-Sleep -Seconds 1
+
+          # 2. Start console via Terminal.app
+          Write-Host "`n=== Step 2: start_powershell_console (Terminal.app) ===" -ForegroundColor Cyan
+          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"start_powershell_console","arguments":{"reason":"issue38 test","banner":"Issue #38 E2E Test"}}}' 60000
+          Write-Host "Response: $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
+
+          if ($response -match '"error"') {
+            Write-Host "ERROR in start_powershell_console response:" -ForegroundColor Red
+            Write-Host $response
+            throw "start_powershell_console failed"
+          }
+          Write-Host "Terminal.app console started" -ForegroundColor Green
+
+          # Take screenshot after console start
+          screencapture -x /tmp/screenshot-after-start.png 2>$null
+          Write-Host "Screenshot saved: /tmp/screenshot-after-start.png"
+
+          # 3. Quick command - should execute without manual Enter
+          Write-Host "`n=== Step 3: invoke_expression (quick) ===" -ForegroundColor Cyan
+          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Write-Host TEST-QUICK -ForegroundColor Green"}}}' 30000
+          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
+
+          if ($response -match 'TEST-QUICK') {
+            Write-Host "PASS: Quick command executed without manual Enter" -ForegroundColor Green
+          } else {
+            Write-Host "WARN: TEST-QUICK not in response (may be first-call redirect)" -ForegroundColor Yellow
+          }
+
+          # 4. Delayed command - the main #38 scenario
+          Write-Host "`n=== Step 4: invoke_expression after 5s delay ===" -ForegroundColor Cyan
+          Start-Sleep -Seconds 5
+          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}' 30000
+          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
+
+          $today = Get-Date -Format "yyyy-MM-dd"
+          if ($response -match $today) {
+            Write-Host "PASS: Delayed command returned correct date ($today)" -ForegroundColor Green
+          } else {
+            Write-Host "FAIL: Expected date $today not found in response" -ForegroundColor Red
+            throw "Issue #38 regression: delayed command did not execute automatically"
+          }
+
+          # 5. Long-running command
+          Write-Host "`n=== Step 5: Long-running command (3s sleep) ===" -ForegroundColor Cyan
+          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Start-Sleep -Seconds 3; Write-Host LONG-DONE"}}}' 60000
+          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
+
+          if ($response -match 'LONG-DONE') {
+            Write-Host "PASS: Long-running command completed" -ForegroundColor Green
+          } else {
+            throw "Long-running command did not return expected output"
+          }
+
+          # 6. Command after long-running
+          Write-Host "`n=== Step 6: Command immediately after long-running ===" -ForegroundColor Cyan
+          $response = Send-JsonRpc '{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Write-Host AFTER-LONG"}}}' 30000
+          Write-Host "Response: $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
+
+          if ($response -match 'AFTER-LONG') {
+            Write-Host "PASS: Post-long command executed" -ForegroundColor Green
+          } else {
+            throw "Post-long command did not execute"
+          }
+
+          # Take final screenshot
+          screencapture -x /tmp/screenshot-final.png 2>$null
+
+          Write-Host "`n========================================" -ForegroundColor Green
+          Write-Host "ALL TESTS PASSED - Issue #38 not reproduced" -ForegroundColor Green
+          Write-Host "========================================" -ForegroundColor Green
+
+        } finally {
+          if (-not $process.HasExited) { $process.Kill() }
+          $process.Dispose()
+        }
+
+    - name: Upload screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-terminal-screenshots
+        path: /tmp/screenshot-*.png
+        if-no-files-found: ignore
