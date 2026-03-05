@@ -99,8 +99,10 @@ jobs:
         $pipeName = $pipes[0].Name -replace '^CoreFxPipe_', ''
         Write-Host "Using pipe: $pipeName"
 
-        # Import module for NamedPipeClient
+        # Import module and get version for protocol handshake
         Import-Module PowerShell.MCP
+        $moduleVersion = [PowerShell.MCP.MCPModuleInitializer]::ServerVersion
+        Write-Host "Module version: $moduleVersion"
 
         # Helper to send command via Named Pipe (4-byte length-prefixed binary protocol)
         function Send-PipeCommand {
@@ -108,7 +110,7 @@ jobs:
           $client = [System.IO.Pipes.NamedPipeClientStream]::new('.', $pipeName)
           $client.Connect($TimeoutSec * 1000)
 
-          $json = @{ name = "invoke_expression"; pipeline = $Pipeline } | ConvertTo-Json -Compress
+          $json = @{ name = "invoke_expression"; pipeline = $Pipeline; proxy_version = $moduleVersion } | ConvertTo-Json -Compress
           $msgBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
           $lenBytes = [BitConverter]::GetBytes([int]$msgBytes.Length)
 
