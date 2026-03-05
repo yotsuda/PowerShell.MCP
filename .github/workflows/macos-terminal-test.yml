@@ -102,21 +102,34 @@ jobs:
         # Import module for NamedPipeClient
         Import-Module PowerShell.MCP
 
-        # Helper to send command via Named Pipe
+        # Helper to send command via Named Pipe (4-byte length-prefixed binary protocol)
         function Send-PipeCommand {
           param([string]$Pipeline, [int]$TimeoutSec = 30)
           $client = [System.IO.Pipes.NamedPipeClientStream]::new('.', $pipeName)
           $client.Connect($TimeoutSec * 1000)
-          $writer = [System.IO.StreamWriter]::new($client)
-          $reader = [System.IO.StreamReader]::new($client)
 
           $json = @{ name = "invoke_expression"; pipeline = $Pipeline } | ConvertTo-Json -Compress
-          $writer.WriteLine($json)
-          $writer.Flush()
+          $msgBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+          $lenBytes = [BitConverter]::GetBytes([int]$msgBytes.Length)
 
-          $response = $reader.ReadLine()
+          # Send: 4-byte length prefix + message body
+          $client.Write($lenBytes, 0, 4)
+          $client.Write($msgBytes, 0, $msgBytes.Length)
+          $client.Flush()
+
+          # Receive: 4-byte length prefix + message body
+          $respLenBytes = [byte[]]::new(4)
+          $client.Read($respLenBytes, 0, 4) | Out-Null
+          $respLen = [BitConverter]::ToInt32($respLenBytes, 0)
+          $respBytes = [byte[]]::new($respLen)
+          $totalRead = 0
+          while ($totalRead -lt $respLen) {
+            $read = $client.Read($respBytes, $totalRead, $respLen - $totalRead)
+            if ($read -eq 0) { break }
+            $totalRead += $read
+          }
           $client.Dispose()
-          return $response
+          return [System.Text.Encoding]::UTF8.GetString($respBytes, 0, $totalRead)
         }
 
         # Test 1: Quick command
