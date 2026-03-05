@@ -24,6 +24,18 @@ jobs:
     - name: Install PowerShell
       run: brew install powershell/tap/powershell
 
+    - name: Grant AppleScript access to Terminal.app
+      run: |
+        # Pre-authorize osascript to control Terminal.app via TCC database
+        # GitHub Actions runner has sudo access
+        sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
+          "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, indirect_object_identifier_type, indirect_object_identifier, flags, last_modified) VALUES ('kTCCServiceAppleEvents', '/usr/bin/osascript', 1, 2, 0, 1, 0, 'com.apple.Terminal', 0, strftime('%s','now'));" 2>&1 || true
+        # Also allow the runner agent
+        RUNNER_PATH=$(which Runner.Listener 2>/dev/null || echo "/Users/runner/runners/*/bin/Runner.Listener")
+        sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
+          "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, indirect_object_identifier_type, indirect_object_identifier, flags, last_modified) VALUES ('kTCCServiceAppleEvents', '/usr/bin/osascript', 1, 2, 0, 1, 1, 'com.apple.Terminal', 0, strftime('%s','now'));" 2>&1 || true
+        echo "TCC database updated"
+
     - name: Build and setup module
       run: |
         dotnet build PowerShell.MCP -c Release --no-incremental
@@ -90,9 +102,10 @@ jobs:
           $response = Send-JsonRpc '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"start_powershell_console","arguments":{"reason":"issue38 test","banner":"Issue #38 E2E Test"}}}' 60000
           Write-Host "Response: $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
 
-          if ($response -match '"error"') {
+          if ($response -match '"error"' -or $response -match 'Failed to start') {
             Write-Host "ERROR in start_powershell_console response:" -ForegroundColor Red
             Write-Host $response
+            screencapture -x /tmp/screenshot-error.png 2>$null
             throw "start_powershell_console failed"
           }
           Write-Host "Terminal.app console started" -ForegroundColor Green
