@@ -17,33 +17,14 @@ public class PowerShellToolsTests
 {
     private readonly Mock<IPowerShellService> _mockPowerShellService;
     private readonly Mock<IPipeDiscoveryService> _mockPipeDiscoveryService;
-    private const string TestAgentId = "test-agent";
-    private const string TestPipeName = "PSMCP.1000.test-agent.2000";
+    private const string TestAgentId = "default";
+    private const string TestPipeName = "PSMCP.1000.default.2000";
 
     public PowerShellToolsTests()
     {
         _mockPowerShellService = new Mock<IPowerShellService>();
         _mockPipeDiscoveryService = new Mock<IPipeDiscoveryService>();
     }
-
-    #region GenerateAgentId Tests
-
-    [Fact]
-    public void GenerateAgentId_ReturnsEightCharHexString()
-    {
-        var id = PowerShellTools.GenerateAgentId();
-        Assert.Equal(8, id.Length);
-        Assert.Matches("^[0-9a-f]{8}$", id);
-    }
-
-    [Fact]
-    public void GenerateAgentId_ReturnsUniqueValues()
-    {
-        var ids = Enumerable.Range(0, 100).Select(_ => PowerShellTools.GenerateAgentId()).ToList();
-        Assert.Equal(ids.Count, ids.Distinct().Count());
-    }
-
-    #endregion
 
     #region GetCurrentLocation Tests
 
