@@ -41,6 +41,11 @@ public class ConsoleSessionManager
     private readonly Dictionary<string, AgentSessionState> _agentSessions = new();
 
     /// <summary>
+    /// Set of agent IDs allocated to sub-agents via is_subagent=true
+    /// </summary>
+    private readonly HashSet<string> _allocatedSubAgentIds = new();
+
+    /// <summary>
     /// Category index assigned to this proxy instance
     /// </summary>
     private readonly int _categoryIndex;
@@ -59,6 +64,11 @@ public class ConsoleSessionManager
     /// Set of pwsh PIDs that have been assigned a console title
     /// </summary>
     private readonly HashSet<int> _titledPids = new();
+
+    /// <summary>
+    /// Prefix for server-generated sub-agent IDs
+    /// </summary>
+    private const string SubAgentIdPrefix = "sa-";
 
     /// <summary>
     /// File path for shared memory backing (cross-platform)
@@ -80,76 +90,44 @@ public class ConsoleSessionManager
     private const int MagicNumber = 0x4D435043; // "MCPC"
 
     /// <summary>
-    /// Console name categories - each proxy gets a unique category
+    /// Console name categories - each proxy gets a unique category.
+    /// Each entry pairs a category name with its word list.
     /// </summary>
-    private static readonly string[][] Categories = new[]
+    private static readonly (string Name, string[] Words)[] Categories = new[]
     {
-        // Animals (15)
-        new[] { "Cat", "Dog", "Fox", "Wolf", "Bear", "Lion", "Tiger", "Panda", "Koala", "Rabbit", "Deer", "Zebra", "Gorilla", "Horse", "Elephant" },
-        // Zodiac (10)
-        new[] { "Aries", "Taurus", "Gemini", "Capricorn", "Leo", "Virgo", "Libra", "Scorpio", "Aquarius", "Pisces" },
-        // Gems (11)
-        new[] { "Sapphire", "Emerald", "Diamond", "Pearl", "Opal", "Topaz", "Ruby", "Amethyst", "Jade", "Garnet", "Onyx" },
-        // Planets & Moons (9)
-        new[] { "Venus", "Mars", "Jupiter", "Saturn", "Neptune", "Pluto", "Titan", "Europa", "Luna" },
-        // Colors (12)
-        new[] { "Red", "Blue", "Green", "Yellow", "Cyan", "Pink", "Purple", "Brown", "Gray", "White", "Black", "Indigo" },
-        // Flowers (13)
-        new[] { "Rose", "Lily", "Iris", "Daisy", "Lotus", "Orchid", "Tulip", "Jasmine", "Peony", "Poppy", "Magnolia", "Hibiscus", "Sunflower" },
-        // Birds (13)
-        new[] { "Eagle", "Falcon", "Sparrow", "Robin", "Swan", "Dove", "Parrot", "Penguin", "Owl", "Flamingo", "Hawk", "Raven", "Crow" },
-        // Trees (11)
-        new[] { "Oak", "Pine", "Maple", "Cedar", "Willow", "Birch", "Elm", "Ash", "Cypress", "Bamboo", "Sequoia" },
-        // Mountains (11)
-        new[] { "Mt.Fuji", "Everest", "K2", "Kilimanjaro", "Mt.Olympus", "Denali", "Mt.Blanc", "Matterhorn", "Vesuvius", "Etna", "Ararat" },
-        // Seas & Oceans (11)
-        new[] { "Pacific", "Atlantic", "Arctic", "Baltic", "Caspian", "Adriatic", "Norwegian", "Arabian", "Tasman", "Caribbean", "Coral" },
-        // Greek Mythology (14)
-        new[] { "Zeus", "Athena", "Hermes", "Artemis", "Hera", "Hades", "Poseidon", "Demeter", "Ares", "Apollo", "Aphrodite", "Dionysus", "Prometheus", "Orpheus" },
-        // Music Genres (12)
-        new[] { "Jazz", "Blues", "Rock", "Soul", "Funk", "Reggae", "Pop", "Punk", "Classical", "Techno", "Disco", "Gospel" },
-        // Weather (12)
-        new[] { "Sunny", "Cloudy", "Misty", "Sleet", "Drizzle", "Haze", "Stormy", "Foggy", "Snowy", "Frosty", "Windy", "Thunder" },
-        // Fruits (10)
-        new[] { "Mango", "Apple", "Peach", "Grape", "Melon", "Banana", "Plum", "Lemon", "Fig", "Cherry" },
-        // Fish (11)
-        new[] { "Salmon", "Tuna", "Goldfish", "Swordfish", "Catfish", "Trout", "Piranha", "Angelfish", "Koi", "Sardine", "Marlin" },
-        // Vegetables (14)
-        new[] { "Carrot", "Potato", "Tomato", "Onion", "Garlic", "Pumpkin", "Bean", "Corn", "Broccoli", "Radish", "Spinach", "Celery", "Lettuce", "Cabbage" },
-        // Dinosaurs (10)
-        new[] { "Rex", "Raptor", "Stego", "Diplo", "Tricera", "Ankylo", "Bronto", "Ptera", "Spino", "Pachy" },
-        // Cheese (10)
-        new[] { "Cheddar", "Gouda", "Brie", "Feta", "Mozzarella", "Parmesan", "Ricotta", "Camembert", "Edam", "Mascarpone" },
-        // Sports (11)
-        new[] { "Soccer", "Tennis", "Golf", "Baseball", "Basketball", "Rugby", "Hockey", "Volleyball", "Bowling", "Badminton", "Cricket" },
-        // Spices & Herbs (14)
-        new[] { "Cumin", "Sage", "Thyme", "Basil", "Oregano", "Paprika", "Saffron", "Clove", "Nutmeg", "Ginger", "Cinnamon", "Rosemary", "Turmeric", "Mint" },
-        // Instruments (13)
-        new[] { "Piano", "Guitar", "Violin", "Flute", "Drums", "Harp", "Cello", "Trumpet", "Bass", "Organ", "Ukulele", "Accordion", "Saxophone" },
-        // Dance Styles (12)
-        new[] { "Ballet", "Tap", "Polka", "Flamenco", "Breakdance", "Waltz", "Twist", "Hip-Hop", "Tango", "Samba", "Rumba", "Mambo" },
-        // Mythical Creatures (13)
-        new[] { "Dragon", "Griffin", "Unicorn", "Pegasus", "Phoenix", "Chimera", "Hydra", "Centaur", "Kraken", "Minotaur", "Cerberus", "Basilisk", "Leviathan" },
-        // Stars (15)
-        new[] { "Sirius", "Vega", "Polaris", "Rigel", "Altair", "Deneb", "Betelgeuse", "Antares", "Spica", "Proxima", "Canopus", "Arcturus", "Aldebaran", "Capella", "Regulus" },
-        // Chemical Elements (13)
-        new[] { "Helium", "Neon", "Argon", "Cobalt", "Nickel", "Copper", "Zinc", "Titanium", "Carbon", "Iron", "Platinum", "Lithium", "Silicon" },
-        // Architecture (13)
-        new[] { "Tower", "Castle", "Palace", "Manor", "Villa", "Temple", "Fortress", "Cathedral", "Abbey", "Lighthouse", "Pyramid", "Mosque", "Pagoda" },
-        // Desserts (15)
-        new[] { "Waffle", "Crepe", "Pie", "Donut", "Cupcake", "Pancake", "Cake", "Pudding", "Muffin", "Cookie", "Brownie", "Eclair", "Macaron", "Tiramisu", "Gelato" },
-        // Fabrics (15)
-        new[] { "Silk", "Velvet", "Cotton", "Linen", "Denim", "Satin", "Cashmere", "Tweed", "Flannel", "Suede", "Canvas", "Wool", "Jersey", "Fleece", "Nylon" },
-        // Islands (12)
-        new[] { "Bali", "Crete", "Malta", "Sicily", "Fiji", "Tahiti", "Bermuda", "Cyprus", "Borneo", "Okinawa", "Maui", "Zanzibar" },
-        // Vehicles (13)
-        new[] { "Car", "Bike", "Train", "Plane", "Boat", "Bus", "Taxi", "Truck", "Ship", "Subway", "Tram", "Ferry", "Yacht" },
-        // Pasta (10)
-        new[] { "Penne", "Fusilli", "Linguine", "Ravioli", "Lasagna", "Tagliatelle", "Tortellini", "Macaroni", "Fettuccine", "Spaghetti" },
-        // Sounds (13)
-        new[] { "Buzz", "Click", "Chirp", "Splash", "Boom", "Whisper", "Echo", "Hum", "Crackle", "Ping", "Sizzle", "Rumble", "Chime" },
-        // House Parts (13)
-        new[] { "Porch", "Window", "Balcony", "Attic", "Cellar", "Chimney", "Garage", "Pantry", "Hallway", "Door", "Stairs", "Roof", "Closet" },
+        ("Animals",      new[] { "Cat", "Dog", "Fox", "Wolf", "Bear", "Lion", "Tiger", "Panda", "Koala", "Rabbit", "Deer", "Zebra", "Gorilla", "Horse", "Elephant" }),
+        ("Zodiac",       new[] { "Aries", "Taurus", "Gemini", "Capricorn", "Leo", "Virgo", "Libra", "Scorpio", "Aquarius", "Pisces" }),
+        ("Gems",         new[] { "Sapphire", "Emerald", "Diamond", "Pearl", "Opal", "Topaz", "Ruby", "Amethyst", "Jade", "Garnet", "Onyx" }),
+        ("Planets",      new[] { "Venus", "Mars", "Jupiter", "Saturn", "Neptune", "Pluto", "Titan", "Europa", "Luna" }),
+        ("Colors",       new[] { "Red", "Blue", "Green", "Yellow", "Cyan", "Pink", "Purple", "Brown", "Gray", "White", "Black", "Indigo" }),
+        ("Flowers",      new[] { "Rose", "Lily", "Iris", "Daisy", "Lotus", "Orchid", "Tulip", "Jasmine", "Peony", "Poppy", "Magnolia", "Hibiscus", "Sunflower" }),
+        ("Birds",        new[] { "Eagle", "Falcon", "Sparrow", "Robin", "Swan", "Dove", "Parrot", "Penguin", "Owl", "Flamingo", "Hawk", "Raven", "Crow" }),
+        ("Trees",        new[] { "Oak", "Pine", "Maple", "Cedar", "Willow", "Birch", "Elm", "Ash", "Cypress", "Bamboo", "Sequoia" }),
+        ("Mountains",    new[] { "Mt.Fuji", "Everest", "K2", "Kilimanjaro", "Mt.Olympus", "Denali", "Mt.Blanc", "Matterhorn", "Vesuvius", "Etna", "Ararat" }),
+        ("Seas",         new[] { "Pacific", "Atlantic", "Arctic", "Baltic", "Caspian", "Adriatic", "Norwegian", "Arabian", "Tasman", "Caribbean", "Coral" }),
+        ("Mythology",    new[] { "Zeus", "Athena", "Hermes", "Artemis", "Hera", "Hades", "Poseidon", "Demeter", "Ares", "Apollo", "Aphrodite", "Dionysus", "Prometheus", "Orpheus" }),
+        ("Music",        new[] { "Jazz", "Blues", "Rock", "Soul", "Funk", "Reggae", "Pop", "Punk", "Classical", "Techno", "Disco", "Gospel" }),
+        ("Weather",      new[] { "Sunny", "Cloudy", "Misty", "Sleet", "Drizzle", "Haze", "Stormy", "Foggy", "Snowy", "Frosty", "Windy", "Thunder" }),
+        ("Fruits",       new[] { "Mango", "Apple", "Peach", "Grape", "Melon", "Banana", "Plum", "Lemon", "Fig", "Cherry" }),
+        ("Fish",         new[] { "Salmon", "Tuna", "Goldfish", "Swordfish", "Catfish", "Trout", "Piranha", "Angelfish", "Koi", "Sardine", "Marlin" }),
+        ("Vegetables",   new[] { "Carrot", "Potato", "Tomato", "Onion", "Garlic", "Pumpkin", "Bean", "Corn", "Broccoli", "Radish", "Spinach", "Celery", "Lettuce", "Cabbage" }),
+        ("Dinosaurs",    new[] { "Rex", "Raptor", "Stego", "Diplo", "Tricera", "Ankylo", "Bronto", "Ptera", "Spino", "Pachy" }),
+        ("Cheese",       new[] { "Cheddar", "Gouda", "Brie", "Feta", "Mozzarella", "Parmesan", "Ricotta", "Camembert", "Edam", "Mascarpone" }),
+        ("Sports",       new[] { "Soccer", "Tennis", "Golf", "Baseball", "Basketball", "Rugby", "Hockey", "Volleyball", "Bowling", "Badminton", "Cricket" }),
+        ("Spices",       new[] { "Cumin", "Sage", "Thyme", "Basil", "Oregano", "Paprika", "Saffron", "Clove", "Nutmeg", "Ginger", "Cinnamon", "Rosemary", "Turmeric", "Mint" }),
+        ("Instruments",  new[] { "Piano", "Guitar", "Violin", "Flute", "Drums", "Harp", "Cello", "Trumpet", "Bass", "Organ", "Ukulele", "Accordion", "Saxophone" }),
+        ("Dance",        new[] { "Ballet", "Tap", "Polka", "Flamenco", "Breakdance", "Waltz", "Twist", "Hip-Hop", "Tango", "Samba", "Rumba", "Mambo" }),
+        ("Creatures",    new[] { "Dragon", "Griffin", "Unicorn", "Pegasus", "Phoenix", "Chimera", "Hydra", "Centaur", "Kraken", "Minotaur", "Cerberus", "Basilisk", "Leviathan" }),
+        ("Stars",        new[] { "Sirius", "Vega", "Polaris", "Rigel", "Altair", "Deneb", "Betelgeuse", "Antares", "Spica", "Proxima", "Canopus", "Arcturus", "Aldebaran", "Capella", "Regulus" }),
+        ("Elements",     new[] { "Helium", "Neon", "Argon", "Cobalt", "Nickel", "Copper", "Zinc", "Titanium", "Carbon", "Iron", "Platinum", "Lithium", "Silicon" }),
+        ("Architecture", new[] { "Tower", "Castle", "Palace", "Manor", "Villa", "Temple", "Fortress", "Cathedral", "Abbey", "Lighthouse", "Pyramid", "Mosque", "Pagoda" }),
+        ("Desserts",     new[] { "Waffle", "Crepe", "Pie", "Donut", "Cupcake", "Pancake", "Cake", "Pudding", "Muffin", "Cookie", "Brownie", "Eclair", "Macaron", "Tiramisu", "Gelato" }),
+        ("Fabrics",      new[] { "Silk", "Velvet", "Cotton", "Linen", "Denim", "Satin", "Cashmere", "Tweed", "Flannel", "Suede", "Canvas", "Wool", "Jersey", "Fleece", "Nylon" }),
+        ("Islands",      new[] { "Bali", "Crete", "Malta", "Sicily", "Fiji", "Tahiti", "Bermuda", "Cyprus", "Borneo", "Okinawa", "Maui", "Zanzibar" }),
+        ("Vehicles",     new[] { "Car", "Bike", "Train", "Plane", "Boat", "Bus", "Taxi", "Truck", "Ship", "Subway", "Tram", "Ferry", "Yacht" }),
+        ("Pasta",        new[] { "Penne", "Fusilli", "Linguine", "Ravioli", "Lasagna", "Tagliatelle", "Tortellini", "Macaroni", "Fettuccine", "Spaghetti" }),
+        ("Sounds",       new[] { "Buzz", "Click", "Chirp", "Splash", "Boom", "Whisper", "Echo", "Hum", "Crackle", "Ping", "Sizzle", "Rumble", "Chime" }),
+        ("House",        new[] { "Porch", "Window", "Balcony", "Attic", "Cellar", "Chimney", "Garage", "Pantry", "Hallway", "Door", "Stairs", "Roof", "Closet" }),
     };
 
     private ConsoleSessionManager()
@@ -406,7 +384,7 @@ public class ConsoleSessionManager
     {
         if (_fixedNameOrder == null)
         {
-            _fixedNameOrder = Categories[_categoryIndex].ToArray();
+            _fixedNameOrder = Categories[_categoryIndex].Words.ToArray();
             for (int i = _fixedNameOrder.Length - 1; i > 0; i--)
             {
                 int j = Random.Shared.Next(i + 1);
@@ -480,7 +458,7 @@ public class ConsoleSessionManager
                 accessor.Write(offset + 4, validEntries[i].category);
             }
 
-            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Using category {categoryIndex} ({Categories[categoryIndex][0]}, {Categories[categoryIndex][1]}, ...)");
+            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Using category {categoryIndex} '{Categories[categoryIndex].Name}' ({Categories[categoryIndex].Words[0]}, {Categories[categoryIndex].Words[1]}, ...)");
             return categoryIndex;
         }
         finally
@@ -556,6 +534,39 @@ public class ConsoleSessionManager
         catch
         {
             // Ignore cleanup errors (shared memory may not exist)
+        }
+    }
+
+    /// <summary>
+    /// Allocates a unique agent ID for a sub-agent (format: "sa-xxxxxxxx").
+    /// </summary>
+    public string AllocateSubAgentId()
+    {
+        lock (_lock)
+        {
+            string id;
+            do
+            {
+                id = SubAgentIdPrefix + Guid.NewGuid().ToString("N")[..8];
+            } while (!_allocatedSubAgentIds.Add(id)); // Ensure uniqueness
+
+            Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Allocated sub-agent ID '{id}'");
+            return id;
+        }
+    }
+
+    /// <summary>
+    /// Validates whether the given agent_id is legitimate.
+    /// Returns true for "default" or any ID allocated via AllocateSubAgentId().
+    /// </summary>
+    public bool IsValidAgentId(string agentId)
+    {
+        if (agentId == "default")
+            return true;
+
+        lock (_lock)
+        {
+            return _allocatedSubAgentIds.Contains(agentId);
         }
     }
 }

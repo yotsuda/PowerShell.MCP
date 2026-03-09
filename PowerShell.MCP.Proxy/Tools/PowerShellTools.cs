@@ -55,11 +55,30 @@ public class PowerShellTools
         await powerShellService.SetWindowTitleAsync(pipeName, title, cancellationToken);
     }
 
-    [McpServerTool]
-    [Description("Generate a unique agent ID for console isolation. Call this once before using any other PowerShell tools if you are a sub-agent.")]
-    public static string GenerateAgentId()
+    /// <summary>
+    /// Resolves the agent ID from is_subagent and agent_id parameters.
+    /// If is_subagent=true and agent_id is empty, allocates a new ID.
+    /// Returns (agentId, isNewlyAllocated, errorMessage).
+    /// </summary>
+    private static (string agentId, bool isNewlyAllocated, string? error) ResolveAgentId(bool isSubAgent, string? agentId)
     {
-        return Guid.NewGuid().ToString("N")[..8];
+        if (!string.IsNullOrEmpty(agentId))
+        {
+            // Validate provided agent_id
+            var resolved = agentId!;
+            if (!ConsoleSessionManager.Instance.IsValidAgentId(resolved))
+                return (resolved, false, $"❌ Invalid agent_id '{resolved}'. Sub-agents must first call start_powershell_console with is_subagent=true to obtain a valid agent_id. Do not pass arbitrary strings as agent_id.");
+            return (resolved, false, null);
+        }
+
+        if (isSubAgent)
+        {
+            // Allocate new agent ID
+            var newId = ConsoleSessionManager.Instance.AllocateSubAgentId();
+            return (newId, true, null);
+        }
+
+        return ("default", false, null);
     }
 
     [McpServerTool]
@@ -67,11 +86,15 @@ public class PowerShellTools
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
-        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
+        [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
+        bool is_subagent = false,
         CancellationToken cancellationToken = default)
     {
-        var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
+        var (agentId, isNewlyAllocated, error) = ResolveAgentId(is_subagent, agent_id);
+        if (error != null)
+            return error;
 
         // Find a ready pipe
         var (readyPipeName, _, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
@@ -80,7 +103,7 @@ public class PowerShellTools
         {
             // No ready pipe - auto-start (StartPowershellConsole includes busy info collection)
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            return await StartPowershellConsole(powerShellService, pipeDiscoveryService, agent_id: agent_id, cancellationToken: cancellationToken);
+            return await StartPowershellConsole(powerShellService, pipeDiscoveryService, agent_id: agentId, is_subagent: is_subagent, cancellationToken: cancellationToken);
         }
 
         try
@@ -91,7 +114,7 @@ public class PowerShellTools
             // Collect completed outputs and busy status info from other pipes
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-            // Build response: busyStatusInfo + completedOutputs + result
+            // Build response: busyStatusInfo + completedOutputs + agentId info + result
             var response = new StringBuilder();
             if (busyStatusInfo.Length > 0)
             {
@@ -101,6 +124,11 @@ public class PowerShellTools
             if (completedOutputs.Length > 0)
             {
                 response.Append(completedOutputs);
+            }
+            if (isNewlyAllocated)
+            {
+                response.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
+                response.AppendLine();
             }
             response.Append(result);
             return response.ToString();
@@ -152,8 +180,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         string? var3 = null,
         [Description("Literal string value injected as $var4 in the pipeline, bypassing the PowerShell parser.")]
         string? var4 = null,
-        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
+        [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
+        bool is_subagent = false,
         CancellationToken cancellationToken = default)
     {
         // Clamp timeout to valid range
@@ -170,7 +200,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             if (var4 != null) parsedVariables["var4"] = var4;
         }
 
-        var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
+        var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
+        if (resolveError != null)
+            return resolveError;
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
@@ -208,6 +240,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 response.AppendLine();
             }
             response.AppendLine($"Started new console PID#{pid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
+            if (isNewlyAllocated)
+            {
+                response.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
+            }
             response.AppendLine();
             response.Append(locationResult);
             if (completedOutputs.Length > 0)
@@ -471,12 +507,23 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         IPipeDiscoveryService pipeDiscoveryService,
         [Description("Maximum seconds to wait for completion (1-170, default: 30). Returns early if a console completes.")]
         int timeout_seconds = 30,
-        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
+        [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
+        bool is_subagent = false,
         CancellationToken cancellationToken = default)
     {
         var sessionManager = ConsoleSessionManager.Instance;
+
+        // wait_for_completion requires an existing agent_id for sub-agents
+        if (is_subagent && string.IsNullOrEmpty(agent_id))
+            return "❌ Sub-agents must obtain an agent_id by calling start_powershell_console, get_current_location, or invoke_expression with is_subagent=true before calling wait_for_completion.";
+
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
+
+        // Validate agent_id
+        if (!ConsoleSessionManager.Instance.IsValidAgentId(agentId))
+            return $"❌ Invalid agent_id '{agentId}'. Sub-agents must first call start_powershell_console with is_subagent=true to obtain a valid agent_id. Do not pass arbitrary strings as agent_id.";
 
         timeout_seconds = Math.Clamp(timeout_seconds, 1, 170);
 
@@ -659,11 +706,16 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         string? banner = null,
         [Description("Optional starting directory path. If relative, resolved from home directory. Defaults to home directory if not specified.")]
         string? start_location = null,
-        [Description("Agent ID from generate_agent_id. Required for sub-agents to isolate their console sessions.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
+        [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
+        bool is_subagent = false,
         CancellationToken cancellationToken = default)
     {
-        var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
+        var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
+        if (resolveError != null)
+            return resolveError;
+
         var forceNew = !string.IsNullOrEmpty(reason);
 
         // When no reason is given, try to reuse an existing standby console
@@ -697,6 +749,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                     reuseResponse.Append(reuseCompletedOutput);
                 }
                 reuseResponse.AppendLine("ℹ️ Did not launch a new console. An existing standby console is available and will be reused. To force a new console, provide the reason parameter.");
+                if (isNewlyAllocated)
+                {
+                    reuseResponse.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
+                }
                 reuseResponse.AppendLine();
                 reuseResponse.Append(reuseLocationResult);
                 return reuseResponse.ToString();
@@ -739,6 +795,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             response.AppendLine();
         }
         response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
+        if (isNewlyAllocated)
+        {
+            response.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
+        }
         response.AppendLine();
         response.Append(startResult);
         return response.ToString();
