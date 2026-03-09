@@ -14,13 +14,13 @@ public class PowerShellTools
     /// <summary>
     /// Finds a ready pipe. Delegates to PipeDiscoveryService.
     /// </summary>
-    private static async Task<(string? readyPipeName, bool consoleSwitched, string? allPipesStatusInfo)> FindReadyPipeAsync(
+    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo)> FindReadyPipeAsync(
         IPipeDiscoveryService pipeDiscoveryService,
         string agentId,
         CancellationToken cancellationToken)
     {
         var result = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
-        return (result.ReadyPipeName, result.ConsoleSwitched, result.AllPipesStatusInfo);
+        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo);
     }
 
     private static string FormatBusyStatus(GetStatusResponse status)
@@ -97,7 +97,7 @@ public class PowerShellTools
             return error;
 
         // Find a ready pipe
-        var (readyPipeName, _, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, _, closedConsoleMessages, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -114,8 +114,13 @@ public class PowerShellTools
             // Collect completed outputs and busy status info from other pipes
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-            // Build response: busyStatusInfo + completedOutputs + agentId info + result
+            // Build response: closedConsoles + busyStatusInfo + completedOutputs + agentId info + result
             var response = new StringBuilder();
+            if (closedConsoleMessages.Count > 0)
+            {
+                response.AppendLine(string.Join("\n", closedConsoleMessages));
+                response.AppendLine();
+            }
             if (busyStatusInfo.Length > 0)
             {
                 response.Append(busyStatusInfo);
@@ -206,7 +211,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -232,8 +237,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             // Extract PID from pipe name (format: PSMCP.{PID})
             var pid = GetPidString(newPipeName);
 
-            // Build response: busy status first + message + location + completedOutputs
+            // Build response: closedConsoles + busy status first + message + location + completedOutputs
             var response = new StringBuilder();
+            if (closedConsoleMessages.Count > 0)
+            {
+                response.AppendLine(string.Join("\n", closedConsoleMessages));
+                response.AppendLine();
+            }
             if (busyStatusInfo.Length > 0)
             {
                 response.Append(busyStatusInfo);
@@ -267,8 +277,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             // Extract PID from pipe name (format: PSMCP.{PID})
             var pid = GetPidString(readyPipeName);
 
-            // Build response: busy status first + closedConsoleInfo + message + locationResult + completedOutputs
+            // Build response: closedConsoles + busy status + message + locationResult + completedOutputs
             var response = new StringBuilder();
+            if (closedConsoleMessages.Count > 0)
+            {
+                response.AppendLine(string.Join("\n", closedConsoleMessages));
+                response.AppendLine();
+            }
             if (busyStatusInfo.Length > 0)
             {
                 response.Append(busyStatusInfo);
@@ -455,6 +470,11 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 }
 
                                 var successResponse = new StringBuilder();
+                                if (closedConsoleMessages.Count > 0)
+                                {
+                                    successResponse.AppendLine(string.Join("\n", closedConsoleMessages));
+                                    successResponse.AppendLine();
+                                }
                                 if (busyStatusInfo.Length > 0)
                                 {
                                     successResponse.Append(busyStatusInfo);
