@@ -104,7 +104,7 @@ PowerShell.MCP complements your existing MCP setup by providing a flexible, gene
 
 ## Architecture
 
-Five tools provide maximum flexibility with minimum complexity:
+Four tools provide maximum flexibility with minimum complexity:
 
 | Tool | Purpose |
 |------|---------|
@@ -112,7 +112,6 @@ Five tools provide maximum flexibility with minimum complexity:
 | `get_current_location` | Get current directory and available drives |
 | `invoke_expression` | Execute any PowerShell command or CLI tool |
 | `wait_for_completion` | Wait for long-running commands to complete |
-| `generate_agent_id` | Generate a unique agent ID for sub-agent console isolation |
 
 ## Quick Start
 
