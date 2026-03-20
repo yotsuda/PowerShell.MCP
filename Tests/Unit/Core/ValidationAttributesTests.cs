@@ -32,10 +32,10 @@ public class ValidationAttributesTests
 
 
     [Fact]
-    public void Validate_MultipleValidLines_NoException()
+    public void Validate_ValidRange_NoException()
     {
         // Arrange
-        var validRange = new[] { 1, 5, 10 };
+        var validRange = "1,10";
 
         // Act & Assert
         var exception = Record.Exception(() => InvokeValidate(validRange));
@@ -48,7 +48,19 @@ public class ValidationAttributesTests
     public void Validate_LargeLineNumbers_NoException()
     {
         // Arrange
-        var validRange = new[] { 1000, 5000, 10000 };
+        var validRange = "1000,5000";
+
+        // Act & Assert
+        var exception = Record.Exception(() => InvokeValidate(validRange));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void Validate_DashFormat_NoException()
+    {
+        // Arrange
+        var validRange = "10-20";
 
         // Act & Assert
         var exception = Record.Exception(() => InvokeValidate(validRange));
@@ -66,7 +78,7 @@ public class ValidationAttributesTests
     public void Validate_ZeroLineNumber_ThrowsValidationException()
     {
         // Arrange
-        var invalidRange = new[] { 0 };
+        var invalidRange = "0";
 
         // Act & Assert
         var exception = Assert.Throws<TargetInvocationException>(() =>
@@ -81,7 +93,7 @@ public class ValidationAttributesTests
     public void Validate_NegativeSingleValue_IsValidForTailLines()
     {
         // Arrange - negative single value means "last N lines"
-        var validRange = new[] { -10 };
+        var validRange = "-10";
 
         // Act & Assert - should not throw
         var exception = Record.Exception(() => InvokeValidate(validRange));
@@ -96,14 +108,18 @@ public class ValidationAttributesTests
     #region Edge Cases
 
     [Fact]
-    public void Validate_EmptyArray_NoException()
+    public void Validate_EmptyString_NoException()
     {
-        // Arrange
-        var emptyRange = new int[] { };
+        // Arrange & Act & Assert
+        var exception = Record.Exception(() => InvokeValidate(""));
+        Assert.Null(exception);
+    }
 
-        // Act & Assert
-        var exception = Record.Exception(() => InvokeValidate(emptyRange));
-
+    [Fact]
+    public void Validate_Null_NoException()
+    {
+        // Arrange & Act & Assert
+        var exception = Record.Exception(() => InvokeValidate(null));
         Assert.Null(exception);
     }
 

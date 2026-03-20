@@ -26,7 +26,7 @@ public class TextFileCmdletBaseTests
         public string PublicGetDisplayPathForWildcard(string originalPattern, string resolvedPath)
             => GetDisplayPathForWildcard(originalPattern, resolvedPath);
 
-        public void PublicValidateLineRange(int[]? lineRange)
+        public void PublicValidateLineRange(string? lineRange)
             => ValidateLineRange(lineRange);
 
         public void PublicValidateContainsAndPatternMutuallyExclusive(string? contains, string? pattern)
@@ -88,7 +88,7 @@ public class TextFileCmdletBaseTests
     {
         // Arrange
         var cmdlet = new TestCmdlet();
-        var validRange = new[] { 5 };
+        var validRange = "5";
 
         // Act & Assert
         var exception = Record.Exception(() => cmdlet.PublicValidateLineRange(validRange));
@@ -101,7 +101,7 @@ public class TextFileCmdletBaseTests
     {
         // Arrange
         var cmdlet = new TestCmdlet();
-        var validRange = new[] { 5, 10 };
+        var validRange = "5,10";
 
         // Act & Assert
         var exception = Record.Exception(() => cmdlet.PublicValidateLineRange(validRange));
@@ -115,7 +115,7 @@ public class TextFileCmdletBaseTests
     {
         // Arrange
         var cmdlet = new TestCmdlet();
-        var invalidRange = new[] { 10, 5 };
+        var invalidRange = "10,5";
 
         // Act & Assert
         var exception = Assert.Throws<ArgumentException>(() =>

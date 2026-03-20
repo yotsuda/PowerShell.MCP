@@ -19,7 +19,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     [Alias("PSPath")]
     public string[] LiteralPath { get; set; } = null!;
 
-    [Parameter]
+    [Parameter][Alias("Contains")]
     public string? OldText { get; set; }
 
     [Parameter]
@@ -30,7 +30,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
     [Parameter]
     [ValidateLineRange]
-    public int[]? LineRange { get; set; }
+    public string? LineRange { get; set; }
 
     [Parameter]
     public string? Encoding { get; set; }

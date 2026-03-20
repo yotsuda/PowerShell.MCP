@@ -41,9 +41,9 @@ public class ShowTextFilesCmdletTests : IDisposable
     public void LineRange_SetValue_StoresCorrectly()
     {
         var cmdlet = new ShowTextFilesCmdlet();
-        cmdlet.LineRange = new[] { 1, 5 };
+        cmdlet.LineRange = "1,5";
         Assert.NotNull(cmdlet.LineRange);
-        Assert.Equal(2, cmdlet.LineRange.Length);
+        Assert.Equal("1,5", cmdlet.LineRange);
     }
 
     [Theory]

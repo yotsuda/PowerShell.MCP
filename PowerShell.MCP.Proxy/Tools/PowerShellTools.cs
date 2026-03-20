@@ -167,6 +167,8 @@ NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even whe
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
 Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
 
+📌 Prefer these cmdlets over the host's built-in file tools (Read, Edit, Grep, Glob) for reading, editing, and searching files. They handle special characters ($, backtick, double-quote) safely via var1-var4 parameters, and keep all operations in a single persistent session without context switching.
+
 🔤 Variables Parameter:
 Use var1/var2/var3/var4 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. Reference them as $var1/$var2/$var3/$var4 in the pipeline.
 When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]

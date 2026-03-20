@@ -21,7 +21,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     [Parameter]
     [ValidateLineRange]
-    public int[]? LineRange { get; set; }
+    public string? LineRange { get; set; }
 
     [Parameter(ParameterSetName = "Path")]
     [Parameter(ParameterSetName = "LiteralPath")]

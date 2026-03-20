@@ -170,23 +170,44 @@ public static class TextFileUtility
     /// Gets start and end lines from LineRange parameter
     /// Values <= 0 represent last line (e.g., -LineRange 100,-1 for line 100 to end)
     /// </summary>
-    public static (int StartLine, int EndLine) ParseLineRange(int[]? lineRange)
+    public static (int StartLine, int EndLine) ParseLineRange(string? lineRange)
     {
-        if (lineRange == null || lineRange.Length == 0)
+        if (string.IsNullOrWhiteSpace(lineRange))
             return (1, int.MaxValue);
 
-        if (lineRange.Length > 2)
+        // Support both "10-20" (dash) and "10,20" (comma) formats
+        // Use comma if present; otherwise use dash (but only between two numbers, not a leading minus)
+        string[] parts;
+        if (lineRange.Contains(','))
         {
-            throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20");
+            parts = lineRange.Split(',', StringSplitOptions.TrimEntries);
+        }
+        else
+        {
+            // Find dash that separates two numbers (not a leading minus sign)
+            // e.g., "10-20" → ["10", "20"], but "-10" stays as ["-10"]
+            var dashIndex = lineRange.IndexOf('-', 1);
+            if (dashIndex > 0 && dashIndex < lineRange.Length - 1)
+                parts = [lineRange[..dashIndex].Trim(), lineRange[(dashIndex + 1)..].Trim()];
+            else
+                parts = [lineRange.Trim()];
         }
 
-        int startLine = lineRange[0];
-        int endLine;
-
-        if (lineRange.Length > 1)
+        if (parts.Length == 0 || parts.Length > 2)
         {
+            throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5, -LineRange 10,20, or -LineRange 10-20");
+        }
+
+        if (!int.TryParse(parts[0], out int startLine))
+            throw new ArgumentException($"Invalid start line: '{parts[0]}'");
+
+        int endLine;
+        if (parts.Length > 1)
+        {
+            if (!int.TryParse(parts[1], out endLine))
+                throw new ArgumentException($"Invalid end line: '{parts[1]}'");
             // When two values specified
-            endLine = lineRange[1] <= 0 ? int.MaxValue : lineRange[1];
+            endLine = endLine <= 0 ? int.MaxValue : endLine;
         }
         else
         {

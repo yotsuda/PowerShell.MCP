@@ -83,7 +83,7 @@ public class TextFileUtilityTests
     public void ParseLineRange_WithValidRange_ReturnsCorrectValues(int input1, int input2, int expectedStart, int expectedEnd)
     {
         // Arrange
-        var lineRange = new int[] { input1, input2 };
+        var lineRange = $"{input1},{input2}";
 
         // Act
         var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
@@ -97,7 +97,7 @@ public class TextFileUtilityTests
     public void ParseLineRange_WithNullRange_ReturnsZeroForBoth()
     {
         // Arrange
-        int[]? lineRange = null;
+        string? lineRange = null;
 
         // Act
         var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
@@ -278,7 +278,7 @@ public class TextFileUtilityTests
     public void ParseLineRange_WithSingleElement_ReturnsSameForBoth(int value)
     {
         // Arrange
-        var lineRange = new int[] { value };
+        var lineRange = $"{value}";
 
         // Act
         var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
@@ -809,7 +809,7 @@ public class TextFileUtilityTests
     public void ParseLineRange_WithZeroOrNegativeEnd_ReturnsMaxValue(int start, int end, int expectedStart, int expectedEnd)
     {
         // Arrange
-        var lineRange = new int[] { start, end };
+        var lineRange = $"{start},{end}";
 
         // Act
         var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
@@ -823,7 +823,7 @@ public class TextFileUtilityTests
     public void ParseLineRange_WithSingleValue_ReturnsSameStartAndEnd()
     {
         // Arrange
-        var lineRange = new int[] { 100 };
+        var lineRange = "100";
 
         // Act
         var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
@@ -840,7 +840,7 @@ public class TextFileUtilityTests
     public void ParseLineRange_WithPositiveRange_ReturnsExactRange(int start, int end)
     {
         // Arrange
-        var lineRange = new int[] { start, end };
+        var lineRange = $"{start},{end}";
 
         // Act
         var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
@@ -854,7 +854,7 @@ public class TextFileUtilityTests
     public void ParseLineRange_WithMoreThanTwoValues_ThrowsArgumentException()
     {
         // Arrange
-        var lineRange = new int[] { 1, 2, 3 };
+        var lineRange = "1,2,3";
 
         // Act & Assert
         var exception = Assert.Throws<ArgumentException>(() =>

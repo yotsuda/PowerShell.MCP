@@ -105,23 +105,26 @@ public abstract class TextFileCmdletBase : PSCmdlet
     /// Validates LineRange parameter
     /// Throws terminating error if 3 or more values specified
     /// </summary>
-    protected void ValidateLineRange(int[]? lineRange)
+    protected void ValidateLineRange(string? lineRange)
     {
-        if (lineRange != null && lineRange.Length > 2)
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5 or -LineRange 10,20"),
-                "InvalidLineRange",
-                ErrorCategory.InvalidArgument,
-                lineRange));
-        }
+        if (string.IsNullOrWhiteSpace(lineRange)) return;
 
-        // Validate start <= end when range is specified
-        // Note: 0 or negative end values are allowed (meaning end of file)
-        if (lineRange != null && lineRange.Length == 2 && lineRange[1] > 0 && lineRange[0] > lineRange[1])
+        try
+        {
+            var (startLine, endLine) = TextFileUtility.ParseLineRange(lineRange);
+            if (endLine != int.MaxValue && startLine > 0 && endLine > 0 && startLine > endLine)
+            {
+                ThrowTerminatingError(new ErrorRecord(
+                    new ArgumentException($"LineRange start ({startLine}) must be less than or equal to end ({endLine})"),
+                    "InvalidLineRange",
+                    ErrorCategory.InvalidArgument,
+                    lineRange));
+            }
+        }
+        catch (ArgumentException ex)
         {
             ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException($"LineRange start ({lineRange[0]}) must be less than or equal to end ({lineRange[1]})"),
+                ex,
                 "InvalidLineRange",
                 ErrorCategory.InvalidArgument,
                 lineRange));
