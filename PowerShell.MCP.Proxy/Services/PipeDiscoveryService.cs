@@ -34,7 +34,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         {
             if (!currentPids.Contains(pid))
             {
-                closedMessages.Add($"  - ⚠ Console PID {pid} was closed");
+                closedMessages.Add($"  - ⚠ Console {ConsoleSessionManager.Instance.GetConsoleDisplayName(pid)} was closed");
             }
         }
 
@@ -69,9 +69,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         {
             if (activePipeStatus == null)
             {
+                var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(activePipe);
                 _sessionManager.ClearDeadPipe(agentId, activePipe);
-                var pid = ConsoleSessionManager.GetPidFromPipeName(activePipe);
-                closedMessages.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
+                closedMessages.Add($"  - ⚠ Console {consoleName} was closed");
             }
             else if (activePipeStatus.IsReady())
             {
@@ -96,9 +96,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
             if (status == null)
             {
+                var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
                 _sessionManager.ClearDeadPipe(agentId, pipeName);
-                var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
-                closedMessages.Add($"  - ⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
+                closedMessages.Add($"  - ⚠ Console {consoleName} was closed");
                 continue;
             }
 

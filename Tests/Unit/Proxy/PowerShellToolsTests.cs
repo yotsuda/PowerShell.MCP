@@ -400,7 +400,7 @@ public class PowerShellToolsTests
             .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PipeDiscoveryResult(
                 TestPipeName, true, new List<string>(),
-                "  - ⚠ Console PID 5000 was closed"));
+                "  - ⚠ Console PID #5000 was closed"));
 
         _mockPowerShellService
             .Setup(s => s.GetCurrentLocationFromPipeAsync(TestPipeName, It.IsAny<CancellationToken>()))
@@ -422,7 +422,7 @@ public class PowerShellToolsTests
             agent_id: TestAgentId);
 
         // Assert
-        Assert.Contains("Console PID 5000 was closed", result);
+        Assert.Contains("Console PID #5000 was closed", result);
         Assert.Contains("Switched to console", result);
     }
 

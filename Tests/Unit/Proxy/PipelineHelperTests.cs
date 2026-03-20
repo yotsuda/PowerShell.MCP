@@ -219,7 +219,7 @@ public class PipelineHelperTests
     public void FormatBusyStatus_NullStatusLine_BuildsFromParameters()
     {
         var result = PipelineHelper.FormatBusyStatus(null, 1234, "Get-Date", 5.5);
-        Assert.Contains("pwsh PID: 1234", result);
+        Assert.Contains("PID #1234", result);
         Assert.Contains("Status: Busy", result);
         Assert.Contains("Get-Date", result);
         Assert.Contains("5.50s", result);
@@ -229,7 +229,7 @@ public class PipelineHelperTests
     public void FormatBusyStatus_EmptyStatusLine_BuildsFromParameters()
     {
         var result = PipelineHelper.FormatBusyStatus("", 1234, "Get-Date", 5.5);
-        Assert.Contains("pwsh PID: 1234", result);
+        Assert.Contains("PID #1234", result);
     }
 
     [Fact]

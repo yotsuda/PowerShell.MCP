@@ -94,12 +94,13 @@ public static partial class PipelineHelper
     /// </summary>
     public static string FormatBusyStatus(string? statusLine, int pid, string? pipeline, double duration)
     {
-        // Use statusLine from dll if available, otherwise fallback to old format
+        // Use statusLine from dll if available, otherwise fallback
         if (!string.IsNullOrEmpty(statusLine))
             return statusLine;
 
+        var consoleName = Services.ConsoleSessionManager.Instance.GetConsoleDisplayName(pid);
         var truncatedPipeline = Truncate(pipeline);
-        return $"⧗ | pwsh PID: {pid} | Status: Busy | Pipeline: {truncatedPipeline} | Duration: {duration:F2}s";
+        return $"⧗ | {consoleName} | Status: Busy | Pipeline: {truncatedPipeline} | Duration: {duration:F2}s";
     }
 
     /// <summary>

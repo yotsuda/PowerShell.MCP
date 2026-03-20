@@ -61,9 +61,9 @@ public class ConsoleSessionManager
     private string[]? _fixedNameOrder;
 
     /// <summary>
-    /// Set of pwsh PIDs that have been assigned a console title
+    /// Maps pwsh PIDs to their assigned console title (e.g., "#12345 Sparrow")
     /// </summary>
-    private readonly HashSet<int> _titledPids = new();
+    private readonly Dictionary<int, string> _pidToTitle = new();
 
     /// <summary>
     /// Prefix for server-generated sub-agent IDs
@@ -246,7 +246,7 @@ public class ConsoleSessionManager
             if (pid.HasValue)
             {
                 state.KnownBusyPids.Remove(pid.Value);
-                _titledPids.Remove(pid.Value);
+                _pidToTitle.Remove(pid.Value);
             }
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}' (agent={agentId})");
 
@@ -365,15 +365,39 @@ public class ConsoleSessionManager
     {
         lock (_lock)
         {
-            if (!_titledPids.Add(pwshPid))
+            if (_pidToTitle.ContainsKey(pwshPid))
                 return null;
 
             if (_nameQueue.Count == 0)
                 RefillNames();
 
             var name = _nameQueue.Dequeue();
-            return $"#{pwshPid} {name}";
+            var title = $"#{pwshPid} {name}";
+            _pidToTitle[pwshPid] = title;
+            return title;
         }
+    }
+
+    /// <summary>
+    /// Gets the console title for a PID, or a fallback "PID #xxx" string if not titled.
+    /// </summary>
+    public string GetConsoleDisplayName(int pwshPid)
+    {
+        lock (_lock)
+        {
+            return _pidToTitle.TryGetValue(pwshPid, out var title)
+                ? $"PID {title}"
+                : $"PID #{pwshPid}";
+        }
+    }
+
+    /// <summary>
+    /// Gets the console display name from a pipe name, or a fallback string.
+    /// </summary>
+    public string GetConsoleDisplayName(string? pipeName)
+    {
+        var pid = GetPidFromPipeName(pipeName);
+        return pid.HasValue ? GetConsoleDisplayName(pid.Value) : "PID #unknown";
     }
 
     /// <summary>

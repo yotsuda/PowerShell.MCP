@@ -39,8 +39,8 @@ public class PowerShellTools
         return (result.CompletedOutput, result.BusyStatusInfo);
     }
 
-    private static string GetPidString(string? pipeName)
-        => PipelineHelper.GetPidString(pipeName);
+    private static string GetConsoleName(string? pipeName)
+        => ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
 
     /// <summary>
     /// Sets the console window title if not already set
@@ -236,8 +236,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             var newPipeName = sessionManager.GetActivePipeName(agentId);
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
-            // Extract PID from pipe name (format: PSMCP.{PID})
-            var pid = GetPidString(newPipeName);
+            var consoleName = GetConsoleName(newPipeName);
 
             // Build response: closedConsoles + busy status first + message + location + completedOutputs
             var response = new StringBuilder();
@@ -251,7 +250,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 response.Append(busyStatusInfo);
                 response.AppendLine();
             }
-            response.AppendLine($"Started new console PID#{pid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
+            response.AppendLine($"Started new console {consoleName} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
             if (isNewlyAllocated)
             {
                 response.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
@@ -276,8 +275,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-            // Extract PID from pipe name (format: PSMCP.{PID})
-            var pid = GetPidString(readyPipeName);
+            var consoleName = GetConsoleName(readyPipeName);
 
             // Build response: closedConsoles + busy status + message + locationResult + completedOutputs
             var response = new StringBuilder();
@@ -295,7 +293,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             {
                 response.AppendLine(allPipesStatusInfo);
             }
-            response.AppendLine($"Switched to console PID#{pid}. Pipeline NOT executed - verify location and re-execute.");
+            response.AppendLine($"Switched to console {consoleName}. Pipeline NOT executed - verify location and re-execute.");
             response.AppendLine();
             response.AppendLine(locationResult);
             if (completedOutputs.Length > 0)
@@ -358,7 +356,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     var newPipeName = sessionManager.GetActivePipeName(agentId);
                                     var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
-                                    var newPid = GetPidString(newPipeName);
+                                    var newConsoleName = GetConsoleName(newPipeName);
 
                                     var busyResponse = new StringBuilder();
                                     // Busy status at the top (current pipe first, then other pipes)
@@ -368,7 +366,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                         busyResponse.Append(busyInfo);
                                     }
                                     busyResponse.AppendLine();
-                                    busyResponse.AppendLine($"Started new console PID#{newPid} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
+                                    busyResponse.AppendLine($"Started new console {newConsoleName} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
                                     busyResponse.AppendLine();
                                     busyResponse.Append(locationResult);
                                     if (completedOutputs.Length > 0)
@@ -414,7 +412,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // Status line first
                                 var timeoutStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
                                     ? jsonResponse.StatusLine
-                                    : $"⧗ Pipeline is still running | pwsh PID: {jsonResponse.Pid} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
+                                    : $"⧗ Pipeline is still running | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 timeoutResponse.AppendLine(timeoutStatusLine);
                                 timeoutResponse.AppendLine();
                                 timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
@@ -448,7 +446,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // Use statusLine from dll if available
                                 var cachedStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
                                     ? jsonResponse.StatusLine
-                                    : $"✓ Pipeline executed successfully | pwsh PID: {jsonResponse.Pid} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
+                                    : $"✓ Pipeline executed successfully | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 cachedResponse.AppendLine(cachedStatusLine);
                                 cachedResponse.AppendLine();
                                 cachedResponse.Append("Result cached. Will be returned on next tool call.");
@@ -566,7 +564,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         {
             if (!currentPids.Contains(pid))
             {
-                closedConsoleMessages.Add($"⚠ Console PID {pid} was closed");
+                closedConsoleMessages.Add($"⚠ Console {ConsoleSessionManager.Instance.GetConsoleDisplayName(pid)} was closed");
             }
         }
 
@@ -587,10 +585,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
             if (status == null)
             {
-                // Dead pipe detected - collect all cached outputs and return
+                // Dead pipe detected - get display name before clearing
+                var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
                 sessionManager.ClearDeadPipe(agentId, pipeName);
-                var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
-                closedConsoleMessages.Add($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
+                closedConsoleMessages.Add($"⚠ Console {consoleName} was closed");
 
                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
@@ -647,11 +645,11 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
                 if (status == null)
                 {
-                    // Dead pipe detected - collect all cached outputs and return
+                    // Dead pipe detected - get display name before clearing
+                    var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
                     sessionManager.ClearDeadPipe(agentId, pipeName);
                     busyPipes.Remove(pipeName);
-                    var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
-                    closedConsoleMessages.Add($"⚠ Console PID {pid?.ToString() ?? "unknown"} was closed");
+                    closedConsoleMessages.Add($"⚠ Console {consoleName} was closed");
 
                     var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                     return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
