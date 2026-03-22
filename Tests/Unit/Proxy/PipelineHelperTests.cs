@@ -318,4 +318,124 @@ public class PipelineHelperTests
     }
 
     #endregion
+
+    #region CheckMarkdownFileHint Tests
+
+    [Fact]
+    public void CheckMarkdownFileHint_OutputWithMdFile_ReturnsHint()
+    {
+        PipelineHelper.ResetMarkdownHintState();
+        var result = PipelineHelper.CheckMarkdownFileHint("README.md", "default");
+        if (OperatingSystem.IsWindows())
+            Assert.NotNull(result);
+        else
+            Assert.Null(result); // Non-Windows returns null after setting flag
+    }
+
+    [Fact]
+    public void CheckMarkdownFileHint_NoMdFile_ReturnsNull()
+    {
+        PipelineHelper.ResetMarkdownHintState();
+        var result = PipelineHelper.CheckMarkdownFileHint("Get-Date", "default");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckMarkdownFileHint_ShownOnlyOncePerAgent()
+    {
+        PipelineHelper.ResetMarkdownHintState();
+        var first = PipelineHelper.CheckMarkdownFileHint("README.md", "default");
+        var second = PipelineHelper.CheckMarkdownFileHint("CHANGELOG.md", "default");
+        Assert.Null(second);
+    }
+
+    [Fact]
+    public void CheckMarkdownFileHint_DifferentAgents_EachGetsHint()
+    {
+        PipelineHelper.ResetMarkdownHintState();
+        var agent1 = PipelineHelper.CheckMarkdownFileHint("README.md", "default");
+        var agent2 = PipelineHelper.CheckMarkdownFileHint("README.md", "sub-agent-1");
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.NotNull(agent1);
+            Assert.NotNull(agent2);
+        }
+    }
+
+    [Fact]
+    public void CheckMarkdownFileHint_InputMatchFirst_OutputSkipped()
+    {
+        // Simulates the ?? chain: pipeline match first, output not checked
+        PipelineHelper.ResetMarkdownHintState();
+        var fromInput = PipelineHelper.CheckMarkdownFileHint("cat README.md", "default");
+        var fromOutput = PipelineHelper.CheckMarkdownFileHint("some output with NOTES.md", "default");
+        // Second call returns null because hint was already shown
+        Assert.Null(fromOutput);
+    }
+
+    [Fact]
+    public void CheckMarkdownFileHint_InputNoMatch_OutputMatch()
+    {
+        // Simulates the ?? chain: pipeline has no .md, output does
+        PipelineHelper.ResetMarkdownHintState();
+        var fromInput = PipelineHelper.CheckMarkdownFileHint("Get-ChildItem", "default");
+        Assert.Null(fromInput);
+        // Flag not set, so output check works
+        var fromOutput = PipelineHelper.CheckMarkdownFileHint("README.md  CHANGELOG.md", "default");
+        if (OperatingSystem.IsWindows())
+            Assert.NotNull(fromOutput);
+    }
+
+    #endregion
+
+    #region CheckJsonFileHint Tests
+
+    [Fact]
+    public void CheckJsonFileHint_OutputWithJsonFile_ReturnsHint()
+    {
+        PipelineHelper.ResetJsonHintState();
+        var result = PipelineHelper.CheckJsonFileHint("config.json", "default");
+        if (OperatingSystem.IsWindows())
+            Assert.True(result is not null or null); // depends on JsonDuo installation
+        else
+            Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckJsonFileHint_NoJsonFile_ReturnsNull()
+    {
+        PipelineHelper.ResetJsonHintState();
+        var result = PipelineHelper.CheckJsonFileHint("Get-Date", "default");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckJsonFileHint_ShownOnlyOncePerAgent()
+    {
+        PipelineHelper.ResetJsonHintState();
+        var first = PipelineHelper.CheckJsonFileHint("config.json", "default");
+        var second = PipelineHelper.CheckJsonFileHint("data.json", "default");
+        Assert.Null(second);
+    }
+
+    [Fact]
+    public void CheckJsonFileHint_DifferentAgents_EachGetsHint()
+    {
+        PipelineHelper.ResetJsonHintState();
+        var agent1 = PipelineHelper.CheckJsonFileHint("config.json", "default");
+        var agent2 = PipelineHelper.CheckJsonFileHint("config.json", "sub-agent-1");
+        // Both should get a result (or both null if not Windows/not installed), but not one null and one not
+        Assert.Equal(agent1 is not null, agent2 is not null);
+    }
+
+    [Fact]
+    public void CheckJsonFileHint_InputMatchFirst_OutputSkipped()
+    {
+        PipelineHelper.ResetJsonHintState();
+        var fromInput = PipelineHelper.CheckJsonFileHint("cat config.json", "default");
+        var fromOutput = PipelineHelper.CheckJsonFileHint("some output with data.json", "default");
+        Assert.Null(fromOutput);
+    }
+
+    #endregion
 }

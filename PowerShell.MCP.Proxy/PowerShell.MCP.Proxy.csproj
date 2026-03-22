@@ -5,7 +5,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.7.2.0</Version>
+    <Version>1.7.4.0</Version>
     <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
 
     <!-- Single File デプロイ設定 -->
@@ -31,7 +31,7 @@
   <ItemGroup>
     <!-- MCP SDK -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
-    <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.4" />
+    <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
     <!-- 依存性注入の最小セット -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
   </ItemGroup>

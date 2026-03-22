@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Tools;
 using PowerShell.MCP.Proxy.Prompts;
@@ -34,7 +35,21 @@ namespace PowerShell.MCP.Proxy
                 .AddMcpServer()
                 .WithStdioServerTransport()
                 .WithTools<PowerShellTools>()
-                .WithLocalizedPrompts<PowerShellPrompts>();
+                .WithLocalizedPrompts<PowerShellPrompts>()
+                .WithRequestFilters(filters =>
+                {
+                    filters.AddCallToolFilter(next => async (request, cancellationToken) =>
+                    {
+                        try
+                        {
+                            return await next(request, cancellationToken);
+                        }
+                        catch (Exception ex) when (ex is not McpException and not OperationCanceledException)
+                        {
+                            throw new McpException(ex.Message);
+                        }
+                    });
+                });
 
             var host = builder.Build();
 

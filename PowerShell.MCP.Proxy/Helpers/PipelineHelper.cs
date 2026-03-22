@@ -83,6 +83,109 @@ public static partial class PipelineHelper
     /// </summary>
     internal static void ResetScopeWarningState() => _scopeWarningDetailShown = false;
 
+    /// <summary>
+    /// Check if input/output contains .md files and return a one-time hint about MarkdownPointer module (per agent).
+    /// </summary>
+    private static readonly HashSet<string> _markdownHintShownAgents = new(StringComparer.OrdinalIgnoreCase);
+    public static string? CheckMarkdownFileHint(string text, string agentId)
+    {
+        lock (_markdownHintShownAgents)
+        {
+            if (_markdownHintShownAgents.Contains(agentId)) return null;
+            if (!MarkdownFileRegex().IsMatch(text)) return null;
+
+            _markdownHintShownAgents.Add(agentId);
+        }
+
+        if (!OperatingSystem.IsWindows())
+            return null;
+
+        if (IsMarkdownPointerInstalled())
+            return "💡 .md file(s) detected — Use the MarkdownPointer module to render and preview Markdown (e.g., mdp .\\README.md). It also includes an MCP server for AI integration.";
+        else
+            return "💡 .md file(s) detected — Install the MarkdownPointer PowerShell module (Install-Module MarkdownPointer) to render and preview Markdown with Mermaid/KaTeX support. After installation, use Get-Command -Module MarkdownPointer to explore available commands.";
+    }
+
+    /// <summary>
+    /// Resets the markdown hint state. For testing only.
+    /// </summary>
+    internal static void ResetMarkdownHintState()
+    {
+        lock (_markdownHintShownAgents) { _markdownHintShownAgents.Clear(); }
+    }
+
+    /// <summary>
+    /// Check if input/output contains .json files and return a one-time hint about JsonDuo module (per agent).
+    /// </summary>
+    private static readonly HashSet<string> _jsonHintShownAgents = new(StringComparer.OrdinalIgnoreCase);
+    public static string? CheckJsonFileHint(string text, string agentId)
+    {
+        lock (_jsonHintShownAgents)
+        {
+            if (_jsonHintShownAgents.Contains(agentId)) return null;
+            if (!JsonFileRegex().IsMatch(text)) return null;
+
+            _jsonHintShownAgents.Add(agentId);
+        }
+
+        if (!OperatingSystem.IsWindows())
+            return null;
+
+        if (IsModuleInstalled("JsonDuo"))
+            return "💡 .json file(s) detected — Use JsonDuo to view and edit JSON (e.g., jd .\\config.json). It also includes diff and MCP server features.";
+        else
+            return null; // JsonDuo is not publicly available yet
+    }
+
+    /// <summary>
+    /// Resets the JSON hint state. For testing only.
+    /// </summary>
+    internal static void ResetJsonHintState()
+    {
+        lock (_jsonHintShownAgents) { _jsonHintShownAgents.Clear(); }
+    }
+
+    /// <summary>
+    /// Check if a PowerShell module is installed by scanning PSModulePath directories.
+    /// </summary>
+    private static bool IsModuleInstalled(string moduleName)
+    {
+        var separator = OperatingSystem.IsWindows() ? ';' : ':';
+        var searchDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // PSModulePath from environment
+        var modulePath = Environment.GetEnvironmentVariable("PSModulePath");
+        if (!string.IsNullOrEmpty(modulePath))
+        {
+            foreach (var dir in modulePath.Split(separator, StringSplitOptions.RemoveEmptyEntries))
+                searchDirs.Add(dir);
+        }
+
+        // Well-known PowerShell module paths (not always in PSModulePath for non-PS processes)
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        searchDirs.Add(Path.Combine(userHome, "Documents", "PowerShell", "Modules"));
+        if (OperatingSystem.IsWindows())
+        {
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            // Check both versioned paths (e.g., PowerShell/7/Modules) and generic
+            foreach (var psDir in Directory.EnumerateDirectories(Path.Combine(programFiles, "PowerShell")))
+            {
+                var modulesDir = Path.Combine(psDir, "Modules");
+                if (Directory.Exists(modulesDir))
+                    searchDirs.Add(modulesDir);
+            }
+        }
+
+        foreach (var dir in searchDirs)
+        {
+            if (Directory.Exists(Path.Combine(dir, moduleName)))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsMarkdownPointerInstalled() => IsModuleInstalled("MarkdownPointer");
+
     [GeneratedRegex(@"\$(?!script:|global:|env:|using:|null\b|true\b|false\b|_\b|\?\b|\^\b|\$\b|args\b|input\b|foreach\b|switch\b|Matches\b|PSItem\b)([a-zA-Z_]\w*)\s*=")]
     private static partial Regex LocalVariableRegex();
 
@@ -181,4 +284,10 @@ public static partial class PipelineHelper
 
     [GeneratedRegex(@"(?<![/\\])\bAdd-Content\b", RegexOptions.IgnoreCase)]
     private static partial Regex AddContentRegex();
+
+    [GeneratedRegex(@"\S+\.md\b", RegexOptions.IgnoreCase)]
+    private static partial Regex MarkdownFileRegex();
+
+    [GeneratedRegex(@"\S+\.json\b", RegexOptions.IgnoreCase)]
+    private static partial Regex JsonFileRegex();
 }

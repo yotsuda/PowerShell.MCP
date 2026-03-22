@@ -500,6 +500,21 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     successResponse.AppendLine();
                                     successResponse.AppendLine(scopeWarning);
                                 }
+                                // One-time hint about MarkdownPointer module
+                                var markdownHint = PipelineHelper.CheckMarkdownFileHint(pipeline, agentId)
+                                    ?? PipelineHelper.CheckMarkdownFileHint(output, agentId);
+                                if (!string.IsNullOrEmpty(markdownHint))
+                                {
+                                    successResponse.AppendLine();
+                                    successResponse.AppendLine(markdownHint);
+                                }
+                                var jsonHint = PipelineHelper.CheckJsonFileHint(pipeline, agentId)
+                                    ?? PipelineHelper.CheckJsonFileHint(output, agentId);
+                                if (!string.IsNullOrEmpty(jsonHint))
+                                {
+                                    successResponse.AppendLine();
+                                    successResponse.AppendLine(jsonHint);
+                                }
                                 return successResponse.ToString();
                         }
                     }
