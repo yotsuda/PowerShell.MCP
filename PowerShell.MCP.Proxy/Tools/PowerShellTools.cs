@@ -163,7 +163,9 @@ Verbose and Debug streams are NOT visible to you. If you need verbose/debug info
 
 📝 Text File Operations:
 ALWAYS use the specialized cmdlets for text file editing: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
-NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via var1-var4 parameters (e.g., Update-MatchInFile path -Contains $var1 -Replacement $var2).
+NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via var1-var4 parameters.
+Create new file: Add-LinesToFile path -Content $var1 (with var1 parameter containing the content)
+Edit existing file: Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile (use var1-var4 for content with $, backtick, or quotes)
 For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
 Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
 
@@ -269,10 +271,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // Console switched - get location (DLL will automatically include its own cached outputs)
         if (consoleSwitched)
         {
-            var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
-
-            // Set console window title for claimed console
+            // Set console window title before reading location (so status line shows the new name)
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
             var consoleName = GetConsoleName(readyPipeName);
@@ -735,7 +736,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     public static async Task<string> StartPowershellConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
-        [Description("Optional. Why a new console is needed. Leave empty to reuse an existing standby console when available.")]
+        [Description("Do NOT specify unless you need a separate console. Forces a new console launch. Omit to reuse an existing standby console (preferred).")]
         string? reason = null,
         [Description("Message displayed at console startup (e.g. greeting, joke, fun fact). Be creative and make the user smile!")]
         string? banner = null,
@@ -759,6 +760,12 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             var discoveryResult = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
             if (discoveryResult.ReadyPipeName != null)
             {
+                // Set console window title if this was a newly claimed (unowned) console
+                if (discoveryResult.ConsoleSwitched)
+                {
+                    await SetConsoleTitleAsync(powerShellService, discoveryResult.ReadyPipeName, cancellationToken);
+                }
+
                 // Display banner on the existing console silently (message only, no command echo)
                 if (!string.IsNullOrEmpty(banner))
                 {
