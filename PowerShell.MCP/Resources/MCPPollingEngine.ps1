@@ -67,11 +67,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             [PowerShell.MCP.Services.ExecutionState]::Heartbeat()
 
             # ===== Proxy Liveness Check (every ~5 seconds) =====
-            if ($global:PowerShellMCPProxyPid) {
-                if (-not $global:__mcpProxyCheckCounter) { $global:__mcpProxyCheckCounter = 0 }
-                if ((++$global:__mcpProxyCheckCounter) -ge 50) {
-                    $global:__mcpProxyCheckCounter = 0
-                    $proxyAlive = try { [System.Diagnostics.Process]::GetProcessById($global:PowerShellMCPProxyPid); $true } catch { $false }
+            if (-not $global:__mcpProxyCheckCounter) { $global:__mcpProxyCheckCounter = 0 }
+            if ((++$global:__mcpProxyCheckCounter) -ge 50) {
+                $global:__mcpProxyCheckCounter = 0
+                # Extract proxy PID from pipe name (authoritative source, updated on claim)
+                # Owned: PSMCP.{proxyPid}.{agentId}.{pwshPid} = 4 segments
+                $pipeName = [PowerShell.MCP.MCPModuleInitializer]::GetPipeName()
+                $segments = if ($pipeName) { $pipeName.Split('.') } else { @() }
+                if ($segments.Length -eq 4) {
+                    $proxyPid = [int]$segments[1]
+                    $proxyAlive = try { [System.Diagnostics.Process]::GetProcessById($proxyPid); $true } catch { $false }
                     if (-not $proxyAlive) {
                         [PowerShell.MCP.MCPModuleInitializer]::ReleaseConsole()
                         $global:PowerShellMCPProxyPid = $null
