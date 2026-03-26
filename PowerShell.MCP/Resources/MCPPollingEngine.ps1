@@ -66,6 +66,26 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # Update heartbeat to indicate runspace is available
             [PowerShell.MCP.Services.ExecutionState]::Heartbeat()
 
+            # ===== Proxy Liveness Check (every ~5 seconds) =====
+            if ($global:PowerShellMCPProxyPid) {
+                if (-not $global:__mcpProxyCheckCounter) { $global:__mcpProxyCheckCounter = 0 }
+                if ((++$global:__mcpProxyCheckCounter) -ge 50) {
+                    $global:__mcpProxyCheckCounter = 0
+                    $proxyAlive = try { [System.Diagnostics.Process]::GetProcessById($global:PowerShellMCPProxyPid); $true } catch { $false }
+                    if (-not $proxyAlive) {
+                        [PowerShell.MCP.MCPModuleInitializer]::ReleaseConsole()
+                        $global:PowerShellMCPProxyPid = $null
+                        $global:PowerShellMCPAgentId = $null
+                        $Host.UI.RawUI.WindowTitle = "#$PID ____"
+                        [Console]::WriteLine()
+                        [Console]::WriteLine()
+                        Write-Host 'AI session disconnected. Waiting for next connection.' -ForegroundColor Yellow
+                        [Console]::WriteLine()
+                        try { $p = & { prompt }; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
+                    }
+                }
+            }
+
             # ===== Helper Functions (Defined within Action Block) =====
 
             function Invoke-CommandWithAllStreams {

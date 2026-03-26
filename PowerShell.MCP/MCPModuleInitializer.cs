@@ -80,6 +80,14 @@ namespace PowerShell.MCP
                     _tokenSource = new CancellationTokenSource();
                 }
 
+                // Set initial window title for unowned consoles (Proxy-launched consoles get titled immediately after)
+                if (!proxyPid.HasValue)
+                {
+                    using var psTitle = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace);
+                    psTitle.AddScript($"$Host.UI.RawUI.WindowTitle = '#{Environment.ProcessId} ____'");
+                    psTitle.Invoke();
+                }
+
                 // Load and execute MCP polling engine script
                 var pollingScript = EmbeddedResourceLoader.LoadScript("MCPPollingEngine.ps1");
 
@@ -164,6 +172,54 @@ namespace PowerShell.MCP
 
                     // Create new server with proxy PID and agent ID
                     _namedPipeServer = new NamedPipeServer(proxyPid, agentId);
+                    _tokenSource = new CancellationTokenSource();
+
+                    // Capture for closure
+                    var server = _namedPipeServer;
+                    var token = _tokenSource.Token;
+
+                    // Start new server
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await server.StartAsync(token);
+                        }
+                        catch (Exception)
+                        {
+                            // Silently ignore Named Pipe server errors
+                        }
+                    }, token);
+
+                    return _namedPipeServer.PipeName;
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Releases this console from proxy ownership by restarting the Named Pipe server as unowned.
+        /// Called when the owning proxy process is detected as dead.
+        /// </summary>
+        /// <returns>The new unowned pipe name, or null on failure</returns>
+        public static string? ReleaseConsole()
+        {
+            lock (_serverLock)
+            {
+                if (_namedPipeServer == null || _tokenSource == null)
+                    return null;
+
+                try
+                {
+                    // Stop current server
+                    _tokenSource.Cancel();
+                    _namedPipeServer.Dispose();
+
+                    // Create new server without proxy PID (unowned: 2-segment pipe name)
+                    _namedPipeServer = new NamedPipeServer(null);
                     _tokenSource = new CancellationTokenSource();
 
                     // Capture for closure
