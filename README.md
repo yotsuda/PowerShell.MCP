@@ -108,7 +108,7 @@ Four tools provide maximum flexibility with minimum complexity:
 
 | Tool | Purpose |
 |------|---------|
-| `start_powershell_console` | Launch a persistent console for the MCP client |
+| `start_console` | Launch a persistent console for the MCP client |
 | `get_current_location` | Get current directory and available drives |
 | `invoke_expression` | Execute any PowerShell command or CLI tool |
 | `wait_for_completion` | Wait for long-running commands to complete |
@@ -144,25 +144,16 @@ Install-PSResource PowerShell.MCP
 
 **For Claude Code:**
 ```powershell
-# Run in PowerShell (pwsh)
-claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
+Register-PwshToClaudeCode
 ```
 
-**For Claude Desktop** — Edit `%APPDATA%\Claude\claude_desktop_config.json`:
+**For Claude Desktop:**
 ```powershell
-# Run in PowerShell (pwsh)
-Get-MCPProxyPath -Escape  # Example output: C:\\Users\\YourName\\...\\PowerShell.MCP\\...\\PowerShell.MCP.Proxy.exe
+Register-PwshToClaudeDesktop
 ```
-Paste the output into `claude_desktop_config.json` (replace the example path below with your actual output):
-```json
-{
-  "mcpServers": {
-    "PowerShell": {
-      "command": "C:\\Users\\YourName\\...\\PowerShell.MCP\\...\\PowerShell.MCP.Proxy.exe"
-    }
-  }
-}
-```
+
+**For other MCP clients:** Run `Get-MCPProxyPath -Escape` to get the JSON-escaped executable path, then add it to your client's configuration file manually.
+
 #### 4. Restart your MCP client
 
 </details>
@@ -184,29 +175,23 @@ sudo apt-get install -y powershell
 
 #### 2. Install PowerShell.MCP, set permissions, and configure your MCP client
 
-**For Claude Code:**
 ```powershell
 # Run in PowerShell (pwsh)
 Install-PSResource PowerShell.MCP
 chmod +x "$(Get-MCPProxyPath)"
-claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
 ```
 
-**For Claude Desktop** — Edit `~/.config/Claude/claude_desktop_config.json`:
+**For Claude Code:**
 ```powershell
-# Run in PowerShell (pwsh)
-Get-MCPProxyPath -Escape  # Example output: /home/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy
+Register-PwshToClaudeCode
 ```
-Paste the output into `claude_desktop_config.json` (replace the example path below with your actual output):
-```json
-{
-  "mcpServers": {
-    "PowerShell": {
-      "command": "/home/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy"
-    }
-  }
-}
+
+**For Claude Desktop:**
+```powershell
+Register-PwshToClaudeDesktop
 ```
+
+**For other MCP clients:** Run `Get-MCPProxyPath -Escape` to get the JSON-escaped executable path, then add it to your client's configuration file manually.
 
 #### 3. Restart your MCP client
 
@@ -228,29 +213,23 @@ brew install --cask powershell
 
 #### 2. Install PowerShell.MCP, set permissions, and configure your MCP client
 
-**For Claude Code:**
 ```powershell
 # Run in PowerShell (pwsh)
 Install-PSResource PowerShell.MCP
 chmod +x "$(Get-MCPProxyPath)"
-claude mcp add PowerShell -s user -- "$(Get-MCPProxyPath)"
 ```
 
-**For Claude Desktop** — Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**For Claude Code:**
 ```powershell
-# Run in PowerShell (pwsh)
-Get-MCPProxyPath -Escape  # Example output: /Users/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy
+Register-PwshToClaudeCode
 ```
-Paste the output into `claude_desktop_config.json` (replace the example path below with your actual output):
-```json
-{
-  "mcpServers": {
-    "PowerShell": {
-      "command": "/Users/YourName/.../PowerShell.MCP/.../PowerShell.MCP.Proxy"
-    }
-  }
-}
+
+**For Claude Desktop:**
+```powershell
+Register-PwshToClaudeDesktop
 ```
+
+**For other MCP clients:** Run `Get-MCPProxyPath -Escape` to get the JSON-escaped executable path, then add it to your client's configuration file manually.
 
 #### 3. Restart your MCP client
 

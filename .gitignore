@@ -444,8 +444,9 @@ Tests/test*.ps1
 Tests/Temp*.ps1
 deployRelease.bat
 
-# PlatyPS auto-generated module help file
+# PlatyPS auto-generated files
 PowerShell.MCP/PlatyPS/en-US/PowerShell.MCP.md
+PowerShell.MCP/PlatyPS/en-US/*.xml
 
 slack*.txt
 
