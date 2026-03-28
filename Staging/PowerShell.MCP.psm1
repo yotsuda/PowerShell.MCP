@@ -48,6 +48,109 @@ if (-not $IsWindows) {
 }
 
 # Set OnRemove script block to execute cleanup automatically
+<#
+.SYNOPSIS
+    Registers PowerShell.MCP as an MCP server in Claude Desktop.
+
+.DESCRIPTION
+    Adds or updates the "pwsh" entry in Claude Desktop's
+    claude_desktop_config.json. Existing settings in the file are preserved.
+    If a legacy "PowerShell" entry pointing to PowerShell.MCP.Proxy exists,
+    it is removed and replaced with the new "pwsh" entry.
+
+.EXAMPLE
+    Register-PwshToClaudeDesktop
+    Registers PowerShell.MCP in Claude Desktop configuration.
+
+.OUTPUTS
+    None. Writes status messages to the host.
+#>
+function Register-PwshToClaudeDesktop {
+    [CmdletBinding()]
+    param()
+
+    $serverName = 'pwsh'
+    $legacyName = 'PowerShell'
+    $command = Get-MCPProxyPath
+
+    # Determine config file path per platform
+    $configPath = if ($IsWindows) {
+        Join-Path $env:APPDATA 'Claude\claude_desktop_config.json'
+    } elseif ($IsMacOS) {
+        Join-Path $HOME 'Library/Application Support/Claude/claude_desktop_config.json'
+    } elseif ($IsLinux) {
+        Join-Path $HOME '.config/Claude/claude_desktop_config.json'
+    } else {
+        throw "Unsupported platform."
+    }
+
+    # Load or create config
+    if (Test-Path $configPath) {
+        $json = Get-Content -Path $configPath -Raw -Encoding UTF8
+        $config = $json | ConvertFrom-Json -AsHashtable
+    } else {
+        $configDir = Split-Path $configPath -Parent
+        if (-not (Test-Path $configDir)) {
+            New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+        }
+        $config = @{}
+    }
+
+    if (-not $config.ContainsKey('mcpServers')) {
+        $config['mcpServers'] = @{}
+    }
+
+    # Migrate legacy "PowerShell" entry if it points to PowerShell.MCP.Proxy
+    if ($config['mcpServers'].ContainsKey($legacyName)) {
+        $legacyCommand = $config['mcpServers'][$legacyName]['command']
+        if ($legacyCommand -match 'PowerShell\.MCP\.Proxy') {
+            $config['mcpServers'].Remove($legacyName)
+            Write-Host "Removed legacy '$legacyName' entry." -ForegroundColor DarkYellow
+        }
+    }
+
+    $action = if ($config['mcpServers'].ContainsKey($serverName)) { 'Updated' } else { 'Added' }
+    $config['mcpServers'][$serverName] = @{ command = $command }
+
+    $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath -Encoding UTF8 -NoNewline
+    Write-Host "$action '$serverName' in $configPath" -ForegroundColor Green
+    Write-Host "  command: $command" -ForegroundColor Gray
+    if ($action -eq 'Added') {
+        Write-Host "Restart Claude Desktop to apply changes." -ForegroundColor Yellow
+    }
+}
+
+<#
+.SYNOPSIS
+    Registers PowerShell.MCP as an MCP server in Claude Code.
+
+.DESCRIPTION
+    Runs 'claude mcp add pwsh -s user' with the current module's
+    proxy executable path. If a legacy "PowerShell" entry pointing to
+    PowerShell.MCP.Proxy exists, it is removed first.
+
+.EXAMPLE
+    Register-PwshToClaudeCode
+
+.OUTPUTS
+    None. Passes through output from the claude CLI.
+#>
+function Register-PwshToClaudeCode {
+    [CmdletBinding()]
+    param()
+
+    # Remove legacy "PowerShell" entry if it points to our proxy
+    $legacyInfo = claude mcp get PowerShell -s user 2>&1
+    if ($legacyInfo -match 'PowerShell\.MCP\.Proxy') {
+        claude mcp remove PowerShell -s user
+        Write-Host "Removed legacy 'PowerShell' entry from Claude Code." -ForegroundColor DarkYellow
+    }
+
+    $proxyPath = Get-MCPProxyPath
+    claude mcp add pwsh -s user -- $proxyPath
+}
+
+
 $ExecutionContext.SessionState.Module.OnRemove = {
     try {
         #Write-Host "[PowerShell.MCP] Module removal detected, starting cleanup..." -ForegroundColor Yellow
