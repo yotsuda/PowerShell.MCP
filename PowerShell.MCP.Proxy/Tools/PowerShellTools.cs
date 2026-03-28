@@ -509,13 +509,14 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     successResponse.AppendLine();
                                     successResponse.AppendLine(markdownHint);
                                 }
-                                var jsonHint = PipelineHelper.CheckJsonFileHint(pipeline, agentId)
-                                    ?? PipelineHelper.CheckJsonFileHint(output, agentId);
-                                if (!string.IsNullOrEmpty(jsonHint))
-                                {
-                                    successResponse.AppendLine();
-                                    successResponse.AppendLine(jsonHint);
-                                }
+                                // TODO: Uncomment when JsonDuo is published to PS Gallery
+                                // var jsonHint = PipelineHelper.CheckJsonFileHint(pipeline, agentId)
+                                //     ?? PipelineHelper.CheckJsonFileHint(output, agentId);
+                                // if (!string.IsNullOrEmpty(jsonHint))
+                                // {
+                                //     successResponse.AppendLine();
+                                //     successResponse.AppendLine(jsonHint);
+                                // }
                                 return successResponse.ToString();
                         }
                     }

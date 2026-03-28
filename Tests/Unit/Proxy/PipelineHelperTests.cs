@@ -388,54 +388,60 @@ public class PipelineHelperTests
 
     #endregion
 
-    #region CheckJsonFileHint Tests
-
-    [Fact]
-    public void CheckJsonFileHint_OutputWithJsonFile_ReturnsHint()
-    {
-        PipelineHelper.ResetJsonHintState();
-        var result = PipelineHelper.CheckJsonFileHint("config.json", "default");
-        if (OperatingSystem.IsWindows())
-            Assert.True(result is not null or null); // depends on JsonDuo installation
-        else
-            Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckJsonFileHint_NoJsonFile_ReturnsNull()
-    {
-        PipelineHelper.ResetJsonHintState();
-        var result = PipelineHelper.CheckJsonFileHint("Get-Date", "default");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckJsonFileHint_ShownOnlyOncePerAgent()
-    {
-        PipelineHelper.ResetJsonHintState();
-        var first = PipelineHelper.CheckJsonFileHint("config.json", "default");
-        var second = PipelineHelper.CheckJsonFileHint("data.json", "default");
-        Assert.Null(second);
-    }
-
-    [Fact]
-    public void CheckJsonFileHint_DifferentAgents_EachGetsHint()
-    {
-        PipelineHelper.ResetJsonHintState();
-        var agent1 = PipelineHelper.CheckJsonFileHint("config.json", "default");
-        var agent2 = PipelineHelper.CheckJsonFileHint("config.json", "sub-agent-1");
-        // Both should get a result (or both null if not Windows/not installed), but not one null and one not
-        Assert.Equal(agent1 is not null, agent2 is not null);
-    }
-
-    [Fact]
-    public void CheckJsonFileHint_InputMatchFirst_OutputSkipped()
-    {
-        PipelineHelper.ResetJsonHintState();
-        var fromInput = PipelineHelper.CheckJsonFileHint("cat config.json", "default");
-        var fromOutput = PipelineHelper.CheckJsonFileHint("some output with data.json", "default");
-        Assert.Null(fromOutput);
-    }
-
-    #endregion
+    // TODO: Uncomment when JsonDuo is published to PS Gallery
+    // #region CheckJsonFileHint Tests
+    //
+    // [Fact]
+    // public void CheckJsonFileHint_OutputWithJsonFile_ReturnsHintOrNullDependingOnInstallation()
+    // {
+    //     PipelineHelper.ResetJsonHintState();
+    //     var result = PipelineHelper.CheckJsonFileHint("config.json", "default");
+    //     if (!OperatingSystem.IsWindows())
+    //     {
+    //         Assert.Null(result);
+    //     }
+    //     else if (result != null)
+    //     {
+    //         Assert.Contains("JsonDuo", result);
+    //     }
+    //     // result == null is valid on Windows when JsonDuo is not installed
+    // }
+    //
+    // [Fact]
+    // public void CheckJsonFileHint_NoJsonFile_ReturnsNull()
+    // {
+    //     PipelineHelper.ResetJsonHintState();
+    //     var result = PipelineHelper.CheckJsonFileHint("Get-Date", "default");
+    //     Assert.Null(result);
+    // }
+    //
+    // [Fact]
+    // public void CheckJsonFileHint_ShownOnlyOncePerAgent()
+    // {
+    //     PipelineHelper.ResetJsonHintState();
+    //     var first = PipelineHelper.CheckJsonFileHint("config.json", "default");
+    //     var second = PipelineHelper.CheckJsonFileHint("data.json", "default");
+    //     Assert.Null(second);
+    // }
+    //
+    // [Fact]
+    // public void CheckJsonFileHint_DifferentAgents_EachGetsHint()
+    // {
+    //     PipelineHelper.ResetJsonHintState();
+    //     var agent1 = PipelineHelper.CheckJsonFileHint("config.json", "default");
+    //     var agent2 = PipelineHelper.CheckJsonFileHint("config.json", "sub-agent-1");
+    //     // Both should get a result (or both null if not Windows/not installed), but not one null and one not
+    //     Assert.Equal(agent1 is not null, agent2 is not null);
+    // }
+    //
+    // [Fact]
+    // public void CheckJsonFileHint_InputMatchFirst_OutputSkipped()
+    // {
+    //     PipelineHelper.ResetJsonHintState();
+    //     var fromInput = PipelineHelper.CheckJsonFileHint("cat config.json", "default");
+    //     var fromOutput = PipelineHelper.CheckJsonFileHint("some output with data.json", "default");
+    //     Assert.Null(fromOutput);
+    // }
+    //
+    // #endregion
 }

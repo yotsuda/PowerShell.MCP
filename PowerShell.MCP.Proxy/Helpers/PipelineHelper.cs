@@ -114,36 +114,37 @@ public static partial class PipelineHelper
         lock (_markdownHintShownAgents) { _markdownHintShownAgents.Clear(); }
     }
 
-    /// <summary>
-    /// Check if input/output contains .json files and return a one-time hint about JsonDuo module (per agent).
-    /// </summary>
-    private static readonly HashSet<string> _jsonHintShownAgents = new(StringComparer.OrdinalIgnoreCase);
-    public static string? CheckJsonFileHint(string text, string agentId)
-    {
-        lock (_jsonHintShownAgents)
-        {
-            if (_jsonHintShownAgents.Contains(agentId)) return null;
-            if (!JsonFileRegex().IsMatch(text)) return null;
-
-            _jsonHintShownAgents.Add(agentId);
-        }
-
-        if (!OperatingSystem.IsWindows())
-            return null;
-
-        if (IsModuleInstalled("JsonDuo"))
-            return "💡 .json file(s) detected — Use JsonDuo to view and edit JSON (e.g., jd .\\config.json). It also includes diff and MCP server features.";
-        else
-            return null; // JsonDuo is not publicly available yet
-    }
-
-    /// <summary>
-    /// Resets the JSON hint state. For testing only.
-    /// </summary>
-    internal static void ResetJsonHintState()
-    {
-        lock (_jsonHintShownAgents) { _jsonHintShownAgents.Clear(); }
-    }
+    // TODO: Uncomment when JsonDuo is published to PS Gallery
+    // /// <summary>
+    // /// Check if input/output contains .json files and return a one-time hint about JsonDuo module (per agent).
+    // /// </summary>
+    // private static readonly HashSet<string> _jsonHintShownAgents = new(StringComparer.OrdinalIgnoreCase);
+    // public static string? CheckJsonFileHint(string text, string agentId)
+    // {
+    //     lock (_jsonHintShownAgents)
+    //     {
+    //         if (_jsonHintShownAgents.Contains(agentId)) return null;
+    //         if (!JsonFileRegex().IsMatch(text)) return null;
+    //
+    //         _jsonHintShownAgents.Add(agentId);
+    //     }
+    //
+    //     if (!OperatingSystem.IsWindows())
+    //         return null;
+    //
+    //     if (IsModuleInstalled("JsonDuo"))
+    //         return "💡 .json file(s) detected — Use JsonDuo to view and edit JSON (e.g., jd .\\config.json). It also includes diff and MCP server features.";
+    //     else
+    //         return null; // JsonDuo is not publicly available yet
+    // }
+    //
+    // /// <summary>
+    // /// Resets the JSON hint state. For testing only.
+    // /// </summary>
+    // internal static void ResetJsonHintState()
+    // {
+    //     lock (_jsonHintShownAgents) { _jsonHintShownAgents.Clear(); }
+    // }
 
     /// <summary>
     /// Check if a PowerShell module is installed by scanning PSModulePath directories.
@@ -167,12 +168,16 @@ public static partial class PipelineHelper
         if (OperatingSystem.IsWindows())
         {
             var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var psRoot = Path.Combine(programFiles, "PowerShell");
             // Check both versioned paths (e.g., PowerShell/7/Modules) and generic
-            foreach (var psDir in Directory.EnumerateDirectories(Path.Combine(programFiles, "PowerShell")))
+            if (Directory.Exists(psRoot))
             {
-                var modulesDir = Path.Combine(psDir, "Modules");
-                if (Directory.Exists(modulesDir))
-                    searchDirs.Add(modulesDir);
+                foreach (var psDir in Directory.EnumerateDirectories(psRoot))
+                {
+                    var modulesDir = Path.Combine(psDir, "Modules");
+                    if (Directory.Exists(modulesDir))
+                        searchDirs.Add(modulesDir);
+                }
             }
         }
 
@@ -285,9 +290,10 @@ public static partial class PipelineHelper
     [GeneratedRegex(@"(?<![/\\])\bAdd-Content\b", RegexOptions.IgnoreCase)]
     private static partial Regex AddContentRegex();
 
-    [GeneratedRegex(@"\S+\.md\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\S+\.(?:md|markdown)\b", RegexOptions.IgnoreCase)]
     private static partial Regex MarkdownFileRegex();
 
-    [GeneratedRegex(@"\S+\.json\b", RegexOptions.IgnoreCase)]
-    private static partial Regex JsonFileRegex();
+    // TODO: Uncomment when JsonDuo is published to PS Gallery
+    // [GeneratedRegex(@"\S+\.jsonc?\b", RegexOptions.IgnoreCase)]
+    // private static partial Regex JsonFileRegex();
 }

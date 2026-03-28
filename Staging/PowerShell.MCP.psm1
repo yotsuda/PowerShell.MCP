@@ -139,6 +139,11 @@ function Register-PwshToClaudeCode {
     [CmdletBinding()]
     param()
 
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        Write-Error "Claude Code CLI ('claude') not found. Install it first: https://docs.anthropic.com/en/docs/claude-code"
+        return
+    }
+
     # Remove legacy "PowerShell" entry if it points to our proxy
     $legacyInfo = claude mcp get PowerShell -s user 2>&1
     if ($legacyInfo -match 'PowerShell\.MCP\.Proxy') {
