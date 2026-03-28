@@ -241,7 +241,7 @@ Register-PwshToClaudeDesktop
 
 Experience PowerShell.MCP's capabilities:
 
-- "Show what PowerShell.MCP can do in a colorful, dynamic, and fun demo"
+- "Open pwsh and show what it can do in a colorful, dynamic, and fun demo"
 - "Try out different styles of notifications using the BurntToast module"
 - "Automate Notepad: type text and smoothly move the window in a circle"
 - "How does it feel now that you have a tool like PowerShell.MCP?"
