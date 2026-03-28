@@ -71,7 +71,7 @@ jobs:
     - name: Install PowerShell (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install powershell/tap/powershell
+        brew install --cask powershell
 
     - name: Install PowerShell (Linux)
       if: runner.os == 'Linux'
