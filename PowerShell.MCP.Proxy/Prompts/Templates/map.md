@@ -6,7 +6,7 @@ Create interactive map for {{request}} using PowerShell.Map module.
 **IMPORTANT: If both theme and target area are clear from the request, skip user confirmation and immediately start map creation.**
 
 WORKFLOW:
-1. Run start_powershell_console
+1. Run start_console
 2. If PowerShell.Map not installed, run `Install-Module PowerShell.Map -Force`. Otherwise, briefly mention: "Run 'Update-Module PowerShell.Map -Force' if you haven't recently" (then proceed immediately)
 3. If theme/area incomplete, confirm with user first
 4. Research locations thoroughly (use web search for detailed practical information)

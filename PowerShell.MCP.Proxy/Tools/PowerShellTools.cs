@@ -67,7 +67,7 @@ public class PowerShellTools
             // Validate provided agent_id
             var resolved = agentId!;
             if (!ConsoleSessionManager.Instance.IsValidAgentId(resolved))
-                return (resolved, false, $"❌ Invalid agent_id '{resolved}'. Sub-agents must first call start_powershell_console with is_subagent=true to obtain a valid agent_id. Do not pass arbitrary strings as agent_id.");
+                return (resolved, false, $"❌ Invalid agent_id '{resolved}'. Sub-agents must first call start_console with is_subagent=true to obtain a valid agent_id. Do not pass arbitrary strings as agent_id.");
             return (resolved, false, null);
         }
 
@@ -86,7 +86,7 @@ public class PowerShellTools
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
-        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
         [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
         bool is_subagent = false,
@@ -101,9 +101,9 @@ public class PowerShellTools
 
         if (readyPipeName == null)
         {
-            // No ready pipe - auto-start (StartPowershellConsole includes busy info collection)
+            // No ready pipe - auto-start (StartConsole includes busy info collection)
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            return await StartPowershellConsole(powerShellService, pipeDiscoveryService, agent_id: agentId, is_subagent: is_subagent, cancellationToken: cancellationToken);
+            return await StartConsole(powerShellService, pipeDiscoveryService, agent_id: agentId, is_subagent: is_subagent, cancellationToken: cancellationToken);
         }
 
         try
@@ -189,7 +189,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         string? var3 = null,
         [Description("Literal string value injected as $var4 in the pipeline, bypassing the PowerShell parser.")]
         string? var4 = null,
-        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
         [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
         bool is_subagent = false,
@@ -221,7 +221,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         {
             // No ready pipe - auto-start
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
+            var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
             if (!success)
             {
                 return locationResult; // Error message
@@ -341,7 +341,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 {
                                     // Auto-start new console
                                     Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-starting new console...");
-                                    var (success, locationResult) = await StartPowershellConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
+                                    var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
                                     if (!success)
                                     {
                                         return locationResult; // Error message
@@ -543,7 +543,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         IPipeDiscoveryService pipeDiscoveryService,
         [Description("Maximum seconds to wait for completion (1-170, default: 30). Returns early if a console completes.")]
         int timeout_seconds = 30,
-        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
         [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
         bool is_subagent = false,
@@ -553,13 +553,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         // wait_for_completion requires an existing agent_id for sub-agents
         if (is_subagent && string.IsNullOrEmpty(agent_id))
-            return "❌ Sub-agents must obtain an agent_id by calling start_powershell_console, get_current_location, or invoke_expression with is_subagent=true before calling wait_for_completion.";
+            return "❌ Sub-agents must obtain an agent_id by calling start_console, get_current_location, or invoke_expression with is_subagent=true before calling wait_for_completion.";
 
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
 
         // Validate agent_id
         if (!ConsoleSessionManager.Instance.IsValidAgentId(agentId))
-            return $"❌ Invalid agent_id '{agentId}'. Sub-agents must first call start_powershell_console with is_subagent=true to obtain a valid agent_id. Do not pass arbitrary strings as agent_id.";
+            return $"❌ Invalid agent_id '{agentId}'. Sub-agents must first call start_console with is_subagent=true to obtain a valid agent_id. Do not pass arbitrary strings as agent_id.";
 
         timeout_seconds = Math.Clamp(timeout_seconds, 1, 170);
 
@@ -733,7 +733,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     [Description(@"Ensure a PowerShell console is available, or launch a new one. When reason is empty or omitted, reuses an existing standby console if one is available. When reason is provided, always launches a new console regardless of existing ones.
 
 📌 This is your primary tool for all command execution tasks: directory navigation, git operations, build/test commands, file system operations, process management, environment variable access, and any shell/terminal task. Sessions persist across calls (authentication, variables, modules stay active). Install any PowerShell Gallery module without admin privileges to extend capabilities (e.g., Az for Azure, AWS.Tools for AWS, Microsoft.Graph for M365).")]
-    public static async Task<string> StartPowershellConsole(
+    public static async Task<string> StartConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
         [Description("Do NOT specify unless you need a separate console. Forces a new console launch. Omit to reuse an existing standby console (preferred).")]
@@ -742,7 +742,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         string? banner = null,
         [Description("Optional starting directory path. If relative, resolved from home directory. Defaults to home directory if not specified.")]
         string? start_location = null,
-        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_powershell_console with is_subagent=true. Do not pass arbitrary strings.")]
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
         [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
         bool is_subagent = false,
@@ -804,7 +804,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         var (resolvedPath, warningMessage) = ResolveStartLocation(start_location);
         var startupCommands = BuildStartupCommands(banner, reason);
-        var (success, startResult) = await StartPowershellConsoleInternal(powerShellService, agentId, startupCommands, resolvedPath, cancellationToken);
+        var (success, startResult) = await StartConsoleInternal(powerShellService, agentId, startupCommands, resolvedPath, cancellationToken);
         if (!success)
         {
             return startResult; // Error message
@@ -877,7 +877,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     /// Internal method to start PowerShell console.
     /// Returns (success, result) where result is locationResult on success, or error message on failure.
     /// </summary>
-    private static async Task<(bool success, string result)> StartPowershellConsoleInternal(
+    private static async Task<(bool success, string result)> StartConsoleInternal(
         IPowerShellService powerShellService,
         string agentId,
         string? startupCommands,
@@ -914,7 +914,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[ERROR] StartPowershellConsole failed: {ex.Message}");
+            Console.Error.WriteLine($"[ERROR] StartConsole failed: {ex.Message}");
             return (false, $"Failed to start PowerShell console: {ex.Message}\n\nPlease check if a terminal emulator is available and try again.");
         }
     }
