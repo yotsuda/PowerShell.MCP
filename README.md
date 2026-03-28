@@ -217,7 +217,13 @@ Paste the output into `claude_desktop_config.json` (replace the example path bel
 
 #### 1. Install PowerShell 7
 ```bash
-brew install powershell/tap/powershell
+brew install --cask powershell
+# If the cask is unavailable, install from GitHub Release:
+# curl -sSL -o /tmp/powershell.tar.gz https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-osx-arm64.tar.gz
+# sudo mkdir -p /usr/local/microsoft/powershell/7
+# sudo tar zxf /tmp/powershell.tar.gz -C /usr/local/microsoft/powershell/7
+# sudo chmod +x /usr/local/microsoft/powershell/7/pwsh
+# sudo ln -sf /usr/local/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
 ```
 
 #### 2. Install PowerShell.MCP, set permissions, and configure your MCP client
