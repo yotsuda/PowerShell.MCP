@@ -21,7 +21,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     [Parameter]
     [ValidateLineRange]
-    public string? LineRange { get; set; }
+    public string[]? LineRange { get; set; }
 
     [Parameter(ParameterSetName = "Path")]
     [Parameter(ParameterSetName = "LiteralPath")]
@@ -85,9 +85,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             ValidateLineRange(LineRange);
         }
         // Tail N lines deletion mode (negative LineRange) combined with Contains/Pattern is not supported
-        if (LineRange != null && LineRange.Length > 0 && LineRange[0] < 0)
+        if (LineRange != null && LineRange.Length > 0)
         {
-            if (!string.IsNullOrEmpty(Contains) || !string.IsNullOrEmpty(Pattern))
+            var (start, _) = TextFileUtility.ParseLineRange(LineRange);
+            if (start < 0 && (!string.IsNullOrEmpty(Contains) || !string.IsNullOrEmpty(Pattern)))
             {
                 throw new PSArgumentException("Negative LineRange (tail removal) cannot be combined with -Contains or -Pattern.");
             }
@@ -109,9 +110,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
                 var metadata = TextFileUtility.DetectFileMetadata(fileInfo.ResolvedPath, Encoding);
                 // Tail N lines deletion mode (negative LineRange)
-                if (LineRange != null && LineRange.Length > 0 && LineRange[0] < 0)
+                var (parsedStart, _parsedEnd) = TextFileUtility.ParseLineRange(LineRange);
+                if (parsedStart < 0)
                 {
-                    RemoveTailLines(fileInfo.InputPath, fileInfo.ResolvedPath, metadata, -LineRange[0]);
+                    RemoveTailLines(fileInfo.InputPath, fileInfo.ResolvedPath, metadata, -parsedStart);
                     continue;
                 }
 

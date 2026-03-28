@@ -519,7 +519,11 @@ ACTION REQUIRED: Update your MCP client configuration
 - Executable path: {proxyExePath}
 - For JSON config, use escaped path: {escapedPath}
 
-TIP: Run 'Get-MCPProxyPath -Escape' in PowerShell to get the properly escaped path for JSON configuration.
+QUICKFIX: Run one of these in PowerShell 7 to update automatically:
+- Claude Code:    Register-PwshToClaudeCode
+- Claude Desktop: Register-PwshToClaudeDesktop
+
+Or manually: Run 'Get-MCPProxyPath -Escape' to get the path for JSON configuration.
 
 Please provide how to update the MCP client configuration to the user.";
                 }
@@ -535,7 +539,11 @@ ISSUE: PowerShell.MCP.Proxy version is outdated.
 ACTION REQUIRED: Update your MCP client configuration
 - Executable path: {proxyExePath}
 
-TIP: Run 'Get-MCPProxyPath' in PowerShell to get the path for MCP client configuration.
+QUICKFIX: Run one of these in PowerShell 7 to update automatically:
+- Claude Code:    Register-PwshToClaudeCode
+- Claude Desktop: Register-PwshToClaudeDesktop
+
+Or manually: Run 'Get-MCPProxyPath' to get the path for MCP client configuration.
 
 Please provide how to update the MCP client configuration to the user.";
                 }

@@ -46,7 +46,7 @@ namespace PowerShell.MCP.Proxy
                         }
                         catch (Exception ex) when (ex is not McpException and not OperationCanceledException)
                         {
-                            throw new McpException(ex.Message);
+                            throw new McpException(ex.Message, ex);
                         }
                     });
                 });

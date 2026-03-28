@@ -20,7 +20,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
     [Parameter]
     [ValidateLineRange]
-    public string? LineRange { get; set; }
+    public string[]? LineRange { get; set; }
 
     [Parameter(Position = 1, ValueFromPipeline = true)][Alias("NewLines")]
     public object[]? Content { get; set; }

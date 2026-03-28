@@ -46,8 +46,9 @@ public class PowerShellService : IPowerShellService
             var jsonHeader = ExtractResponseHeader(response);
             return JsonSerializer.Deserialize(jsonHeader, GetStatusResponseContext.Default.GetStatusResponse);
         }
-        catch
+        catch (Exception ex)
         {
+            Console.Error.WriteLine($"[WARN] Failed to parse status response: {ex.Message}");
             return null;
         }
     }
@@ -99,8 +100,9 @@ public class PowerShellService : IPowerShellService
 
             return JsonSerializer.Deserialize(response, ClaimConsoleResponseContext.Default.ClaimConsoleResponse);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Console.Error.WriteLine($"[WARN] ClaimConsoleAsync failed: {ex.Message}");
             return null;
         }
     }
@@ -114,9 +116,9 @@ public class PowerShellService : IPowerShellService
         {
             await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors - title setting is best effort
+            Console.Error.WriteLine($"[WARN] SetWindowTitleAsync failed: {ex.Message}");
         }
     }
 
@@ -129,9 +131,9 @@ public class PowerShellService : IPowerShellService
         {
             await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors - silent execution is best effort
+            Console.Error.WriteLine($"[WARN] ExecuteSilentAsync failed: {ex.Message}");
         }
     }
 

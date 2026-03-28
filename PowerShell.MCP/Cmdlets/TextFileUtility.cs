@@ -167,6 +167,13 @@ public static class TextFileUtility
     }
 
     /// <summary>
+    /// Joins a string[] LineRange parameter into a single string for parsing.
+    /// Supports: -LineRange 5  |  -LineRange 10,20  |  -LineRange 10-20  |  -LineRange '10-20'
+    /// </summary>
+    public static (int StartLine, int EndLine) ParseLineRange(string[]? lineRange)
+        => ParseLineRange(lineRange == null || lineRange.Length == 0 ? null : string.Join(",", lineRange));
+
+    /// <summary>
     /// Gets start and end lines from LineRange parameter
     /// Values <= 0 represent last line (e.g., -LineRange 100,-1 for line 100 to end)
     /// </summary>
@@ -188,7 +195,13 @@ public static class TextFileUtility
             // e.g., "10-20" → ["10", "20"], but "-10" stays as ["-10"]
             var dashIndex = lineRange.IndexOf('-', 1);
             if (dashIndex > 0 && dashIndex < lineRange.Length - 1)
+            {
+                // Reject multiple separating dashes (e.g., "10-20-30")
+                var secondDash = lineRange.IndexOf('-', dashIndex + 1);
+                if (secondDash > 0 && !lineRange[(dashIndex + 1)..].TrimStart().StartsWith('-'))
+                    throw new ArgumentException("LineRange accepts 1 or 2 values: start line, or start and end line. For example: -LineRange 5, -LineRange 10,20, or -LineRange 10-20");
                 parts = [lineRange[..dashIndex].Trim(), lineRange[(dashIndex + 1)..].Trim()];
+            }
             else
                 parts = [lineRange.Trim()];
         }

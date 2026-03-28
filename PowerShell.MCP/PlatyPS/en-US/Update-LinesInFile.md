@@ -14,13 +14,13 @@ Replace or delete specific lines in a text file
 
 ### Path
 ```
-Update-LinesInFile [-Path] <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>]
+Update-LinesInFile [-Path] <String[]> [-LineRange <String[]>] [[-Content] <Object[]>] [-Encoding <String>]
  [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Update-LinesInFile -LiteralPath <String[]> [-LineRange <Int32[]>] [[-Content] <Object[]>] [-Encoding <String>]
+Update-LinesInFile -LiteralPath <String[]> [-LineRange <String[]>] [[-Content] <Object[]>] [-Encoding <String>]
  [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -77,10 +77,10 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Line range to replace (e.g., 5 or 5,10). Omit to replace entire file.
+Line range to replace. Accepts: `5` (single line), `5,10` (range), `5-10` (dash format). Omit to replace entire file.
 
 ```yaml
-Type: Int32[]
+Type: String[]
 Parameter Sets: (All)
 Aliases:
 

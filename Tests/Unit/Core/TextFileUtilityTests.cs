@@ -861,4 +861,110 @@ public class TextFileUtilityTests
             TextFileUtility.ParseLineRange(lineRange));
         Assert.Contains("LineRange accepts 1 or 2 values", exception.Message);
     }
+
+    // ======================================================================
+    // ParseLineRange Tests - Dash Format
+    // ======================================================================
+
+    [Theory]
+    [InlineData("10-20", 10, 20)]
+    [InlineData("1-100", 1, 100)]
+    [InlineData("50-50", 50, 50)]
+    public void ParseLineRange_DashFormat_ReturnsCorrectRange(string input, int expectedStart, int expectedEnd)
+    {
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(input);
+        Assert.Equal(expectedStart, startLine);
+        Assert.Equal(expectedEnd, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_DashFormat_NegativeStart()
+    {
+        // "-10-20" → start=-10, end=20
+        var (startLine, endLine) = TextFileUtility.ParseLineRange("-10-20");
+        Assert.Equal(-10, startLine);
+        Assert.Equal(20, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_DashFormat_NegativeEnd()
+    {
+        // "10--1" → start=10, end=-1 → end=MaxValue
+        var (startLine, endLine) = TextFileUtility.ParseLineRange("10--1");
+        Assert.Equal(10, startLine);
+        Assert.Equal(int.MaxValue, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_DashFormat_MultipleDashes_ThrowsArgumentException()
+    {
+        var exception = Assert.Throws<ArgumentException>(() =>
+            TextFileUtility.ParseLineRange("10-20-30"));
+        Assert.Contains("LineRange accepts 1 or 2 values", exception.Message);
+    }
+
+    // ======================================================================
+    // ParseLineRange Tests - String Array Overload (PowerShell parameter binding)
+    // ======================================================================
+
+    [Fact]
+    public void ParseLineRange_StringArray_Null_ReturnsDefaults()
+    {
+        var (startLine, endLine) = TextFileUtility.ParseLineRange((string[]?)null);
+        Assert.Equal(1, startLine);
+        Assert.Equal(int.MaxValue, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_StringArray_Empty_ReturnsDefaults()
+    {
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(Array.Empty<string>());
+        Assert.Equal(1, startLine);
+        Assert.Equal(int.MaxValue, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_StringArray_SingleElement_DashFormat()
+    {
+        // -LineRange '10-20' → string[] { "10-20" }
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(new[] { "10-20" });
+        Assert.Equal(10, startLine);
+        Assert.Equal(20, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_StringArray_TwoElements_CommaFromPowerShell()
+    {
+        // -LineRange 10,20 → string[] { "10", "20" } (PowerShell splits on comma)
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(new[] { "10", "20" });
+        Assert.Equal(10, startLine);
+        Assert.Equal(20, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_StringArray_SingleValue()
+    {
+        // -LineRange 5 → string[] { "5" }
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(new[] { "5" });
+        Assert.Equal(5, startLine);
+        Assert.Equal(5, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_StringArray_NegativeTail()
+    {
+        // -LineRange -10 → string[] { "-10" } (PowerShell treats as string, not subtraction)
+        var (startLine, endLine) = TextFileUtility.ParseLineRange(new[] { "-10" });
+        Assert.Equal(-10, startLine);
+        Assert.Equal(-10, endLine);
+    }
+
+    [Fact]
+    public void ParseLineRange_StringArray_ThreeElements_ThrowsArgumentException()
+    {
+        // -LineRange 1,2,3 → string[] { "1", "2", "3" } → joined as "1,2,3"
+        var exception = Assert.Throws<ArgumentException>(() =>
+            TextFileUtility.ParseLineRange(new[] { "1", "2", "3" }));
+        Assert.Contains("LineRange accepts 1 or 2 values", exception.Message);
+    }
 }

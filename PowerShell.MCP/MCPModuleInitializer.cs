@@ -112,9 +112,9 @@ namespace PowerShell.MCP
                     {
                         await server.StartAsync(token);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        // Silently ignore Named Pipe server errors
+                        Console.Error.WriteLine($"[ERROR] Named Pipe server failed: {ex.Message}");
                     }
                 }, token);
             }
@@ -185,16 +185,17 @@ namespace PowerShell.MCP
                         {
                             await server.StartAsync(token);
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
-                            // Silently ignore Named Pipe server errors
+                            Console.Error.WriteLine($"[ERROR] Named Pipe server failed (ClaimConsole): {ex.Message}");
                         }
                     }, token);
 
                     return _namedPipeServer.PipeName;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    Console.Error.WriteLine($"[ERROR] ClaimConsole failed: {ex.Message}");
                     return null;
                 }
             }
@@ -233,16 +234,17 @@ namespace PowerShell.MCP
                         {
                             await server.StartAsync(token);
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
-                            // Silently ignore Named Pipe server errors
+                            Console.Error.WriteLine($"[ERROR] Named Pipe server failed (ReleaseConsole): {ex.Message}");
                         }
                     }, token);
 
                     return _namedPipeServer.PipeName;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    Console.Error.WriteLine($"[ERROR] ReleaseConsole failed: {ex.Message}");
                     return null;
                 }
             }

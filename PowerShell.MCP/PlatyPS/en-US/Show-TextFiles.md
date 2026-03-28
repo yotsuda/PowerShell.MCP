@@ -14,13 +14,13 @@ Display file contents with line numbers, or search across files with regex or li
 
 ### Path
 ```
-Show-TextFiles [-Path] <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>] [-Recurse]
+Show-TextFiles [-Path] <String[]> [-LineRange <String[]>] [-Pattern <String>] [-Contains <String>] [-Recurse]
  [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Show-TextFiles -LiteralPath <String[]> [-LineRange <Int32[]>] [-Pattern <String>] [-Contains <String>]
+Show-TextFiles -LiteralPath <String[]> [-LineRange <String[]>] [-Pattern <String>] [-Contains <String>]
  [-Recurse] [-Encoding <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -30,6 +30,7 @@ Display file contents with line numbers, or search across files using regex/lite
     Show-TextFiles file.txt                          # entire file
 
     Show-TextFiles file.txt -LineRange 10,20         # lines 10-20
+    Show-TextFiles file.txt -LineRange 10-20         # same (dash format)
 
     Show-TextFiles file.txt -LineRange -10           # last 10 lines
 
@@ -85,10 +86,10 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Line range (e.g., 5 or 5,10). Negative value = tail count.
+Line range. Accepts: `5` (single line), `10,20` (range), `10-20` (dash format). Negative value = tail count (e.g., `-10` = last 10 lines).
 
 ```yaml
-Type: Int32[]
+Type: String[]
 Parameter Sets: (All)
 Aliases:
 

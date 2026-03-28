@@ -27,7 +27,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
             .Where(p => p.HasValue)
-            .Select(p => p!.Value)
+            .Select(p => p.Value)
             .ToHashSet();
 
         foreach (var pid in previouslyBusyPids)
@@ -131,7 +131,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 if (!pwshPid.HasValue) continue;
 
                 // Fire and forget - the pipe will close before response
-                _ = _powerShellService.ClaimConsoleAsync(pipeName, _sessionManager.ProxyPid, agentId, cancellationToken);
+                _ = _powerShellService.ClaimConsoleAsync(pipeName, _sessionManager.ProxyPid, agentId, cancellationToken)
+                    .ContinueWith(t =>
+                    {
+                        if (t.IsFaulted)
+                            Console.Error.WriteLine($"[WARN] ClaimConsoleAsync failed: {t.Exception?.InnerException?.Message}");
+                    }, TaskScheduler.Default);
 
                 // Calculate the expected new pipe name
                 var newPipeName = ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pwshPid.Value);
@@ -139,6 +144,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 // Wait for the new pipe to become available (retry with short timeout)
                 for (int i = 0; i < 20; i++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     await Task.Delay(100, cancellationToken);
 
                     var newStatus = await _powerShellService.GetStatusFromPipeAsync(newPipeName, cancellationToken);

@@ -14,13 +14,13 @@ Remove lines from a text file by line range or pattern matching
 
 ### Path
 ```
-Remove-LinesFromFile [-Path] <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
+Remove-LinesFromFile [-Path] <String[]> [-LineRange <String[]>] [-Contains <String>] [-Pattern <String>]
  [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
-Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <Int32[]>] [-Contains <String>] [-Pattern <String>]
+Remove-LinesFromFile -LiteralPath <String[]> [-LineRange <String[]>] [-Contains <String>] [-Pattern <String>]
  [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -83,10 +83,10 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Line range to remove (e.g., 5 or 5,10). Negative value = tail count.
+Line range to remove. Accepts: `5` (single line), `5,10` (range), `5-10` (dash format). Negative value = tail count (e.g., `-10` = last 10 lines).
 
 ```yaml
-Type: Int32[]
+Type: String[]
 Parameter Sets: (All)
 Aliases:
 

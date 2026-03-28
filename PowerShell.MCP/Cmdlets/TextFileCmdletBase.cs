@@ -105,9 +105,9 @@ public abstract class TextFileCmdletBase : PSCmdlet
     /// Validates LineRange parameter
     /// Throws terminating error if 3 or more values specified
     /// </summary>
-    protected void ValidateLineRange(string? lineRange)
+    protected void ValidateLineRange(string[]? lineRange)
     {
-        if (string.IsNullOrWhiteSpace(lineRange)) return;
+        if (lineRange == null || lineRange.Length == 0) return;
 
         try
         {

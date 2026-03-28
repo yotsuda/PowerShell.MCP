@@ -78,7 +78,7 @@ public class ValidationAttributesTests
     public void Validate_ZeroLineNumber_ThrowsValidationException()
     {
         // Arrange
-        var invalidRange = "0";
+        var invalidRange = new[] { "0" };
 
         // Act & Assert
         var exception = Assert.Throws<TargetInvocationException>(() =>
@@ -111,7 +111,7 @@ public class ValidationAttributesTests
     public void Validate_EmptyString_NoException()
     {
         // Arrange & Act & Assert
-        var exception = Record.Exception(() => InvokeValidate(""));
+        var exception = Record.Exception(() => InvokeValidate(new[] { "" }));
         Assert.Null(exception);
     }
 

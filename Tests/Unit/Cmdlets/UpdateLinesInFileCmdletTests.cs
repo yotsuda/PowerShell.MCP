@@ -40,9 +40,9 @@ public class UpdateLinesInFileCmdletTests : IDisposable
     public void LineRange_SetValue_StoresCorrectly()
     {
         var cmdlet = new UpdateLinesInFileCmdlet();
-        cmdlet.LineRange = "1,3";
+        cmdlet.LineRange = new[] { "1,3" };
         Assert.NotNull(cmdlet.LineRange);
-        Assert.Equal("1,3", cmdlet.LineRange);
+        Assert.Equal(new[] { "1,3" }, cmdlet.LineRange);
     }
 
     [Fact]

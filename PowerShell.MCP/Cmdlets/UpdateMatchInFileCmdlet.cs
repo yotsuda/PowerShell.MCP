@@ -30,7 +30,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
     [Parameter]
     [ValidateLineRange]
-    public string? LineRange { get; set; }
+    public string[]? LineRange { get; set; }
 
     [Parameter]
     public string? Encoding { get; set; }

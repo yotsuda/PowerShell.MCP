@@ -15,14 +15,14 @@ Replace text in a file using literal string or regex pattern
 ### Path
 ```
 Update-MatchInFile [-Path] <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
- [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-LineRange <String[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
  [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 ```
 Update-MatchInFile -LiteralPath <String[]> [-OldText <String>] [-Pattern <String>] [-Replacement <String>]
- [-LineRange <Int32[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-LineRange <String[]>] [-Encoding <String>] [-Backup] [-ProgressAction <ActionPreference>] [-WhatIf]
  [-Confirm] [<CommonParameters>]
 ```
 
@@ -85,7 +85,7 @@ Literal string to find and replace. Supports multiline strings (newlines allowed
 ```yaml
 Type: String
 Parameter Sets: (All)
-Aliases:
+Aliases: Contains
 
 Required: False
 Position: Named
@@ -125,10 +125,10 @@ Accept wildcard characters: False
 ```
 
 ### -LineRange
-Limits replacement to specific lines (e.g., 5 or 10,20).
+Limits replacement to specific lines. Accepts: `5` (single line), `10,20` (range), `10-20` (dash format).
 
 ```yaml
-Type: Int32[]
+Type: String[]
 Parameter Sets: (All)
 Aliases:
 

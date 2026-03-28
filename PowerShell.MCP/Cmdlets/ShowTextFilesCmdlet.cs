@@ -22,7 +22,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
 
     [Parameter]
     [ValidateLineRange]
-    public string? LineRange { get; set; }
+    public string[]? LineRange { get; set; }
 
     [Parameter(ParameterSetName = "Path")]
     [Parameter(ParameterSetName = "LiteralPath")]
@@ -182,26 +182,13 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
         WriteObject(AnsiColors.Header(displayPath));
 
         // Default to (1, int.MaxValue) if LineRange is null or empty
-        int requestedStart = 1;
-        int requestedEnd = int.MaxValue;
+        var (requestedStart, requestedEnd) = TextFileUtility.ParseLineRange(LineRange);
 
-        if (LineRange != null && LineRange.Length > 0)
+        // Tail specification (-10 or -10,-1)
+        if (requestedStart < 0)
         {
-            requestedStart = LineRange[0];
-            requestedEnd = LineRange.Length > 1 ? LineRange[1] : requestedStart;
-
-            // Tail specification (-10 or -10,-1)
-            if (requestedStart < 0)
-            {
-                ShowTailLines(filePath, encoding, -requestedStart);
-                return;
-            }
-
-            // If endLine is 0 or negative, continue to end
-            if (requestedEnd <= 0)
-            {
-                requestedEnd = int.MaxValue;
-            }
+            ShowTailLines(filePath, encoding, -requestedStart);
+            return;
         }
 
             // Normal range specification

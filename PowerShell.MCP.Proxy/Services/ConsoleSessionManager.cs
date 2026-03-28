@@ -425,10 +425,11 @@ public class ConsoleSessionManager
     {
         using var mutex = new Mutex(false, MutexName, out _);
 
+        if (!mutex.WaitOne(TimeSpan.FromSeconds(10)))
+            throw new TimeoutException("Could not acquire shared memory mutex for category initialization");
+
         try
         {
-            mutex.WaitOne();
-
             using var mmf = MemoryMappedFile.CreateFromFile(SharedMemoryFile, FileMode.OpenOrCreate, null, SharedMemorySize);
             using var accessor = mmf.CreateViewAccessor();
 
@@ -515,7 +516,8 @@ public class ConsoleSessionManager
         try
         {
             using var mutex = new Mutex(false, MutexName, out _);
-            mutex.WaitOne();
+            if (!mutex.WaitOne(TimeSpan.FromSeconds(5)))
+                return; // Timeout acquiring lock - skip cleanup
 
             try
             {
@@ -552,13 +554,11 @@ public class ConsoleSessionManager
             }
             finally
             {
-                mutex.ReleaseMutex();
+                try { mutex.ReleaseMutex(); } catch { }
             }
         }
-        catch
-        {
-            // Ignore cleanup errors (shared memory may not exist)
-        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     /// <summary>

@@ -574,7 +574,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
             .Where(p => p.HasValue)
-            .Select(p => p!.Value)
+            .Select(p => p.Value)
             .ToHashSet();
 
         foreach (var pid in previouslyBusyPids)

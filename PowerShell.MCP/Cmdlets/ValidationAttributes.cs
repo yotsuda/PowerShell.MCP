@@ -13,12 +13,13 @@ public class ValidateLineRangeAttribute : ValidateArgumentsAttribute
 {
     protected override void Validate(object arguments, EngineIntrinsics engineIntrinsics)
     {
-        if (arguments is not string s || string.IsNullOrWhiteSpace(s))
+        string[]? arr = arguments as string[];
+        if (arr == null || arr.Length == 0)
             return;
 
         try
         {
-            var (startLine, _) = TextFileUtility.ParseLineRange(s);
+            var (startLine, _) = TextFileUtility.ParseLineRange(arr);
             if (startLine == 0)
             {
                 throw new ValidationMetadataException(

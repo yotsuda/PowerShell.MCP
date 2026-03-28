@@ -22,7 +22,13 @@ jobs:
           9.0.x
 
     - name: Install PowerShell
-      run: brew install powershell/tap/powershell
+      run: |
+        curl -sSL -o /tmp/powershell.tar.gz https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-osx-arm64.tar.gz
+        sudo mkdir -p /usr/local/microsoft/powershell/7
+        sudo tar zxf /tmp/powershell.tar.gz -C /usr/local/microsoft/powershell/7
+        sudo chmod +x /usr/local/microsoft/powershell/7/pwsh
+        sudo ln -sf /usr/local/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
+        pwsh --version
 
     - name: Build and setup module
       run: |
