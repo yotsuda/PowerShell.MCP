@@ -780,6 +780,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 var reuseLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
 
                 var reuseResponse = new StringBuilder();
+                // Report closed consoles detected during discovery
+                if (discoveryResult.ClosedConsoleMessages.Count > 0)
+                {
+                    foreach (var msg in discoveryResult.ClosedConsoleMessages)
+                        reuseResponse.AppendLine(msg);
+                    reuseResponse.AppendLine();
+                }
                 // Always collect cached outputs - any console may have completed work
                 var (reuseCompletedOutput, reuseBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, discoveryResult.ReadyPipeName, cancellationToken);
                 if (reuseBusyStatusInfo.Length > 0)
