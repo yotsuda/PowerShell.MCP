@@ -216,10 +216,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         return new CachedOutputResult(completedOutput.ToString(), busyStatusInfo.ToString());
     }
 
-    private static string? BuildClosedConsoleInfo(List<string> allPipesStatus)
+    private static string? BuildClosedConsoleInfo(List<string> closedMessages)
     {
-        var closedMessages = allPipesStatus.Where(s => s.Contains("was closed")).ToList();
-        if (closedMessages.Count == 0) return null;
-        return string.Join("\n", closedMessages);
+        // Closed messages are already in ClosedConsoleMessages - return null to avoid duplication
+        return null;
     }
 }
