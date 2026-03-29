@@ -533,10 +533,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ERROR] InvokeExpression failed: {ex.Message}");
-            // Detect and report closed console
+            // Detect and report closed consoles (the failed pipe + any others)
             var consoleName = sessionManager.GetConsoleDisplayName(readyPipeName);
             sessionManager.ClearDeadPipe(agentId, readyPipeName);
-            return $"Command execution failed: {ex.Message}\n  - ⚠ Console {consoleName} was closed\nPlease try again. A new console will be started automatically if needed.";
+            var otherClosed = pipeDiscoveryService.DetectClosedConsoles(agentId);
+            var closedMessages = new List<string> { $"  - ⚠ Console {consoleName} was closed" };
+            closedMessages.AddRange(otherClosed);
+            return $"Command execution failed: {ex.Message}\n{string.Join("\n", closedMessages)}\nPlease try again. A new console will be started automatically if needed.";
         }
     }
 
