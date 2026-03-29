@@ -36,5 +36,5 @@ public interface IPipeDiscoveryService
     /// <summary>
     /// Detect externally closed consoles
     /// </summary>
-    IReadOnlyList<string> DetectClosedConsoles(string agentId);
+    IReadOnlyList<string> DetectClosedConsoles(string agentId, int? excludePid = null);
 }

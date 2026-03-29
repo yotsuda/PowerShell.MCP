@@ -19,7 +19,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<string> DetectClosedConsoles(string agentId)
+    public IReadOnlyList<string> DetectClosedConsoles(string agentId, int? excludePid = null)
     {
         var closedMessages = new List<string>();
         var previouslyBusyPids = _sessionManager.ConsumeKnownBusyPids(agentId);
@@ -32,6 +32,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
         foreach (var pid in previouslyBusyPids)
         {
+            if (pid == excludePid) continue;
             if (!currentPids.Contains(pid))
             {
                 closedMessages.Add($"  - ⚠ Console {ConsoleSessionManager.Instance.GetConsoleDisplayName(pid)} was closed");
@@ -61,8 +62,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var closedMessages = new List<string>();
         var allPipesStatus = new List<string>();
 
-        // Detect externally closed consoles
-        closedMessages.AddRange(DetectClosedConsoles(agentId));
+        // Detect externally closed consoles (exclude active pipe PID - it's checked separately below)
+        var activePipePid = activePipe != null ? ConsoleSessionManager.GetPidFromPipeName(activePipe) : null;
+        closedMessages.AddRange(DetectClosedConsoles(agentId, activePipePid));
 
         // Process cached active pipe status for closed/busy tracking
         if (activePipe != null)
