@@ -23,7 +23,7 @@ public class PowerShellService : IPowerShellService
 
         if (string.IsNullOrEmpty(response))
         {
-            throw new InvalidOperationException($"PowerShell.MCP module communication to pipe '{pipeName}' failed - no response received");
+            throw new InvalidOperationException($"PowerShell.MCP module communication to console {ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName)} failed - no response received");
         }
 
         return ExtractResponseBody(response);
@@ -78,7 +78,7 @@ public class PowerShellService : IPowerShellService
 
         if (string.IsNullOrEmpty(response))
         {
-            throw new InvalidOperationException($"PowerShell.MCP module communication to pipe '{pipeName}' failed for command: {pipeline}");
+            throw new InvalidOperationException($"PowerShell.MCP module communication to console {ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName)} failed for command: {pipeline}");
         }
 
         return response;
