@@ -566,9 +566,13 @@ public class PowerShellToolsTests
         var sessionManager = ConsoleSessionManager.Instance;
         const int testPid = 88802;
 
+        // Use a unique agent ID to avoid race with parallel test classes (e.g. PipeDiscoveryServiceTests)
+        // that also call ConsumeKnownBusyPids on the singleton with "default" agent ID
+        var isolatedAgentId = sessionManager.AllocateSubAgentId();
+
         sessionManager.TryAssignNameToPid(testPid);
         var expectedDisplayName = sessionManager.GetConsoleDisplayName(testPid);
-        sessionManager.MarkPipeBusy(TestAgentId, testPid);
+        sessionManager.MarkPipeBusy(isolatedAgentId, testPid);
 
         _mockPipeDiscoveryService
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
@@ -579,7 +583,7 @@ public class PowerShellToolsTests
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             timeout_seconds: 1,
-            agent_id: TestAgentId);
+            agent_id: isolatedAgentId);
 
         // Assert: console display name (not raw pipe name) in closed message
         Assert.Contains(expectedDisplayName, result);
