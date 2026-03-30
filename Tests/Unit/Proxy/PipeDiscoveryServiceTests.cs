@@ -88,13 +88,16 @@ public class PipeDiscoveryServiceTests
     }
 
     [Fact]
-    public async Task FindReadyPipeAsync_ActivePipeDead_ReturnsNull()
+    public async Task FindReadyPipeAsync_ActivePipeDead_ReturnsClosedWithConsoleDisplayName()
     {
         var sessionManager = ConsoleSessionManager.Instance;
         var proxyPid = sessionManager.ProxyPid;
-        var testPipeName = $"PSMCP.{proxyPid}.{DefaultAgentId}.99997";
+        const int testPid = 99997;
+        var testPipeName = $"PSMCP.{proxyPid}.{DefaultAgentId}.{testPid}";
 
         sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
+        sessionManager.TryAssignNameToPid(testPid);
+        var expectedDisplayName = sessionManager.GetConsoleDisplayName(testPid);
 
         _mockPowerShellService
             .Setup(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
@@ -102,8 +105,10 @@ public class PipeDiscoveryServiceTests
 
         var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
 
-        // Should have detected the closed console
+        // Should have detected the closed console with display name, not raw pipe name
         Assert.Contains(result.ClosedConsoleMessages, m => m.Contains("was closed"));
+        Assert.Contains(result.ClosedConsoleMessages, m => m.Contains(expectedDisplayName));
+        Assert.DoesNotContain(result.ClosedConsoleMessages, m => m.Contains("PSMCP."));
 
         // Cleanup is automatic since ClearDeadPipe was called
     }

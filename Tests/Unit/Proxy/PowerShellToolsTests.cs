@@ -351,6 +351,10 @@ public class PowerShellToolsTests
             .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "bad-cmd", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Connection lost"));
 
+        _mockPipeDiscoveryService
+            .Setup(s => s.DetectClosedConsoles(It.IsAny<string>(), It.IsAny<int?>()))
+            .Returns(new List<string>());
+
         // Act
         var result = await PowerShellTools.InvokeExpression(
             _mockPowerShellService.Object,
@@ -426,6 +430,111 @@ public class PowerShellToolsTests
         Assert.Contains("Switched to console", result);
     }
 
+    [Fact]
+    public async Task InvokeExpression_ExecutionError_ShowsConsoleDisplayName()
+    {
+        // Arrange: pipe found but execution throws — error message should contain console display name, not raw pipe name
+        var sessionManager = ConsoleSessionManager.Instance;
+        var proxyPid = sessionManager.ProxyPid;
+        const int testPid = 88801;
+        var pipeName = $"PSMCP.{proxyPid}.{TestAgentId}.{testPid}";
+
+        // Assign a friendly name so we can verify it appears in the output
+        sessionManager.SetActivePipeName(TestAgentId, pipeName);
+        sessionManager.TryAssignNameToPid(testPid);
+        var expectedDisplayName = sessionManager.GetConsoleDisplayName(testPid);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null));
+
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(pipeName, "bad-cmd", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException($"PowerShell.MCP module communication to console {expectedDisplayName} failed for command: bad-cmd"));
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.DetectClosedConsoles(It.IsAny<string>(), It.IsAny<int?>()))
+            .Returns(new List<string>());
+
+        // Act
+        var result = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            "bad-cmd",
+            agent_id: TestAgentId);
+
+        // Assert: response contains console display name, not raw pipe name
+        Assert.Contains(expectedDisplayName, result);
+        Assert.Contains("was closed", result);
+        Assert.DoesNotContain("PSMCP.", result);
+
+        // Cleanup
+        sessionManager.ClearDeadPipe(TestAgentId, pipeName);
+    }
+
+    [Fact]
+    public async Task InvokeExpression_ExecutionError_IncludesOtherClosedConsoles()
+    {
+        // Arrange: execution fails, and DetectClosedConsoles finds additional closed consoles
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "fail-cmd", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Connection lost"));
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.DetectClosedConsoles(It.IsAny<string>(), It.IsAny<int?>()))
+            .Returns(new List<string> { "  - ⚠ Console PID #9999 was closed" });
+
+        // Act
+        var result = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            "fail-cmd",
+            agent_id: TestAgentId);
+
+        // Assert: both the failed console and the other closed console appear
+        Assert.Contains("PID #2000", result); // the console that threw
+        Assert.Contains("PID #9999 was closed", result); // additional closed console
+        Assert.Contains("Please try again", result);
+
+        // Cleanup
+        ConsoleSessionManager.Instance.ClearDeadPipe(TestAgentId, TestPipeName);
+    }
+
+    [Fact]
+    public async Task InvokeExpression_ClosedConsoleMessages_IncludedInNonSwitchedResponse()
+    {
+        // Arrange: not switched, but ClosedConsoleMessages has entries (detected during discovery)
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipeDiscoveryResult(
+                TestPipeName, false,
+                new List<string> { "  - ⚠ Console PID #7777 was closed" },
+                null));
+
+        var headerJson = System.Text.Json.JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.1 });
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(headerJson + "\n\n✓ done\n2025-01-15");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        // Act
+        var result = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            "Get-Date",
+            agent_id: TestAgentId);
+
+        // Assert: closed console info is included even on success path
+        Assert.Contains("PID #7777 was closed", result);
+    }
+
     #endregion
 
     #region WaitForCompletion Tests
@@ -447,6 +556,34 @@ public class PowerShellToolsTests
 
         // Assert
         Assert.Contains("No commands to wait for completion", result);
+    }
+
+    [Fact]
+    public async Task WaitForCompletion_PreviouslyBusyPidDisappeared_ReturnsClosedMessage()
+    {
+        // Arrange: a PID was previously marked busy, but EnumeratePipes returns empty (pipe gone)
+        // This triggers the "previously busy PID disappeared" detection path
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88802;
+
+        sessionManager.TryAssignNameToPid(testPid);
+        var expectedDisplayName = sessionManager.GetConsoleDisplayName(testPid);
+        sessionManager.MarkPipeBusy(TestAgentId, testPid);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        // Act: EnumeratePipes returns no real pipes, so busy PID 88802 is detected as gone
+        var result = await PowerShellTools.WaitForCompletion(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            timeout_seconds: 1,
+            agent_id: TestAgentId);
+
+        // Assert: console display name (not raw pipe name) in closed message
+        Assert.Contains(expectedDisplayName, result);
+        Assert.Contains("was closed", result);
     }
 
     #endregion
