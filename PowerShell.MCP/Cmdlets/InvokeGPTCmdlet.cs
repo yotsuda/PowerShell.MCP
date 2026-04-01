@@ -13,15 +13,11 @@ namespace PowerShell.MCP.Cmdlets;
 [OutputType(typeof(AIResponse))]
 public class InvokeGPTCmdlet : AIStreamingCmdletBase
 {
-    private static readonly Dictionary<string, string> s_modelAliases = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["4o"]      = "gpt-4o",
-        ["GPT4o"]   = "gpt-4o",
-        ["4.1"]     = "gpt-4.1",
-        ["GPT4.1"]  = "gpt-4.1",
-        ["o3"]      = "o3",
-        ["o4-mini"] = "o4-mini",
-    };
+    [Parameter]
+    [ArgumentCompleter(typeof(GPTModelCompleter))]
+    public new string? Model { get; set; }
+
+    private const string DefaultModel = "gpt-4o";
 
     protected override string ProviderName => "OpenAI";
 
@@ -30,7 +26,7 @@ public class InvokeGPTCmdlet : AIStreamingCmdletBase
         var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY")
             ?? throw new PSInvalidOperationException("OPENAI_API_KEY environment variable is not set.");
 
-        var model = ResolveModel(Model);
+        var model = string.IsNullOrEmpty(Model) ? DefaultModel : Model;
 
         var json = BuildJson(model, userContent);
 
@@ -40,14 +36,6 @@ public class InvokeGPTCmdlet : AIStreamingCmdletBase
 
         var text = ReadSSEStream(request, ParseDelta);
         return (text, model);
-    }
-
-    private static string ResolveModel(string? model)
-    {
-        if (string.IsNullOrEmpty(model))
-            return "gpt-4o";
-
-        return s_modelAliases.TryGetValue(model, out var resolved) ? resolved : model;
     }
 
     private string BuildJson(string model, string userContent)

@@ -13,15 +13,11 @@ namespace PowerShell.MCP.Cmdlets;
 [OutputType(typeof(AIResponse))]
 public class InvokeClaudeCmdlet : AIStreamingCmdletBase
 {
-    private static readonly Dictionary<string, string> s_modelAliases = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Opus"]    = "claude-opus-4-0-20250514",
-        ["Opus4"]   = "claude-opus-4-0-20250514",
-        ["Sonnet"]  = "claude-sonnet-4-20250514",
-        ["Sonnet4"] = "claude-sonnet-4-20250514",
-        ["Haiku"]   = "claude-haiku-4-5-20251001",
-        ["Haiku4"]  = "claude-haiku-4-5-20251001",
-    };
+    [Parameter]
+    [ArgumentCompleter(typeof(ClaudeModelCompleter))]
+    public new string? Model { get; set; }
+
+    private const string DefaultModel = "claude-sonnet-4-20250514";
 
     protected override string ProviderName => "Anthropic";
 
@@ -30,7 +26,7 @@ public class InvokeClaudeCmdlet : AIStreamingCmdletBase
         var apiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")
             ?? throw new PSInvalidOperationException("ANTHROPIC_API_KEY environment variable is not set.");
 
-        var model = ResolveModel(Model);
+        var model = string.IsNullOrEmpty(Model) ? DefaultModel : Model;
 
         var json = BuildJson(model, userContent);
 
@@ -41,14 +37,6 @@ public class InvokeClaudeCmdlet : AIStreamingCmdletBase
 
         var text = ReadSSEStream(request, ParseDelta);
         return (text, model);
-    }
-
-    private static string ResolveModel(string? model)
-    {
-        if (string.IsNullOrEmpty(model))
-            return "claude-sonnet-4-20250514";
-
-        return s_modelAliases.TryGetValue(model, out var resolved) ? resolved : model;
     }
 
     private string BuildJson(string model, string userContent)
