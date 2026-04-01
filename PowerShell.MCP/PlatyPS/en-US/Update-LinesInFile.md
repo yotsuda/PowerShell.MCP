@@ -111,7 +111,7 @@ Type: System.Object[]
 DefaultValue: None
 SupportsWildcards: false
 Aliases:
-- NewLines
+- [NewLines]()
 ParameterSets:
 - Name: (All)
   Position: 1
@@ -178,7 +178,7 @@ Type: System.String[]
 DefaultValue: None
 SupportsWildcards: false
 Aliases:
-- PSPath
+- [PSPath]()
 ParameterSets:
 - Name: LiteralPath
   Position: Named
@@ -265,8 +265,8 @@ File path(s) to process.
 
 ## RELATED LINKS
 
-- [Add-LinesToFile](Add-LinesToFile.md)
-- [Update-MatchInFile](Update-MatchInFile.md)
-- [Remove-LinesFromFile](Remove-LinesFromFile.md)
-- [Show-TextFiles](Show-TextFiles.md)
+- [Add-LinesToFile]()
+- [Update-MatchInFile]()
+- [Remove-LinesFromFile]()
+- [Show-TextFiles]()
 

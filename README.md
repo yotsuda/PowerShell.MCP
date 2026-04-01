@@ -152,11 +152,6 @@ Register-PwshToClaudeCode
 Register-PwshToClaudeDesktop
 ```
 
-> **⚠️ MSIX (Microsoft Store) installs:** `Register-PwshToClaudeDesktop` may write to the wrong config path due to MSIX filesystem virtualization. If MCP tools don't appear after restart, open Claude Desktop's **Settings → Developer → Edit Config** to find the actual config path, then manually add:
-> ```json
-> { "mcpServers": { "pwsh": { "command": "<paste output of Get-MCPProxyPath -Escape>" } } }
-> ```
-
 **For other MCP clients:** Run `Get-MCPProxyPath -Escape` to get the JSON-escaped executable path, then add it to your client's configuration file manually.
 
 #### 4. Restart your MCP client

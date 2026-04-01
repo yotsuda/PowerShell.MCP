@@ -150,7 +150,7 @@ Type: System.String[]
 DefaultValue: None
 SupportsWildcards: false
 Aliases:
-- PSPath
+- [PSPath]()
 ParameterSets:
 - Name: LiteralPath
   Position: Named
@@ -270,8 +270,8 @@ File path(s) to process.
 
 ## RELATED LINKS
 
-- [Add-LinesToFile](Add-LinesToFile.md)
-- [Update-LinesInFile](Update-LinesInFile.md)
-- [Update-MatchInFile](Update-MatchInFile.md)
-- [Remove-LinesFromFile](Remove-LinesFromFile.md)
+- [Add-LinesToFile]()
+- [Update-LinesInFile]()
+- [Update-MatchInFile]()
+- [Remove-LinesFromFile]()
 

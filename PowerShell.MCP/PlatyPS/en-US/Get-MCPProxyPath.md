@@ -86,8 +86,8 @@ Full path to the PowerShell.MCP.Proxy executable for the current platform.
 
 ## RELATED LINKS
 
-- [Get-MCPOwner](Get-MCPOwner.md)
-- [Register-PwshToClaudeCode](Register-PwshToClaudeCode.md)
-- [Register-PwshToClaudeDesktop](Register-PwshToClaudeDesktop.md)
-- [Stop-AllPwsh](Stop-AllPwsh.md)
+- [Get-MCPOwner]()
+- [Register-PwshToClaudeCode]()
+- [Register-PwshToClaudeDesktop]()
+- [Stop-AllPwsh]()
 

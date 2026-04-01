@@ -78,8 +78,8 @@ PSCustomObject with Owned, ProxyPid, AgentId, and ClientName properties.
 
 ## RELATED LINKS
 
-- [Get-MCPProxyPath](Get-MCPProxyPath.md)
-- [Register-PwshToClaudeCode](Register-PwshToClaudeCode.md)
-- [Register-PwshToClaudeDesktop](Register-PwshToClaudeDesktop.md)
-- [Stop-AllPwsh](Stop-AllPwsh.md)
+- [Get-MCPProxyPath]()
+- [Register-PwshToClaudeCode]()
+- [Register-PwshToClaudeDesktop]()
+- [Stop-AllPwsh]()
 

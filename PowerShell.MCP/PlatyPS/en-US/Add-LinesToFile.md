@@ -176,7 +176,7 @@ Type: System.String[]
 DefaultValue: None
 SupportsWildcards: false
 Aliases:
-- PSPath
+- [PSPath]()
 ParameterSets:
 - Name: LiteralPath
   Position: Named
@@ -264,8 +264,8 @@ Exception: wildcards in `-Path` cannot create new files.
 
 ## RELATED LINKS
 
-- [Update-LinesInFile](Update-LinesInFile.md)
-- [Update-MatchInFile](Update-MatchInFile.md)
-- [Remove-LinesFromFile](Remove-LinesFromFile.md)
-- [Show-TextFiles](Show-TextFiles.md)
+- [Update-LinesInFile]()
+- [Update-MatchInFile]()
+- [Remove-LinesFromFile]()
+- [Show-TextFiles]()
 

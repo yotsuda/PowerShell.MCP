@@ -22,14 +22,6 @@ The universal MCP server for Claude Code and other MCP-compatible clients. One i
 
 Insert lines into a text file at a specific position or at the end
 
-### [Invoke-Claude](Invoke-Claude.md)
-
-Sends a prompt to the Anthropic Claude API and returns the response with real-time streaming.
-
-### [Invoke-GPT](Invoke-GPT.md)
-
-Sends a prompt to the OpenAI API and returns the response with real-time streaming.
-
 ### [Remove-LinesFromFile](Remove-LinesFromFile.md)
 
 Remove lines from a text file by line range or pattern matching

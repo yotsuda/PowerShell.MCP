@@ -135,8 +135,8 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## RELATED LINKS
 
-- [Get-MCPOwner](Get-MCPOwner.md)
-- [Get-MCPProxyPath](Get-MCPProxyPath.md)
-- [Register-PwshToClaudeCode](Register-PwshToClaudeCode.md)
-- [Register-PwshToClaudeDesktop](Register-PwshToClaudeDesktop.md)
+- [Get-MCPOwner]()
+- [Get-MCPProxyPath]()
+- [Register-PwshToClaudeCode]()
+- [Register-PwshToClaudeDesktop]()
 

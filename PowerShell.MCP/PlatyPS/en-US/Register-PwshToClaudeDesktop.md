@@ -59,8 +59,8 @@ None.
 
 ## RELATED LINKS
 
-- [Register-PwshToClaudeCode](Register-PwshToClaudeCode.md)
-- [Get-MCPOwner](Get-MCPOwner.md)
-- [Get-MCPProxyPath](Get-MCPProxyPath.md)
-- [Stop-AllPwsh](Stop-AllPwsh.md)
+- [Register-PwshToClaudeCode]()
+- [Get-MCPOwner]()
+- [Get-MCPProxyPath]()
+- [Stop-AllPwsh]()
 

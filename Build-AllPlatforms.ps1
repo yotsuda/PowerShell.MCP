@@ -98,10 +98,8 @@ if ('Dll' -in $Target) {
     # Copy manifest, script, and format files from Staging
     Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psd1') -Destination $OutputBase -Force
     Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psm1') -Destination $OutputBase -Force
-    Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.Format.ps1xml') -Destination $OutputBase -Force
     Write-Host "  Copied: PowerShell.MCP.psd1" -ForegroundColor Green
     Write-Host "  Copied: PowerShell.MCP.psm1" -ForegroundColor Green
-    Write-Host "  Copied: PowerShell.MCP.Format.ps1xml" -ForegroundColor Green
 
 
     Write-Host ""
@@ -170,7 +168,8 @@ if ('Dll' -in $Target) {
         'PowerShell.MCP.dll',
         'PowerShell.MCP.psd1',
         'PowerShell.MCP.psm1',
-        'Ude.NetStandard.dll'
+        'Ude.NetStandard.dll',
+        'en-US\PowerShell.MCP-help.xml'
     )
 }
 

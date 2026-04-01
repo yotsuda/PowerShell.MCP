@@ -61,5 +61,5 @@ None.
 
 ## RELATED LINKS
 
-- [Register-PwshToClaudeDesktop](Register-PwshToClaudeDesktop.md)
+- [Register-PwshToClaudeDesktop]()
 
