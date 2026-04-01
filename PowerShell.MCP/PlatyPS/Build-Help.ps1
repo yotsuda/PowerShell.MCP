@@ -1,18 +1,19 @@
 <#
 .SYNOPSIS
-    Build PowerShell help files from PlatyPS markdown files
+    Build PowerShell help files from PlatyPS v2 markdown files
 
 .DESCRIPTION
-    This script generates MAML help files from markdown documentation using PlatyPS.
-    It builds help for all supported .NET target frameworks and copies the output
-    to both Debug and Release build directories.
+    This script generates MAML help files from markdown documentation using
+    Microsoft.PowerShell.PlatyPS (v2). It builds help for all supported .NET
+    target frameworks and copies the output to both Debug and Release build
+    directories.
 
 .EXAMPLE
     .\Build-Help.ps1
     Builds help files for all target frameworks
 
 .NOTES
-    Requires: platyPS module (Install-Module -Name platyPS)
+    Requires: Microsoft.PowerShell.PlatyPS module
     Run with Administrator privileges to deploy to PowerShell modules directory
 #>
 
@@ -27,17 +28,24 @@ $markdownPath = Join-Path $scriptRoot "en-US"
 $projectRoot = Split-Path $scriptRoot -Parent
 $binPath = Join-Path $projectRoot "bin"
 
-Write-Host "=== PowerShell.MCP Help Build Script ===" -ForegroundColor Cyan
+Write-Host "=== PowerShell.MCP Help Build Script (PlatyPS v2) ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Check for platyPS module
-if (-not (Get-Module -Name platyPS -ListAvailable)) {
-    Write-Error "platyPS module not found. Install it with: Install-Module -Name platyPS"
+# Check for Microsoft.PowerShell.PlatyPS module
+$platyPS = Get-Module -Name Microsoft.PowerShell.PlatyPS -ListAvailable
+if (-not $platyPS) {
+    # Fallback to legacy platyPS
+    $platyPS = Get-Module -Name platyPS -ListAvailable
+    if ($platyPS) {
+        Write-Error "Only legacy platyPS $($platyPS.Version) found. Install Microsoft.PowerShell.PlatyPS: Install-Module Microsoft.PowerShell.PlatyPS -Scope CurrentUser"
+    } else {
+        Write-Error "PlatyPS not found. Install with: Install-Module Microsoft.PowerShell.PlatyPS -Scope CurrentUser"
+    }
     exit 1
 }
 
-Import-Module platyPS -ErrorAction Stop
-Write-Host "[OK] platyPS module loaded" -ForegroundColor Green
+Import-Module Microsoft.PowerShell.PlatyPS -ErrorAction Stop
+Write-Host "[OK] Microsoft.PowerShell.PlatyPS $($platyPS.Version) loaded" -ForegroundColor Green
 
 # Verify markdown files exist
 if (-not (Test-Path $markdownPath)) {
@@ -45,7 +53,7 @@ if (-not (Test-Path $markdownPath)) {
     exit 1
 }
 
-$mdFiles = Get-ChildItem -Path $markdownPath -Filter "*.md"
+$mdFiles = Get-ChildItem -Path "$markdownPath\*.md" -Exclude "PowerShell.MCP.md"
 if ($mdFiles.Count -eq 0) {
     Write-Error "No markdown files found in: $markdownPath"
     exit 1
@@ -59,7 +67,7 @@ $targetFrameworks = @()
 if (Test-Path $binPath) {
     $debugPath = Join-Path $binPath "Debug"
     $releasePath = Join-Path $binPath "Release"
-    
+
     foreach ($buildConfig in @($debugPath, $releasePath)) {
         if (Test-Path $buildConfig) {
             $tfms = Get-ChildItem -Path $buildConfig -Directory | Where-Object { $_.Name -match '^net\d' }
@@ -80,20 +88,24 @@ if ($targetFrameworks.Count -eq 0) {
 Write-Host "Target frameworks: $($targetFrameworks -join ', ')" -ForegroundColor Yellow
 Write-Host ""
 
-# Build help to temporary directory first
-# NOTE: New-ExternalHelp emits a harmless .NET stderr "already exists" when generating
-# multiple help files (DLL + script module) because it calls mkdir twice internally.
-# This cannot be suppressed from PowerShell and does not affect the output.
+# Build help: Import markdown → Export MAML XML
 $tempOutputPath = Join-Path $env:TEMP "PowerShell.MCP-Help-Build"
 if (Test-Path $tempOutputPath) {
     Remove-Item -Path $tempOutputPath -Recurse -Force
 }
 
-Write-Host "Building help file..." -ForegroundColor Cyan
+Write-Host "Building help files..." -ForegroundColor Cyan
 try {
-    $result = New-ExternalHelp -Path $markdownPath -OutputPath $tempOutputPath -Force -ErrorAction Stop
-    Write-Host "[OK] Help file generated: $($result.Name)" -ForegroundColor Green
-    Write-Host "     Size: $([math]::Round($result.Length / 1KB, 2)) KB" -ForegroundColor Gray
+    # PlatyPS v2: import markdown into CommandHelp objects, then export to MAML
+    $helpObjects = $mdFiles | ForEach-Object {
+        Import-MarkdownCommandHelp -Path $_.FullName
+    }
+    Write-Host "  Imported $($helpObjects.Count) command help objects" -ForegroundColor Gray
+
+    $result = Export-MamlCommandHelp -CommandHelp $helpObjects -OutputFolder $tempOutputPath -Force
+    foreach ($f in $result) {
+        Write-Host "[OK] Help file generated: $($f.Name) ($([math]::Round($f.Length / 1KB, 2)) KB)" -ForegroundColor Green
+    }
 } catch {
     Write-Error "Failed to build help file: $_"
     exit 1
@@ -101,23 +113,23 @@ try {
 
 Write-Host ""
 
-# Help files to copy (DLL binary cmdlets + script module cmdlets)
-$helpFiles = Get-ChildItem -Path $tempOutputPath -Filter "*.xml"
+# Help files to copy
+$helpFiles = Get-ChildItem -Path $tempOutputPath -Filter "*.xml" -Recurse
 $copiedCount = 0
 
 foreach ($tfm in $targetFrameworks) {
     foreach ($config in @("Debug", "Release")) {
         $targetPath = Join-Path $binPath "$config\$tfm\en-US"
-        
+
         if (-not (Test-Path $targetPath)) {
             New-Item -Path $targetPath -ItemType Directory -Force | Out-Null
         }
-        
+
         foreach ($hf in $helpFiles) {
             Copy-Item -Path $hf.FullName -Destination (Join-Path $targetPath $hf.Name) -Force
         }
         $copiedCount++
-        
+
         Write-Host "  [COPY] $config/$tfm/en-US/" -ForegroundColor Gray
     }
 }
@@ -128,12 +140,12 @@ try {
     if (-not (Test-Path $psModulePath)) {
         New-Item -Path $psModulePath -ItemType Directory -Force | Out-Null
     }
-    
+
     foreach ($hf in $helpFiles) {
         Copy-Item -Path $hf.FullName -Destination (Join-Path $psModulePath $hf.Name) -Force
     }
     $copiedCount++
-    
+
     Write-Host "  [COPY] PowerShell\7\Modules\PowerShell.MCP\en-US\" -ForegroundColor Gray
 } catch {
     Write-Warning "Could not copy to PowerShell modules directory: $_"
@@ -143,11 +155,11 @@ try {
 Write-Host ""
 $primaryTfm = $targetFrameworks[0]
 Write-Host "=== Build Complete ===" -ForegroundColor Green
-Write-Host "Help file copied to $copiedCount locations" -ForegroundColor Green
+Write-Host "Help files copied to $copiedCount locations" -ForegroundColor Green
 Write-Host ""
 Write-Host "To test the help:" -ForegroundColor Yellow
-Write-Host "  Import-Module .\bin\Debug\$primaryTfm\PowerShell.MCP.dll -Force" -ForegroundColor Gray
-Write-Host "  Get-Help Show-TextFile -Full" -ForegroundColor Gray
+Write-Host "  Get-Help Invoke-Claude -Full" -ForegroundColor Gray
+Write-Host "  Get-Help Show-TextFiles -Full" -ForegroundColor Gray
 
 # Cleanup temporary directory
 Remove-Item -Path $tempOutputPath -Recurse -Force -ErrorAction SilentlyContinue
