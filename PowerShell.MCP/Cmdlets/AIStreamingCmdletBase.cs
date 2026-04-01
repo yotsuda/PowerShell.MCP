@@ -102,9 +102,7 @@ public abstract class AIStreamingCmdletBase : PSCmdlet
             }
         }
 
-        if (wroteAny)
-            Host.UI.WriteLine();
-
+        // No Host.UI.WriteLine() here — the formatter's output provides the trailing newline.
         return result.ToString();
     }
 

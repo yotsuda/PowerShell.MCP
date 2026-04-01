@@ -10,7 +10,9 @@
         <CustomEntries>
           <CustomEntry>
             <CustomItem>
-              <Text> </Text>
+              <ExpressionBinding>
+                <ScriptBlock>$null</ScriptBlock>
+              </ExpressionBinding>
             </CustomItem>
           </CustomEntry>
         </CustomEntries>
