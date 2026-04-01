@@ -74,8 +74,14 @@ function Register-PwshToClaudeDesktop {
     $command = Get-MCPProxyPath
 
     # Determine config file path per platform
+    # MSIX (Microsoft Store) installs virtualize %APPDATA% under Packages\
     $configPath = if ($IsWindows) {
-        Join-Path $env:APPDATA 'Claude\claude_desktop_config.json'
+        $msixDir = Get-ChildItem "$env:LOCALAPPDATA\Packages\Claude_*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($msixDir) {
+            Join-Path $msixDir.FullName 'LocalCache\Roaming\Claude\claude_desktop_config.json'
+        } else {
+            Join-Path $env:APPDATA 'Claude\claude_desktop_config.json'
+        }
     } elseif ($IsMacOS) {
         Join-Path $HOME 'Library/Application Support/Claude/claude_desktop_config.json'
     } elseif ($IsLinux) {
@@ -439,4 +445,6 @@ function Stop-AllPwsh {
     # Stop self last
     Stop-Process -Id $PID -Force
 }
+
+
 
