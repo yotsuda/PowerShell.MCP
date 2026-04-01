@@ -77,9 +77,7 @@ CmdletsToExport = @(
 'Add-LinesToFile',
 'Update-LinesInFile',
 'Update-MatchInFile',
-'Remove-LinesFromFile',
-'Invoke-Claude',
-'Invoke-GPT'
+'Remove-LinesFromFile'
 )
 
 # Variables to export from this module

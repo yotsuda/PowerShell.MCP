@@ -304,12 +304,14 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $outputStreams.Success += $item
                 }
 
-                # Append Invoke-Claude/Invoke-GPT output if available
-                $aiResponse = [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse
-                if (-not [string]::IsNullOrEmpty($aiResponse)) {
-                    $outputStreams.Success += $aiResponse
-                    [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
-                }
+                # Append PromptAI (Invoke-Claude/Invoke-GPT/Invoke-Gemini) output if available
+                try {
+                    $aiResponse = [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse
+                    if (-not [string]::IsNullOrEmpty($aiResponse)) {
+                        $outputStreams.Success += $aiResponse
+                        [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
+                    }
+                } catch { }
 
                 # Calculate statistics
                 $errorCount = $outputStreams.Error.Count + $outputStreams.Exception.Count
@@ -456,8 +458,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     Write-ColoredCommand $cmd
 
-                    # Clear Invoke-Claude/Invoke-GPT output before execution
-                    [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
+                    # Clear PromptAI output before execution
+                    try { [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null } catch { }
 
                     # Execute command with clean stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $cmd
@@ -532,8 +534,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 $mcpOutput = $null
                 try {
-                    # Clear Invoke-Claude/Invoke-GPT output before execution
-                    [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
+                    # Clear PromptAI output before execution
+                    try { [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null } catch { }
 
                     # Execute command with stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $silentCmd
