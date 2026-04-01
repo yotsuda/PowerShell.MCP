@@ -304,6 +304,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $outputStreams.Success += $item
                 }
 
+                # Append Invoke-Claude/Invoke-GPT output if available
+                $aiResponse = [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse
+                if (-not [string]::IsNullOrEmpty($aiResponse)) {
+                    $outputStreams.Success += $aiResponse
+                    [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
+                }
+
                 # Calculate statistics
                 $errorCount = $outputStreams.Error.Count + $outputStreams.Exception.Count
                 $warningCount = $outputStreams.Warning.Count
@@ -449,6 +456,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     Write-ColoredCommand $cmd
 
+                    # Clear Invoke-Claude/Invoke-GPT output before execution
+                    [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
+
                     # Execute command with clean stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $cmd
 
@@ -522,6 +532,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 $mcpOutput = $null
                 try {
+                    # Clear Invoke-Claude/Invoke-GPT output before execution
+                    [PowerShell.MCP.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
+
                     # Execute command with stream capture
                     $streamResults = Invoke-CommandWithAllStreams -Command $silentCmd
 

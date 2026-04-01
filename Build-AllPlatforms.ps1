@@ -95,11 +95,13 @@ if ('Dll' -in $Target) {
     Write-Host "  Copied: PowerShell.MCP.dll" -ForegroundColor Green
     Write-Host "  Copied: Ude.NetStandard.dll" -ForegroundColor Green
 
-    # Copy manifest and script from Staging
+    # Copy manifest, script, and format files from Staging
     Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psd1') -Destination $OutputBase -Force
     Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.psm1') -Destination $OutputBase -Force
+    Copy-Item (Join-Path $stagingPath 'PowerShell.MCP.Format.ps1xml') -Destination $OutputBase -Force
     Write-Host "  Copied: PowerShell.MCP.psd1" -ForegroundColor Green
     Write-Host "  Copied: PowerShell.MCP.psm1" -ForegroundColor Green
+    Write-Host "  Copied: PowerShell.MCP.Format.ps1xml" -ForegroundColor Green
 
 
     Write-Host ""

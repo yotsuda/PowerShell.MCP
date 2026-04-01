@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.7.4'
+ModuleVersion = '1.7.5'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -63,7 +63,7 @@ RequiredModules = @()
 # TypesToProcess = @()
 
 # Format files (.ps1xml) to be loaded when importing this module
-# FormatsToProcess = @()
+FormatsToProcess = @('PowerShell.MCP.Format.ps1xml')
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 NestedModules = @('PowerShell.MCP.dll')
@@ -77,7 +77,9 @@ CmdletsToExport = @(
 'Add-LinesToFile',
 'Update-LinesInFile',
 'Update-MatchInFile',
-'Remove-LinesFromFile'
+'Remove-LinesFromFile',
+'Invoke-Claude',
+'Invoke-GPT'
 )
 
 # Variables to export from this module
