@@ -91,14 +91,21 @@ public abstract class AIStreamingCmdletBase : PSCmdlet
             if (data.SequenceEqual("[DONE]"))
                 break;
 
-            using var doc = JsonDocument.Parse(data.ToString());
-            var chunk = parseDelta(doc.RootElement);
-
-            if (chunk != null)
+            try
             {
-                result.Append(chunk);
-                Host.UI.Write(chunk);
-                wroteAny = true;
+                using var doc = JsonDocument.Parse(data.ToString());
+                var chunk = parseDelta(doc.RootElement);
+
+                if (chunk != null)
+                {
+                    result.Append(chunk);
+                    Host.UI.Write(chunk);
+                    wroteAny = true;
+                }
+            }
+            catch (JsonException)
+            {
+                // Skip malformed SSE chunks rather than aborting the entire stream.
             }
         }
 
