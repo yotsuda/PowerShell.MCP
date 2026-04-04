@@ -14,6 +14,10 @@
 
 PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through a single MCP server. You and AI collaborate in the same PowerShell console—every command is visible, auditable, and saved to history.
 
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/6ebec366-832f-484a-ae74-285bc754c437" alt="social-image" width="640" />
+</div>
+
 ## Why PowerShell.MCP?
 
 **A universal gateway to the PowerShell ecosystem.**
