@@ -32,6 +32,12 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
     public string? Pattern { get; set; }
 
     [Parameter]
+    public int? Skip { get; set; }
+
+    [Parameter]
+    public int? First { get; set; }
+
+    [Parameter]
     public string? Encoding { get; set; }
 
     [Parameter]
@@ -42,6 +48,9 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
+        // -Skip/-First compatibility: map to -LineRange
+        LineRange = MapSkipFirstToLineRange(Skip, First, LineRange);
+
         // Contains and Pattern can be combined (OR condition), same as Show-TextFiles
 
         // Check that at least one of LineRange, Contains, or Pattern is specified

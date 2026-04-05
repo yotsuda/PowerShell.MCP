@@ -20,15 +20,15 @@ Display file contents with line numbers, or search across files with regex or li
 ### Path
 
 ```
-Show-TextFiles [-Path] <string[]> [-LineRange <string[]>] [-Pattern <string>] [-Contains <string>]
- [-Recurse] [-Encoding <string>] [<CommonParameters>]
+Show-TextFiles [-Path] <string[]> [-LineRange <string[]>] [-Skip <int>] [-First <int>]
+ [-Pattern <string>] [-Contains <string>] [-Recurse] [-Encoding <string>] [<CommonParameters>]
 ```
 
 ### LiteralPath
 
 ```
-Show-TextFiles -LiteralPath <string[]> [-LineRange <string[]>] [-Pattern <string>]
- [-Contains <string>] [-Recurse] [-Encoding <string>] [<CommonParameters>]
+Show-TextFiles -LiteralPath <string[]> [-LineRange <string[]>] [-Skip <int>] [-First <int>]
+ [-Pattern <string>] [-Contains <string>] [-Recurse] [-Encoding <string>] [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -86,6 +86,52 @@ ParameterSets:
   ValueFromPipelineByPropertyName: false
   ValueFromRemainingArguments: false
 - Name: LiteralPath
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -First
+
+Number of lines to process.
+Use with `-Skip` to define a range, or alone to process from the beginning.
+Mapped to `-LineRange` internally (e.g., `-First 20` becomes `-LineRange 1-20`).
+
+```yaml
+Type: System.Nullable`1[System.Int32]
+DefaultValue: None
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: (All)
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -Skip
+
+Number of lines to skip from the beginning.
+Use with `-First` to define a window (e.g., `-Skip 200 -First 50` becomes `-LineRange 201-250`).
+Use alone to skip lines and process to end of file (e.g., `-Skip 100` becomes `-LineRange 101,-1`).
+
+```yaml
+Type: System.Nullable`1[System.Int32]
+DefaultValue: None
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: (All)
   Position: Named
   IsRequired: false
   ValueFromPipeline: false

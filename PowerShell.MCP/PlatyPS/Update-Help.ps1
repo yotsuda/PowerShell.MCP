@@ -32,7 +32,7 @@ foreach ($md in $mdFiles) {
     $cmdName = $cmdHelp.Title
     $cmdInfo = Get-Command $cmdName -Module PowerShell.MCP -ErrorAction SilentlyContinue
     if ($cmdInfo) {
-        Update-MarkdownCommandHelp -Path $md.FullName -CommandInfo $cmdInfo -Force
+        Update-CommandHelp -Path $md.FullName
         Write-Host "  Updated: $($md.Name)" -ForegroundColor Gray
     } else {
         Write-Warning "  Skipped: $($md.Name) (command not found)"
@@ -42,7 +42,8 @@ foreach ($md in $mdFiles) {
 # Update module page
 $modulePage = Join-Path $markdownPath "PowerShell.MCP.md"
 if (Test-Path $modulePage) {
-    Update-MarkdownModuleFile -Path $modulePage -ModuleInfo (Get-Module PowerShell.MCP) -Force
+    $commandHelps = $mdFiles | ForEach-Object { Import-MarkdownCommandHelp -Path $_.FullName }
+    Update-MarkdownModuleFile -Path $modulePage -CommandHelp $commandHelps -Force
     Write-Host "  Updated: PowerShell.MCP.md" -ForegroundColor Gray
 }
 

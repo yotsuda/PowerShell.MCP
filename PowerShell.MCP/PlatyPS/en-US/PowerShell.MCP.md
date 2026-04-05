@@ -5,7 +5,7 @@ HelpInfoUri: https://github.com/yotsuda/PowerShell.MCP#readme
 Locale: ja-JP
 Module Guid: 313962fa-c90b-424a-9c8a-d4a05f4a1481
 Module Name: PowerShell.MCP
-ms.date: 04/01/2026
+ms.date: 04/05/2026
 PlatyPS schema version: 2024-05-01
 title: PowerShell.MCP Module
 ---
@@ -16,27 +16,11 @@ title: PowerShell.MCP Module
 
 The universal MCP server for Claude Code and other MCP-compatible clients. One installation gives AI access to 10,000+ PowerShell modules and any CLI tool. You and AI collaborate in the same console with full transparency. Supports Windows, Linux, and macOS.
 
-## PowerShell.MCP
+## PowerShell.MCP Cmdlets
 
 ### [Add-LinesToFile](Add-LinesToFile.md)
 
 Insert lines into a text file at a specific position or at the end
-
-### [Remove-LinesFromFile](Remove-LinesFromFile.md)
-
-Remove lines from a text file by line range or pattern matching
-
-### [Show-TextFiles](Show-TextFiles.md)
-
-Display file contents with line numbers, or search across files with regex or literal patterns
-
-### [Update-LinesInFile](Update-LinesInFile.md)
-
-Replace or delete specific lines in a text file
-
-### [Update-MatchInFile](Update-MatchInFile.md)
-
-Replace text in a file using literal string or regex pattern
 
 ### [Get-MCPOwner](Get-MCPOwner.md)
 
@@ -54,7 +38,23 @@ Registers PowerShell.MCP as an MCP server in Claude Code.
 
 Registers PowerShell.MCP as an MCP server in Claude Desktop.
 
+### [Remove-LinesFromFile](Remove-LinesFromFile.md)
+
+Remove lines from a text file by line range or pattern matching
+
+### [Show-TextFiles](Show-TextFiles.md)
+
+Display file contents with line numbers, or search across files with regex or literal patterns
+
 ### [Stop-AllPwsh](Stop-AllPwsh.md)
 
 Stops all pwsh processes to release DLL locks.
+
+### [Update-LinesInFile](Update-LinesInFile.md)
+
+Replace or delete specific lines in a text file
+
+### [Update-MatchInFile](Update-MatchInFile.md)
+
+Replace text in a file using literal string or regex pattern
 

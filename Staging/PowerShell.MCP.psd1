@@ -12,7 +12,7 @@
 RootModule = 'PowerShell.MCP.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.7.5'
+ModuleVersion = '1.7.6'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')

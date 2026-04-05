@@ -35,6 +35,12 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
     }
 
     [Parameter]
+    public int? Skip { get; set; }
+
+    [Parameter]
+    public int? First { get; set; }
+
+    [Parameter]
     public string? Encoding { get; set; }
 
     [Parameter]
@@ -42,6 +48,9 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
 
     protected override void BeginProcessing()
     {
+        // -Skip/-First compatibility: map to -LineRange
+        LineRange = MapSkipFirstToLineRange(Skip, First, LineRange);
+
         InitializeContentAccumulation();
     }
 

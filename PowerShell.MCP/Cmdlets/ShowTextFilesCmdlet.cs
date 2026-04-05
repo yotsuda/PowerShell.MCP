@@ -34,6 +34,12 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
 
 
     [Parameter]
+    public int? Skip { get; set; }
+
+    [Parameter]
+    public int? First { get; set; }
+
+    [Parameter]
     public SwitchParameter Recurse { get; set; }
 
     [Parameter]
@@ -84,6 +90,9 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                 ErrorCategory.InvalidArgument,
                 null));
         }
+
+        // -Skip/-First compatibility: map to -LineRange
+        LineRange = MapSkipFirstToLineRange(Skip, First, LineRange);
 
         // Pre-compile regex for performance (used across all files)
         // Combine Contains and Pattern with OR if both specified (single-line mode only)

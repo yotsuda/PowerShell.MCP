@@ -132,6 +132,51 @@ public abstract class TextFileCmdletBase : PSCmdlet
     }
 
     /// <summary>
+    /// Maps -Skip/-First to -LineRange. Returns the mapped LineRange value.
+    /// Throws terminating error for invalid combinations.
+    /// </summary>
+    protected string[]? MapSkipFirstToLineRange(int? skip, int? first, string[]? lineRange)
+    {
+        if (!skip.HasValue && !first.HasValue)
+            return lineRange;
+
+        if (lineRange != null)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException(
+                    "Cannot use -Skip/-First together with -LineRange.\n" +
+                    "Use -LineRange alone.\n\n" +
+                    "Examples:\n" +
+                    "  -Skip 200 -First 50  -> -LineRange 201-250\n" +
+                    "  -First 20            -> -LineRange 1-20"),
+                "SkipFirstWithLineRange",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+
+        if (first.HasValue && first.Value <= 0)
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("-First must be a positive integer."),
+                "FirstNotPositive",
+                ErrorCategory.InvalidArgument,
+                null));
+        }
+
+        int s = skip ?? 0;
+        int start = s + 1;
+
+        if (!first.HasValue)
+        {
+            // -Skip only: from start to end of file
+            return start <= 1 ? lineRange : new[] { $"{start},-1" };
+        }
+
+        int end = s + first.Value;
+        return new[] { $"{start}-{end}" };
+    }
+
+    /// <summary>
     /// Validates that a parameter value does not contain newline characters
     /// </summary>
     protected void ValidateNoNewlines(string? value, string parameterName)

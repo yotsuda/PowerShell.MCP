@@ -21,16 +21,16 @@ Replace text in a file using literal string or regex pattern
 
 ```
 Update-MatchInFile [-Path] <string[]> [-OldText <string>] [-Pattern <string>]
- [-Replacement <string>] [-LineRange <string[]>] [-Encoding <string>] [-Backup] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+ [-Replacement <string>] [-LineRange <string[]>] [-Skip <int>] [-First <int>] [-Encoding <string>]
+ [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### LiteralPath
 
 ```
 Update-MatchInFile -LiteralPath <string[]> [-OldText <string>] [-Pattern <string>]
- [-Replacement <string>] [-LineRange <string[]>] [-Encoding <string>] [-Backup] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+ [-Replacement <string>] [-LineRange <string[]>] [-Skip <int>] [-First <int>] [-Encoding <string>]
+ [-Backup] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -91,6 +91,52 @@ DefaultValue: ''
 SupportsWildcards: false
 Aliases:
 - cf
+ParameterSets:
+- Name: (All)
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -First
+
+Number of lines to process.
+Use with `-Skip` to define a range, or alone to process from the beginning.
+Mapped to `-LineRange` internally (e.g., `-First 20` becomes `-LineRange 1-20`).
+
+```yaml
+Type: System.Nullable`1[System.Int32]
+DefaultValue: None
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: (All)
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -Skip
+
+Number of lines to skip from the beginning.
+Use with `-First` to define a window (e.g., `-Skip 200 -First 50` becomes `-LineRange 201-250`).
+Use alone to skip lines and process to end of file (e.g., `-Skip 100` becomes `-LineRange 101,-1`).
+
+```yaml
+Type: System.Nullable`1[System.Int32]
+DefaultValue: None
+SupportsWildcards: false
+Aliases: []
 ParameterSets:
 - Name: (All)
   Position: Named

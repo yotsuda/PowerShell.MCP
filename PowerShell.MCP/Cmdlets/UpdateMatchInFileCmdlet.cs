@@ -33,6 +33,12 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     public string[]? LineRange { get; set; }
 
     [Parameter]
+    public int? Skip { get; set; }
+
+    [Parameter]
+    public int? First { get; set; }
+
+    [Parameter]
     public string? Encoding { get; set; }
 
     [Parameter]
@@ -40,6 +46,8 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
 
     protected override void BeginProcessing()
     {
+        // -Skip/-First compatibility: map to -LineRange
+        LineRange = MapSkipFirstToLineRange(Skip, First, LineRange);
         bool hasLiteral = !string.IsNullOrEmpty(OldText);
         bool hasRegex = !string.IsNullOrEmpty(Pattern);
 
