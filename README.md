@@ -18,6 +18,8 @@ PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through
   <img src="https://github.com/user-attachments/assets/6ebec366-832f-484a-ae74-285bc754c437" alt="social-image" width="640" />
 </div>
 
+**Looking for bash?** If you can't install PowerShell 7, or prefer bash/shell scripts, check out **[bashpilot](https://github.com/yotsuda/bashpilot)** — the same shared console concept for bash.
+
 ## Why PowerShell.MCP?
 
 **A universal gateway to the PowerShell ecosystem.**
