@@ -210,9 +210,15 @@ public class PowerShellToolsTests
     }
 
     [Fact]
-    public async Task InvokeExpression_Completed_ReturnsCachedMessage()
+    public async Task InvokeExpression_Completed_DrainsCurrentPipeInline()
     {
-        // Arrange: result was cached from a previous run
+        // Arrange: shouldCache fired (DLL returned "completed" without body)
+        // but the current invoke_expression handler is still servicing the
+        // original MCP request, so we can drain the current pipe's cache
+        // via consume_output and return the real content on THIS call.
+        // Without this, the client would see a placeholder
+        // "Result cached. Will be returned on next tool call." and have
+        // to issue a second tool call just to get the result.
         _mockPipeDiscoveryService
             .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
@@ -229,6 +235,12 @@ public class PowerShellToolsTests
             .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson);
 
+        // consume_output drains the DLL's cache and returns the real body.
+        const string drainedBody = "Idle      0     svchost\nIdle      4     System\n";
+        _mockPowerShellService
+            .Setup(s => s.ConsumeOutputFromPipeAsync(TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(drainedBody);
+
         _mockPipeDiscoveryService
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CachedOutputResult("", ""));
@@ -242,7 +254,63 @@ public class PowerShellToolsTests
 
         // Assert
         Assert.Contains("Pipeline completed (cached)", result);
-        Assert.Contains("Result cached", result);
+        Assert.Contains("Idle      0     svchost", result);
+        Assert.Contains("Idle      4     System", result);
+        // The old placeholder must NOT appear when drain succeeded — it
+        // was the UX bug the fix was designed to eliminate.
+        Assert.DoesNotContain("Result cached. Will be returned on next tool call.", result);
+
+        // Verify consume_output was actually called (and exactly once).
+        _mockPowerShellService.Verify(
+            s => s.ConsumeOutputFromPipeAsync(TestPipeName, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task InvokeExpression_Completed_EmptyDrainFallsBackToPlaceholder()
+    {
+        // Arrange: shouldCache fired but by the time the Proxy's
+        // consume_output call arrives, another drainer (e.g. a concurrent
+        // wait_for_completion call) has already emptied the DLL's cache.
+        // The response must still include the status line and a
+        // fallback placeholder so the client isn't left staring at an
+        // empty response — the drained content has gone somewhere, just
+        // not here, and the client can find it on the next call.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        var headerJson = JsonSerializer.Serialize(new
+        {
+            pid = 2000,
+            status = "completed",
+            pipeline = "Get-Process",
+            duration = 5.2,
+            statusLine = "✓ Pipeline completed (cached) | Window: #2000 Cat | Status: Completed"
+        });
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(TestPipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(headerJson);
+
+        // Simulate the race: consume_output returns empty.
+        _mockPowerShellService
+            .Setup(s => s.ConsumeOutputFromPipeAsync(TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        // Act
+        var result = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            "Get-Process",
+            agent_id: TestAgentId);
+
+        // Assert
+        Assert.Contains("Pipeline completed (cached)", result);
+        Assert.Contains("Result cached. Will be returned on next tool call.", result);
     }
 
     [Fact]

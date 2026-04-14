@@ -429,8 +429,26 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 return timeoutResponse.ToString();
 
                             case PipeStatus.Completed:
-                                // Result was cached - return status
-                                // Collect busy status from other pipes
+                                // Drain the current pipe's cache inline so the client sees
+                                // the result on THIS tool call instead of having to make a
+                                // follow-up call. The DLL's shouldCache branch fires when a
+                                // new pipe request arrived while this invoke's command was
+                                // still running — MarkForCaching gets set, NotifyResultReady
+                                // sees the flag and routes the result to the console's local
+                                // cache, and the DLL returns a metadata-only "completed"
+                                // response assuming the original caller was no longer
+                                // listening. In practice the original InvokeExpression
+                                // handler IS still running (this switch case is inside it)
+                                // and can still deliver the response through the pipe that
+                                // is currently being serviced. Same mechanism the "timeout"
+                                // case at line 391 already uses. Without this, the client
+                                // had to issue a second tool call just to see an already-
+                                // completed result — observable as a "Result cached. Will
+                                // be returned on next tool call." placeholder in place of
+                                // the actual output.
+                                var currentPipeCachedCompleted = await powerShellService.ConsumeOutputFromPipeAsync(readyPipeName, cancellationToken);
+
+                                // Collect busy status + other consoles' cached outputs
                                 var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
                                 var cachedResponse = new StringBuilder();
@@ -447,13 +465,25 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 {
                                     cachedResponse.Append(cachedCompletedOutput);
                                 }
-                                // Use statusLine from dll if available
+                                // Status line first (same shape as success / timeout cases).
                                 var cachedStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
                                     ? jsonResponse.StatusLine
                                     : $"✓ Pipeline executed successfully | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 cachedResponse.AppendLine(cachedStatusLine);
                                 cachedResponse.AppendLine();
-                                cachedResponse.Append("Result cached. Will be returned on next tool call.");
+                                // Then the drained content. Defensive fallback for a race
+                                // where another drainer got there first (e.g. a concurrent
+                                // wait_for_completion call) — keep the old placeholder so
+                                // the AI still knows the result is being delivered
+                                // somewhere, rather than staring at an empty response.
+                                if (!string.IsNullOrEmpty(currentPipeCachedCompleted))
+                                {
+                                    cachedResponse.Append(currentPipeCachedCompleted);
+                                }
+                                else
+                                {
+                                    cachedResponse.Append("Result cached. Will be returned on next tool call.");
+                                }
                                 return cachedResponse.ToString();
 
                             case "error":
