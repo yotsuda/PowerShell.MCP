@@ -18,7 +18,7 @@ PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through
   <img src="https://github.com/user-attachments/assets/6ebec366-832f-484a-ae74-285bc754c437" alt="social-image" width="640" />
 </div>
 
-**Looking for bash, cmd, or another shell?** If you can't install PowerShell 7, or prefer bash/cmd/shell scripts, check out **[splashshell](https://github.com/yotsuda/splashshell)** — the same shared console concept, with a unified ConPTY-based console that supports bash, pwsh, and cmd side by side.
+**Looking for bash, cmd, or another shell?** If you can't install PowerShell 7, or prefer bash/cmd/shell scripts, check out **[splash](https://github.com/yotsuda/splash)** — the same shared console concept, with a unified ConPTY-based console that supports bash, pwsh, and cmd side by side.
 
 ## Why PowerShell.MCP?
 
