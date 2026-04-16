@@ -166,6 +166,17 @@ public class PowerShellProcessManager
 }
 
 /// <summary>
+/// PowerShell snippets shared across platform-specific launchers.
+/// </summary>
+internal static class PwshLauncherShared
+{
+    // Install-PSResource on case-sensitive file systems (Linux, case-sensitive APFS on macOS)
+    // may create the module directory as 'powershell.mcp'. Rename it so Import-Module can
+    // locate the PascalCase name. No-op on case-insensitive file systems.
+    internal const string ModuleCaseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { if ([string]::IsNullOrWhiteSpace($p)) { continue }; $lc = Join-Path $p 'powershell.mcp'; $uc = Join-Path $p 'PowerShell.MCP'; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
+}
+
+/// <summary>
 /// Windows-specific launcher using Win32 API to create a new console window
 /// </summary>
 public static class PwshLauncherWindows
@@ -315,22 +326,9 @@ public static class PwshLauncherMacOS
             CreateNoWindow = true
         };
 
-        // Build command with optional startup commands (pre-built Write-Host statements, with '' escaping for AppleScript)
-        // Set global variables with proxy PID and agent ID before importing module
         var proxyPid = Process.GetCurrentProcess().Id;
-        string command;
-        if (!string.IsNullOrEmpty(startupCommands))
-        {
-            // Double single quotes for AppleScript string context
-            var escaped = startupCommands.Replace("'", "''");
-            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue; {escaped}";
-        }
-        else
-        {
-            command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = ''{agentId}''; Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
-        }
-
-        var workingDir = string.IsNullOrEmpty(startLocation) ? "~" : startLocation.Replace("'", "'\\''");
+        var initCommand = BuildInitCommand(proxyPid, agentId, startupCommands, startLocation);
+        var encodedCommand = EncodeCommand(initCommand);
 
         using var process = Process.Start(psi);
         if (process != null)
@@ -340,11 +338,31 @@ public static class PwshLauncherMacOS
             // This ensures pwsh is found regardless of installation method (Homebrew, pkg, etc.)
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -WorkingDirectory '{workingDir}' -Command '{command}'\"");
+            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -EncodedCommand {encodedCommand}\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
         }
+    }
+
+    // Builds the PowerShell initialization command that will be Base64-encoded and passed via -EncodedCommand.
+    // Kept internal so unit tests can verify shell-safety (no unescaped quotes) without spawning a process.
+    internal static string BuildInitCommand(int proxyPid, string agentId, string? startupCommands, string? startLocation)
+    {
+        var setLocation = string.IsNullOrEmpty(startLocation)
+            ? "Set-Location ~; "
+            : $"Set-Location -LiteralPath '{startLocation.Replace("'", "''")}'; ";
+
+        var escapedAgentId = agentId.Replace("'", "''");
+        var core = $"{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {PwshLauncherShared.ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+        return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
+    }
+
+    // Encodes to Base64 (UTF-16LE) so the pwsh invocation contains no shell-sensitive characters.
+    // This bypasses both the AppleScript `do script` string and the zsh parsing that Terminal.app performs.
+    internal static string EncodeCommand(string command)
+    {
+        return Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(command));
     }
 }
 
@@ -423,8 +441,7 @@ public static class PwshLauncherLinux
             // Build initialization command and encode to Base64 to avoid shell quoting issues
             // Set global variables with proxy PID and agent ID before importing module
             var proxyPid = Process.GetCurrentProcess().Id;
-            // Fix module directory case sensitivity on Linux: Install-PSResource may create lowercase 'powershell.mcp'
-            var caseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { if ([string]::IsNullOrWhiteSpace($p)) { continue }; $lc = Join-Path $p 'powershell.mcp'; $uc = Join-Path $p 'PowerShell.MCP'; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
+            var caseFix = PwshLauncherShared.ModuleCaseFix;
 
             // Set working directory via Set-Location inside the command to avoid shell quoting issues
             var setLocation = string.IsNullOrEmpty(startLocation)
@@ -522,8 +539,7 @@ public static class PwshLauncherLinux
     private static void LaunchPwshDirectly(string agentId, string? startupCommands, string? startLocation)
     {
         var proxyPid = Process.GetCurrentProcess().Id;
-        // Fix module directory case sensitivity on Linux: Install-PSResource may create lowercase 'powershell.mcp'
-        var caseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { if ([string]::IsNullOrWhiteSpace($p)) { continue }; $lc = Join-Path $p 'powershell.mcp'; $uc = Join-Path $p 'PowerShell.MCP'; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
+        var caseFix = PwshLauncherShared.ModuleCaseFix;
         var initCommand = string.IsNullOrEmpty(startupCommands)
             ? $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force"
             : $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force; {startupCommands}";
