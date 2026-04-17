@@ -317,7 +317,6 @@ public static class PwshLauncherMacOS
 {
     public static void LaunchPwsh(string agentId, string? startupCommands = null, string? startLocation = null)
     {
-        // Use osascript with stdin to avoid shell quoting issues
         var psi = new ProcessStartInfo
         {
             FileName = "osascript",
@@ -328,25 +327,32 @@ public static class PwshLauncherMacOS
 
         var proxyPid = Process.GetCurrentProcess().Id;
         var initCommand = BuildInitCommand(proxyPid, agentId, startupCommands, startLocation);
-        var encodedCommand = EncodeCommand(initCommand);
+
+        // Write the init to a temp .ps1 and launch with `-File`. AppleScript's `do script`
+        // types its argument into the Terminal window verbatim — if we passed the PS source
+        // directly (or a Base64 -EncodedCommand) the user would see ~1KB of noise scroll past
+        // every time a console starts. A short `-File /tmp/xyz.ps1` stays readable.
+        // The script self-deletes on first line so there is no long-lived debris.
+        // We intentionally use /tmp (world-known, symlink-resolved, ASCII-safe in AppleScript
+        // string context) rather than $TMPDIR which is per-user and varies across setups.
+        var tempFile = $"/tmp/pwsh-mcp-init-{Guid.NewGuid():N}.ps1";
+        var scriptBody = $"Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue{Environment.NewLine}{initCommand}";
+        File.WriteAllText(tempFile, scriptBody);
 
         using var process = Process.Start(psi);
         if (process != null)
         {
-            // Terminal.app opens a new window with a login shell (typically zsh)
-            // which reads ~/.zprofile and sets up the user's environment including PATH
-            // This ensures pwsh is found regardless of installation method (Homebrew, pkg, etc.)
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -EncodedCommand {encodedCommand}\"");
+            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -File '{tempFile}'\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
         }
     }
 
-    // Builds the PowerShell initialization command that will be Base64-encoded and passed via -EncodedCommand.
-    // Kept internal so unit tests can verify shell-safety (no unescaped quotes) without spawning a process.
+    // Builds the PowerShell initialization script written to a temp .ps1 and loaded via `pwsh -File`.
+    // Kept internal so unit tests can lock in shell-safety (no unescaped quotes) without spawning a process.
     internal static string BuildInitCommand(int proxyPid, string agentId, string? startupCommands, string? startLocation)
     {
         var setLocation = string.IsNullOrEmpty(startLocation)
@@ -356,13 +362,6 @@ public static class PwshLauncherMacOS
         var escapedAgentId = agentId.Replace("'", "''");
         var core = $"{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {PwshLauncherShared.ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
-    }
-
-    // Encodes to Base64 (UTF-16LE) so the pwsh invocation contains no shell-sensitive characters.
-    // This bypasses both the AppleScript `do script` string and the zsh parsing that Terminal.app performs.
-    internal static string EncodeCommand(string command)
-    {
-        return Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(command));
     }
 }
 

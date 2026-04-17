@@ -6,7 +6,9 @@ namespace PowerShell.MCP.Tests.Unit.Proxy;
 // Regression tests for GitHub issue #45: broken '' quoting on macOS.
 // The original bug produced `$global:PowerShellMCPAgentId = ''default''` which zsh
 // collapsed to a bareword `default`, so pwsh failed with "command not recognized".
-// These tests lock in the Base64 -EncodedCommand approach so the regression cannot come back.
+// The launcher now writes the init to a temp .ps1 and loads it with `pwsh -File`,
+// so nothing AgentId-derived ever reaches the shell. These tests lock in the
+// PowerShell-level quote escaping that still matters inside the .ps1.
 public class PwshLauncherMacOSTests
 {
     private const string DefaultAgentId = "default";
@@ -53,14 +55,4 @@ public class PwshLauncherMacOSTests
         Assert.True(caseFixIdx < importIdx, "case-fix must run before Import-Module");
     }
 
-    [Fact]
-    public void EncodeCommand_ProducesOnlyBase64SafeCharacters()
-    {
-        // A Base64 string contains only [A-Za-z0-9+/=] — none of which are shell-sensitive
-        // in zsh or AppleScript string context. This is the whole point of using -EncodedCommand.
-        var cmd = PwshLauncherMacOS.BuildInitCommand(DefaultPid, DefaultAgentId, null, null);
-        var encoded = PwshLauncherMacOS.EncodeCommand(cmd);
-
-        Assert.Matches("^[A-Za-z0-9+/=]+$", encoded);
-    }
 }
