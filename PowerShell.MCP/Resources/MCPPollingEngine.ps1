@@ -323,14 +323,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # Split by newline, pipe character, and limit to 30 chars
                 $pipelineSummary = ""
                 if ($Pipeline) {
-                    # Split by newline first, take first line
-                    $firstPart = ($Pipeline -split "[\r\n]")[0].Trim()
+                    # Strip leading whitespace/newlines so a pipeline like
+                    # "\nWrite-Host hi" doesn't become "..." (or empty when
+                    # the pipeline is whitespace-only) on the status line.
+                    $trimmedPipeline = $Pipeline.Trim()
+                    # Split by newline first, take first non-empty line
+                    $firstPart = ($trimmedPipeline -split "[\r\n]")[0].Trim()
                     # Split by pipe character, take first segment
                     $firstPart = ($firstPart -split "\|")[0].Trim()
                     # Truncate to 30 chars if needed
                     if ($firstPart.Length -gt 30) {
                         $pipelineSummary = $firstPart.Substring(0, 27) + "..."
-                    } elseif ($firstPart.Length -lt $Pipeline.TrimEnd().Length) {
+                    } elseif ($firstPart.Length -lt $trimmedPipeline.Length) {
                         # Was truncated by newline or pipe
                         $pipelineSummary = $firstPart + "..."
                     } else {

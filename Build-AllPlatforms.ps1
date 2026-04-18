@@ -7,7 +7,10 @@ param(
     [ValidateSet('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')]
     [string[]]$Target,
     [string]$Configuration = 'Release',
-    [string]$OutputBase
+    [string]$OutputBase,
+    [switch]$Sign,
+    [string]$PfxPath = 'C:\MyProj\vault\yotsuda.pfx',
+    [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -101,6 +104,14 @@ if ('Dll' -in $Target) {
     Write-Host "  Copied: PowerShell.MCP.psd1" -ForegroundColor Green
     Write-Host "  Copied: PowerShell.MCP.psm1" -ForegroundColor Green
 
+    # Copy third-party license notices (LGPL-2.1 obligation for Ude.NetStandard)
+    Copy-Item (Join-Path $PSScriptRoot 'THIRD_PARTY_NOTICES.md') -Destination $OutputBase -Force
+    $licensesSrc = Join-Path $PSScriptRoot 'licenses'
+    $licensesDst = Join-Path $OutputBase 'licenses'
+    if (Test-Path $licensesDst) { Remove-Item $licensesDst -Recurse -Force }
+    Copy-Item $licensesSrc -Destination $licensesDst -Recurse -Force
+    Write-Host "  Copied: THIRD_PARTY_NOTICES.md" -ForegroundColor Green
+    Write-Host "  Copied: licenses\" -ForegroundColor Green
 
     Write-Host ""
 }
@@ -157,6 +168,57 @@ if ($proxyTargets) {
 }
 
 # =============================================================================
+# Authenticode-sign Windows binaries (PowerShell.MCP.dll + Proxy.exe)
+# =============================================================================
+# WDAC / Device Guard environments block unsigned binaries. Signing with our
+# self-signed cert lets IT add the cert as a trusted publisher once instead of
+# whitelisting per-version SHA-256 hashes (which break on every update).
+# See issue #46.
+
+$signTargets = @()
+if ('Dll' -in $Target) {
+    $signTargets += Join-Path $OutputBase 'PowerShell.MCP.dll'
+}
+if ('WinX64' -in $Target) {
+    $signTargets += Join-Path $OutputBase 'bin\win-x64\PowerShell.MCP.Proxy.exe'
+}
+
+if ($signTargets -and $Sign) {
+    Write-Host "[Sign] Authenticode-signing Windows binaries..." -ForegroundColor Yellow
+
+    if (-not (Test-Path $PfxPath)) {
+        Write-Error "  PFX not found at $PfxPath. Cannot sign."
+        exit 1
+    }
+
+    $pfxPassword = Read-Host "  Enter PFX password" -AsSecureString
+    $cert = Get-PfxCertificate -FilePath $PfxPath -Password $pfxPassword
+
+    foreach ($file in $signTargets) {
+        if (-not (Test-Path $file)) {
+            Write-Warning "  Missing: $file — skipping"
+            continue
+        }
+        $result = Set-AuthenticodeSignature `
+            -FilePath $file `
+            -Certificate $cert `
+            -HashAlgorithm SHA256 `
+            -TimestampServer $TimestampUrl `
+            -IncludeChain NotRoot
+        if ($result.Status -eq 'Valid') {
+            Write-Host "  Signed: $(Split-Path $file -Leaf)" -ForegroundColor Green
+        } else {
+            Write-Error "  Sign failed for $file : $($result.StatusMessage)"
+            exit 1
+        }
+    }
+    Write-Host ""
+} elseif ($signTargets) {
+    Write-Host "[Sign] Skipping signing (pass -Sign to enable, e.g. for publish builds)." -ForegroundColor Gray
+    Write-Host ""
+}
+
+# =============================================================================
 # Summary: Verify built files
 # =============================================================================
 Write-Host "[Summary] Verifying output..." -ForegroundColor Yellow
@@ -169,6 +231,11 @@ if ('Dll' -in $Target) {
         'PowerShell.MCP.psd1',
         'PowerShell.MCP.psm1',
         'Ude.NetStandard.dll',
+        'THIRD_PARTY_NOTICES.md',
+        'licenses\Ude.NetStandard\COPYING',
+        'licenses\Ude.NetStandard\MPL-1.1.txt',
+        'licenses\Ude.NetStandard\gpl-2.0.txt',
+        'licenses\Ude.NetStandard\lgpl-2.1.txt',
         'en-US\PowerShell.MCP-help.xml'
     )
 }
@@ -201,12 +268,14 @@ $allowedFiles = @(
     'PowerShell.MCP.dll',
     'PowerShell.MCP.psd1',
     'PowerShell.MCP.psm1',
-    'Ude.NetStandard.dll'
+    'Ude.NetStandard.dll',
+    'THIRD_PARTY_NOTICES.md'
 )
 
 $allowedDirs = @(
     'bin',
-    'en-US'
+    'en-US',
+    'licenses'
 )
 
 $unexpectedItems = @()
@@ -253,8 +322,9 @@ if (Test-Path $binPath) {
 # Check en-US directory
 $enUSPath = Join-Path $OutputBase 'en-US'
 if (Test-Path $enUSPath) {
+    $allowedHelpFiles = @('PowerShell.MCP-help.xml', 'PowerShell.MCP.dll-Help.xml')
     Get-ChildItem $enUSPath -File | ForEach-Object {
-        if ($_.Name -ne 'PowerShell.MCP.dll-Help.xml') {
+        if ($_.Name -notin $allowedHelpFiles) {
             $unexpectedItems += "en-US\$($_.Name)"
         }
     }

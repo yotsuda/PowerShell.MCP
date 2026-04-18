@@ -108,6 +108,12 @@ PowerShell.MCP complements your existing MCP setup by providing a flexible, gene
 - Every command visible and auditable
 - Integrates with existing security policies
 
+**🔒 Secrets stay with you, not the AI**
+- Interactive prompts (`Read-Host -AsSecureString`, `Get-Credential`, MFA codes) hide input from the AI
+- Enter passphrases for code-signing, `gpg`, `ssh-add`, `sudo`, cloud CLI MFA — keystrokes go to the program, never to AI's output stream
+- AI orchestrates the workflow ("build, sign, push the tag"); you supply the secret at the right moment
+- Impossible with stdin-piped MCP shells, where the AI must somehow feed the secret in
+
 ## Architecture
 
 Four tools provide maximum flexibility with minimum complexity:
@@ -423,6 +429,25 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 - **CLI stderr**: Not captured by default. Use `$result = & command.exe 2>&1` to capture.
 - **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
 - **Command History**: AI-executed single-line commands are added to console history. Multi-line commands are intentionally excluded to avoid history bloat.
+
+## Enterprise Deployment (WDAC / Device Guard)
+
+Starting with v1.7.7, `PowerShell.MCP.dll` and `PowerShell.MCP.Proxy.exe`
+(win-x64) are Authenticode-signed with the **yotsuda code-signing
+certificate**, shared across all yotsuda OSS projects.
+
+For installation instructions (personal PC, AD GPO deployment, WDAC policy
+configuration) and the public certificate file itself, see:
+
+**→ [github.com/yotsuda/code-signing](https://github.com/yotsuda/code-signing)**
+
+The certificate thumbprint is also published in each GitHub release's notes.
+
+```powershell
+# Quick verify on installed binaries
+Get-AuthenticodeSignature `
+    "$((Get-Module PowerShell.MCP -ListAvailable).ModuleBase)\bin\win-x64\PowerShell.MCP.Proxy.exe"
+```
 
 ## Disclaimer
 
