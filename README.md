@@ -18,7 +18,7 @@ PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through
   <img src="https://github.com/user-attachments/assets/6ebec366-832f-484a-ae74-285bc754c437" alt="social-image" width="640" />
 </div>
 
-**Looking for bash, cmd, or another shell?** If you can't install PowerShell 7, or prefer bash/cmd/shell scripts, check out **[ripple](https://github.com/yotsuda/ripple)** — the same shared console concept, with a unified ConPTY-based console that supports bash, pwsh, and cmd side by side.
+**Need bash, a language REPL, a SQL console, or a debugger instead?** If you can't install PowerShell 7, or you'd rather drive another shell (bash, cmd, zsh), a language REPL (python, node, racket, lua, …), a SQL console (sqlite3, …), or a language debugger (pdb, jdb, perldb), check out **[ripple](https://github.com/yotsuda/ripple)** — the same shared-console concept generalized to any REPL, with unified ConPTY-based consoles running side by side.
 
 ## Why PowerShell.MCP?
 
