@@ -102,12 +102,28 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $warningVar = @()
                 $informationVar = @()
 
+                # Snapshot $LASTEXITCODE BEFORE the pipeline so we can
+                # tell whether this invocation TOUCHED it (a native exe
+                # ran and updated the variable) vs inherited a stale
+                # value from an earlier native in a prior call. Without
+                # this snapshot, reporting $LASTEXITCODE verbatim would
+                # leak a stale 7 from `cmd /c exit 7` into every
+                # subsequent pure-PowerShell pipeline.
+                $lecAtStart = $global:LASTEXITCODE
+
                 try {
                     $redirectedOutput = Invoke-Expression $Command `
                         -OutVariable outVar `
                         -ErrorVariable errorVar `
                         -WarningVariable warningVar `
                         -InformationVariable informationVar
+
+                    # Capture post-pipeline state IMMEDIATELY. Any
+                    # statement below (even a bare variable assignment)
+                    # resets $? to True, so grab the two signals we
+                    # care about before the dedup loop runs.
+                    $ok = $?
+                    $lec = $global:LASTEXITCODE
 
                     # Deduplicate errors (PowerShell ErrorVariable can record the same error multiple times)
                     $uniqueErrors = @()
@@ -126,12 +142,31 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         }
                     }
 
+                    # LastExitReport gating: only surface a non-zero
+                    # native exit when the pipeline OVERALL SUCCEEDED
+                    # ($? True) AND $LASTEXITCODE was actually written
+                    # by this pipeline (not stale from before) AND the
+                    # written value is non-zero. When $? is False the
+                    # status icon flips to ✗ and errorCount is already
+                    # surfacing the failure, so LastExit would be
+                    # redundant. Zero means "silent — no native
+                    # reported, or the last one returned 0". Mirrors
+                    # ripple's OSC 633;L contract so the two MCPs
+                    # surface the same semantic across shells.
+                    $lecChanged = $lec -ne $lecAtStart
+                    $lastExitReport = if ($ok -and $lecChanged -and $null -ne $lec -and $lec -ne 0) {
+                        [int]$lec
+                    } else {
+                        0
+                    }
+
                     return @{
                         Success = $outVar
                         Error = $uniqueErrors
                         Exception = @()
                         Warning = $warningVar
                         Information = $informationVar
+                        LastExitReport = $lastExitReport
                     }
                 }
                 catch {
@@ -143,6 +178,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         Exception = $exceptionVar
                         Warning = $warningVar
                         Information = $informationVar
+                        # Pipeline threw — the exception itself is the
+                        # primary failure signal. Don't also surface
+                        # LastExit: a native that set $LASTEXITCODE
+                        # before the throw is of lower interest than
+                        # the thrown exception and would just add
+                        # noise to the error-path response.
+                        LastExitReport = 0
                     }
                 }
             }
@@ -318,6 +360,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $warningCount = $outputStreams.Warning.Count
                 $infoCount = $outputStreams.Information.Count
                 $hasErrors = $errorCount -gt 0
+                # LastExitReport is 0 when the invocation did not
+                # surface a hidden native exit (see
+                # Invoke-CommandWithAllStreams for the gating). Null-
+                # safe read — the older wire shape without this field
+                # still drains to 0 silently.
+                $lastExitReport = if ($StreamResults.ContainsKey('LastExitReport')) {
+                    [int]$StreamResults.LastExitReport
+                } else {
+                    0
+                }
 
                 # Truncate pipeline for status line
                 # Split by newline, pipe character, and limit to 30 chars
@@ -358,10 +410,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # by construction. This follows the same "omit what
                 # equals zero" discipline the status line already uses
                 # for `$pipelineInfo`.
-                $errInfo  = if ($errorCount   -gt 0) { " | Errors: $errorCount" }    else { "" }
-                $warnInfo = if ($warningCount -gt 0) { " | Warnings: $warningCount" } else { "" }
-                $infoInfo = if ($infoCount    -gt 0) { " | Info: $infoCount" }       else { "" }
-                $statusLine = "$statusIcon Pipeline $statusText | Window: $windowTitle | Status: $Status$pipelineInfo | Duration: $durationText$errInfo$warnInfo$infoInfo | $LocationInfo"
+                $errInfo     = if ($errorCount     -gt 0) { " | Errors: $errorCount" }       else { "" }
+                $warnInfo    = if ($warningCount   -gt 0) { " | Warnings: $warningCount" }   else { "" }
+                $infoInfo    = if ($infoCount      -gt 0) { " | Info: $infoCount" }          else { "" }
+                # `LastExit: N` surfaces a native exe that returned
+                # non-zero mid-pipeline when the pipeline overall
+                # succeeded — the ✓ badge would otherwise silently
+                # hide the non-zero exit. Positioned right after
+                # Duration so it sits next to the exit-code domain
+                # (Errors is about PS $Error stream, a separate axis).
+                $lastExitInfo = if ($lastExitReport -gt 0) { " | LastExit: $lastExitReport" } else { "" }
+                $statusLine = "$statusIcon Pipeline $statusText | Window: $windowTitle | Status: $Status$pipelineInfo | Duration: $durationText$lastExitInfo$errInfo$warnInfo$infoInfo | $LocationInfo"
 
                 # Generate structured output strings
                 $structuredOutput = @{
