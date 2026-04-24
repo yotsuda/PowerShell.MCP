@@ -1,0 +1,249 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Derive version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = "${env:GITHUB_REF_NAME}"
+          $v = $tag.TrimStart('v')
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "tag=$tag"   | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verify version consistency across psd1 and csproj
+        shell: pwsh
+        run: |
+          $expected = '${{ steps.ver.outputs.version }}'
+          $expectedCsproj = "$expected.0"   # csproj carries 4-part assembly version, psd1 carries 3-part
+
+          # psd1
+          $data = Import-PowerShellDataFile Staging/PowerShell.MCP.psd1
+          if ($data.ModuleVersion -ne $expected) {
+            throw "Staging/PowerShell.MCP.psd1 ModuleVersion $($data.ModuleVersion) != tag v$expected"
+          }
+
+          # PowerShell.MCP.csproj
+          [xml]$mainProj = Get-Content 'PowerShell.MCP/PowerShell.MCP.csproj'
+          $mainVer = $mainProj.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ($mainVer -ne $expectedCsproj) {
+            throw "PowerShell.MCP.csproj Version $mainVer != $expectedCsproj"
+          }
+
+          # PowerShell.MCP.Proxy.csproj
+          [xml]$proxyProj = Get-Content 'PowerShell.MCP.Proxy/PowerShell.MCP.Proxy.csproj'
+          $proxyVer = $proxyProj.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ($proxyVer -ne $expectedCsproj) {
+            throw "PowerShell.MCP.Proxy.csproj Version $proxyVer != $expectedCsproj"
+          }
+
+          Write-Host "All three version sources match: psd1=$expected, csproj=$expectedCsproj"
+
+      - name: Restore
+        shell: pwsh
+        run: |
+          dotnet restore PowerShell.MCP/PowerShell.MCP.csproj --source https://api.nuget.org/v3/index.json --ignore-failed-sources
+          dotnet restore PowerShell.MCP.Proxy/PowerShell.MCP.Proxy.csproj --source https://api.nuget.org/v3/index.json --ignore-failed-sources
+
+      - name: Build PowerShell.MCP.dll (net8.0)
+        shell: pwsh
+        run: |
+          dotnet build PowerShell.MCP/PowerShell.MCP.csproj -c Release -f net8.0 --no-restore
+
+      - name: Publish PowerShell.MCP.Proxy for all RIDs
+        shell: pwsh
+        run: |
+          foreach ($rid in 'win-x64','linux-x64','osx-x64','osx-arm64') {
+            $outDir = "PowerShell.MCP.Proxy/bin/Release/net9.0/$rid/publish"
+            Write-Host "=== Publishing Proxy for $rid ==="
+            dotnet publish PowerShell.MCP.Proxy/PowerShell.MCP.Proxy.csproj `
+              -c Release -r $rid -o $outDir `
+              --self-contained --no-restore
+            if ($LASTEXITCODE -ne 0) { throw "Proxy publish failed for $rid" }
+          }
+
+      - name: Build help XML (PlatyPS v2)
+        shell: pwsh
+        run: |
+          Install-Module Microsoft.PowerShell.PlatyPS -Scope CurrentUser -Force -AllowClobber
+          Import-Module Microsoft.PowerShell.PlatyPS
+          $mdFiles = Get-ChildItem 'PowerShell.MCP/PlatyPS/en-US/*.md' -Exclude 'PowerShell.MCP.md','*.md.bak'
+          if ($mdFiles.Count -eq 0) { throw 'No PlatyPS markdown files found' }
+          $helpObjects = $mdFiles | ForEach-Object { Import-MarkdownCommandHelp -Path $_.FullName }
+          $helpOut = Join-Path $env:RUNNER_TEMP 'help-out'
+          $null = Export-MamlCommandHelp -CommandHelp $helpObjects -OutputFolder $helpOut -Force
+          $xml = Get-ChildItem $helpOut -Filter '*.xml' -Recurse
+          if (-not $xml) { throw 'PlatyPS produced no XML output' }
+          "helpOut=$helpOut" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Built $($xml.Count) help XML file(s)"
+
+      - name: Assemble module directory
+        id: stage
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'PowerShell.MCP'
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $stage 'en-US')     -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $stage 'licenses')  -Force | Out-Null
+
+          # DLL + Ude.NetStandard.dll (net8.0). The csproj's CopyUdeNetStandard target
+          # places Ude.NetStandard.dll into the build output.
+          $dllOut = 'PowerShell.MCP/bin/Release/net8.0'
+          Copy-Item (Join-Path $dllOut 'PowerShell.MCP.dll')    $stage
+          Copy-Item (Join-Path $dllOut 'Ude.NetStandard.dll')   $stage
+
+          # Manifest + psm1
+          Copy-Item 'Staging/PowerShell.MCP.psd1' $stage
+          Copy-Item 'Staging/PowerShell.MCP.psm1' $stage
+
+          # Licenses / notices
+          Copy-Item 'THIRD_PARTY_NOTICES.md' $stage
+          Copy-Item 'licenses/*' (Join-Path $stage 'licenses') -Recurse
+
+          # Proxy binaries (multi-RID)
+          foreach ($rid in 'win-x64','linux-x64','osx-x64','osx-arm64') {
+            $ridDir = Join-Path $stage "bin/$rid"
+            New-Item -ItemType Directory -Path $ridDir -Force | Out-Null
+            $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
+            Copy-Item "PowerShell.MCP.Proxy/bin/Release/net9.0/$rid/publish/$exeName" $ridDir
+          }
+
+          # Help XML
+          Get-ChildItem $env:helpOut -Filter '*.xml' -Recurse | Copy-Item -Destination (Join-Path $stage 'en-US')
+
+          "stage=$stage" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "=== Staged module contents ==="
+          Get-ChildItem $stage -Recurse | Select-Object FullName
+
+      - name: Probe signing secret
+        id: sign_probe
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.CODE_SIGNING_PFX_BASE64 }}
+        run: |
+          $present = -not [string]::IsNullOrEmpty($env:PFX_B64)
+          "present=$($present.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Sign Windows binaries (DLL + Proxy.exe only)
+        if: steps.sign_probe.outputs.present == 'true'
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.CODE_SIGNING_PFX_BASE64 }}
+          PFX_PW:  ${{ secrets.CODE_SIGNING_PFX_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+          $pw = ConvertTo-SecureString $env:PFX_PW -AsPlainText -Force
+          $cert = Get-PfxCertificate -FilePath $pfx -Password $pw
+          $stage = '${{ steps.stage.outputs.stage }}'
+
+          # Sign ONLY the native Windows binaries. Script files (psd1 / psm1) are
+          # left unsigned: Install-Module verifies Authenticode on script files and
+          # would reject a self-signed signature on any machine where the cert is
+          # not pre-trusted. Ude.NetStandard.dll is a third-party binary we do not
+          # re-sign. Non-Windows Proxy binaries cannot carry Authenticode signatures.
+          $files = @(
+            "$stage/PowerShell.MCP.dll",
+            "$stage/bin/win-x64/PowerShell.MCP.Proxy.exe"
+          )
+          Set-AuthenticodeSignature -FilePath $files -Certificate $cert `
+              -HashAlgorithm SHA256 `
+              -TimestampServer http://timestamp.digicert.com `
+              -IncludeChain NotRoot
+
+          # Self-signed certs yield Status=UnknownError on machines where the cert
+          # is not in the trust store (GitHub runners don't trust it). That's
+          # expected — the signature itself is correct, only chain validation needs
+          # the cert installed on the end-user machine. Verify thumbprint matches +
+          # reject tamper / missing.
+          $expected = $cert.Thumbprint
+          $bad = Get-AuthenticodeSignature $files | Where-Object {
+            $_.SignerCertificate.Thumbprint -ne $expected -or
+            $_.Status -notin @('Valid','UnknownError')
+          }
+          if ($bad) {
+            $bad | Format-Table Status, StatusMessage, Path
+            throw 'One or more Windows binary signatures are missing, tampered, or signed by the wrong cert.'
+          }
+
+      - name: Guard — Windows binaries must be signed for a tagged release
+        if: steps.sign_probe.outputs.present != 'true'
+        shell: pwsh
+        run: |
+          throw 'CODE_SIGNING_PFX_BASE64 is not configured. Tagged releases must be signed. Add the secret and re-run, or delete the tag.'
+
+      - name: Assert signing distribution (only DLL + win-x64 Proxy.exe)
+        shell: pwsh
+        run: |
+          $stage = '${{ steps.stage.outputs.stage }}'
+          $shouldBeSigned = @(
+            "$stage/PowerShell.MCP.dll",
+            "$stage/bin/win-x64/PowerShell.MCP.Proxy.exe"
+          )
+          $shouldBeUnsigned = @(
+            "$stage/PowerShell.MCP.psd1",
+            "$stage/PowerShell.MCP.psm1",
+            "$stage/Ude.NetStandard.dll"
+          )
+          foreach ($f in $shouldBeSigned) {
+            $s = Get-AuthenticodeSignature $f
+            if ($s.Status -eq 'NotSigned') { throw "Expected signed but NotSigned: $f" }
+          }
+          foreach ($f in $shouldBeUnsigned) {
+            $s = Get-AuthenticodeSignature $f
+            if ($s.Status -ne 'NotSigned') { throw "Expected unsigned but $($s.Status): $f" }
+          }
+          Write-Host 'Signing distribution OK: DLL + win-x64 Proxy.exe signed; script files + Ude unsigned.'
+
+      - name: Publish to PSGallery
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          Publish-Module -Path '${{ steps.stage.outputs.stage }}' -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
+
+      - name: Extract release notes for this version
+        id: notes
+        shell: pwsh
+        run: |
+          $version = '${{ steps.ver.outputs.version }}'
+          $lines = Get-Content Staging/ReleaseNotes.md
+          $inSection = $false
+          $section = New-Object System.Collections.Generic.List[string]
+          foreach ($line in $lines) {
+            if ($line -match '^# Version:\s*(\S+)') {
+              if ($matches[1] -eq $version) { $inSection = $true; continue }
+              elseif ($inSection)            { break }
+            }
+            if ($inSection) { $section.Add($line) }
+          }
+          $body = ($section -join "`n").Trim()
+          if ([string]::IsNullOrWhiteSpace($body)) {
+            throw "No release notes section found for version $version in Staging/ReleaseNotes.md"
+          }
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          Set-Content -Path $notesPath -Value $body -Encoding UTF8
+          "notes_path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ steps.ver.outputs.tag }}" --title "${{ steps.ver.outputs.tag }}" --notes-file "${{ steps.notes.outputs.notes_path }}"
