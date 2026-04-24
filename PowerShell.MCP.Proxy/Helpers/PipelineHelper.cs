@@ -34,11 +34,37 @@ public static partial class PipelineHelper
     }
 
     /// <summary>
-    /// Check for local variable assignments without scope prefix and return warning message.
-    /// First call returns a detailed warning; subsequent calls return a compact 1-liner.
+    /// Check for local variable assignments without scope prefix and
+    /// return a warning message.
+    ///
+    /// Noise-control contract: each distinct variable name is reported
+    /// to a given agent AT MOST ONCE. Re-assigning the same name on
+    /// later pipelines is silent (the AI already got the lesson for
+    /// that name). If a caller introduces a NEW local variable name,
+    /// it produces a compact warning covering only the new names.
+    /// The very first warning shown to an agent is the detailed
+    /// "Consider using $script:..." form so the AI learns the concept;
+    /// subsequent new-name warnings are the short one-liner.
+    ///
+    /// Pre-refactor behaviour was to emit a compact warning on EVERY
+    /// call that contained any local assignment — which in practice
+    /// produced 20+ duplicate warnings per session for the same
+    /// already-warned-about name, dominating response volume without
+    /// adding information.
     /// </summary>
-    private static volatile bool _scopeWarningDetailShown = false;
-    public static string? CheckLocalVariableAssignments(string pipeline)
+    private static readonly object _scopeWarningLock = new();
+    // Per-agent record of every local variable name we've already
+    // warned that agent about. Separate dictionary (not just a set of
+    // "agents that saw the detail") so a NEW name still triggers a
+    // compact reminder even after the detail was shown.
+    private static readonly Dictionary<string, HashSet<string>> _warnedVarsPerAgent
+        = new(StringComparer.OrdinalIgnoreCase);
+    // Agents that have seen the detailed warning at least once. Any
+    // subsequent warning to the same agent uses the compact form.
+    private static readonly HashSet<string> _detailShownAgents
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    public static string? CheckLocalVariableAssignments(string pipeline, string agentId = "default")
     {
         // Pattern: $varname = (but not $script:, $global:, $env:, $using:, $null, $true, $false)
         // Also exclude common automatic variables like $_, $?, $^, $$, $args, $input, $foreach, $switch
@@ -59,29 +85,56 @@ public static partial class PipelineHelper
 
         if (varNames.Count == 0) return null;
 
-        if (!_scopeWarningDetailShown)
+        lock (_scopeWarningLock)
         {
-            _scopeWarningDetailShown = true;
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
-            foreach (var name in varNames)
+            if (!_warnedVarsPerAgent.TryGetValue(agentId, out var warnedVars))
             {
-                sb.AppendLine($"  ${name} → Consider using $script:{name} to preserve across calls");
+                warnedVars = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _warnedVarsPerAgent[agentId] = warnedVars;
             }
-            return sb.ToString().TrimEnd();
-        }
-        else
-        {
-            // Compact reminder for subsequent calls
-            var varList = string.Join(", ", varNames.Select(n => "$" + n));
-            return $"⚠️ SCOPE: Use $script: prefix for: {varList}";
+
+            // Only warn about variable names this agent has not seen
+            // before. If every name in this pipeline was already warned
+            // about, stay silent — the AI has no lesson left to learn
+            // for those names and re-printing the warning is pure noise.
+            var newVars = varNames.Where(v => !warnedVars.Contains(v)).ToList();
+            if (newVars.Count == 0) return null;
+
+            foreach (var v in newVars) warnedVars.Add(v);
+
+            if (_detailShownAgents.Add(agentId))
+            {
+                // First warning ever for this agent — spell out the fix so
+                // the AI learns the $script: convention.
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
+                foreach (var name in newVars)
+                {
+                    sb.AppendLine($"  ${name} → Consider using $script:{name} to preserve across calls");
+                }
+                return sb.ToString().TrimEnd();
+            }
+            else
+            {
+                // Agent already knows the rule; just list the newly
+                // introduced names as a compact reminder.
+                var varList = string.Join(", ", newVars.Select(n => "$" + n));
+                return $"⚠️ SCOPE: Use $script: prefix for: {varList}";
+            }
         }
     }
 
     /// <summary>
     /// Resets the scope warning state. For testing only.
     /// </summary>
-    internal static void ResetScopeWarningState() => _scopeWarningDetailShown = false;
+    internal static void ResetScopeWarningState()
+    {
+        lock (_scopeWarningLock)
+        {
+            _warnedVarsPerAgent.Clear();
+            _detailShownAgents.Clear();
+        }
+    }
 
     /// <summary>
     /// Check if input/output contains .md files and return a one-time hint about MarkdownPointer module (per agent).

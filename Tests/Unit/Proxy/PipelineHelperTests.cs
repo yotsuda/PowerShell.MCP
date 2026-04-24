@@ -203,6 +203,61 @@ public class PipelineHelperTests
         Assert.DoesNotContain("$i →", result);
     }
 
+    // --- per-agent / per-variable dedup behaviour ---
+
+    [Fact]
+    public void CheckLocalVariableAssignments_RepeatedSameVariable_SecondCallIsSilent()
+    {
+        // First pipeline with $foo → detail warning for agent A.
+        var first = PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-A");
+        Assert.NotNull(first);
+
+        // Same agent re-assigns $foo. The AI already learned the lesson
+        // for $foo; repeating the warning is noise, so return null.
+        var second = PipelineHelper.CheckLocalVariableAssignments("$foo = 2", "agent-A");
+        Assert.Null(second);
+    }
+
+    [Fact]
+    public void CheckLocalVariableAssignments_NewVariableAfterSeen_ReturnsCompactForNewOnly()
+    {
+        // Prime: $foo becomes "already-warned" for agent A via detail.
+        PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-A");
+
+        // Pipeline introduces $foo (already warned) + $bar (new). Only
+        // $bar should surface, and it should use the compact form —
+        // the detail was already consumed by the priming call.
+        var result = PipelineHelper.CheckLocalVariableAssignments("$foo = 10; $bar = 20", "agent-A");
+        Assert.NotNull(result);
+        Assert.StartsWith("⚠️ SCOPE:", result);
+        Assert.Contains("$bar", result);
+        Assert.DoesNotContain("$foo", result);
+    }
+
+    [Fact]
+    public void CheckLocalVariableAssignments_AllVariablesAlreadySeen_ReturnsNull()
+    {
+        PipelineHelper.CheckLocalVariableAssignments("$a = 1; $b = 2", "agent-A");
+        // Same agent, every name already warned → silent.
+        var result = PipelineHelper.CheckLocalVariableAssignments("$a = 3; $b = 4", "agent-A");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckLocalVariableAssignments_DifferentAgents_HaveIndependentState()
+    {
+        // Agent A learns $foo with detail.
+        var aFirst = PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-A");
+        Assert.NotNull(aFirst);
+        Assert.Contains("Consider using", aFirst);
+
+        // Agent B is fresh — the same $foo assignment should also
+        // produce a detail warning, not silence.
+        var bFirst = PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-B");
+        Assert.NotNull(bFirst);
+        Assert.Contains("Consider using", bFirst);
+    }
+
     #endregion
 
     #region FormatBusyStatus Tests

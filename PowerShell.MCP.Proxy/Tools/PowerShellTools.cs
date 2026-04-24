@@ -308,8 +308,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             return response.ToString();
         }
 
-        // Check for local variable assignments without scope prefix
-        var scopeWarning = CheckLocalVariableAssignments(pipeline);
+        // Check for local variable assignments without scope prefix.
+        // Per-agent dedup: same var name never double-warns the same
+        // conversation, so long sessions don't drown in reminders.
+        var scopeWarning = CheckLocalVariableAssignments(pipeline, agentId);
 
         // Enforce var1/var2 usage for text editing cmdlets
         var var1Error = PipelineHelper.CheckVar1Enforcement(pipeline, var1, var2);
@@ -1002,8 +1004,12 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
 
     /// <summary>
-    /// Checks for local variable assignments without scope prefix and returns a warning message.
+    /// Checks for local variable assignments without scope prefix and
+    /// returns a warning message. The warning is deduped per-agent and
+    /// per-variable-name (see <see cref="PipelineHelper.CheckLocalVariableAssignments"/>);
+    /// threading the current agentId through is what makes the dedup
+    /// work across calls in the same conversation.
     /// </summary>
-    private static string? CheckLocalVariableAssignments(string pipeline)
-        => PipelineHelper.CheckLocalVariableAssignments(pipeline);
+    private static string? CheckLocalVariableAssignments(string pipeline, string agentId)
+        => PipelineHelper.CheckLocalVariableAssignments(pipeline, agentId);
 }
