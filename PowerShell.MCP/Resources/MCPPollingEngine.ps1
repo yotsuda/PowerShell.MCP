@@ -351,7 +351,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $windowTitle = $Host.UI.RawUI.WindowTitle
 
                 $pipelineInfo = if ($pipelineSummary) { " | Pipeline: $pipelineSummary" } else { "" }
-                $statusLine = "$statusIcon Pipeline $statusText | Window: $windowTitle | Status: $Status$pipelineInfo | Duration: $durationText | Errors: $errorCount | Warnings: $warningCount | Info: $infoCount | $LocationInfo"
+                # Zero-count tags (Errors: 0 / Warnings: 0 / Info: 0) are
+                # silent on the happy path — a clean run produces a
+                # shorter status line and a run with actual events
+                # produces a line where every count listed is non-zero
+                # by construction. This follows the same "omit what
+                # equals zero" discipline the status line already uses
+                # for `$pipelineInfo`.
+                $errInfo  = if ($errorCount   -gt 0) { " | Errors: $errorCount" }    else { "" }
+                $warnInfo = if ($warningCount -gt 0) { " | Warnings: $warningCount" } else { "" }
+                $infoInfo = if ($infoCount    -gt 0) { " | Info: $infoCount" }       else { "" }
+                $statusLine = "$statusIcon Pipeline $statusText | Window: $windowTitle | Status: $Status$pipelineInfo | Duration: $durationText$errInfo$warnInfo$infoInfo | $LocationInfo"
 
                 # Generate structured output strings
                 $structuredOutput = @{
