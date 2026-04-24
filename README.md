@@ -5,6 +5,7 @@
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![SafeSkill 87/100](https://img.shields.io/badge/SafeSkill-87%2F100_Passes%20with%20Notes-yellow)](https://safeskill.dev/scan/yotsuda-powershell-mcp)
 
 **Security Warning:** This module provides complete PowerShell access to your system. Malicious use could result in severe damage. Use responsibly and only in trusted environments.
 
