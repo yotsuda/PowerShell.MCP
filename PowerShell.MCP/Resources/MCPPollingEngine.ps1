@@ -93,14 +93,22 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
             # ===== Helper Functions (Defined within Action Block) =====
 
+            # Invoke-Captured is a thin advanced-function wrapper used so
+            # the pipeline that runs the user's command can carry
+            # -WarningVariable / -InformationVariable common parameters.
+            # Those parameters are only honored on cmdlets and advanced
+            # functions, not on bare scriptblock invocations, so the
+            # wrapper exists solely to attach them. & $Block invokes the
+            # body in the wrapper's scope; PowerShell's CmdletBinding
+            # plumbing forwards the variable bindings through.
+            function Invoke-Captured {
+                [CmdletBinding()]
+                param([scriptblock]$Block)
+                & $Block
+            }
+
             function Invoke-CommandWithAllStreams {
                 param([string]$Command)
-
-                # Initialize output variables
-                $outVar = @()
-                $errorVar = @()
-                $warningVar = @()
-                $informationVar = @()
 
                 # Snapshot $LASTEXITCODE BEFORE the pipeline so we can
                 # tell whether this invocation TOUCHED it (a native exe
@@ -111,81 +119,121 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # subsequent pure-PowerShell pipeline.
                 $lecAtStart = $global:LASTEXITCODE
 
+                # Hybrid capture wiring:
+                #   * 2>&1 | Tee-Object | Out-Host
+                #       Streams 1 (Output) and 2 (Error) merge into a
+                #       single chronological PSObject sequence — Tee-Object
+                #       captures into $pipelineStream while Out-Host
+                #       renders each item to the visible terminal in real
+                #       time with the host's standard coloring (red+cyan
+                #       for ErrorRecord, plain for String, etc.). The
+                #       captured items keep their PowerShell types
+                #       (String / ErrorRecord / etc.) so the formatter
+                #       can decide rendering on the AI side.
+                #   * -WarningVariable / -InformationVariable
+                #       Streams 3 (Warning) and 6 (Information, includes
+                #       Write-Host) are NOT merged: merging them would
+                #       force their rendering through Out-Host's
+                #       generic record renderer and lose Write-Host's
+                #       chosen ForegroundColor on the visible terminal.
+                #       Their auto-rendering via the host UI's
+                #       WriteWarningLine / WriteInformation paths fires
+                #       independently of capture and keeps the colors
+                #       intact for the user.
+                #   * TeeTextWriter on Console.Out / Console.Error
+                #       Catches [Console]::WriteLine and
+                #       [Console]::Error.WriteLine direct writes that
+                #       bypass the PowerShell stream system entirely.
+                #       Pre-fix those bytes were invisible to the AI
+                #       side. The tee writes to BOTH the original
+                #       writer (preserves real-time visible-console
+                #       output) AND a StringBuilder for capture.
+                $warningVar = @()
+                $informationVar = @()
+                $exceptionVar = @()
+                $pipelineStream = @()
+
+                $origOut = [Console]::Out
+                $origErr = [Console]::Error
+                $consoleOutBuf = [System.Text.StringBuilder]::new()
+                $consoleErrBuf = [System.Text.StringBuilder]::new()
+                [Console]::SetOut([PowerShell.MCP.Services.TeeTextWriter]::new($origOut, $consoleOutBuf))
+                [Console]::SetError([PowerShell.MCP.Services.TeeTextWriter]::new($origErr, $consoleErrBuf))
+
+                $ok = $false
+                $lec = $lecAtStart
                 try {
-                    $redirectedOutput = Invoke-Expression $Command `
-                        -OutVariable outVar `
-                        -ErrorVariable errorVar `
-                        -WarningVariable warningVar `
-                        -InformationVariable informationVar
-
-                    # Capture post-pipeline state IMMEDIATELY. Any
-                    # statement below (even a bare variable assignment)
-                    # resets $? to True, so grab the two signals we
-                    # care about before the dedup loop runs.
-                    $ok = $?
-                    $lec = $global:LASTEXITCODE
-
-                    # Deduplicate errors (PowerShell ErrorVariable can record the same error multiple times)
-                    $uniqueErrors = @()
-                    $seenErrors = @{}
-                    foreach ($err in $errorVar) {
-                        # Create a unique key based on message, error ID, and category
-                        $key = if ($err -is [System.Management.Automation.ErrorRecord]) {
-                            "$($err.Exception.Message)|$($err.FullyQualifiedErrorId)|$($err.CategoryInfo.Category)"
-                        } else {
-                            $err.ToString()
-                        }
-
-                        if (-not $seenErrors.ContainsKey($key)) {
-                            $uniqueErrors += $err
-                            $seenErrors[$key] = $true
-                        }
+                    try {
+                        $sb = [scriptblock]::Create($Command)
+                        Invoke-Captured -Block $sb `
+                            -WarningVariable +warningVar `
+                            -InformationVariable +informationVar 2>&1 |
+                            Tee-Object -Variable pipelineStream |
+                            Out-Host
+                        # Capture post-pipeline state IMMEDIATELY. Any
+                        # statement below (even a bare variable
+                        # assignment) resets $? to True, so grab the two
+                        # signals we care about right after the pipe.
+                        $ok = $?
+                        $lec = $global:LASTEXITCODE
                     }
-
-                    # LastExitReport gating: only surface a non-zero
-                    # native exit when the pipeline OVERALL SUCCEEDED
-                    # ($? True) AND $LASTEXITCODE was actually written
-                    # by this pipeline (not stale from before) AND the
-                    # written value is non-zero. When $? is False the
-                    # status icon flips to ✗ and errorCount is already
-                    # surfacing the failure, so LastExit would be
-                    # redundant. Zero means "silent — no native
-                    # reported, or the last one returned 0". Mirrors
-                    # ripple's OSC 633;L contract so the two MCPs
-                    # surface the same semantic across shells.
-                    $lecChanged = $lec -ne $lecAtStart
-                    $lastExitReport = if ($ok -and $lecChanged -and $null -ne $lec -and $lec -ne 0) {
-                        [int]$lec
-                    } else {
-                        0
-                    }
-
-                    return @{
-                        Success = $outVar
-                        Error = $uniqueErrors
-                        Exception = @()
-                        Warning = $warningVar
-                        Information = $informationVar
-                        LastExitReport = $lastExitReport
+                    catch {
+                        # Terminating errors (throw, .NET exceptions
+                        # that bubble out, parser errors from
+                        # [scriptblock]::Create) reach here. Non-
+                        # terminating errors stay inside $pipelineStream
+                        # via 2>&1 and don't trigger the catch.
+                        $exceptionVar = @($_)
+                        $ok = $false
+                        $lec = $global:LASTEXITCODE
                     }
                 }
-                catch {
-                    $exceptionVar = @($_)
+                finally {
+                    [Console]::SetOut($origOut)
+                    [Console]::SetError($origErr)
+                }
 
-                    return @{
-                        Success = $outVar
-                        Error = @()
-                        Exception = $exceptionVar
-                        Warning = $warningVar
-                        Information = $informationVar
-                        # Pipeline threw — the exception itself is the
-                        # primary failure signal. Don't also surface
-                        # LastExit: a native that set $LASTEXITCODE
-                        # before the throw is of lower interest than
-                        # the thrown exception and would just add
-                        # noise to the error-path response.
-                        LastExitReport = 0
+                # Deduplicate errors in the chronological stream.
+                # PowerShell can emit the same ErrorRecord more than once
+                # in some pipelines (the legacy -ErrorVariable code
+                # documented this). Keep the first occurrence in place so
+                # the chronological order is preserved.
+                $seenErrors = @{}
+                $dedupedStream = [System.Collections.Generic.List[object]]::new()
+                foreach ($item in $pipelineStream) {
+                    if ($item -is [System.Management.Automation.ErrorRecord]) {
+                        $key = "$($item.Exception.Message)|$($item.FullyQualifiedErrorId)|$($item.CategoryInfo.Category)"
+                        if ($seenErrors.ContainsKey($key)) { continue }
+                        $seenErrors[$key] = $true
                     }
+                    $dedupedStream.Add($item)
+                }
+
+                # LastExitReport gating: only surface a non-zero native
+                # exit when the pipeline OVERALL SUCCEEDED ($? True) AND
+                # $LASTEXITCODE was actually written by this pipeline
+                # (not stale from before) AND the written value is
+                # non-zero. When $? is False the status icon flips to ✗
+                # and errorCount is already surfacing the failure, so
+                # LastExit would be redundant. Zero means "silent — no
+                # native reported, or the last one returned 0". Mirrors
+                # ripple's OSC 633;L contract so the two MCPs surface
+                # the same semantic across shells.
+                $lecChanged = $lec -ne $lecAtStart
+                $lastExitReport = if ($ok -and $lecChanged -and $null -ne $lec -and $lec -ne 0) {
+                    [int]$lec
+                } else {
+                    0
+                }
+
+                return @{
+                    PipelineItems = $dedupedStream
+                    Warning = $warningVar
+                    Information = $informationVar
+                    Exception = $exceptionVar
+                    ConsoleOut = $consoleOutBuf.ToString()
+                    ConsoleErr = $consoleErrBuf.ToString()
+                    LastExitReport = $lastExitReport
                 }
             }
 
@@ -291,74 +339,100 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     [string]$Pipeline = ""
                 )
 
-                # Process each stream type
-                $outputStreams = @{
-                    Success = @()
-                    Error = @()
-                    Exception = @()
-                    Warning = @()
-                    Information = @()
-                }
-
-                # Process errors
-                foreach($err in $StreamResults.Error) {
-                    if ($err -is [System.Management.Automation.ErrorRecord]) {
-                        $outputStreams.Error += $err.Exception.Message
+                # Walk PipelineItems in emit order, render each item the
+                # same way the streaming Out-Host did on the visible
+                # console, and count errors as we go. Output and errors
+                # interleave in this single text block — the AI sees the
+                # error in its actual position in the run, not collected
+                # at the end of a separate "=== ERRORS ===" section.
+                $pipelineLines = @()
+                $errorCount = 0
+                foreach ($item in $StreamResults.PipelineItems) {
+                    if ($item -is [System.Management.Automation.ErrorRecord]) {
+                        $errorCount++
+                        # Use Exception.Message (matches the visible
+                        # red+cyan render the user sees, minus the
+                        # `Write-Error: ` prefix and trace context that
+                        # are PowerShell's own decoration).
+                        $pipelineLines += $item.Exception.Message
+                    } elseif ($null -eq $item) {
+                        $pipelineLines += ""
                     } else {
-                        $outputStreams.Error += $err.ToString()
+                        # Out-String runs every item through the same
+                        # default formatter Out-Host used; trim trailing
+                        # newlines so the join below doesn't double up.
+                        $pipelineLines += ($item | Out-String).TrimEnd("`r","`n")
                     }
                 }
+                $pipelineText = ($pipelineLines -join "`n").Trim()
 
-                # Process exceptions
-                foreach($ex in $StreamResults.Exception) {
-                    if ($ex -is [System.Management.Automation.ErrorRecord]) {
-                        $outputStreams.Exception += $ex.Exception.Message
+                # Process exceptions (terminating throws caught inside
+                # Invoke-CommandWithAllStreams).
+                $exceptionLines = @()
+                foreach ($ex in $StreamResults.Exception) {
+                    $exceptionLines += if ($ex -is [System.Management.Automation.ErrorRecord]) {
+                        $ex.Exception.Message
                     } else {
-                        $outputStreams.Exception += $ex.ToString()
+                        $ex.ToString()
                     }
                 }
+                $exceptionText = ($exceptionLines -join "`n").Trim()
 
-                # Process warnings
-                foreach($warn in $StreamResults.Warning) {
-                    if ($warn -is [System.Management.Automation.WarningRecord]) {
-                        $outputStreams.Warning += $warn.Message
+                # Process warnings.
+                $warningLines = @()
+                foreach ($warn in $StreamResults.Warning) {
+                    $warningLines += if ($warn -is [System.Management.Automation.WarningRecord]) {
+                        $warn.Message
                     } else {
-                        $outputStreams.Warning += $warn.ToString()
+                        $warn.ToString()
                     }
                 }
+                $warningText = ($warningLines -join "`n").Trim()
 
-                # Process information
-                foreach($info in $StreamResults.Information) {
-                    if ($info -is [System.Management.Automation.InformationRecord]) {
-                        $messageData = if ($null -ne $info.MessageData) {
-                            $info.MessageData.ToString()
-                        } else {
-                            $info.ToString()
-                        }
-                        $outputStreams.Information += $messageData
+                # Process information / Write-Host. Skip empty/whitespace
+                # records (PowerShell sometimes emits a blank
+                # InformationRecord at pipeline boundaries).
+                $infoLines = @()
+                foreach ($info in $StreamResults.Information) {
+                    $messageData = if ($info -is [System.Management.Automation.InformationRecord]) {
+                        if ($null -ne $info.MessageData) { $info.MessageData.ToString() } else { $info.ToString() }
                     } else {
-                        $outputStreams.Information += $info.ToString()
+                        $info.ToString()
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($messageData)) {
+                        $infoLines += $messageData
                     }
                 }
+                $infoText = ($infoLines -join "`n").Trim()
 
-                # Process success
-                foreach ($item in $StreamResults.Success) {
-                    $outputStreams.Success += $item
-                }
+                # Direct console writes — only present when something
+                # bypassed the PowerShell stream system entirely
+                # ([Console]::WriteLine etc.). On the happy path these
+                # buffers stay empty and the section is omitted.
+                $consoleOutText = if ($null -ne $StreamResults.ConsoleOut) {
+                    ([string]$StreamResults.ConsoleOut).TrimEnd("`r","`n")
+                } else { "" }
+                $consoleErrText = if ($null -ne $StreamResults.ConsoleErr) {
+                    ([string]$StreamResults.ConsoleErr).TrimEnd("`r","`n")
+                } else { "" }
 
-                # Append PromptAI (Invoke-Claude/Invoke-GPT/Invoke-Gemini) output if available
+                # Append PromptAI (Invoke-Claude/Invoke-GPT/Invoke-Gemini) output if available.
                 try {
                     $aiResponse = [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse
                     if (-not [string]::IsNullOrEmpty($aiResponse)) {
-                        $outputStreams.Success += $aiResponse
+                        if ($pipelineText) {
+                            $pipelineText = $pipelineText + "`n" + $aiResponse.TrimEnd()
+                        } else {
+                            $pipelineText = $aiResponse.TrimEnd()
+                        }
                         [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null
                     }
                 } catch { }
 
-                # Calculate statistics
-                $errorCount = $outputStreams.Error.Count + $outputStreams.Exception.Count
-                $warningCount = $outputStreams.Warning.Count
-                $infoCount = $outputStreams.Information.Count
+                # Calculate statistics.
+                $errorCount += $StreamResults.Exception.Count
+                $warningCount = $StreamResults.Warning.Count
+                $infoCount = $infoLines.Count
                 $hasErrors = $errorCount -gt 0
                 # LastExitReport is 0 when the invocation did not
                 # surface a hidden native exit (see
@@ -422,70 +496,60 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $lastExitInfo = if ($lastExitReport -gt 0) { " | LastExit: $lastExitReport" } else { "" }
                 $statusLine = "$statusIcon Pipeline $statusText | Window: $windowTitle | Status: $Status$pipelineInfo | Duration: $durationText$lastExitInfo$errInfo$warnInfo$infoInfo | $LocationInfo"
 
-                # Generate structured output strings
-                $structuredOutput = @{
-                    Success = ($outputStreams.Success | Out-String).Trim()
-                    Error = ($outputStreams.Error -join "`n").Trim()
-                    Exception = ($outputStreams.Exception -join "`n").Trim()
-                    Warning = ($outputStreams.Warning -join "`n").Trim()
-                    Information = ($outputStreams.Information -join "`n").Trim()
+                # Compose response. PipelineItems already interleaves
+                # Output and Error in emit order, so the leading text
+                # block reads chronologically — the AI can see at which
+                # point in the run an error happened relative to the
+                # surrounding output. Warnings, Information, and direct
+                # console writes follow as separate sections only when
+                # non-empty, so the simple-success path stays terse.
+                $sections = @()
+                if ($pipelineText) {
+                    $sections += $pipelineText
+                    $sections += ""
                 }
 
-                # Remove empty outputs
-                $cleanOutput = @{}
-                foreach ($key in $structuredOutput.Keys) {
-                    if (-not [string]::IsNullOrEmpty($structuredOutput[$key])) {
-                        $cleanOutput[$key] = $structuredOutput[$key]
-                    }
+                # Exceptions (terminating throws) follow the chronological
+                # block. Labelled because PowerShell distinguishes
+                # terminating from non-terminating errors and the AI
+                # reading the response benefits from the same distinction.
+                if ($exceptionText) {
+                    $sections += "=== EXCEPTIONS ==="
+                    $sections += $exceptionText
+                    $sections += ""
                 }
 
-                # Generate formatted output
-                # Check if only success output exists
-                $onlySuccess = ($cleanOutput.Count -eq 1 -and $cleanOutput.Keys -contains 'Success')
-
-                if ($onlySuccess -and -not $hasErrors) {
-                    # Simple success case: status + output
-                    if ($cleanOutput.Success) {
-                        return $statusLine + "`n`n" + $cleanOutput.Success
-                    } else {
-                        return $statusLine
-                    }
-                } else {
-                    # Complex case with multiple streams
-                    $formattedOutput = @($statusLine, "")
-
-                    if ($cleanOutput.Exception) {
-                        $formattedOutput += "=== EXCEPTIONS ==="
-                        $formattedOutput += $cleanOutput.Exception
-                        $formattedOutput += ""
-                    }
-
-                    if ($cleanOutput.Error) {
-                        $formattedOutput += "=== ERRORS ==="
-                        $formattedOutput += $cleanOutput.Error
-                        $formattedOutput += ""
-                    }
-
-                    if ($cleanOutput.Warning) {
-                        $formattedOutput += "=== WARNINGS ==="
-                        $formattedOutput += $cleanOutput.Warning
-                        $formattedOutput += ""
-                    }
-
-                    if ($cleanOutput.Success) {
-                        $formattedOutput += "=== SUCCESS ==="
-                        $formattedOutput += $cleanOutput.Success
-                        $formattedOutput += ""
-                    }
-
-                    if ($cleanOutput.Information) {
-                        $formattedOutput += "=== INFO ==="
-                        $formattedOutput += $cleanOutput.Information
-                        $formattedOutput += ""
-                    }
-
-                    return ($formattedOutput -join "`n").Trim()
+                if ($warningText) {
+                    $sections += "=== WARNINGS ==="
+                    $sections += $warningText
+                    $sections += ""
                 }
+
+                if ($infoText) {
+                    $sections += "=== INFO ==="
+                    $sections += $infoText
+                    $sections += ""
+                }
+
+                # Direct console writes (only present when something
+                # bypassed the PowerShell stream system entirely). These
+                # used to be invisible to the AI side; surfacing them
+                # here closes the [Console]::Error.WriteLine gap.
+                if ($consoleOutText) {
+                    $sections += "=== CONSOLE.OUT (direct) ==="
+                    $sections += $consoleOutText
+                    $sections += ""
+                }
+                if ($consoleErrText) {
+                    $sections += "=== CONSOLE.ERR (direct) ==="
+                    $sections += $consoleErrText
+                    $sections += ""
+                }
+
+                if ($sections.Count -eq 0) {
+                    return $statusLine
+                }
+                return $statusLine + "`n`n" + (($sections -join "`n").TrimEnd())
             }
 
             # ===== Main Event Processing =====
@@ -534,33 +598,34 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Clear PromptAI output before execution
                     try { [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null } catch { }
 
-                    # Execute command with clean stream capture
+                    # Execute command with hybrid stream capture. The
+                    # capture function wires `... 2>&1 | Tee-Object |
+                    # Out-Host` internally, which means each output and
+                    # error item already streamed to the visible console
+                    # in real time (ErrorRecord: red+cyan, plain output:
+                    # default formatter), and Warning / Information were
+                    # auto-rendered by the host's stream-3 / stream-6
+                    # writers (yellow / Write-Host's chosen color)
+                    # alongside. So the post-execute Out-Default + manual
+                    # Write-Host re-render that used to live here would
+                    # duplicate the visible-console output line-for-line
+                    # — removed.
                     $streamResults = Invoke-CommandWithAllStreams -Command $cmd
 
                     # Get duration from C# ExecutionState (managed by WaitForResult)
                     $duration = [PowerShell.MCP.Services.ExecutionState]::ElapsedSeconds
 
-                    # Display results in console
-                    $streamResults.Success | Out-Default
-
-                    # Display exceptions in console
+                    # Render terminating-exception messages (the catch
+                    # path inside Invoke-CommandWithAllStreams swallowed
+                    # them so they didn't reach the streaming Out-Host).
+                    # Non-terminating errors went through 2>&1 already
+                    # and are visible — they don't need a second pass.
                     if ($streamResults.Exception -and $streamResults.Exception.Count -gt 0) {
                         foreach ($ex in $streamResults.Exception) {
                             if ($ex -is [System.Management.Automation.ErrorRecord]) {
                                 Write-Host $ex.Exception.Message -ForegroundColor Red
                             } else {
                                 Write-Host $ex.ToString() -ForegroundColor Red
-                            }
-                        }
-                    }
-
-                    # Display errors in console
-                    if ($streamResults.Error -and $streamResults.Error.Count -gt 0 -and (-not $streamResults.Exception -or $streamResults.Exception.Count -eq 0)) {
-                        foreach ($err in $streamResults.Error) {
-                            if ($err -is [System.Management.Automation.ErrorRecord]) {
-                                Write-Host $err.Exception.Message -ForegroundColor Red
-                            } else {
-                                Write-Host $err.ToString() -ForegroundColor Red
                             }
                         }
                     }
