@@ -344,12 +344,29 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
                                 if (jsonResponse.Reason == "user_command" || jsonResponse.Reason == "mcp_command")
                                 {
-                                    // Auto-start new console
-                                    Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-starting new console...");
-                                    var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
-                                    if (!success)
+                                    // Auto-route: spawn a new console at the source's cwd and
+                                    // re-run the pipeline there in the same tool call. Pre-fix
+                                    // we returned a "Pipeline NOT executed - verify location
+                                    // and re-execute" message and the AI had to re-send the
+                                    // exact same call, with the new console at HOME (= losing
+                                    // the cwd the user/AI had been working in). Two
+                                    // round-trips and a manual `Set-Location` for every busy
+                                    // race. Now: read the source's cwd from the busy
+                                    // response (DLL emits `cwd` from the get_status path),
+                                    // start the new console there, and run the pipeline as a
+                                    // single recursive call. The DLL has emitted `cwd` since
+                                    // a recent compatible version; older DLLs leave it null
+                                    // and we fall back to HOME (= the old behavior).
+                                    var sourceCwd = jsonResponse.Cwd;
+                                    var startLoc = (!string.IsNullOrEmpty(sourceCwd) && Directory.Exists(sourceCwd))
+                                        ? sourceCwd
+                                        : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+                                    Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-routing to new console at {startLoc}...");
+                                    var (startSuccess, startError) = await StartConsoleInternal(powerShellService, agentId, null, startLoc, cancellationToken);
+                                    if (!startSuccess)
                                     {
-                                        return locationResult; // Error message
+                                        return startError;
                                     }
 
                                     // Set console window title
@@ -359,28 +376,43 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                         await SetConsoleTitleAsync(powerShellService, activeAfterBusy, cancellationToken);
                                     }
 
-                                    var newPipeName = sessionManager.GetActivePipeName(agentId);
-                                    var (completedOutputs, busyInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
+                                    var newConsoleName = GetConsoleName(activeAfterBusy);
 
-                                    var newConsoleName = GetConsoleName(newPipeName);
+                                    // Recurse: the new console is now the active standby,
+                                    // so FindReadyPipeAsync on the recursive call sees it
+                                    // as ready and the pipeline runs cleanly. Recursion
+                                    // depth is bounded in practice — StartConsoleInternal
+                                    // just spawned a fresh console that hasn't been handed
+                                    // out as a user-input target yet, so a second
+                                    // back-to-back busy would require a sub-millisecond
+                                    // race that's effectively impossible at AI tool-call
+                                    // cadence. If it ever happens, the recursion would
+                                    // spawn one more console and run there; no infinite
+                                    // loop, just one extra console.
+                                    var retryResult = await InvokeExpression(
+                                        powerShellService, pipeDiscoveryService, pipeline,
+                                        timeout_seconds, var1, var2, var3, var4,
+                                        agentId, is_subagent: false,
+                                        cancellationToken: cancellationToken);
 
+                                    // Surface the auto-route notice + closed-console
+                                    // messages collected by THIS outer call (the recursive
+                                    // call's FindReadyPipeAsync runs fresh and won't
+                                    // re-report them). Drop the previous bulky
+                                    // get_current_location JSON (system info / drives) — the
+                                    // recursive call delivers the actual pipeline output and
+                                    // the AI no longer needs the OS / drive-list block to
+                                    // verify cwd because we already preserved it.
                                     var busyResponse = new StringBuilder();
-                                    // Busy status at the top (current pipe first, then other pipes)
+                                    if (closedConsoleMessages.Count > 0)
+                                    {
+                                        busyResponse.AppendLine(string.Join("\n", closedConsoleMessages));
+                                        busyResponse.AppendLine();
+                                    }
                                     busyResponse.AppendLine(FormatBusyStatus(jsonResponse));
-                                    if (busyInfo.Length > 0)
-                                    {
-                                        busyResponse.Append(busyInfo);
-                                    }
+                                    busyResponse.AppendLine($"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.");
                                     busyResponse.AppendLine();
-                                    busyResponse.AppendLine($"Started new console {newConsoleName} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
-                                    busyResponse.AppendLine();
-                                    busyResponse.Append(locationResult);
-                                    if (completedOutputs.Length > 0)
-                                    {
-                                        busyResponse.AppendLine();
-                                        busyResponse.AppendLine();
-                                        busyResponse.Append(completedOutputs);
-                                    }
+                                    busyResponse.Append(retryResult);
                                     return busyResponse.ToString();
                                 }
                                 break;
@@ -536,9 +568,8 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     successResponse.AppendLine();
                                     successResponse.AppendLine(scopeWarning);
                                 }
-                                // One-time hint about MarkdownPointer module
-                                var markdownHint = PipelineHelper.CheckMarkdownFileHint(pipeline, agentId)
-                                    ?? PipelineHelper.CheckMarkdownFileHint(output, agentId);
+                                // One-time hint about MarkdownPointer module (pipeline-only; output checks caused false positives on incidental .md mentions).
+                                var markdownHint = PipelineHelper.CheckMarkdownFileHint(pipeline, agentId);
                                 if (!string.IsNullOrEmpty(markdownHint))
                                 {
                                     successResponse.AppendLine();

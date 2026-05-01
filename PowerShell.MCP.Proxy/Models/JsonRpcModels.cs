@@ -76,6 +76,18 @@ public class GetStatusResponse
 
     [JsonPropertyName("message")]
     public string? Message { get; set; }
+
+    /// <summary>
+    /// Process-level current working directory of the source console
+    /// at the moment this status was captured. Populated by the DLL
+    /// (see <c>NamedPipeServer.HandleGetStatus</c>) for every status
+    /// response — busy / user_command / mcp_command / standby /
+    /// completed. Used by the busy-auto-route path so a freshly-spawned
+    /// console can land at the same cwd before re-running the AI's
+    /// pipeline. Null on older DLLs that predate the field.
+    /// </summary>
+    [JsonPropertyName("cwd")]
+    public string? Cwd { get; set; }
 }
 
 [JsonSerializable(typeof(GetStatusResponse))]

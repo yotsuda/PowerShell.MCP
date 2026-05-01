@@ -417,6 +417,21 @@ public class NamedPipeServer : IDisposable
             {
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var status = ExecutionState.Status;
+                // Process-level cwd. PowerShell's `Set-Location` for the
+                // FileSystem provider syncs this with $PWD so P/Invoke
+                // calls see the same directory the user typed `cd` to.
+                // Reading it here is just a property access — does NOT
+                // touch the runspace and is safe to call while a command
+                // is busy. Used by the proxy's busy-auto-route path so a
+                // freshly-spawned console can land at the source's cwd
+                // before re-running the AI's pipeline (otherwise every
+                // contention with a user-typed command would force the
+                // AI to manually re-cd). Non-FileSystem providers
+                // (HKLM:\, Cert:\, etc.) leave this at the last
+                // FileSystem location, which is the right fallback.
+                string? cwd;
+                try { cwd = System.IO.Directory.GetCurrentDirectory(); }
+                catch { cwd = null; }
 
                 string statusResponse;
                 if (status == "busy")
@@ -435,7 +450,8 @@ public class NamedPipeServer : IDisposable
                         status = "busy",
                         pipeline = truncatedPipeline,
                         duration = roundedDuration,
-                        statusLine
+                        statusLine,
+                        cwd
                     });
                 }
                 else if (status == "completed")
@@ -448,7 +464,8 @@ public class NamedPipeServer : IDisposable
                         pid,
                         status = "completed",
                         cachedCount = cachedOutputs.Count,
-                        statusLine
+                        statusLine,
+                        cwd
                     });
                 }
                 else
@@ -457,7 +474,7 @@ public class NamedPipeServer : IDisposable
                     if (ExecutionState.IsRunspaceAvailable)
                     {
                         var statusLine = BuildStatusLine("●", "Console ready", "Standby");
-                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby", statusLine });
+                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby", statusLine, cwd });
                     }
                     else
                     {
@@ -470,7 +487,8 @@ public class NamedPipeServer : IDisposable
                             status = "busy",
                             pipeline = "(user command)",
                             duration = userDuration,
-                            statusLine
+                            statusLine,
+                            cwd
                         });
                     }
                 }
@@ -571,13 +589,22 @@ Please provide how to update the MCP client configuration to the user.";
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var elapsed = ExecutionState.ElapsedSeconds;
                 var runningPipeline = TruncatePipeline(ExecutionState.CurrentPipeline);
+                // Process-level cwd. The runspace is busy with another
+                // command but Directory.GetCurrentDirectory is just a
+                // property read — non-blocking. Proxy uses this to spawn
+                // the new auto-route console at the source's cwd so the
+                // re-routed pipeline runs where the AI expected it.
+                string? cwd;
+                try { cwd = System.IO.Directory.GetCurrentDirectory(); }
+                catch { cwd = null; }
                 var busyResponse = JsonSerializer.Serialize(new
                 {
                     pid,
                     status = "busy",
                     reason = "mcp_command",
                     pipeline = runningPipeline,
-                    duration = Math.Round(elapsed, 2)
+                    duration = Math.Round(elapsed, 2),
+                    cwd
                 });
 
                 await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
@@ -598,13 +625,20 @@ Please provide how to update the MCP client configuration to the user.";
                     // Runspace is busy with user command - return JSON response
                     var pid = Process.GetCurrentProcess().Id;
                     var userCmdElapsed = ExecutionState.UserCommandElapsedSeconds;
+                    // Capture the source console's cwd so the proxy can
+                    // spawn the auto-route console at the same location
+                    // (see the mcp_command branch above for the reasoning).
+                    string? cwd;
+                    try { cwd = System.IO.Directory.GetCurrentDirectory(); }
+                    catch { cwd = null; }
                     var busyResponse = JsonSerializer.Serialize(new
                     {
                         pid,
                         status = "busy",
                         reason = "user_command",
                         pipeline = "(user command)",
-                        duration = Math.Round(userCmdElapsed, 2)
+                        duration = Math.Round(userCmdElapsed, 2),
+                        cwd
                     });
                     await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
                     return;
