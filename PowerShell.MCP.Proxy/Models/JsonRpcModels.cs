@@ -84,7 +84,10 @@ public class GetStatusResponse
     /// response — busy / user_command / mcp_command / standby /
     /// completed. Used by the busy-auto-route path so a freshly-spawned
     /// console can land at the same cwd before re-running the AI's
-    /// pipeline. Null on older DLLs that predate the field.
+    /// pipeline. Nullable only because <c>Directory.GetCurrentDirectory</c>
+    /// can throw on a disconnected network drive — the version-lockstep
+    /// connection guard rules out the "old DLL didn't send the field"
+    /// case at the wire level.
     /// </summary>
     [JsonPropertyName("cwd")]
     public string? Cwd { get; set; }

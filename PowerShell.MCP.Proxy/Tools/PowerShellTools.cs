@@ -351,15 +351,20 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     // exact same call, with the new console at HOME (= losing
                                     // the cwd the user/AI had been working in). Two
                                     // round-trips and a manual `Set-Location` for every busy
-                                    // race. Now: read the source's cwd from the busy
-                                    // response (DLL emits `cwd` from the get_status path),
-                                    // start the new console there, and run the pipeline as a
-                                    // single recursive call. The DLL has emitted `cwd` since
-                                    // a recent compatible version; older DLLs leave it null
-                                    // and we fall back to HOME (= the old behavior).
-                                    var sourceCwd = jsonResponse.Cwd;
-                                    var startLoc = (!string.IsNullOrEmpty(sourceCwd) && Directory.Exists(sourceCwd))
-                                        ? sourceCwd
+                                    // race.
+                                    //
+                                    // The version-lockstep connection guard (see
+                                    // NamedPipeServer.cs's `version_mismatch` branch) means
+                                    // any DLL that survived the handshake speaks the same
+                                    // protocol as this proxy, so jsonResponse.Cwd is always
+                                    // populated for busy responses — no "null because old
+                                    // DLL" case to handle. Directory.Exists IS still checked
+                                    // because the cwd path itself can be unreachable at
+                                    // runtime (deleted folder, disconnected network drive);
+                                    // in that genuine edge case we fall back to HOME so the
+                                    // spawn can at least succeed.
+                                    var startLoc = (!string.IsNullOrEmpty(jsonResponse.Cwd) && Directory.Exists(jsonResponse.Cwd))
+                                        ? jsonResponse.Cwd
                                         : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
                                     Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-routing to new console at {startLoc}...");
