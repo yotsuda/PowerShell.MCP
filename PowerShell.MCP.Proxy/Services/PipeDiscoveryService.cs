@@ -43,7 +43,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     }
 
     /// <inheritdoc />
-    public async Task<PipeDiscoveryResult> FindReadyPipeAsync(string agentId, CancellationToken cancellationToken)
+    public async Task<PipeDiscoveryResult> FindReadyPipeAsync(string agentId, CancellationToken cancellationToken, bool includeUnowned = true)
     {
         // Fast path: check active pipe before any expensive operations (EnumeratePipes, DetectClosedConsoles)
         var activePipe = _sessionManager.GetActivePipeName(agentId);
@@ -54,7 +54,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             if (activePipeStatus != null && activePipeStatus.IsReady())
             {
                 if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
-                return new PipeDiscoveryResult(activePipe, false, [], null);
+                return new PipeDiscoveryResult(activePipe, false, [], null, activePipeStatus.Cwd);
             }
         }
 
@@ -79,7 +79,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 // Became ready between fast path and slow path (after DetectClosedConsoles)
                 if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
-                return new PipeDiscoveryResult(activePipe, false, closedMessages, BuildClosedConsoleInfo(closedMessages));
+                return new PipeDiscoveryResult(activePipe, false, closedMessages, BuildClosedConsoleInfo(closedMessages), activePipeStatus.Cwd);
             }
             else // busy
             {
@@ -108,14 +108,21 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                 _sessionManager.SetActivePipeName(agentId, pipeName);
-                return new PipeDiscoveryResult(pipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages));
+                return new PipeDiscoveryResult(pipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages), status.Cwd);
             }
 
             if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
             allPipesStatus.Add($"  - {pipeName}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
         }
 
-        // Step 3: Check unowned pipes (user-started consoles not yet claimed by any proxy)
+        // Step 3: Check unowned pipes (user-started consoles not yet claimed
+        // by any proxy). Caller can opt out via includeUnowned=false — see
+        // start_console's no-start_location branch for the rationale.
+        if (!includeUnowned)
+        {
+            return new PipeDiscoveryResult(null, false, closedMessages, BuildClosedConsoleInfo(closedMessages));
+        }
+
         foreach (var pipeName in _sessionManager.EnumerateUnownedPipes())
         {
             var status = await _powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
@@ -153,7 +160,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     if (newStatus != null)
                     {
                         _sessionManager.SetActivePipeName(agentId, newPipeName);
-                        return new PipeDiscoveryResult(newPipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages));
+                        return new PipeDiscoveryResult(newPipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages), newStatus.Cwd);
                     }
                 }
             }

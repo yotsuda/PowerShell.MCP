@@ -66,6 +66,38 @@ public class ConsoleSessionManager
     private readonly Dictionary<int, string> _pidToTitle = new();
 
     /// <summary>
+    /// Maps pwsh PIDs to the cwd the AI's most recent successful (or
+    /// timeout / cached) <c>invoke_expression</c> ended at. Captured from
+    /// the DLL's response header (which now carries <c>cwd</c>) so the
+    /// proxy never has to re-query a busy / dead pipe to know "where the
+    /// AI thinks it is". Used to:
+    ///  - inject a <c>Set-Location</c> preamble when the live cwd has
+    ///    drifted (user typed <c>cd</c> in the visible console between
+    ///    AI calls);
+    ///  - choose <c>start_location</c> for busy-auto-route's spawn so
+    ///    the new console picks up at AI's intended cwd, not the
+    ///    user-touched live cwd of the busy source;
+    ///  - resume at the right place after the active console died and
+    ///    we had to switch to a sibling owned pipe.
+    /// Cleared with <see cref="ClearDeadPipe"/> so a recycled PID can't
+    /// pull a stale entry.
+    /// </summary>
+    private readonly Dictionary<int, string> _pidToLastAiCwd = new();
+
+    /// <summary>
+    /// Session-scoped fallback for the agent's most recently observed AI
+    /// cwd, surviving the death of the per-pid <c>_pidToLastAiCwd</c>
+    /// entry. Updated alongside the per-pid entry whenever a pipe reports
+    /// a successful invoke_expression cwd. Used as the
+    /// <c>start_location</c> when invoke_expression auto-starts a console
+    /// (no surviving pipe means no per-pid entry to fall back to, but the
+    /// AI was still working *somewhere* and that somewhere is the right
+    /// place for the new console to land — same rationale as busy-route).
+    /// Cleared only when the agent's session is evicted entirely.
+    /// </summary>
+    private readonly Dictionary<string, string> _agentToLastAiCwd = new();
+
+    /// <summary>
     /// Prefix for server-generated sub-agent IDs
     /// </summary>
     private const string SubAgentIdPrefix = "sa-";
@@ -247,6 +279,7 @@ public class ConsoleSessionManager
             {
                 state.KnownBusyPids.Remove(pid.Value);
                 _pidToTitle.Remove(pid.Value);
+                _pidToLastAiCwd.Remove(pid.Value);
             }
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}' (agent={agentId})");
 
@@ -254,6 +287,7 @@ public class ConsoleSessionManager
             if (agentId != "default" && state.ActivePipeName == null && state.KnownBusyPids.Count == 0)
             {
                 _agentSessions.Remove(agentId);
+                _agentToLastAiCwd.Remove(agentId);
             }
         }
     }
@@ -376,6 +410,58 @@ public class ConsoleSessionManager
             _pidToTitle[pwshPid] = title;
             return title;
         }
+    }
+
+    /// <summary>
+    /// Records the cwd the AI's most recent <c>invoke_expression</c> ended at
+    /// for the given pwsh PID. Called after a successful (or timeout / cached)
+    /// pipe call by the proxy, with the cwd field the DLL emits in its
+    /// response header. Also updates the agent-scoped fallback so a later
+    /// invoke_expression that has to auto-start a console can resume at
+    /// the same place even after the pipe (and its per-pid entry) has died.
+    /// Pass null to clear (e.g., on switch to a fresh console with no
+    /// prior AI history) — only the per-pid entry is cleared; the
+    /// agent-level fallback is preserved.
+    /// </summary>
+    public void SetLastAiCwd(string agentId, int pwshPid, string? cwd)
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrEmpty(cwd))
+            {
+                _pidToLastAiCwd.Remove(pwshPid);
+            }
+            else
+            {
+                _pidToLastAiCwd[pwshPid] = cwd;
+                _agentToLastAiCwd[agentId] = cwd;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the cwd recorded by the most recent successful AI command on
+    /// this PID, or null if no AI command has executed there yet (newly
+    /// claimed unowned pipe, freshly auto-started console where the AI's
+    /// pipeline was redirected mid-busy, etc.). Callers should fall back
+    /// to the live cwd from get_status when null.
+    /// </summary>
+    public string? GetLastAiCwd(int pwshPid)
+    {
+        lock (_lock) return _pidToLastAiCwd.TryGetValue(pwshPid, out var cwd) ? cwd : null;
+    }
+
+    /// <summary>
+    /// Returns the agent-scoped cwd fallback used when no per-pid entry
+    /// exists — typically because the pipe the AI was working on died
+    /// before the next tool call and we now need to spawn a fresh console.
+    /// Returns null when this agent has never recorded an AI cwd
+    /// (brand-new agent, unowned-claim only history, etc.); callers should
+    /// fall back to <c>UserProfile</c>.
+    /// </summary>
+    public string? GetSessionLastAiCwd(string agentId)
+    {
+        lock (_lock) return _agentToLastAiCwd.TryGetValue(agentId, out var cwd) ? cwd : null;
     }
 
     /// <summary>

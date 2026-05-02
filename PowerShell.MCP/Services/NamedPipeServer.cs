@@ -33,6 +33,15 @@ public static class ExecutionState
     private static bool _firstHeartbeatReceived = false;
     private const int HeartbeatTimeoutMs = 10000; // If no heartbeat for 10s, runspace is likely busy
 
+    // PowerShell PSDrive cwd as seen on the runspace's home thread. Updated
+    // by MCPPollingEngine.ps1 every timer tick (~100ms when idle), so the
+    // proxy's cwd-tracking sees AI's intended cwd ($PWD) — not the process
+    // cwd, which is NOT kept in sync by Set-Location for PowerShell-managed
+    // FileSystem providers. Read by the cwd snapshot points in the pipe
+    // server (busy/timeout/completed/success responses + get_status); falls
+    // back to Directory.GetCurrentDirectory() before the first heartbeat.
+    private static string? _currentAiCwd;
+
     /// <summary>
     /// Gets the current status (derived from state, atomically)
     /// </summary>
@@ -93,6 +102,28 @@ public static class ExecutionState
             _lastHeartbeat = DateTime.UtcNow;
             _firstHeartbeatReceived = true;
         }
+    }
+
+    /// <summary>
+    /// Records the runspace's PSDrive cwd ($PWD.Path). Called from the
+    /// MCPPollingEngine timer tick on the runspace's home thread, where
+    /// $PWD reflects every Set-Location (process cwd does not). Pass null
+    /// only on shutdown.
+    /// </summary>
+    public static void SetCurrentAiCwd(string? cwd)
+    {
+        lock (_lock) { _currentAiCwd = cwd; }
+    }
+
+    /// <summary>
+    /// Returns the most recent <c>$PWD.Path</c> snapshot from the runspace,
+    /// or null before the first timer tick has fired. The pipe server
+    /// reads this on every cwd-emitting response so the proxy sees AI's
+    /// intended cwd, not the stale process cwd.
+    /// </summary>
+    public static string? CurrentAiCwd
+    {
+        get { lock (_lock) { return _currentAiCwd; } }
     }
 
     /// <summary>
@@ -417,20 +448,18 @@ public class NamedPipeServer : IDisposable
             {
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var status = ExecutionState.Status;
-                // Process-level cwd. PowerShell's `Set-Location` for the
-                // FileSystem provider syncs this with $PWD so P/Invoke
-                // calls see the same directory the user typed `cd` to.
-                // Reading it here is just a property access — does NOT
-                // touch the runspace and is safe to call while a command
-                // is busy. Used by the proxy's busy-auto-route path so a
-                // freshly-spawned console can land at the source's cwd
-                // before re-running the AI's pipeline (otherwise every
-                // contention with a user-typed command would force the
-                // AI to manually re-cd). Non-FileSystem providers
-                // (HKLM:\, Cert:\, etc.) leave this at the last
-                // FileSystem location, which is the right fallback.
+                // PSDrive $PWD cwd from the runspace, cached on the
+                // home thread by MCPPollingEngine's timer tick. Reading
+                // the cache here is just a property access — does NOT
+                // touch the runspace and is safe to call while a
+                // command is busy. The proxy uses this on every status
+                // probe (drift detection's live-cwd source, busy-auto-
+                // route's spawn location). Reading process cwd directly
+                // would silently lie because Set-Location updates only
+                // PSDrive, not the process-level cwd, for PowerShell-
+                // managed FileSystem providers.
                 string? cwd;
-                try { cwd = System.IO.Directory.GetCurrentDirectory(); }
+                try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
                 catch { cwd = null; }
 
                 string statusResponse;
@@ -589,13 +618,17 @@ Please provide how to update the MCP client configuration to the user.";
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 var elapsed = ExecutionState.ElapsedSeconds;
                 var runningPipeline = TruncatePipeline(ExecutionState.CurrentPipeline);
-                // Process-level cwd. The runspace is busy with another
-                // command but Directory.GetCurrentDirectory is just a
-                // property read — non-blocking. Proxy uses this to spawn
-                // the new auto-route console at the source's cwd so the
-                // re-routed pipeline runs where the AI expected it.
+                // PSDrive cwd from the runspace's home thread (cached by
+                // MCPPollingEngine's timer tick). The runspace is busy
+                // with another command, so we read the cached value
+                // instead of touching SessionState directly. Proxy uses
+                // this to spawn the auto-route console at the source's
+                // cwd so the re-routed pipeline runs where the AI
+                // expected it. Falls back to process cwd before the
+                // first heartbeat (won't happen in practice once the
+                // module is loaded).
                 string? cwd;
-                try { cwd = System.IO.Directory.GetCurrentDirectory(); }
+                try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
                 catch { cwd = null; }
                 var busyResponse = JsonSerializer.Serialize(new
                 {
@@ -629,7 +662,7 @@ Please provide how to update the MCP client configuration to the user.";
                     // spawn the auto-route console at the same location
                     // (see the mcp_command branch above for the reasoning).
                     string? cwd;
-                    try { cwd = System.IO.Directory.GetCurrentDirectory(); }
+                    try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
                     catch { cwd = null; }
                     var busyResponse = JsonSerializer.Serialize(new
                     {
@@ -655,6 +688,16 @@ Please provide how to update the MCP client configuration to the user.";
                     var runningPipeline = TruncatePipeline(pipeline);
                     var roundedDuration = Math.Round(elapsed, 2);
 
+                    // Snapshot the post-execution cwd so the proxy can update its
+                    // LastAiCwd cache without an extra get_status round-trip. Reads
+                    // the PSDrive $PWD path cached by MCPPollingEngine's timer tick
+                    // — Set-Location updates $PWD but does NOT update process cwd
+                    // for PowerShell-managed providers, so Directory.GetCurrentDirectory()
+                    // would silently lie and pin LastAiCwd to startup dir forever.
+                    string? cwd;
+                    try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
+                    catch { cwd = null; }
+
                     if (isTimeout)
                     {
                         // Timeout - send JSON response
@@ -666,7 +709,8 @@ Please provide how to update the MCP client configuration to the user.";
                             pipeline = runningPipeline,
                             duration = roundedDuration,
                             statusLine,
-                            warning = cmdletWarning
+                            warning = cmdletWarning,
+                            cwd
                         });
                         try
                         {
@@ -688,7 +732,8 @@ Please provide how to update the MCP client configuration to the user.";
                             pipeline = runningPipeline,
                             duration = roundedDuration,
                             statusLine,
-                            warning = cmdletWarning
+                            warning = cmdletWarning,
+                            cwd
                         });
                         try
                         {
@@ -711,7 +756,8 @@ Please provide how to update the MCP client configuration to the user.";
                             pid,
                             status = "success",
                             pipeline = runningPipeline,
-                            duration = Math.Round(elapsed, 2)
+                            duration = Math.Round(elapsed, 2),
+                            cwd
                         });
                         var response = header + "\n\n" + resultText;
                         try

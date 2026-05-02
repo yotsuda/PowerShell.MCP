@@ -14,13 +14,42 @@ public class PowerShellTools
     /// <summary>
     /// Finds a ready pipe. Delegates to PipeDiscoveryService.
     /// </summary>
-    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo)> FindReadyPipeAsync(
+    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo, string? liveCwd)> FindReadyPipeAsync(
         IPipeDiscoveryService pipeDiscoveryService,
         string agentId,
         CancellationToken cancellationToken)
     {
         var result = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
-        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo);
+        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo, result.LiveCwd);
+    }
+
+    /// <summary>
+    /// Checks whether the AI's intended cwd has drifted from the live cwd
+    /// (typically because the user typed <c>cd</c> in the visible console
+    /// between AI calls). Returns the AI cwd we want to restore to plus
+    /// the live cwd we observed, or null when no drift / no LastAiCwd /
+    /// missing live cwd. The caller prepends a Set-Location preamble to
+    /// the AI's pipeline and surfaces a routing notice on drift.
+    /// </summary>
+    private static (string AiCwd, string LiveCwd)? DetectCwdDrift(string? readyPipeName, string? liveCwd)
+    {
+        if (string.IsNullOrEmpty(readyPipeName) || string.IsNullOrEmpty(liveCwd))
+            return null;
+        var pid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
+        if (!pid.HasValue) return null;
+        var aiCwd = ConsoleSessionManager.Instance.GetLastAiCwd(pid.Value);
+        if (string.IsNullOrEmpty(aiCwd)) return null;
+        // Case-insensitive comparison on Windows; Path.GetFullPath normalizes
+        // separators and trailing slashes so "C:\Project" and "C:\Project\"
+        // don't trigger a spurious cd.
+        var normalizedAi = Path.GetFullPath(aiCwd);
+        var normalizedLive = Path.GetFullPath(liveCwd);
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return string.Equals(normalizedAi, normalizedLive, comparison)
+            ? null
+            : (aiCwd, liveCwd);
     }
 
     private static string FormatBusyStatus(GetStatusResponse status)
@@ -97,7 +126,7 @@ public class PowerShellTools
             return error;
 
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, _) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -224,94 +253,66 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+
+        // The startup notice surfaces "spawned a new console" / "switched
+        // to a sibling" context to the AI. Pre-1.9 these paths returned
+        // early with `Pipeline NOT executed - verify location and
+        // re-execute`, forcing a second tool call. The new contract:
+        // spawn / switch silently and run the pipeline in the same call.
+        // The user-cd drift case still bails (see drift block below) — that
+        // bail surfaces its own notice; the startup notice is folded into
+        // it when both fire on the same call.
+        string? startupNotice = null;
 
         if (readyPipeName == null)
         {
-            // No ready pipe - auto-start
-            Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), cancellationToken);
+            // No ready pipe - auto-start, then fall through to execute the
+            // AI's pipeline at the new console in the same tool call.
+            // Pick the start_location the same way busy-route does: prefer
+            // the agent's session-scoped LastAiCwd so the new console
+            // resumes where the AI was working, falling back to UserProfile
+            // when this agent has no recorded cwd (first call, fresh agent).
+            // Validate Directory.Exists so a since-deleted folder doesn't
+            // wedge the spawn.
+            var sessionAiCwd = sessionManager.GetSessionLastAiCwd(agentId);
+            var autoStartLocation = (!string.IsNullOrEmpty(sessionAiCwd) && Directory.Exists(sessionAiCwd))
+                ? sessionAiCwd
+                : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting at {autoStartLocation}... Reason: {allPipesStatusInfo}");
+            var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, null, autoStartLocation, cancellationToken);
             if (!success)
             {
                 return locationResult; // Error message
             }
 
-            // Set console window title
-            var activeAfterStart = sessionManager.GetActivePipeName(agentId);
-            if (activeAfterStart != null)
+            // Pick up the freshly-spawned pipe so the rest of this call
+            // executes against it. GetActivePipeName returns the newly
+            // attached pipe because StartConsoleInternal wires SetActivePipeName.
+            readyPipeName = sessionManager.GetActivePipeName(agentId);
+            if (readyPipeName == null)
             {
-                await SetConsoleTitleAsync(powerShellService, activeAfterStart, cancellationToken);
+                return "Failed to acquire newly-started console pipe.";
             }
 
-            // Collect completed outputs and busy status (after console start, using new pipe as exclude)
-            var newPipeName = sessionManager.GetActivePipeName(agentId);
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
-
-            var consoleName = GetConsoleName(newPipeName);
-
-            // Build response: closedConsoles + busy status first + message + location + completedOutputs
-            var response = new StringBuilder();
-            if (closedConsoleMessages.Count > 0)
-            {
-                response.AppendLine(string.Join("\n", closedConsoleMessages));
-                response.AppendLine();
-            }
-            if (busyStatusInfo.Length > 0)
-            {
-                response.Append(busyStatusInfo);
-                response.AppendLine();
-            }
-            response.AppendLine($"Started new console {consoleName} with PowerShell.MCP module imported. Pipeline NOT executed - verify location and re-execute.");
-            if (isNewlyAllocated)
-            {
-                response.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
-            }
-            response.AppendLine();
-            response.Append(locationResult);
-            if (completedOutputs.Length > 0)
-            {
-                response.AppendLine();
-                response.AppendLine();
-                response.Append(completedOutputs);
-            }
-            return response.ToString();
-        }
-
-        // Console switched - get location (DLL will automatically include its own cached outputs)
-        if (consoleSwitched)
-        {
-            // Set console window title before reading location (so status line shows the new name)
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
-            var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
-            var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-            var consoleName = GetConsoleName(readyPipeName);
+            // Probe the new console for its live cwd — fresh pwsh starts at
+            // home, but a future StartConsoleInternal might honor an explicit
+            // start_location. Drift check below depends on this value.
+            var newStatus = await powerShellService.GetStatusFromPipeAsync(readyPipeName, cancellationToken);
+            liveCwd = newStatus?.Cwd;
 
-            // Build response: closedConsoles + busy status + message + locationResult + completedOutputs
-            var response = new StringBuilder();
-            if (closedConsoleMessages.Count > 0)
-            {
-                response.AppendLine(string.Join("\n", closedConsoleMessages));
-                response.AppendLine();
-            }
-            if (busyStatusInfo.Length > 0)
-            {
-                response.Append(busyStatusInfo);
-                response.AppendLine();
-            }
-            if (!string.IsNullOrEmpty(allPipesStatusInfo))
-            {
-                response.AppendLine(allPipesStatusInfo);
-            }
-            response.AppendLine($"Switched to console {consoleName}. Pipeline NOT executed - verify location and re-execute.");
-            response.AppendLine();
-            response.AppendLine(locationResult);
-            if (completedOutputs.Length > 0)
-            {
-                response.AppendLine();
-                response.Append(completedOutputs);
-            }
-            return response.ToString();
+            startupNotice = $"ℹ️ Started new console {GetConsoleName(readyPipeName)} with PowerShell.MCP module imported. Pipeline running on the new console.";
+        }
+        else if (consoleSwitched)
+        {
+            // Console switched (active died → sibling owned pipe, or
+            // unowned pipe claimed). Set the title and fall through to
+            // execute. Drift check below catches the case where the
+            // sibling has its own LastAiCwd from prior AI work.
+            await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            startupNotice = $"ℹ️ Switched to console {GetConsoleName(readyPipeName)}. Pipeline running on the new console.";
         }
 
         // Check for local variable assignments without scope prefix.
@@ -324,6 +325,42 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         if (var1Error != null)
         {
             return var1Error;
+        }
+
+        // Cwd drift detection: if the user typed `cd` in the visible console
+        // since the AI's last successful invoke_expression, the live cwd has
+        // moved off AI's intended cwd. Bail out without executing — the AI's
+        // pipeline was built assuming cwd=AiCwd, silently running at LiveCwd
+        // could trigger destructive ops at the wrong place (e.g. Remove-Item
+        // *.tmp at C:\Windows\System32). Update LastAiCwd to LiveCwd so the
+        // user-cd state is cleared: a re-issue of the same pipeline runs at
+        // LiveCwd with no drift, and the AI keeps full agency to either
+        // accept the new cwd or prepend Set-Location to revert.
+        // DetectCwdDrift returns null when there's no LastAiCwd recorded
+        // (e.g. fresh console / auto-start), so those paths naturally fall
+        // through to execute.
+        var drift = DetectCwdDrift(readyPipeName, liveCwd);
+        if (drift.HasValue)
+        {
+            var driftPid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
+            if (driftPid.HasValue)
+                sessionManager.SetLastAiCwd(agentId, driftPid.Value, drift.Value.LiveCwd);
+
+            var driftConsoleName = GetConsoleName(readyPipeName);
+            var bailResponse = new StringBuilder();
+            if (closedConsoleMessages.Count > 0)
+            {
+                bailResponse.AppendLine(string.Join("\n", closedConsoleMessages));
+                bailResponse.AppendLine();
+            }
+            if (!string.IsNullOrEmpty(startupNotice))
+            {
+                bailResponse.AppendLine(startupNotice);
+                bailResponse.AppendLine();
+            }
+            bailResponse.AppendLine($"ℹ️ User changed cwd in console {driftConsoleName} from '{drift.Value.AiCwd}' to '{drift.Value.LiveCwd}'.");
+            bailResponse.AppendLine($"Pipeline NOT executed. Re-issue to run at '{drift.Value.LiveCwd}', or prepend `Set-Location -LiteralPath '{drift.Value.AiCwd.Replace("'", "''")}';` to revert.");
+            return bailResponse.ToString();
         }
 
         // Execute the command
@@ -350,28 +387,32 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
                                 if (jsonResponse.Reason == "user_command" || jsonResponse.Reason == "mcp_command")
                                 {
-                                    // Auto-route: spawn a new console at the source's cwd and
+                                    // Auto-route: spawn a new console at AI's intended cwd and
                                     // re-run the pipeline there in the same tool call. Pre-fix
                                     // we returned a "Pipeline NOT executed - verify location
                                     // and re-execute" message and the AI had to re-send the
                                     // exact same call, with the new console at HOME (= losing
-                                    // the cwd the user/AI had been working in). Two
-                                    // round-trips and a manual `Set-Location` for every busy
-                                    // race.
+                                    // the cwd the user/AI had been working in).
                                     //
-                                    // The version-lockstep connection guard (see
-                                    // NamedPipeServer.cs's `version_mismatch` branch) means
-                                    // any DLL that survived the handshake speaks the same
-                                    // protocol as this proxy, so jsonResponse.Cwd is always
-                                    // populated for busy responses — no "null because old
-                                    // DLL" case to handle. Directory.Exists IS still checked
-                                    // because the cwd path itself can be unreachable at
-                                    // runtime (deleted folder, disconnected network drive);
-                                    // in that genuine edge case we fall back to HOME so the
-                                    // spawn can at least succeed.
-                                    var startLoc = (!string.IsNullOrEmpty(jsonResponse.Cwd) && Directory.Exists(jsonResponse.Cwd))
-                                        ? jsonResponse.Cwd
-                                        : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                                    // Preference order for the spawn location:
+                                    //   1. LastAiCwd[busyPid] — where the AI thinks it left
+                                    //      the source console. The user may have typed `cd`
+                                    //      interactively in the busy console, but the AI's
+                                    //      pipeline is built on AI's mental model, not the
+                                    //      user's interactive state.
+                                    //   2. jsonResponse.Cwd — the busy console's live cwd,
+                                    //      used when AI has no recorded intent yet (first
+                                    //      tool call after spawning, busy race).
+                                    //   3. UserProfile — last-resort fallback if cwd is
+                                    //      unreachable (deleted folder, disconnected drive).
+                                    var lastAiCwd = jsonResponse.Pid > 0
+                                        ? sessionManager.GetLastAiCwd(jsonResponse.Pid)
+                                        : null;
+                                    var startLoc = (!string.IsNullOrEmpty(lastAiCwd) && Directory.Exists(lastAiCwd))
+                                        ? lastAiCwd
+                                        : (!string.IsNullOrEmpty(jsonResponse.Cwd) && Directory.Exists(jsonResponse.Cwd))
+                                            ? jsonResponse.Cwd
+                                            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
                                     Console.Error.WriteLine($"[INFO] Runspace busy ({jsonResponse.Reason}), auto-routing to new console at {startLoc}...");
                                     var (startSuccess, startError) = await StartConsoleInternal(powerShellService, agentId, null, startLoc, cancellationToken);
@@ -431,6 +472,11 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                             case "timeout":
                                 // Mark this pipe as busy for tracking
                                 if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(agentId, jsonResponse.Pid);
+                                // Snapshot AI-intended cwd so a later switch / busy-route
+                                // can resume there. The timeout cwd is mid-execution but
+                                // is still the place AI's pipeline was operating from.
+                                if (jsonResponse.Pid > 0 && !string.IsNullOrEmpty(jsonResponse.Cwd))
+                                    sessionManager.SetLastAiCwd(agentId, jsonResponse.Pid, jsonResponse.Cwd);
 
                                 // Consume cached output from current pipe (if any)
                                 var currentPipeCachedOutput = await powerShellService.ConsumeOutputFromPipeAsync(readyPipeName, cancellationToken);
@@ -447,6 +493,11 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 if (!string.IsNullOrEmpty(allPipesStatusInfo))
                                 {
                                     timeoutResponse.AppendLine(allPipesStatusInfo);
+                                    timeoutResponse.AppendLine();
+                                }
+                                if (!string.IsNullOrEmpty(startupNotice))
+                                {
+                                    timeoutResponse.AppendLine(startupNotice);
                                     timeoutResponse.AppendLine();
                                 }
                                 if (!string.IsNullOrEmpty(currentPipeCachedOutput))
@@ -474,6 +525,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 return timeoutResponse.ToString();
 
                             case PipeStatus.Completed:
+                                // Snapshot AI-intended cwd from the cached completion.
+                                if (jsonResponse.Pid > 0 && !string.IsNullOrEmpty(jsonResponse.Cwd))
+                                    sessionManager.SetLastAiCwd(agentId, jsonResponse.Pid, jsonResponse.Cwd);
+
                                 // Drain the current pipe's cache inline so the client sees
                                 // the result on THIS tool call instead of having to make a
                                 // follow-up call. The DLL's shouldCache branch fires when a
@@ -506,6 +561,11 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     cachedResponse.AppendLine(allPipesStatusInfo);
                                     cachedResponse.AppendLine();
                                 }
+                                if (!string.IsNullOrEmpty(startupNotice))
+                                {
+                                    cachedResponse.AppendLine(startupNotice);
+                                    cachedResponse.AppendLine();
+                                }
                                 if (cachedCompletedOutput.Length > 0)
                                 {
                                     cachedResponse.Append(cachedCompletedOutput);
@@ -535,6 +595,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 return jsonResponse.Message ?? $"Error from PowerShell.MCP module: {jsonResponse.Error}";
 
                             case "success":
+                                // Snapshot AI-intended cwd at successful completion. This
+                                // is the post-execution cwd — where AI's pipeline left the
+                                // shell — so the next invoke_expression's drift check
+                                // compares against the place AI actually finished at.
+                                if (jsonResponse.Pid > 0 && !string.IsNullOrEmpty(jsonResponse.Cwd))
+                                    sessionManager.SetLastAiCwd(agentId, jsonResponse.Pid, jsonResponse.Cwd);
+
                                 // Normal completion - use body as result
                                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
@@ -561,6 +628,15 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 if (!string.IsNullOrEmpty(allPipesStatusInfo))
                                 {
                                     successResponse.AppendLine(allPipesStatusInfo);
+                                }
+                                if (!string.IsNullOrEmpty(startupNotice))
+                                {
+                                    successResponse.AppendLine(startupNotice);
+                                    if (isNewlyAllocated)
+                                    {
+                                        successResponse.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
+                                    }
+                                    successResponse.AppendLine();
                                 }
                                 if (completedOutput.Length > 0)
                                 {
@@ -838,10 +914,21 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         var forceNew = !string.IsNullOrEmpty(reason);
 
+        // Skip unowned-pipe discovery when the caller didn't pin a target
+        // cwd. Without an explicit start_location, the AI hasn't expressed
+        // a "where I want to be" intent; claiming an unowned console
+        // (whose cwd is whatever the user happened to be in when they
+        // ran Import-Module) would inherit an arbitrary cwd and confuse
+        // subsequent invoke_expression calls. A fresh console at the
+        // proxy's default home is the predictable baseline. Already-owned
+        // standby consoles are still reused — the skip only blocks the
+        // unowned-claim step.
+        var includeUnowned = !string.IsNullOrEmpty(start_location);
+
         // When no reason is given, try to reuse an existing standby console
         if (!forceNew)
         {
-            var discoveryResult = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
+            var discoveryResult = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken, includeUnowned);
             if (discoveryResult.ReadyPipeName != null)
             {
                 // Set console window title if this was a newly claimed (unowned) console

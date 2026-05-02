@@ -66,6 +66,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # Update heartbeat to indicate runspace is available
             [PowerShell.MCP.Services.ExecutionState]::Heartbeat()
 
+            # Cache PSDrive $PWD on the home thread so the pipe-server
+            # threads (which can't safely touch SessionState) read AI's
+            # actual cwd, not the stale process cwd that Set-Location
+            # never updates.
+            try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
+
             # ===== Proxy Liveness Check (every ~5 seconds) =====
             if (-not $global:__mcpProxyCheckCounter) { $global:__mcpProxyCheckCounter = 0 }
             if ((++$global:__mcpProxyCheckCounter) -ge 50) {
@@ -966,11 +972,30 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # earlier paths threw on this iteration.
                     try {
                         $promptText = & { prompt }
+                        # Force cursor to col 0 of a fresh line before
+                        # writing the prompt. Out-Host's flush of the
+                        # last pipeline item can leave the cursor at a
+                        # non-zero column (especially after recent
+                        # changes that increased polling-engine activity
+                        # — $PWD probes during the pipeline, etc.); a
+                        # prompt written at that position appears glued
+                        # to the AI's last output line and PSReadLine
+                        # then anchors user input there.
+                        if ([Console]::CursorLeft -gt 0) { [Console]::WriteLine() }
                         [Console]::Write($promptText.TrimEnd(' ').TrimEnd('>') + '> ')
                     }
                     catch {
-                        try { [Console]::Write("PS $((Get-Location).Path)> ") } catch { [Console]::Write("PS> ") }
+                        try {
+                            if ([Console]::CursorLeft -gt 0) { [Console]::WriteLine() }
+                            [Console]::Write("PS $((Get-Location).Path)> ")
+                        } catch { [Console]::Write("PS> ") }
                     }
+
+                    # Refresh AI cwd cache so the pipe server's post-execution
+                    # cwd snapshot reflects any Set-Location the pipeline did.
+                    # The 100ms timer Action only fires when runspace is idle,
+                    # so the pre-pipeline tick's cached value is stale here.
+                    try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
 
                     # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
                     if ($null -eq $mcpOutput) {
@@ -1021,6 +1046,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $mcpOutput = $locationInfo + "`n" + $errorMessage
                 }
                 finally {
+                    # Refresh AI cwd cache (silent commands can also Set-Location)
+                    try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
+
                     # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
                     if ($null -eq $mcpOutput) {
                         $mcpOutput = "Command execution completed"
