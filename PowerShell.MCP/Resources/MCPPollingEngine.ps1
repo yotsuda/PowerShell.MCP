@@ -104,6 +104,26 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             function Invoke-Captured {
                 [CmdletBinding()]
                 param([scriptblock]$Block)
+                # Suppress Write-Progress overlay during AI commands.
+                # Two reasons:
+                #   1. The AI cannot meaningfully consume a real-time
+                #      progress bar — the bar updates in place via
+                #      cursor manipulation, not as text the AI can read.
+                #      A static "10% done" snapshot delivered in the
+                #      tool response carries no value.
+                #   2. ConPTY leaks Progress redraw bytes into the next
+                #      command's Console.Out tee. The first command runs
+                #      Write-Progress, finishes; the second command
+                #      starts and ConPTY emits cleanup bytes for the
+                #      prior overlay, which our tee captures. The user
+                #      sees a CONSOLE.OUT section in command #2's
+                #      response containing the bar from command #1.
+                # Setting $ProgressPreference here scopes only to the
+                # AI command's invocation chain (PowerShell uses dynamic
+                # scope for preference variables), so user-typed
+                # commands at the visible terminal keep their normal
+                # progress display.
+                $ProgressPreference = 'SilentlyContinue'
                 & $Block
             }
 
@@ -160,14 +180,69 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 [Console]::SetOut([PowerShell.MCP.Services.TeeTextWriter]::new($origOut, $consoleOutBuf))
                 [Console]::SetError([PowerShell.MCP.Services.TeeTextWriter]::new($origErr, $consoleErrBuf))
 
+                # Host UI tee. Catches output that bypasses both the
+                # PowerShell stream system AND [Console]::Out: chiefly
+                # the `What if:` text that ShouldProcess writes via
+                # host.UI.WriteLine, and direct $Host.UI.WriteLine
+                # calls in user scripts. Done by reflecting on
+                # InternalHostUserInterface's private `_externalUI`
+                # field and swapping it to a TeePSHostUserInterface
+                # decorator for the duration of the command. Restored
+                # in finally so a thrown exception cannot leak the
+                # swap into subsequent commands. The reflection target
+                # has been stable across every PowerShell version since
+                # the InternalHost split (PS 1.0); failure to reflect
+                # is non-fatal — we just lose host-tee capture for that
+                # command.
+                $hostWriteBuf = [System.Text.StringBuilder]::new()
+                $uiSwapper = $Host.UI
+                $externalUIField = $uiSwapper.GetType().GetField('_externalUI',
+                    [System.Reflection.BindingFlags]::NonPublic -bor
+                    [System.Reflection.BindingFlags]::Instance)
+                $origExternalUI = $null
+                if ($null -ne $externalUIField) {
+                    try {
+                        $origExternalUI = $externalUIField.GetValue($uiSwapper)
+                        $teeUI = [PowerShell.MCP.Services.TeePSHostUserInterface]::new($origExternalUI, $hostWriteBuf)
+                        $externalUIField.SetValue($uiSwapper, $teeUI)
+                    } catch {
+                        # Reflection access denied — keep going without
+                        # host-tee capture rather than refusing to run
+                        # the command.
+                        $origExternalUI = $null
+                    }
+                }
+
                 $ok = $false
                 $lec = $lecAtStart
                 try {
                     try {
                         $sb = [scriptblock]::Create($Command)
+                        # Stream merge map: 2 (Error), 4 (Verbose), 5
+                        # (Debug) all merge into stream 1 so the
+                        # chronological tee captures them. Stream 6
+                        # (Information) and 3 (Warning) stay UN-merged
+                        # because:
+                        #   * 6 carries Write-Host's chosen ConsoleColor
+                        #     in the InformationRecord and merging would
+                        #     route rendering through Out-Host's default
+                        #     formatter which doesn't read the color
+                        #     back — the user-visible Write-Host color
+                        #     would silently flatten to default.
+                        #   * 3 has its own yellow auto-render that
+                        #     Out-Host preserves when the WarningRecord
+                        #     stays on stream 3, but loses when merged.
+                        # 4 and 5 don't have this problem: their
+                        # auto-render produces the yellow "VERBOSE: " /
+                        # "DEBUG: " prefix as part of Out-Host's
+                        # VerboseRecord / DebugRecord handler, which
+                        # fires whether the records arrive on the
+                        # original stream or merged into stream 1.
+                        # Tested both directions before settling on
+                        # this merge layout.
                         Invoke-Captured -Block $sb `
                             -WarningVariable +warningVar `
-                            -InformationVariable +informationVar 2>&1 |
+                            -InformationVariable +informationVar 2>&1 4>&1 5>&1 |
                             Tee-Object -Variable pipelineStream |
                             Out-Host
                         # Capture post-pipeline state IMMEDIATELY. Any
@@ -191,6 +266,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 finally {
                     [Console]::SetOut($origOut)
                     [Console]::SetError($origErr)
+                    # Restore host UI's external writer if we swapped.
+                    if ($null -ne $origExternalUI -and $null -ne $externalUIField) {
+                        try { $externalUIField.SetValue($uiSwapper, $origExternalUI) } catch { }
+                    }
                 }
 
                 # Deduplicate errors in the chronological stream.
@@ -233,6 +312,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     Exception = $exceptionVar
                     ConsoleOut = $consoleOutBuf.ToString()
                     ConsoleErr = $consoleErrBuf.ToString()
+                    HostWrite = $hostWriteBuf.ToString()
                     LastExitReport = $lastExitReport
                 }
             }
@@ -341,10 +421,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 # Walk PipelineItems in emit order, render each item the
                 # same way the streaming Out-Host did on the visible
-                # console, and count errors as we go. Output and errors
-                # interleave in this single text block — the AI sees the
-                # error in its actual position in the run, not collected
-                # at the end of a separate "=== ERRORS ===" section.
+                # console, and count errors as we go. Output, errors,
+                # verbose, and debug interleave in this single text
+                # block — the AI sees each event in its actual position
+                # in the run, not collected at the end of a separate
+                # "=== ERRORS ===" section.
                 $pipelineLines = @()
                 $errorCount = 0
                 foreach ($item in $StreamResults.PipelineItems) {
@@ -355,6 +436,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # `Write-Error: ` prefix and trace context that
                         # are PowerShell's own decoration).
                         $pipelineLines += $item.Exception.Message
+                    } elseif ($item -is [System.Management.Automation.VerboseRecord]) {
+                        # Mirrors PowerShell's own visible render which
+                        # prefixes VERBOSE: in yellow. AI side gets the
+                        # plain text version.
+                        $pipelineLines += "VERBOSE: " + $item.Message
+                    } elseif ($item -is [System.Management.Automation.DebugRecord]) {
+                        $pipelineLines += "DEBUG: " + $item.Message
                     } elseif ($null -eq $item) {
                         $pipelineLines += ""
                     } else {
@@ -409,12 +497,122 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # bypassed the PowerShell stream system entirely
                 # ([Console]::WriteLine etc.). On the happy path these
                 # buffers stay empty and the section is omitted.
+                #
+                # Strip VT control sequences before surfacing. Reasons:
+                #   * Write-Progress writes to Console.Out via SGR +
+                #     cursor manipulation (e.g. CSI 7m for inverse, the
+                #     bar fills with spaces inside CSI 7m...CSI 27m).
+                #     Those bytes give the AI nothing useful — the
+                #     visual bar doesn't translate to text — and clog
+                #     responses with escape gibberish.
+                #   * ConPTY can re-emit cursor / clear sequences when
+                #     a previous Progress overlay hasn't been scrolled
+                #     away by the next command, leaking into ConsoleOut
+                #     of unrelated subsequent commands.
+                # Strip pattern matches the SGR / cursor-control families
+                # we actually see in practice (CSI Ps m, CSI Ps J, CSI
+                # Ps K, CSI x;y H/f); not exhaustive across the whole
+                # ECMA-48 spec but tight on what shows up in pwsh +
+                # ConPTY output.
+                $vtPattern = "`e\[[\d;]*[a-zA-Z]"
+
+                # Strip ConsoleOut / ConsoleErr more aggressively than
+                # just VT codes. Two cleanup passes:
+                #
+                #   1. Remove ECMA-48 control sequences (CSI, SGR,
+                #      cursor moves, line clears).
+                #   2. Collapse runs of spaces longer than 8 to a
+                #      single space. Write-Progress draws its bar with
+                #      80-column space-padded segments; a leftover
+                #      Progress overlay leaking into the next command's
+                #      ConsoleOut via ConPTY's redraw-on-next-write
+                #      shows up as long horizontal-space runs that
+                #      carry no useful information for the AI side.
+                #      The collapse keeps incidental double-spaces in
+                #      legitimate output untouched.
+                #
+                # If after stripping the result is whitespace only,
+                # surface as empty so the section is omitted entirely
+                # rather than rendering an empty header.
+                $cleanConsoleStream = {
+                    param([string]$raw)
+                    if (-not $raw) { return "" }
+                    $stripped = $raw -replace $vtPattern, ""
+                    $collapsed = $stripped -replace ' {8,}', '  '
+                    $trimmed = $collapsed.TrimEnd("`r","`n", " ", "`t")
+                    if ([string]::IsNullOrWhiteSpace($trimmed)) { return "" }
+                    return $trimmed
+                }
                 $consoleOutText = if ($null -ne $StreamResults.ConsoleOut) {
-                    ([string]$StreamResults.ConsoleOut).TrimEnd("`r","`n")
+                    & $cleanConsoleStream ([string]$StreamResults.ConsoleOut)
                 } else { "" }
                 $consoleErrText = if ($null -ne $StreamResults.ConsoleErr) {
-                    ([string]$StreamResults.ConsoleErr).TrimEnd("`r","`n")
+                    & $cleanConsoleStream ([string]$StreamResults.ConsoleErr)
                 } else { "" }
+
+                # Host-UI-level Write/WriteLine (WhatIf messages,
+                # $Host.UI.WriteLine direct calls). Captured by
+                # TeePSHostUserInterface in Invoke-CommandWithAllStreams.
+                # Same VT-strip rationale as ConsoleOut: the visible
+                # console gets the colored render via the inner UI; the
+                # AI side wants the plain text. Trim trailing
+                # whitespace so the section doesn't end on dangling
+                # blanks.
+                #
+                # Out-Host renders normal pipeline output by calling
+                # $Host.UI.WriteLine internally — so without filtering,
+                # every regular output line would appear twice (once in
+                # pipelineText, once in this section). Filter
+                # line-by-line: keep only HostWrite lines that don't
+                # appear in any of the already-emitted sections. What
+                # remains is the novel host-UI writes the streams /
+                # Console-tee never saw — chiefly WhatIf messages from
+                # ShouldProcess and direct $Host.UI.WriteLine calls.
+                $hostWriteText = ""
+                if ($null -ne $StreamResults.HostWrite) {
+                    $hostRaw = ([string]$StreamResults.HostWrite -replace $vtPattern, "")
+                    if ($hostRaw.Trim()) {
+                        # Build a HashSet of lines that are already
+                        # surfaced in another section. A line that
+                        # exactly matches one of these is treated as a
+                        # render-time duplicate and dropped from
+                        # HostWrite.
+                        $known = [System.Collections.Generic.HashSet[string]]::new(
+                            [System.StringComparer]::Ordinal)
+                        foreach ($src in @($pipelineText, $exceptionText, $warningText, $infoText, $consoleOutText, $consoleErrText)) {
+                            if (-not [string]::IsNullOrEmpty($src)) {
+                                foreach ($line in $src -split "`r?`n") {
+                                    $trimmed = $line.Trim()
+                                    if ($trimmed) { [void]$known.Add($trimmed) }
+                                }
+                            }
+                        }
+                        $novel = @()
+                        foreach ($line in $hostRaw -split "`r?`n") {
+                            $trimmed = $line.Trim()
+                            if (-not $trimmed) { continue }
+                            if ($known.Contains($trimmed)) { continue }
+                            # Check substring containment for partial
+                            # matches: Out-Host renders ErrorRecord
+                            # through a multi-line formatter so a
+                            # single host-UI WriteLine carries the
+                            # whole render block, while pipelineText
+                            # only has the ErrorRecord's
+                            # Exception.Message. Drop host-UI lines
+                            # that are entirely inside a pipelineText
+                            # line (or vice versa) to suppress this
+                            # form of duplicate.
+                            $isDup = $false
+                            foreach ($k in $known) {
+                                if ($k.Contains($trimmed) -or $trimmed.Contains($k)) {
+                                    $isDup = $true; break
+                                }
+                            }
+                            if (-not $isDup) { $novel += $trimmed }
+                        }
+                        $hostWriteText = ($novel -join "`n").Trim()
+                    }
+                }
 
                 # Append PromptAI (Invoke-Claude/Invoke-GPT/Invoke-Gemini) output if available.
                 try {
@@ -543,6 +741,14 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 if ($consoleErrText) {
                     $sections += "=== CONSOLE.ERR (direct) ==="
                     $sections += $consoleErrText
+                    $sections += ""
+                }
+                # Host UI Write/WriteLine (WhatIf, $Host.UI.WriteLine).
+                # Empty on the happy path (no ShouldProcess, no direct
+                # host-UI write); section omitted then.
+                if ($hostWriteText) {
+                    $sections += "=== HOST.UI (direct) ==="
+                    $sections += $hostWriteText
                     $sections += ""
                 }
 
