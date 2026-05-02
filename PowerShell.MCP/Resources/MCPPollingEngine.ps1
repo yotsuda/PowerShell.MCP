@@ -927,41 +927,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
                     Write-Host $errorMessage -ForegroundColor Red
-                    # Diagnostic: capture stack trace + exception type so we can
-                    # locate the failing code path the next time this fires.
-                    # Triggered by an intermittent "Operation is not valid due
-                    # to the current state of the object" the user saw whose
-                    # source isn't yet identified — remove this block once the
-                    # underlying cause has been pinned down.
-                    try {
-                        $diagPath = Join-Path $env:TEMP 'mcp-polling-engine-error.log'
-                        $stamp = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fff'
-                        $cmdSnippet = if ($cmd) { $cmd.Substring(0, [Math]::Min(200, $cmd.Length)) } else { '<null>' }
-                        $exType = $_.Exception.GetType().FullName
-                        $exMsg  = $_.Exception.Message
-                        $scriptST = if ($_.ScriptStackTrace) { $_.ScriptStackTrace } else { '<null>' }
-                        $netST    = if ($_.Exception.StackTrace) { $_.Exception.StackTrace } else { '<null>' }
-                        $inner = $_.Exception.InnerException
-                        $innerType = if ($inner) { $inner.GetType().FullName } else { '<none>' }
-                        $innerMsg  = if ($inner) { $inner.Message } else { '' }
-                        $innerST   = if ($inner -and $inner.StackTrace) { $inner.StackTrace } else { '' }
-                        $diagText = @"
-===== $stamp =====
-Pipeline (truncated): $cmdSnippet
-Exception type: $exType
-Message: $exMsg
-ScriptStackTrace:
-$scriptST
-.NET StackTrace:
-$netST
-InnerException type: $innerType
-InnerException message: $innerMsg
-InnerException StackTrace:
-$innerST
-
-"@
-                        Add-Content -Path $diagPath -Value $diagText -Encoding UTF8
-                    } catch {}
                     $mcpOutput = $errorMessage
                 }
                 finally {
