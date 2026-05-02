@@ -1,0 +1,63 @@
+using PowerShell.MCP.Proxy.Services;
+using Xunit;
+
+namespace PowerShell.MCP.Tests.Unit.Proxy;
+
+// PwshLauncherShared.BuildInitCommand is the single source of truth for the
+// PowerShell init script that all non-Windows launchers run when starting a
+// fresh pwsh session. The original regression (GitHub issue #45) was a broken
+// '' quoting on macOS that produced `$global:PowerShellMCPAgentId = ''default''`,
+// which zsh collapsed to a bareword `default`. After the helper was extracted
+// from PwshLauncherMacOS into PwshLauncherShared so PwshLauncherLinux can use
+// it too, these tests guard the PowerShell-level quote escaping for every
+// platform that delivers the script via pwsh (whether through `-File` /
+// `-EncodedCommand` / `-Command`).
+public class PwshLauncherSharedTests
+{
+    private const string DefaultAgentId = "default";
+    private const int DefaultPid = 12345;
+
+    [Fact]
+    public void BuildInitCommand_DefaultAgent_ContainsNoDoubleSingleQuotes()
+    {
+        var cmd = PwshLauncherShared.BuildInitCommand(DefaultPid, DefaultAgentId, null, null);
+
+        Assert.DoesNotContain("''default''", cmd);
+        Assert.Contains("$global:PowerShellMCPAgentId = 'default'", cmd);
+    }
+
+    [Fact]
+    public void BuildInitCommand_StartLocationWithSingleQuote_IsEscapedForPowerShell()
+    {
+        // PowerShell single-quoted string escape is '' (doubling). This is a
+        // *PowerShell* concern — independent of how the script body reaches pwsh
+        // (temp .ps1 on macOS, Base64 on Linux, ArgumentList on the headless path).
+        var cmd = PwshLauncherShared.BuildInitCommand(DefaultPid, DefaultAgentId, null, "/Users/o'brien");
+
+        Assert.Contains("Set-Location -LiteralPath '/Users/o''brien';", cmd);
+    }
+
+    [Fact]
+    public void BuildInitCommand_AgentIdWithSingleQuote_IsEscapedForPowerShell()
+    {
+        var cmd = PwshLauncherShared.BuildInitCommand(DefaultPid, "te'st", null, null);
+
+        Assert.Contains("$global:PowerShellMCPAgentId = 'te''st'", cmd);
+    }
+
+    [Fact]
+    public void BuildInitCommand_IncludesModuleCaseFixBeforeImport()
+    {
+        // Case-sensitive file systems (Linux ext4/btrfs, case-sensitive APFS)
+        // can surface a lowercase 'powershell.mcp' directory that
+        // Install-PSResource creates. The case-fix script must run before
+        // Import-Module so the PascalCase name resolves.
+        var cmd = PwshLauncherShared.BuildInitCommand(DefaultPid, DefaultAgentId, null, null);
+
+        var caseFixIdx = cmd.IndexOf("Rename-Item $lc $uc", StringComparison.Ordinal);
+        var importIdx = cmd.IndexOf("Import-Module PowerShell.MCP -Force", StringComparison.Ordinal);
+
+        Assert.True(caseFixIdx >= 0, "case-fix snippet must be present");
+        Assert.True(caseFixIdx < importIdx, "case-fix must run before Import-Module");
+    }
+}

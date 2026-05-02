@@ -174,6 +174,24 @@ internal static class PwshLauncherShared
     // may create the module directory as 'powershell.mcp'. Rename it so Import-Module can
     // locate the PascalCase name. No-op on case-insensitive file systems.
     internal const string ModuleCaseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { if ([string]::IsNullOrWhiteSpace($p)) { continue }; $lc = Join-Path $p 'powershell.mcp'; $uc = Join-Path $p 'PowerShell.MCP'; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
+
+    // Builds the PowerShell initialization command shared by every non-Windows launcher.
+    // The actual delivery to pwsh differs per platform — macOS writes this to /tmp and
+    // launches with `-File`, Linux Base64-encodes it for `-EncodedCommand` because of
+    // shell quoting through `sh -c` — but the script body is identical. Single quotes
+    // inside agentId / startLocation are escaped per PowerShell's '' convention so a
+    // future ID format change can't break the launch line.
+    // Kept internal so unit tests can lock in shell-safety without spawning a process.
+    internal static string BuildInitCommand(int proxyPid, string agentId, string? startupCommands, string? startLocation)
+    {
+        var setLocation = string.IsNullOrEmpty(startLocation)
+            ? "Set-Location ~; "
+            : $"Set-Location -LiteralPath '{startLocation.Replace("'", "''")}'; ";
+
+        var escapedAgentId = agentId.Replace("'", "''");
+        var core = $"{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+        return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
+    }
 }
 
 /// <summary>
@@ -326,7 +344,7 @@ public static class PwshLauncherMacOS
         };
 
         var proxyPid = Process.GetCurrentProcess().Id;
-        var initCommand = BuildInitCommand(proxyPid, agentId, startupCommands, startLocation);
+        var initCommand = PwshLauncherShared.BuildInitCommand(proxyPid, agentId, startupCommands, startLocation);
 
         // Write the init to a temp .ps1 and launch with `-File`. AppleScript's `do script`
         // types its argument into the Terminal window verbatim — if we passed the PS source
@@ -351,18 +369,6 @@ public static class PwshLauncherMacOS
         }
     }
 
-    // Builds the PowerShell initialization script written to a temp .ps1 and loaded via `pwsh -File`.
-    // Kept internal so unit tests can lock in shell-safety (no unescaped quotes) without spawning a process.
-    internal static string BuildInitCommand(int proxyPid, string agentId, string? startupCommands, string? startLocation)
-    {
-        var setLocation = string.IsNullOrEmpty(startLocation)
-            ? "Set-Location ~; "
-            : $"Set-Location -LiteralPath '{startLocation.Replace("'", "''")}'; ";
-
-        var escapedAgentId = agentId.Replace("'", "''");
-        var core = $"{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {PwshLauncherShared.ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
-        return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
-    }
 }
 
 /// <summary>
@@ -437,27 +443,12 @@ public static class PwshLauncherLinux
                 CreateNoWindow = true
             };
 
-            // Build initialization command and encode to Base64 to avoid shell quoting issues
-            // Set global variables with proxy PID and agent ID before importing module
+            // Build the PowerShell init script (shared with macOS) and encode to Base64.
+            // Linux delivers it via -EncodedCommand because the launch path goes through
+            // `setsid <terminal> ... <shell> -l -c '<pwshCommand>'` and quoting through
+            // multiple shell layers is fragile; -EncodedCommand sidesteps that entirely.
             var proxyPid = Process.GetCurrentProcess().Id;
-            var caseFix = PwshLauncherShared.ModuleCaseFix;
-
-            // Set working directory via Set-Location inside the command to avoid shell quoting issues
-            var setLocation = string.IsNullOrEmpty(startLocation)
-                ? "Set-Location ~; "
-                : $"Set-Location -LiteralPath '{startLocation.Replace("'", "''")}'; ";
-
-            string initCommand;
-            if (!string.IsNullOrEmpty(startupCommands))
-            {
-                initCommand = $"{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue; {startupCommands}";
-            }
-            else
-            {
-                initCommand = $"{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
-            }
-
-            // Encode command to Base64 (UTF-16LE) to bypass shell quoting/expansion issues
+            var initCommand = PwshLauncherShared.BuildInitCommand(proxyPid, agentId, startupCommands, startLocation);
             var encodedCommand = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(initCommand));
 
             // Command to launch pwsh with encoded initialization via login shell
@@ -537,15 +528,14 @@ public static class PwshLauncherLinux
     /// </summary>
     private static void LaunchPwshDirectly(string agentId, string? startupCommands, string? startLocation)
     {
+        // Reuse the shared init builder so a single source of truth (with proper
+        // single-quote escaping) covers terminal / headless / macOS paths. ArgumentList
+        // delivers -Command as a separate argv entry, so no Base64 encoding is needed
+        // here even though the terminal-launched Linux path uses -EncodedCommand.
+        // BuildInitCommand prepends Set-Location, so the headless cwd is established
+        // by the script body itself; -WorkingDirectory is no longer needed.
         var proxyPid = Process.GetCurrentProcess().Id;
-        var caseFix = PwshLauncherShared.ModuleCaseFix;
-        var initCommand = string.IsNullOrEmpty(startupCommands)
-            ? $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force"
-            : $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; {caseFix}Import-Module PowerShell.MCP -Force; {startupCommands}";
-
-        var workingDir = string.IsNullOrEmpty(startLocation)
-            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            : startLocation;
+        var initCommand = PwshLauncherShared.BuildInitCommand(proxyPid, agentId, startupCommands, startLocation);
 
         var psi = new ProcessStartInfo
         {
@@ -557,8 +547,6 @@ public static class PwshLauncherLinux
             RedirectStandardError = true,
         };
         psi.ArgumentList.Add("-NoExit");
-        psi.ArgumentList.Add("-WorkingDirectory");
-        psi.ArgumentList.Add(workingDir);
         psi.ArgumentList.Add("-Command");
         psi.ArgumentList.Add(initCommand);
 
