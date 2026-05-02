@@ -104,26 +104,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             function Invoke-Captured {
                 [CmdletBinding()]
                 param([scriptblock]$Block)
-                # Suppress Write-Progress overlay during AI commands.
-                # Two reasons:
-                #   1. The AI cannot meaningfully consume a real-time
-                #      progress bar — the bar updates in place via
-                #      cursor manipulation, not as text the AI can read.
-                #      A static "10% done" snapshot delivered in the
-                #      tool response carries no value.
-                #   2. ConPTY leaks Progress redraw bytes into the next
-                #      command's Console.Out tee. The first command runs
-                #      Write-Progress, finishes; the second command
-                #      starts and ConPTY emits cleanup bytes for the
-                #      prior overlay, which our tee captures. The user
-                #      sees a CONSOLE.OUT section in command #2's
-                #      response containing the bar from command #1.
-                # Setting $ProgressPreference here scopes only to the
-                # AI command's invocation chain (PowerShell uses dynamic
-                # scope for preference variables), so user-typed
-                # commands at the visible terminal keep their normal
-                # progress display.
-                $ProgressPreference = 'SilentlyContinue'
+                # Write-Progress renders normally on the visible console
+                # so the user can see progress for AI-initiated
+                # long-running commands (Compress-Archive,
+                # Invoke-WebRequest, etc.). Each redraw of pwsh 7's
+                # "Minimal" Progress view also writes the bar's text to
+                # Console.Out, which our tee captures.
+                # Format-McpOutput's $progressOverlayPattern strips the
+                # overlay blocks (recognized by their reverse-video
+                # bracketed-status framing) from the captured ConsoleOut
+                # buffer before surfacing to the AI, so the response
+                # stays clean while the visible terminal keeps the
+                # animated bar.
                 & $Block
             }
 
@@ -557,10 +549,26 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # If after stripping the result is whitespace only,
                 # surface as empty so the section is omitted entirely
                 # rather than rendering an empty header.
+                # pwsh 7's "Minimal" Progress view writes each redraw to
+                # Console.Out (not via cursor save/restore — the visible
+                # console position is fixed by Win32 SetCursorPosition,
+                # which doesn't go through our tee). The redraw bytes
+                # captured to ConsoleOut form a highly recognizable
+                # shape:
+                #   \e[<sgr>;1m  <activity> [
+                #   \e[7m  <status>  <padding>  \e[27m
+                #   <padding>  ]  \e[0m
+                # The reverse-video framing of the status (\e[7m...\e[27m)
+                # combined with the bar's literal [ ... ] is distinctive
+                # enough that no legitimate user output would coincidentally
+                # match it. Strip these blocks BEFORE the generic VT-strip
+                # so the inner SGR markers are still there to anchor on.
+                $progressOverlayPattern = "`e\[\d+(?:;\d+)*m[^`e]*?\[`e\[7m[^`e]*?`e\[27m[^`e]*?\]`e\[0m"
                 $cleanConsoleStream = {
                     param([string]$raw)
                     if (-not $raw) { return "" }
-                    $stripped = $raw -replace $vtPattern, ""
+                    $stripped = $raw -replace $progressOverlayPattern, ""
+                    $stripped = $stripped -replace $vtPattern, ""
                     $collapsed = $stripped -replace ' {8,}', '  '
                     $trimmed = $collapsed.TrimEnd("`r","`n", " ", "`t")
                     if ([string]::IsNullOrWhiteSpace($trimmed)) { return "" }
