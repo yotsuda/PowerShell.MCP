@@ -97,7 +97,7 @@ public class PowerShellTools
             return error;
 
         // Find a ready pipe
-        var (readyPipeName, _, closedConsoleMessages, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -108,6 +108,15 @@ public class PowerShellTools
 
         try
         {
+            // Set console window title if this was a newly claimed (unowned) console.
+            // Without this, get_current_location as the first tool call after the user
+            // ran Import-Module PowerShell.MCP would leave the title as the placeholder
+            // "#PID ____" until some other tool that handles consoleSwitched runs.
+            if (consoleSwitched)
+            {
+                await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            }
+
             // Get location (DLL will include its own cached outputs automatically)
             var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
 
