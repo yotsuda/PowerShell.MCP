@@ -168,7 +168,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 #       side. The tee writes to BOTH the original
                 #       writer (preserves real-time visible-console
                 #       output) AND a StringBuilder for capture.
-                $warningVar = @()
                 $informationVar = @()
                 $exceptionVar = @()
                 $pipelineStream = @()
@@ -218,31 +217,28 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 try {
                     try {
                         $sb = [scriptblock]::Create($Command)
-                        # Stream merge map: 2 (Error), 4 (Verbose), 5
-                        # (Debug) all merge into stream 1 so the
-                        # chronological tee captures them. Stream 6
-                        # (Information) and 3 (Warning) stay UN-merged
-                        # because:
-                        #   * 6 carries Write-Host's chosen ConsoleColor
-                        #     in the InformationRecord and merging would
-                        #     route rendering through Out-Host's default
-                        #     formatter which doesn't read the color
-                        #     back — the user-visible Write-Host color
-                        #     would silently flatten to default.
-                        #   * 3 has its own yellow auto-render that
-                        #     Out-Host preserves when the WarningRecord
-                        #     stays on stream 3, but loses when merged.
-                        # 4 and 5 don't have this problem: their
-                        # auto-render produces the yellow "VERBOSE: " /
-                        # "DEBUG: " prefix as part of Out-Host's
-                        # VerboseRecord / DebugRecord handler, which
-                        # fires whether the records arrive on the
-                        # original stream or merged into stream 1.
-                        # Tested both directions before settling on
-                        # this merge layout.
+                        # Stream merge map: 2 (Error), 3 (Warning), 4
+                        # (Verbose), 5 (Debug) all merge into stream 1
+                        # so the chronological tee captures them in
+                        # emit order. Only stream 6 (Information) stays
+                        # UN-merged because the InformationRecord
+                        # carries Write-Host's user-chosen
+                        # ConsoleColor as a property, and Out-Host's
+                        # generic record formatter doesn't read it back
+                        # when rendering merged records — Write-Host's
+                        # color would silently flatten to default.
+                        # Streams 2/3/4/5 each have their own
+                        # type-specific Out-Host formatter that emits
+                        # the canonical colored prefix (red+cyan for
+                        # ErrorRecord, yellow `WARNING:` for
+                        # WarningRecord, yellow `VERBOSE:` /
+                        # yellow `DEBUG:` for the corresponding
+                        # records) regardless of which stream the
+                        # record arrived on, so merging is safe for
+                        # them. Tested all four before settling on
+                        # this layout.
                         Invoke-Captured -Block $sb `
-                            -WarningVariable +warningVar `
-                            -InformationVariable +informationVar 2>&1 4>&1 5>&1 |
+                            -InformationVariable +informationVar 2>&1 3>&1 4>&1 5>&1 |
                             Tee-Object -Variable pipelineStream |
                             Out-Host
                         # Capture post-pipeline state IMMEDIATELY. Any
@@ -307,7 +303,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 return @{
                     PipelineItems = $dedupedStream
-                    Warning = $warningVar
                     Information = $informationVar
                     Exception = $exceptionVar
                     ConsoleOut = $consoleOutBuf.ToString()
@@ -428,6 +423,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # "=== ERRORS ===" section.
                 $pipelineLines = @()
                 $errorCount = 0
+                $warningCount = 0
                 foreach ($item in $StreamResults.PipelineItems) {
                     if ($item -is [System.Management.Automation.ErrorRecord]) {
                         $errorCount++
@@ -436,6 +432,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # `Write-Error: ` prefix and trace context that
                         # are PowerShell's own decoration).
                         $pipelineLines += $item.Exception.Message
+                    } elseif ($item -is [System.Management.Automation.WarningRecord]) {
+                        $warningCount++
+                        # Mirrors PowerShell's own visible render which
+                        # prefixes WARNING: in yellow.
+                        $pipelineLines += "WARNING: " + $item.Message
                     } elseif ($item -is [System.Management.Automation.VerboseRecord]) {
                         # Mirrors PowerShell's own visible render which
                         # prefixes VERBOSE: in yellow. AI side gets the
@@ -465,17 +466,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                 }
                 $exceptionText = ($exceptionLines -join "`n").Trim()
-
-                # Process warnings.
-                $warningLines = @()
-                foreach ($warn in $StreamResults.Warning) {
-                    $warningLines += if ($warn -is [System.Management.Automation.WarningRecord]) {
-                        $warn.Message
-                    } else {
-                        $warn.ToString()
-                    }
-                }
-                $warningText = ($warningLines -join "`n").Trim()
 
                 # Process information / Write-Host. Skip empty/whitespace
                 # records (PowerShell sometimes emits a blank
@@ -579,7 +569,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # HostWrite.
                         $known = [System.Collections.Generic.HashSet[string]]::new(
                             [System.StringComparer]::Ordinal)
-                        foreach ($src in @($pipelineText, $exceptionText, $warningText, $infoText, $consoleOutText, $consoleErrText)) {
+                        foreach ($src in @($pipelineText, $exceptionText, $infoText, $consoleOutText, $consoleErrText)) {
                             if (-not [string]::IsNullOrEmpty($src)) {
                                 foreach ($line in $src -split "`r?`n") {
                                     $trimmed = $line.Trim()
@@ -629,7 +619,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 # Calculate statistics.
                 $errorCount += $StreamResults.Exception.Count
-                $warningCount = $StreamResults.Warning.Count
+                # warningCount accumulates as we walked PipelineItems above
+                # — Warning records arrive on stream 3 and merge into
+                # pipelineStream via 3>&1, so they're counted there.
                 $infoCount = $infoLines.Count
                 $hasErrors = $errorCount -gt 0
                 # LastExitReport is 0 when the invocation did not
@@ -717,12 +709,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $sections += ""
                 }
 
-                if ($warningText) {
-                    $sections += "=== WARNINGS ==="
-                    $sections += $warningText
-                    $sections += ""
-                }
-
+                # Warning records now interleave inline in pipelineText
+                # via the 3>&1 stream merge, so the dedicated
+                # `=== WARNINGS ===` section is gone — the AI sees
+                # `WARNING: msg` in its actual position relative to
+                # surrounding output / errors / verbose / debug.
                 if ($infoText) {
                     $sections += "=== INFO ==="
                     $sections += $infoText
