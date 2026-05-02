@@ -306,6 +306,16 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         var displayPath = GetDisplayPath(originalPath, inputPath);
         bool headerPrinted = false;
         bool displayedNewContent = false;
+        // True iff the last line we emitted via WriteObject was the
+        // empty string. The summary line the caller writes after this
+        // method returns reads better when there's a blank between it
+        // and the context block, but the blank should appear exactly
+        // once. Set to true at every WriteObject("") site below; cleared
+        // (false) when any non-blank context line is written. After the
+        // loop, if we ended with a context line (file ran out mid-post-
+        // context, so afterContextCounter never reached 0), we emit one
+        // last blank.
+        bool endedWithBlank = false;
 
         int currentLine = 1;
         int outputLine = 1;
@@ -391,6 +401,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                             DisplayNewContent(contentLines, startLine);
                             displayedNewContent = true;
                             WriteObject("");
+                            endedWithBlank = true;
                         }
                     }
 
@@ -417,6 +428,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     if (afterContextCounter == 0)
                     {
                         WriteObject("");
+                        endedWithBlank = true;
                     }
                 }
 
@@ -443,6 +455,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                 DisplayNewContent(contentLines, startLine);
                 displayedNewContent = true;
                 WriteObject("");
+                endedWithBlank = true;
             }
 
             // If replacement range not reached at file end
@@ -477,6 +490,18 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                     outputLine++;
                 }
             }
+        }
+
+        // If we displayed any context (header was printed) but the
+        // file ran out before afterContextCounter could trigger its
+        // own blank-line separator, the summary line the caller
+        // emits next would land directly under the last context row
+        // with no visual gap. Emit one trailing blank so the summary
+        // reads as its own section. The endedWithBlank flag tracks
+        // the existing blank-emission sites so we don't double up.
+        if (headerPrinted && !endedWithBlank)
+        {
+            WriteObject("");
         }
 
         return (linesRemoved, linesInserted, warningMessage);
