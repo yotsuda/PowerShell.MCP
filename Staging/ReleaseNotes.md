@@ -10,6 +10,9 @@
 - **Auto-route on busy console.** When `invoke_expression` finds the chosen PowerShell console busy with a user-typed or another AI command, the proxy now spawns a new console at the *source's cwd* and re-runs the pipeline there in the same tool call. Pre-1.8 the AI got `Pipeline NOT executed - verify location and re-execute` and had to re-send manually with whatever cwd they wanted, costing two MCP round-trips for every busy race.
 - **`LastExit: N` status-line tag** surfaces the case where a pipeline overall succeeded (`$?` is true) but a native exe within it returned non-zero. The green ✓ badge no longer silently hides those signals.
 
+## Bug Fixes
+- `get_current_location` now sets the window title when it claims an unowned console. Pre-fix, an AI whose first tool call was `get_current_location` (instead of `invoke_expression` or `start_console`, both of which already handled this) left the user's pre-existing `Import-Module PowerShell.MCP` console with the placeholder title `#PID ____` until some later tool call redrew it. Symptom appeared intermittently depending on which tool the AI happened to call first.
+
 ## Improvements
 - Real-time streaming preserved through the new capture wiring — items render to the visible console as they arrive, not collected and rendered after the pipeline finishes.
 - Color preserved on the visible console for every stream type: red `Write-Error`, yellow `WARNING:`, yellow `VERBOSE:` / `DEBUG:` prefixes, and `Write-Host`'s user-chosen `ForegroundColor`.
@@ -19,6 +22,7 @@
 - New `TeeTextWriter` for `[Console]::Out` / `[Console]::Error` tee, written to in parallel with the original streams so visible-console output is unaffected.
 - New `TeePSHostUserInterface` decorator wrapping `$Host.UI` (reflected swap on `_externalUI`) for host-UI-level capture of `Write/WriteLine` paths that bypass both PowerShell streams and `[Console]::Out`.
 - Stream merge map widened to `2>&1 3>&1 4>&1 5>&1`. Stream 6 (Information) remains unmerged so `Write-Host`'s user-chosen `ForegroundColor` survives to the visible console.
+- Single shared `BuildInitCommand` now drives the PowerShell init script for every non-Windows launcher (macOS tempFile, Linux Base64-encoded terminal launch, Linux headless ArgumentList path). Each platform keeps its own delivery mechanism for documented reasons — AppleScript echo on macOS, multi-shell quoting on Linux — but the script body and its single-quote escaping are now built in one place. xUnit pins the escaping for every platform that calls the helper.
 
 ---
 
