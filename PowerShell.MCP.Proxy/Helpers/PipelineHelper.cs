@@ -154,9 +154,9 @@ public static partial class PipelineHelper
             return null;
 
         if (IsMarkdownPointerInstalled())
-            return "💡 .md file(s) detected — Use the MarkdownPointer module to render and preview Markdown (e.g., mdp .\\README.md). It also includes an MCP server for AI integration.";
+            return "💡 .md detected — Use `mdp <file.md>` to render Markdown (Mermaid/KaTeX, slide mode). For full-file preview prefer mdp over `Get-Content`/`cat`/`Show-TextFiles`; keep `Show-TextFiles` for grep/line-range queries (`-Pattern`, `-Contains`, `-LineRange`). The mdp server also exposes a `show_markdown` MCP tool. Already installed — just use it, no need to ask the user.";
         else
-            return "💡 .md file(s) detected — Install the MarkdownPointer PowerShell module (Install-Module MarkdownPointer) to render and preview Markdown with Mermaid/KaTeX support. After installation, use Get-Command -Module MarkdownPointer to explore available commands.";
+            return "💡 .md detected — MarkdownPointer is not installed. Tell the user it adds visual Markdown preview (Mermaid/KaTeX, slide mode), PPTX import/export, and a `show_markdown` MCP tool you can use directly, then ask consent to install via `Install-Module MarkdownPointer -Scope CurrentUser`. Do not install without user consent.";
     }
 
     /// <summary>
