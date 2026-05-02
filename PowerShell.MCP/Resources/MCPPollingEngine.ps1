@@ -576,11 +576,23 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # exactly matches one of these is treated as a
                         # render-time duplicate and dropped from
                         # HostWrite.
+                        # VT-strip both sides before comparison.
+                        # pipelineText (and the other section sources)
+                        # carries the cmdlet's own SGR codes from
+                        # AnsiColors.* renders — Update-LinesInFile in
+                        # particular emits coloured context / inserted
+                        # / deleted lines. $hostRaw was already
+                        # VT-stripped earlier in this method. Without
+                        # also stripping the comparison set, the dedup
+                        # mismatched on the ANSI runs and let the
+                        # whole cmdlet output leak into the HOST.UI
+                        # section as plain text duplicates.
                         $known = [System.Collections.Generic.HashSet[string]]::new(
                             [System.StringComparer]::Ordinal)
                         foreach ($src in @($pipelineText, $exceptionText, $infoText, $consoleOutText, $consoleErrText)) {
                             if (-not [string]::IsNullOrEmpty($src)) {
-                                foreach ($line in $src -split "`r?`n") {
+                                $srcStripped = $src -replace $vtPattern, ""
+                                foreach ($line in $srcStripped -split "`r?`n") {
                                     $trimmed = $line.Trim()
                                     if ($trimmed) { [void]$known.Add($trimmed) }
                                 }
