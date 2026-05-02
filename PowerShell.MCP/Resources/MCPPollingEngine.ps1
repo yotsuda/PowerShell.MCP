@@ -446,38 +446,70 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # block — the AI sees each event in its actual position
                 # in the run, not collected at the end of a separate
                 # "=== ERRORS ===" section.
-                $pipelineLines = @()
+                # ArrayList (not @() / +=) because $flushNormalBatch
+                # below is a script block with its own scope — `+=` on
+                # a plain array would create a local copy and the outer
+                # variable would never get the appended item. .Add() on
+                # the ArrayList reference mutates the underlying object
+                # so the outer scope sees the change.
+                $pipelineLines = [System.Collections.ArrayList]::new()
                 $errorCount = 0
                 $warningCount = 0
+                # When a user's pipeline ends with Format-Table /
+                # Format-List / Format-Wide / Format-Custom, the items
+                # captured by Tee-Object are PowerShell's internal
+                # format records (FormatStartData, GroupStartData,
+                # FormatEntryData, GroupEndData, FormatEndData). These
+                # records can ONLY be rendered as a complete sibling
+                # stream — passing a single FormatStartData (or any
+                # record without its siblings) through Out-String makes
+                # the format engine throw `Operation is not valid due
+                # to the current state of the object` from
+                # MshCommandRuntime.ThrowTerminatingError. So accumulate
+                # consecutive non-special items in $normalBatch and
+                # flush them through Out-String collectively whenever a
+                # special record (Error / Warning / Verbose / Debug /
+                # $null) interrupts, or at end-of-loop.
+                $normalBatch = [System.Collections.ArrayList]::new()
+                $flushNormalBatch = {
+                    if ($normalBatch.Count -gt 0) {
+                        $rendered = ($normalBatch | Out-String).TrimEnd("`r","`n")
+                        if ($rendered.Length -gt 0) { [void]$pipelineLines.Add($rendered) }
+                        $normalBatch.Clear()
+                    }
+                }
                 foreach ($item in $StreamResults.PipelineItems) {
                     if ($item -is [System.Management.Automation.ErrorRecord]) {
+                        & $flushNormalBatch
                         $errorCount++
                         # Use Exception.Message (matches the visible
                         # red+cyan render the user sees, minus the
                         # `Write-Error: ` prefix and trace context that
                         # are PowerShell's own decoration).
-                        $pipelineLines += $item.Exception.Message
+                        [void]$pipelineLines.Add($item.Exception.Message)
                     } elseif ($item -is [System.Management.Automation.WarningRecord]) {
+                        & $flushNormalBatch
                         $warningCount++
                         # Mirrors PowerShell's own visible render which
                         # prefixes WARNING: in yellow.
-                        $pipelineLines += "WARNING: " + $item.Message
+                        [void]$pipelineLines.Add("WARNING: " + $item.Message)
                     } elseif ($item -is [System.Management.Automation.VerboseRecord]) {
+                        & $flushNormalBatch
                         # Mirrors PowerShell's own visible render which
                         # prefixes VERBOSE: in yellow. AI side gets the
                         # plain text version.
-                        $pipelineLines += "VERBOSE: " + $item.Message
+                        [void]$pipelineLines.Add("VERBOSE: " + $item.Message)
                     } elseif ($item -is [System.Management.Automation.DebugRecord]) {
-                        $pipelineLines += "DEBUG: " + $item.Message
+                        & $flushNormalBatch
+                        [void]$pipelineLines.Add("DEBUG: " + $item.Message)
                     } elseif ($null -eq $item) {
-                        $pipelineLines += ""
+                        & $flushNormalBatch
+                        [void]$pipelineLines.Add("")
                     } else {
-                        # Out-String runs every item through the same
-                        # default formatter Out-Host used; trim trailing
-                        # newlines so the join below doesn't double up.
-                        $pipelineLines += ($item | Out-String).TrimEnd("`r","`n")
+                        [void]$normalBatch.Add($item)
                     }
                 }
+                & $flushNormalBatch
                 $pipelineText = ($pipelineLines -join "`n").Trim()
 
                 # Process exceptions (terminating throws caught inside
