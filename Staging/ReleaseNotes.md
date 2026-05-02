@@ -1,4 +1,9 @@
 # Version: 1.8.0
+
+## Highlights
+
+**Verbose / Debug / native exe stderr are now visible to the AI.** Pre-1.8 the tool description explicitly told you "Verbose and Debug streams are NOT visible to you" and native exe stderr (e.g. `cmd /c '... 1>&2'`) was effectively swallowed. They now appear in the AI response in the same time-ordered position as everything else — closing the AI's biggest documented blind spot in the Output→Error→Warning→Verbose→Debug capture surface.
+
 ## New Features
 - **Hybrid stream capture: chronological pipeline replaces bucketed sections.** Output, Error, Warning, Verbose, and Debug records now interleave in a single time-ordered text block in the AI response — the AI sees each event in its actual position relative to surrounding output. Pre-1.8 the four separate `=== ERRORS ===` / `=== WARNINGS ===` etc. sections lost the "warning fired between step-A and step-B, then the error hit" context.
 - **Five output channels that used to bypass the AI's view are now captured:**
