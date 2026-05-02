@@ -653,12 +653,32 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # section as plain text duplicates.
                         $known = [System.Collections.Generic.HashSet[string]]::new(
                             [System.StringComparer]::Ordinal)
+                        # Whitespace-collapsed parallel set: catches the
+                        # Out-String vs Out-Host column-width drift on
+                        # Format-Table / Format-Wide / Format-List.
+                        # Out-String uses the IRawUserInterface buffer
+                        # width (often 120) while Out-Host uses the
+                        # actual visible terminal width, so the same
+                        # row often ends up with one space difference
+                        # in inter-column padding ("xxx   yyy" vs
+                        # "xxx    yyy"). Exact-match and substring
+                        # checks both miss it. Normalising whitespace
+                        # runs to a single space catches these without
+                        # affecting other dedup paths (legitimate
+                        # host-UI lines that happen to normalise the
+                        # same as a pipeline line are virtually
+                        # impossible in practice).
+                        $knownNorm = [System.Collections.Generic.HashSet[string]]::new(
+                            [System.StringComparer]::Ordinal)
                         foreach ($src in @($pipelineText, $exceptionText, $infoText, $consoleOutText, $consoleErrText)) {
                             if (-not [string]::IsNullOrEmpty($src)) {
                                 $srcStripped = $src -replace $vtPattern, ""
                                 foreach ($line in $srcStripped -split "`r?`n") {
                                     $trimmed = $line.Trim()
-                                    if ($trimmed) { [void]$known.Add($trimmed) }
+                                    if ($trimmed) {
+                                        [void]$known.Add($trimmed)
+                                        [void]$knownNorm.Add(($trimmed -replace '\s+', ' '))
+                                    }
                                 }
                             }
                         }
@@ -667,6 +687,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             $trimmed = $line.Trim()
                             if (-not $trimmed) { continue }
                             if ($known.Contains($trimmed)) { continue }
+                            $normalized = $trimmed -replace '\s+', ' '
+                            if ($knownNorm.Contains($normalized)) { continue }
                             # Check substring containment for partial
                             # matches: Out-Host renders ErrorRecord
                             # through a multi-line formatter so a
