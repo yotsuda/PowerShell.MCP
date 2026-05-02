@@ -275,6 +275,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 // Detect end of deletion range
                                 if (wasRemoving && !shouldRemove)
                                 {
+                                    WriteObject("   :");
                                     afterRemovalCounter = 2;
                                 }
 
@@ -365,6 +366,11 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     if (writer != null && !shouldRemove && metadata.HasTrailingNewline)
                                     {
                                         writer.Write(metadata.NewlineSequence);
+                                    }
+                                    // File ended mid-deletion: emit closing marker
+                                    if (shouldRemove)
+                                    {
+                                        WriteObject("   :");
                                     }
                                     break;
                                 }
@@ -549,6 +555,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                         lastOutputLine = ln;
                     }
                 }
+                WriteObject("   :");
             }
 
             // Post-context lines
@@ -732,6 +739,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 {
                     WriteObject($"   : {AnsiColors.Deleted(item.line)}");
                 }
+                WriteObject("   :");
             }
 
             // Separate context and summary with empty line
