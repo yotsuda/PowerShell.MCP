@@ -889,16 +889,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     $locationInfo = "Location [$($currentLocation.provider)]: $($currentLocation.currentPath)"
 
-                    # Display prompt after command output (without trailing newline)
-                    try {
-                        $promptText = & { prompt }
-                        $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
-                        [Console]::Write("${cleanPrompt}> ")
-                    }
-                    catch {
-                        [Console]::Write("PS $($currentLocation.currentPath)> ")
-                    }
-
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration -Pipeline $cmd
                 }
@@ -908,6 +898,26 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $mcpOutput = $errorMessage
                 }
                 finally {
+                    # Render the visible-console post-prompt LAST so it
+                    # always appears below any error message that the
+                    # try-body's exception render or the outer catch
+                    # wrote. Pre-fix, the post-prompt was rendered inside
+                    # the try BEFORE Format-McpOutput; if Format-McpOutput
+                    # (or any preceding step) threw, the catch's
+                    # `Write-Host error -Red` ended up to the right of
+                    # the already-written prompt, producing
+                    # "PS C:\tmp> ERROR MESSAGE" with no fresh prompt
+                    # below. Triple fallback: prompt() → Get-Location →
+                    # bare "PS> " keeps the line correct even if both
+                    # earlier paths threw on this iteration.
+                    try {
+                        $promptText = & { prompt }
+                        [Console]::Write($promptText.TrimEnd(' ').TrimEnd('>') + '> ')
+                    }
+                    catch {
+                        try { [Console]::Write("PS $((Get-Location).Path)> ") } catch { [Console]::Write("PS> ") }
+                    }
+
                     # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
                     if ($null -eq $mcpOutput) {
                         $mcpOutput = "Command execution completed"
