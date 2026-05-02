@@ -128,7 +128,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             }
 
             function Invoke-CommandWithAllStreams {
-                param([string]$Command)
+                param(
+                    [string]$Command,
+                    # When set, do NOT pipe pipeline items to Out-Host —
+                    # silent execution paths (get_current_location, the
+                    # other internal location/status probes) need the
+                    # streams captured into the response hashtable but
+                    # MUST NOT splash the captured items onto the
+                    # visible console. The user-facing invoke_expression
+                    # path leaves this off so each item streams to the
+                    # terminal in real time as the command runs.
+                    [switch]$Silent
+                )
 
                 # Snapshot $LASTEXITCODE BEFORE the pipeline so we can
                 # tell whether this invocation TOUCHED it (a native exe
@@ -246,10 +257,23 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # record arrived on, so merging is safe for
                         # them. Tested all four before settling on
                         # this layout.
-                        Invoke-Captured -Block $sb `
-                            -InformationVariable +informationVar 2>&1 3>&1 4>&1 5>&1 |
-                            ForEach-Object { [void]$pipelineStream.Add($_); $_ } |
-                            Out-Host
+                        # Silent path swaps Out-Host for Out-Null so
+                        # internal probes (get_current_location etc.)
+                        # don't dump their JSON onto the user's
+                        # terminal. The capture pipeline is otherwise
+                        # identical so the AI-facing response shape
+                        # stays consistent across both paths.
+                        if ($Silent) {
+                            Invoke-Captured -Block $sb `
+                                -InformationVariable +informationVar 2>&1 3>&1 4>&1 5>&1 |
+                                ForEach-Object { [void]$pipelineStream.Add($_); $_ } |
+                                Out-Null
+                        } else {
+                            Invoke-Captured -Block $sb `
+                                -InformationVariable +informationVar 2>&1 3>&1 4>&1 5>&1 |
+                                ForEach-Object { [void]$pipelineStream.Add($_); $_ } |
+                                Out-Host
+                        }
                         # Capture post-pipeline state IMMEDIATELY. Any
                         # statement below (even a bare variable
                         # assignment) resets $? to True, so grab the two
@@ -893,8 +917,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Clear PromptAI output before execution
                     try { [PromptAI.Cmdlets.AIStreamingCmdletBase]::LastResponse = $null } catch { }
 
-                    # Execute command with stream capture
-                    $streamResults = Invoke-CommandWithAllStreams -Command $silentCmd
+                    # Execute command with stream capture in silent
+                    # mode so the result lands in $streamResults but
+                    # nothing goes to the user's terminal.
+                    $streamResults = Invoke-CommandWithAllStreams -Command $silentCmd -Silent
 
                     # Get duration from C# ExecutionState (managed by WaitForResult)
                     $duration = [PowerShell.MCP.Services.ExecutionState]::ElapsedSeconds
