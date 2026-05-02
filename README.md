@@ -425,7 +425,6 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 
 - **AI Command Cancellation**: Commands executed by AI cannot be cancelled with Ctrl+C. Close the console to stop.
 - **User Command Privacy**: Commands you execute are not visible to AI assistants.
-- **Verbose/Debug Streams**: Not captured. Share via clipboard if needed.
 - **CLI stderr**: Not captured by default. Use `$result = & command.exe 2>&1` to capture.
 - **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
 - **Command History**: AI-executed single-line commands are added to console history. Multi-line commands are intentionally excluded to avoid history bloat.

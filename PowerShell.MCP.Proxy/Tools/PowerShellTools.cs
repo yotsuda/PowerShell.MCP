@@ -158,9 +158,6 @@ Local variables are NOT preserved between invoke_expression calls. Use $script: 
 ⚠️ CRITICAL - String Interpolation:
 Double-quoted strings expand variables and subexpressions: ""$var"" becomes the value of $var, ""$(expr)"" evaluates expr. Use single quotes for literal strings: '$var' keeps the text $var as-is.
 
-⚠️ CRITICAL - Verbose/Debug Output:
-Verbose and Debug streams are NOT visible to you. If you need verbose/debug information, ask the user to copy it from the console and share it with you.
-
 📝 Text File Operations:
 ALWAYS use the specialized cmdlets for text file editing: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
 NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via var1-var4 parameters.
