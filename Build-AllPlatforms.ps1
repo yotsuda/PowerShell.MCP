@@ -1,11 +1,19 @@
 # Build-AllPlatforms.ps1
 # Builds PowerShell.MCP module and PowerShell.MCP.Proxy for all supported platforms
 
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Target')]
 param(
-    [Parameter(Position = 0)]
+    [Parameter(Position = 0, ParameterSetName = 'Target')]
     [ValidateSet('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')]
     [string[]]$Target,
+    # Shortcut for fast iteration on the in-pwsh module: equivalent to
+    # -Target Dll (no proxy rebuild for any platform). Useful while
+    # iterating on Cmdlets/ or Resources/MCPPollingEngine.ps1 because
+    # the proxy.exe stays unchanged and the running MCP session keeps
+    # working — only the DLL gets rebuilt and dropped into the module
+    # folder.
+    [Parameter(ParameterSetName = 'DllOnly')]
+    [switch]$DllOnly,
     [string]$Configuration = 'Release',
     [string]$OutputBase,
     [switch]$Sign,
@@ -13,10 +21,23 @@ param(
     [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 
+# -DllOnly is a sugar shortcut equivalent to -Target Dll. Resolved
+# here (before $Target's all-targets default kicks in) so the rest
+# of the script just sees a normal $Target list.
+if ($DllOnly) {
+    $Target = @('Dll')
+}
+
 $ErrorActionPreference = 'Stop'
 
-# Kill all Claude.exe processes to release file locks
-Get-Process -Name 'Claude' -ErrorAction SilentlyContinue | Stop-Process -Force
+# Kill all Claude.exe processes to release file locks. Skipped under
+# -DllOnly because that path only updates the in-pwsh module DLL and
+# uses move-then-copy below to swap it without needing the lock to
+# release — keeping Claude.exe / the running proxy alive lets the
+# user's MCP session continue uninterrupted across the rebuild.
+if (-not $DllOnly) {
+    Get-Process -Name 'Claude' -ErrorAction SilentlyContinue | Stop-Process -Force
+}
 
 # If no target specified, build all
 $allTargets = @('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')
@@ -83,8 +104,24 @@ if ('Dll' -in $Target) {
     # Source paths (deploy net8.0 — forward compatible with .NET 9)
     $buildOutputPath = Join-Path $moduleProjectPath "bin\$Configuration\net8.0"
 
-    # Copy DLLs from build output
-    Copy-Item (Join-Path $buildOutputPath 'PowerShell.MCP.dll') -Destination $OutputBase -Force
+    # Copy DLLs from build output. Under -DllOnly we use a move-
+    # then-copy swap so a running pwsh that has the existing DLL
+    # loaded doesn't block the deploy — Windows lets us rename the
+    # locked file out of the way (the open handle keeps tracking
+    # the renamed inode) and put the new file in place at the
+    # original name. Stale stash files from prior -DllOnly runs are
+    # best-effort deleted on each invocation; ones that are still
+    # held by a live pwsh just fail silently and stay until that
+    # pwsh exits.
+    $dllSrc = Join-Path $buildOutputPath 'PowerShell.MCP.dll'
+    $dllDst = Join-Path $OutputBase 'PowerShell.MCP.dll'
+    if ($DllOnly -and (Test-Path $dllDst)) {
+        Get-ChildItem -LiteralPath $OutputBase -Filter 'PowerShell.MCP.dll.stash-*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+        $stashName = "PowerShell.MCP.dll.stash-$(Get-Random)"
+        Move-Item -LiteralPath $dllDst -Destination (Join-Path $OutputBase $stashName) -Force
+    }
+    Copy-Item $dllSrc -Destination $OutputBase -Force
     # Ude.NetStandard.dll: try build output first, fallback to NuGet cache
     $udeDll = Join-Path $env:USERPROFILE '.nuget\packages\ude.netstandard\1.2.0\lib\netstandard2.0\Ude.NetStandard.dll'
     $udeBuildPath = Join-Path $buildOutputPath 'Ude.NetStandard.dll'
