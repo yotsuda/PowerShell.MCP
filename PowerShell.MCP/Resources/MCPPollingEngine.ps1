@@ -170,7 +170,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 #       output) AND a StringBuilder for capture.
                 $informationVar = @()
                 $exceptionVar = @()
-                $pipelineStream = @()
+                # Accumulate via ForEach-Object into this list rather
+                # than via Tee-Object -Variable. Tee-Object writes its
+                # -Variable only when the pipeline COMPLETES — if a
+                # `throw` from inside the user's command terminates
+                # the pipeline mid-stream, every item that already
+                # flowed through Tee-Object is silently dropped from
+                # the variable. ForEach-Object adds to the list one
+                # item at a time, so a mid-pipeline throw still leaves
+                # the items emitted up to that point in $pipelineStream.
+                $pipelineStream = [System.Collections.Generic.List[object]]::new()
 
                 $origOut = [Console]::Out
                 $origErr = [Console]::Error
@@ -239,7 +248,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # this layout.
                         Invoke-Captured -Block $sb `
                             -InformationVariable +informationVar 2>&1 3>&1 4>&1 5>&1 |
-                            Tee-Object -Variable pipelineStream |
+                            ForEach-Object { [void]$pipelineStream.Add($_); $_ } |
                             Out-Host
                         # Capture post-pipeline state IMMEDIATELY. Any
                         # statement below (even a bare variable
