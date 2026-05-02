@@ -71,12 +71,20 @@ jobs:
       - name: Publish PowerShell.MCP.Proxy for all RIDs
         shell: pwsh
         run: |
+          # Each `dotnet publish -r <rid>` does its OWN RID-specific
+          # restore (the project.assets.json from the upstream Restore
+          # step has no per-RID targets, so passing --no-restore here
+          # would fail with "Assets file ... doesn't have a target for
+          # 'net9.0/<rid>'"). Letting publish restore is the simplest
+          # path to a self-contained per-RID build; the time cost
+          # (4 restores instead of 1) is small relative to the publish
+          # itself.
           foreach ($rid in 'win-x64','linux-x64','osx-x64','osx-arm64') {
             $outDir = "PowerShell.MCP.Proxy/bin/Release/net9.0/$rid/publish"
             Write-Host "=== Publishing Proxy for $rid ==="
             dotnet publish PowerShell.MCP.Proxy/PowerShell.MCP.Proxy.csproj `
               -c Release -r $rid -o $outDir `
-              --self-contained --no-restore
+              --self-contained
             if ($LASTEXITCODE -ne 0) { throw "Proxy publish failed for $rid" }
           }
 
