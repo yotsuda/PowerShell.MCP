@@ -13,7 +13,7 @@
 ## Improvements
 - Real-time streaming preserved through the new capture wiring — items render to the visible console as they arrive, not collected and rendered after the pipeline finishes.
 - Color preserved on the visible console for every stream type: red `Write-Error`, yellow `WARNING:`, yellow `VERBOSE:` / `DEBUG:` prefixes, and `Write-Host`'s user-chosen `ForegroundColor`.
-- `Write-Progress` keeps rendering on the visible console for AI-initiated commands (`Compress-Archive`, `Invoke-WebRequest`, etc.) so the user can watch progress. Each redraw of pwsh 7's "Minimal" Progress view also writes the bar text to `Console.Out`; the polling engine recognizes those overlay blocks by their reverse-video bracketed-status framing (`\e[<sgr>m … [\e[7m … \e[27m … ]\e[0m`) and strips them from the captured `=== CONSOLE.OUT (direct) ===` buffer before surfacing to the AI, so the response stays clean.
+- `Write-Progress` keeps rendering on the visible console for AI-initiated commands (`Compress-Archive`, `Invoke-WebRequest`, etc.) so the user can watch progress. Each redraw of pwsh 7's "Minimal" Progress view also writes the bar text to `Console.Out`; the polling engine recognizes those overlay blocks by their reverse-video bracketed-status framing — an ANSI SGR escape, then `[`, then a reverse-video toggle (`ESC[7m` … `ESC[27m`), then `]` and reset (`ESC[0m`) — and strips them from the captured `=== CONSOLE.OUT (direct) ===` buffer before surfacing to the AI, so the response stays clean.
 
 ## Internal
 - New `TeeTextWriter` for `[Console]::Out` / `[Console]::Error` tee, written to in parallel with the original streams so visible-console output is unaffected.
