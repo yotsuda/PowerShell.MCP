@@ -97,9 +97,16 @@ public static class EncodingHelper
                 "euc-jp" or "euc_jp" or "eucjp" => Encoding.GetEncoding("euc-jp"),
                 "iso-2022-jp" or "iso2022jp" or "iso2022-jp" or "jis" => Encoding.GetEncoding("iso-2022-jp"),
 
-                // Chinese encodings
+                // Chinese encodings.
+                // GB18030 (CP 54936) is a 4-byte superset of GBK and must NOT collapse to gb2312
+                // (CP 936) — that mapping silently truncates characters outside GBK's repertoire.
+                // GBK / cp936 / gb2312 all legitimately resolve to CP 936 on .NET (the runtime
+                // unifies them; the registered encoding's WebName is "gb2312" but it covers GBK).
+                // Big5-HKSCS aliases to plain big5 because .NET has no separate HKSCS provider —
+                // HKSCS-only characters will be lost. Custom EncodingProvider would be needed.
+                "gb18030" => Encoding.GetEncoding("gb18030"),
                 "big-5" or "big5hkscs" or "cp950" => Encoding.GetEncoding("big5"),
-                "gb2312" or "gbk" or "gb18030" or "cp936" => Encoding.GetEncoding("gb2312"),
+                "gb2312" or "gbk" or "cp936" => Encoding.GetEncoding("gb2312"),
 
                 // Korean encodings
                 "euckr" or "cp949" => Encoding.GetEncoding("euc-kr"),

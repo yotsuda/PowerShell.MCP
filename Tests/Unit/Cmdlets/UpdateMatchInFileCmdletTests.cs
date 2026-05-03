@@ -211,6 +211,40 @@ public class UpdateMatchInFileCmdletTests : IDisposable
     }
 
     [Fact]
+    public void EncodingHelper_GetEncoding_Gb18030_DoesNotCollapseToGb2312()
+    {
+        // Skip if GB18030 is not available (e.g., in .NET 9 without CodePages provider).
+        // In production this DLL runs inside pwsh, which registers the provider on startup.
+        try
+        {
+            var _ = System.Text.Encoding.GetEncoding("gb18030");
+        }
+        catch (ArgumentException)
+        {
+            return;
+        }
+
+        // Arrange: temp file (content irrelevant — explicit encoding overrides detection)
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, "test");
+
+            // Act: request gb18030 explicitly
+            var encoding = EncodingHelper.GetEncoding(tempFile, "gb18030");
+
+            // Assert: must be GB18030 (CP 54936), not GB2312/GBK (CP 936).
+            // Collapsing would silently truncate characters outside GBK's repertoire.
+            Assert.Equal(54936, encoding.CodePage);
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
     public void EncodingHelper_GetEncoding_Utf8NoBom_OverridesFileWithBom()
     {
         // Arrange: Create a file with UTF-8 BOM
