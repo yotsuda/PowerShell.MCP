@@ -124,8 +124,4 @@ public class NamedPipeClient
         return false;
     }
 
-    /// <summary>
-    /// Waits until default Named Pipe is ready (for backward compatibility)
-    /// </summary>
-    public static Task<bool> WaitForPipeReadyAsync() => WaitForPipeReadyAsync(ConsoleSessionManager.DefaultPipeName);
 }

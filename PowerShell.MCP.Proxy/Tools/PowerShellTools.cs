@@ -541,7 +541,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // handler IS still running (this switch case is inside it)
                                 // and can still deliver the response through the pipe that
                                 // is currently being serviced. Same mechanism the "timeout"
-                                // case at line 391 already uses. Without this, the client
+                                // case above already uses. Without this, the client
                                 // had to issue a second tool call just to see an already-
                                 // completed result — observable as a "Result cached. Will
                                 // be returned on next tool call." placeholder in place of

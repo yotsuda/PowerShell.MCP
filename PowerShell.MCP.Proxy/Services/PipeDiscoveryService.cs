@@ -79,7 +79,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 // Became ready between fast path and slow path (after DetectClosedConsoles)
                 if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
-                return new PipeDiscoveryResult(activePipe, false, closedMessages, BuildClosedConsoleInfo(closedMessages), activePipeStatus.Cwd);
+                return new PipeDiscoveryResult(activePipe, false, closedMessages, null, activePipeStatus.Cwd);
             }
             else // busy
             {
@@ -108,7 +108,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                 _sessionManager.SetActivePipeName(agentId, pipeName);
-                return new PipeDiscoveryResult(pipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages), status.Cwd);
+                return new PipeDiscoveryResult(pipeName, true, closedMessages, null, status.Cwd);
             }
 
             if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
@@ -120,7 +120,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         // start_console's no-start_location branch for the rationale.
         if (!includeUnowned)
         {
-            return new PipeDiscoveryResult(null, false, closedMessages, BuildClosedConsoleInfo(closedMessages));
+            return new PipeDiscoveryResult(null, false, closedMessages, null);
         }
 
         foreach (var pipeName in _sessionManager.EnumerateUnownedPipes())
@@ -160,7 +160,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     if (newStatus != null)
                     {
                         _sessionManager.SetActivePipeName(agentId, newPipeName);
-                        return new PipeDiscoveryResult(newPipeName, true, closedMessages, BuildClosedConsoleInfo(closedMessages), newStatus.Cwd);
+                        return new PipeDiscoveryResult(newPipeName, true, closedMessages, null, newStatus.Cwd);
                     }
                 }
             }
@@ -223,9 +223,4 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         return new CachedOutputResult(completedOutput.ToString(), busyStatusInfo.ToString());
     }
 
-    private static string? BuildClosedConsoleInfo(List<string> closedMessages)
-    {
-        // Closed messages are already in ClosedConsoleMessages - return null to avoid duplication
-        return null;
-    }
 }

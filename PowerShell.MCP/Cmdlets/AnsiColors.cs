@@ -30,5 +30,4 @@ internal static class AnsiColors
     public static string Info(string message) => $"{BrightWhite}{message}{Reset}";
     public static string Inserted(string text) => $"{Green}{text}{Reset}";
     public static string Deleted(string text) => $"{Red}{text}{Reset}";
-    public static string Highlight(string text) => $"{Yellow}{text}{Reset}";
 }

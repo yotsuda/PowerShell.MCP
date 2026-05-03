@@ -739,9 +739,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $hasErrors = $errorCount -gt 0
                 # LastExitReport is 0 when the invocation did not
                 # surface a hidden native exit (see
-                # Invoke-CommandWithAllStreams for the gating). Null-
-                # safe read — the older wire shape without this field
-                # still drains to 0 silently.
+                # Invoke-CommandWithAllStreams for the gating).
                 $lastExitReport = if ($StreamResults.ContainsKey('LastExitReport')) {
                     [int]$StreamResults.LastExitReport
                 } else {

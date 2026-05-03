@@ -5,7 +5,7 @@ namespace PowerShell.MCP.Cmdlets;
 /// <summary>
 /// Validates LineRange parameter values (string format: "10", "10,20", "10-20")
 /// - Single value: positive = specific line; negative = tail count
-///   (Show-TextFiles only — e.g. -LineRange -5 means last 5 lines).
+///   (Show-TextFiles / Remove-LinesFromFile — e.g. -LineRange -5 means last 5 lines).
 /// - Two values:
 ///     - Start (first) MUST be positive (1-based line number).
 ///     - End (second): positive = 1-based line, 0 / negative = end of

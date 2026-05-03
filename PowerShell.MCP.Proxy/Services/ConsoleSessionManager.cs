@@ -365,24 +365,15 @@ public class ConsoleSessionManager
 
     /// <summary>
     /// Enumerates unowned PowerShell.MCP Named Pipes (user-started consoles not yet claimed by any proxy).
-    /// Unowned pipes have 4 segments: {name}.{pwshPid}
-    /// Owned pipes have 6 segments: {name}.{proxyPid}.{agentId}.{pwshPid}
+    /// Unowned: PSMCP.{pwshPid} = 2 segments
+    /// Owned:   PSMCP.{proxyPid}.{agentId}.{pwshPid} = 4 segments
     /// </summary>
     public IEnumerable<string> EnumerateUnownedPipes()
     {
         foreach (var pipe in EnumeratePipes(proxyPid: null))
         {
-            // Get just the pipe name without directory path
-            var baseName = Path.GetFileName(pipe);
-
-            // Remove CoreFxPipe_ prefix (Linux/macOS)
-            if (baseName.StartsWith("CoreFxPipe_"))
-                baseName = baseName.Substring("CoreFxPipe_".Length);
-
-            // Count segments after DefaultPipeName
-            // Unowned: PSMCP.{pwshPid} = 2 segments
-            // Owned:   PSMCP.{proxyPid}.{agentId}.{pwshPid} = 4 segments
-            var segments = baseName.Split('.');
+            // EnumeratePipes already yields the bare pipe name (CoreFxPipe_ stripped on Unix).
+            var segments = pipe.Split('.');
             if (segments.Length == 2 && int.TryParse(segments[^1], out _))
             {
                 yield return pipe;

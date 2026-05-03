@@ -79,7 +79,7 @@ public static class LocalizedMcpServerBuilderExtensions
                                     var paramName = kvp.Key;
                                     var localizedTitle = kvp.Value;
 
-                                    // If this property exists and doesn''t have a title, add it
+                                    // If this property exists and doesn't have a title, add it
                                     if (jsonObject.TryGetPropertyValue(paramName, out var paramNode) &&
                                         paramNode is JsonObject paramObject &&
                                         !paramObject.ContainsKey("title"))

@@ -178,8 +178,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                 else
                 {
                     // Existing non-empty file: insert processing (context output in real-time)
-                    int totalLines;
-                    (totalLines, actualInsertAt) = InsertLinesWithContext(originalPath, resolvedPath,
+                    (_, actualInsertAt) = InsertLinesWithContext(originalPath, resolvedPath,
                         tempFile,
                         contentLines,
                         metadata,
