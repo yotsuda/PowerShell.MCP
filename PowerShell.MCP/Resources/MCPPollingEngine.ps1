@@ -82,7 +82,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $segments = if ($pipeName) { $pipeName.Split('.') } else { @() }
                 if ($segments.Length -eq 4) {
                     $proxyPid = [int]$segments[1]
-                    $proxyAlive = try { [System.Diagnostics.Process]::GetProcessById($proxyPid); $true } catch { $false }
+                    # GetProcessById returns a Process holding an OS handle that is only released
+                    # by the finalizer if not Disposed. This poll fires every ~5s — without explicit
+                    # Dispose the handle count creeps up over a long-running session.
+                    $proxyAlive = $false
+                    $proxyProc = $null
+                    try { $proxyProc = [System.Diagnostics.Process]::GetProcessById($proxyPid); $proxyAlive = $true } catch { }
+                    finally { if ($proxyProc) { $proxyProc.Dispose() } }
                     if (-not $proxyAlive) {
                         [PowerShell.MCP.MCPModuleInitializer]::ReleaseConsole()
                         $global:PowerShellMCPProxyPid = $null
