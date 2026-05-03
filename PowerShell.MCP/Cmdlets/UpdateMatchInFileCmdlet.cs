@@ -322,8 +322,12 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 }
                                 else
                                 {
+                                    // Use match.Result(replacement) so $1/$2/etc. capture-group references
+                                    // expand the same way Regex.Replace did when writing the file. A naive
+                                    // {Green}{normalizedReplacement}{Reset} would show literal "$1" instead
+                                    // of the substituted text, so display would diverge from file content.
                                     displayLine = regex!.Replace(currentLine,
-                                        match => $"{AnsiColors.Green}{normalizedReplacement}{AnsiColors.Reset}");
+                                        match => $"{AnsiColors.Green}{match.Result(normalizedReplacement)}{AnsiColors.Reset}");
                                 }
                             }
 

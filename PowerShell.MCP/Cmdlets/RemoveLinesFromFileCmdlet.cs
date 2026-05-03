@@ -80,7 +80,10 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             bool usePattern = !string.IsNullOrEmpty(Pattern);
             if (useContains && usePattern)
             {
-                _compiledRegex = new Regex(Regex.Escape(Contains!) + "|" + Pattern!, RegexOptions.Compiled);
+                // Wrap each side of the OR in (?:...) so quantifiers/alternation in Pattern
+                // don't bind across the | — without this, `-Pattern 'x{0,3}'` would let the
+                // right side match an empty string and remove every line.
+                _compiledRegex = new Regex("(?:" + Regex.Escape(Contains!) + ")|(?:" + Pattern! + ")", RegexOptions.Compiled);
             }
             else if (usePattern)
             {

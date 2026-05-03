@@ -101,8 +101,11 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             string combinedPattern;
             if (!string.IsNullOrEmpty(Contains) && !string.IsNullOrEmpty(Pattern))
             {
-                // Both specified: OR condition (escaped Contains | Pattern)
-                combinedPattern = Regex.Escape(Contains) + "|" + Pattern;
+                // Both specified: OR condition (escaped Contains | Pattern).
+                // Wrap each side in (?:...) so quantifiers/alternation in Pattern don't bind
+                // across the | — without this, `-Pattern 'x{0,3}'` would let the right side
+                // match an empty string and hit every line.
+                combinedPattern = "(?:" + Regex.Escape(Contains) + ")|(?:" + Pattern + ")";
             }
             else if (!string.IsNullOrEmpty(Pattern))
             {
