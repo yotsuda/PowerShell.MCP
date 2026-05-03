@@ -1189,9 +1189,14 @@ public class PowerShellToolsTests
             "Get-Date",
             agent_id: TestAgentId);
 
-        // Assert: apostrophe doubled inside the literal-path argument
+        // Assert: apostrophe doubled inside the literal-path argument.
+        // Build the expected substring from aiCwd itself so the test passes on every
+        // platform — Path.GetTempPath() returns /tmp/... on Linux and /var/folders/...
+        // on macOS, neither of which starts with "C:". The escape rule (' -> '') is
+        // what we actually want to lock in.
+        var expectedRevertHint = $"Set-Location -LiteralPath '{aiCwd.Replace("'", "''")}'";
         Assert.Contains("Pipeline NOT executed", result);
-        Assert.Contains("Set-Location -LiteralPath 'C:", result);
+        Assert.Contains(expectedRevertHint, result);
         Assert.Contains("o''brien", result);
 
         // Cleanup
