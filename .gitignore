@@ -21,6 +21,9 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+# Local build artifact directory — not consumed by anything anymore
+# (Staging/ is the source of truth for releases via .github/workflows/release.yml).
+dist/
 x64/
 x86/
 [Ww][Ii][Nn]32/
