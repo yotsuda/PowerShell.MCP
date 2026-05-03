@@ -17,13 +17,23 @@ public class PowerShellToolsTests
 {
     private readonly Mock<IPowerShellService> _mockPowerShellService;
     private readonly Mock<IPipeDiscoveryService> _mockPipeDiscoveryService;
-    private const string TestAgentId = "default";
-    private const string TestPipeName = "PSMCP.1000.default.2000";
+    // Allocate a unique sub-agent id per test instance (xunit creates one per test
+    // method) so concurrent test classes touching the static ConsoleSessionManager.Instance
+    // — which keys all state by agent id — can't trample each other. A previous run hit
+    // a flaky failure on Windows where another suite''s "default" entry had cleared this
+    // class''s active-pipe registration mid-test. Names kept for diff clarity.
+    private readonly string TestAgentId;
+    private readonly string TestPipeName;
 
     public PowerShellToolsTests()
     {
         _mockPowerShellService = new Mock<IPowerShellService>();
         _mockPipeDiscoveryService = new Mock<IPipeDiscoveryService>();
+        TestAgentId = ConsoleSessionManager.Instance.AllocateSubAgentId();
+        // Pipe name format: PSMCP.{proxyPid}.{agentId}.{pwshPid}. Match the agent id
+        // so any code that re-derives agentId from the pipe name (or filters by it)
+        // sees consistent values.
+        TestPipeName = $"PSMCP.1000.{TestAgentId}.2000";
     }
 
     #region GetCurrentLocation Tests

@@ -9,12 +9,18 @@ public class PipeDiscoveryServiceTests
 {
     private readonly Mock<IPowerShellService> _mockPowerShellService;
     private readonly PipeDiscoveryService _service;
-    private const string DefaultAgentId = "default";
+    // Allocate a unique sub-agent id per test instance (xunit creates one per test
+    // method) so concurrent test classes touching the static ConsoleSessionManager.Instance
+    // — which keys all state by agent id — can't trample each other. A previous run hit
+    // a flaky failure on Windows where another suite''s "default" entry had cleared this
+    // class''s active-pipe registration mid-test. The variable name stays for diff clarity.
+    private readonly string DefaultAgentId;
 
     public PipeDiscoveryServiceTests()
     {
         _mockPowerShellService = new Mock<IPowerShellService>();
         _service = new PipeDiscoveryService(_mockPowerShellService.Object);
+        DefaultAgentId = ConsoleSessionManager.Instance.AllocateSubAgentId();
     }
 
     #region DetectClosedConsoles Tests
