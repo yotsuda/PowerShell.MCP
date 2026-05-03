@@ -110,6 +110,20 @@ public class PowerShellTools
         return ("default", false, null);
     }
 
+    /// <summary>
+    /// Prepends the 🔑 agent_id notice to a tool response when a new sub-agent
+    /// ID was just allocated. No-op for the common case (isNewlyAllocated=false),
+    /// so this can be applied unconditionally to every return path of a tool method.
+    /// Centralizing the emit here is what guarantees the notice can't be dropped by
+    /// timeout / cached-completed / error / busy-route / drift-bail / auto-start
+    /// branches the way it was when each branch had to remember to add it.
+    /// </summary>
+    private static string PrependAgentIdNoticeIfNew(string body, bool isNewlyAllocated, string agentId)
+    {
+        if (!isNewlyAllocated) return body;
+        return $"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.\n\n{body}";
+    }
+
     [McpServerTool]
     [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
@@ -122,17 +136,24 @@ public class PowerShellTools
         CancellationToken cancellationToken = default)
     {
         var (agentId, isNewlyAllocated, error) = ResolveAgentId(is_subagent, agent_id);
+        // Wrap every return so the 🔑 notice can never be dropped on a sub-agent's
+        // first call regardless of which branch builds the response.
+        string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
         if (error != null)
-            return error;
+            return Wrap(error);
 
         // Find a ready pipe
         var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, _) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
-            // No ready pipe - auto-start (StartConsole includes busy info collection)
+            // No ready pipe - auto-start (StartConsole includes busy info collection).
+            // Pass is_subagent: false because the sub-agent ID was already allocated
+            // here; if we passed it as true the inner StartConsole would skip its own
+            // ResolveAgentId allocation but our Wrap would still add the notice. Either
+            // shape works; passing false makes the inner call's intent explicit.
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            return await StartConsole(powerShellService, pipeDiscoveryService, agent_id: agentId, is_subagent: is_subagent, cancellationToken: cancellationToken);
+            return Wrap(await StartConsole(powerShellService, pipeDiscoveryService, agent_id: agentId, is_subagent: false, cancellationToken: cancellationToken));
         }
 
         try
@@ -168,18 +189,13 @@ public class PowerShellTools
             {
                 response.Append(completedOutputs);
             }
-            if (isNewlyAllocated)
-            {
-                response.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
-                response.AppendLine();
-            }
             response.Append(result);
-            return response.ToString();
+            return Wrap(response.ToString());
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ERROR] GetCurrentLocation failed: {ex.Message}");
-            return $"Failed to get current location: {ex.Message}\n\nPlease try again. A new console will be started automatically if needed.";
+            return Wrap($"Failed to get current location: {ex.Message}\n\nPlease try again. A new console will be started automatically if needed.");
         }
     }
 
@@ -248,8 +264,11 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         }
 
         var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
+        // Wrap every return so the 🔑 notice can never be dropped on a sub-agent's
+        // first call regardless of which branch builds the response.
+        string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
         if (resolveError != null)
-            return resolveError;
+            return Wrap(resolveError);
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
@@ -283,7 +302,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, null, autoStartLocation, cancellationToken);
             if (!success)
             {
-                return locationResult; // Error message
+                return Wrap(locationResult); // Error message
             }
 
             // Pick up the freshly-spawned pipe so the rest of this call
@@ -292,7 +311,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             readyPipeName = sessionManager.GetActivePipeName(agentId);
             if (readyPipeName == null)
             {
-                return "Failed to acquire newly-started console pipe.";
+                return Wrap("Failed to acquire newly-started console pipe.");
             }
 
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
@@ -324,7 +343,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         var var1Error = PipelineHelper.CheckVar1Enforcement(pipeline, var1, var2);
         if (var1Error != null)
         {
-            return var1Error;
+            return Wrap(var1Error);
         }
 
         // Cwd drift detection: if the user typed `cd` in the visible console
@@ -360,7 +379,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             }
             bailResponse.AppendLine($"ℹ️ User changed cwd in console {driftConsoleName} from '{drift.Value.AiCwd}' to '{drift.Value.LiveCwd}'.");
             bailResponse.AppendLine($"Pipeline NOT executed. Re-issue to run at '{drift.Value.LiveCwd}', or prepend `Set-Location -LiteralPath '{drift.Value.AiCwd.Replace("'", "''")}';` to revert.");
-            return bailResponse.ToString();
+            return Wrap(bailResponse.ToString());
         }
 
         // Execute the command
@@ -418,7 +437,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     var (startSuccess, startError) = await StartConsoleInternal(powerShellService, agentId, null, startLoc, cancellationToken);
                                     if (!startSuccess)
                                     {
-                                        return startError;
+                                        return Wrap(startError);
                                     }
 
                                     // Set console window title
@@ -465,7 +484,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     busyResponse.AppendLine($"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.");
                                     busyResponse.AppendLine();
                                     busyResponse.Append(retryResult);
-                                    return busyResponse.ToString();
+                                    return Wrap(busyResponse.ToString());
                                 }
                                 break;
 
@@ -522,7 +541,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     timeoutResponse.AppendLine();
                                     timeoutResponse.AppendLine(scopeWarning);
                                 }
-                                return timeoutResponse.ToString();
+                                return Wrap(timeoutResponse.ToString());
 
                             case PipeStatus.Completed:
                                 // Snapshot AI-intended cwd from the cached completion.
@@ -589,10 +608,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 {
                                     cachedResponse.Append("Result cached. Will be returned on next tool call.");
                                 }
-                                return cachedResponse.ToString();
+                                return Wrap(cachedResponse.ToString());
 
                             case "error":
-                                return jsonResponse.Message ?? $"Error from PowerShell.MCP module: {jsonResponse.Error}";
+                                return Wrap(jsonResponse.Message ?? $"Error from PowerShell.MCP module: {jsonResponse.Error}");
 
                             case "success":
                                 // Snapshot AI-intended cwd at successful completion. This
@@ -632,10 +651,6 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 if (!string.IsNullOrEmpty(startupNotice))
                                 {
                                     successResponse.AppendLine(startupNotice);
-                                    if (isNewlyAllocated)
-                                    {
-                                        successResponse.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
-                                    }
                                     successResponse.AppendLine();
                                 }
                                 if (completedOutput.Length > 0)
@@ -670,7 +685,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 //     successResponse.AppendLine();
                                 //     successResponse.AppendLine(jsonHint);
                                 // }
-                                return successResponse.ToString();
+                                return Wrap(successResponse.ToString());
                         }
                     }
                 }
@@ -681,7 +696,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             }
 
             // Fallback: return result as-is (shouldn't happen with new DLL)
-            return result;
+            return Wrap(result);
         }
         catch (Exception ex)
         {
@@ -692,7 +707,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             var otherClosed = pipeDiscoveryService.DetectClosedConsoles(agentId);
             var closedMessages = new List<string> { $"  - ⚠ Console {consoleName} was closed" };
             closedMessages.AddRange(otherClosed);
-            return $"Command execution failed: {ex.Message}\n{string.Join("\n", closedMessages)}\nPlease try again. A new console will be started automatically if needed.";
+            return Wrap($"Command execution failed: {ex.Message}\n{string.Join("\n", closedMessages)}\nPlease try again. A new console will be started automatically if needed.");
         }
     }
 
@@ -909,8 +924,11 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         CancellationToken cancellationToken = default)
     {
         var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
+        // Wrap every return so the 🔑 notice can never be dropped on a sub-agent's
+        // first call regardless of which branch builds the response.
+        string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
         if (resolveError != null)
-            return resolveError;
+            return Wrap(resolveError);
 
         var forceNew = !string.IsNullOrEmpty(reason);
 
@@ -969,13 +987,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                     reuseResponse.Append(reuseCompletedOutput);
                 }
                 reuseResponse.AppendLine("ℹ️ Did not launch a new console. An existing standby console is available and will be reused. To force a new console, provide the reason parameter.");
-                if (isNewlyAllocated)
-                {
-                    reuseResponse.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
-                }
                 reuseResponse.AppendLine();
                 reuseResponse.Append(reuseLocationResult);
-                return reuseResponse.ToString();
+                return Wrap(reuseResponse.ToString());
             }
             // No standby console found, fall through to create a new one
         }
@@ -985,7 +999,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         var (success, startResult) = await StartConsoleInternal(powerShellService, agentId, startupCommands, resolvedPath, cancellationToken);
         if (!success)
         {
-            return startResult; // Error message
+            return Wrap(startResult); // Error message
         }
 
         // Set console window title
@@ -1015,13 +1029,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             response.AppendLine();
         }
         response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
-        if (isNewlyAllocated)
-        {
-            response.AppendLine($"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.");
-        }
         response.AppendLine();
         response.Append(startResult);
-        return response.ToString();
+        return Wrap(response.ToString());
     }
 
     /// <summary>

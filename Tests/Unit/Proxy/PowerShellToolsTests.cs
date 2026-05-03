@@ -136,6 +136,109 @@ public class PowerShellToolsTests
     }
 
     [Fact]
+    public async Task GetCurrentLocation_SubAgentNewAllocation_ReadyPipe_EmitsAgentIdNotice()
+    {
+        // Sub-agent's first call must include the 🔑 agent_id notice in the response
+        // so the AI knows which ID to pass to subsequent tool calls. Success-path
+        // regression guard.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        _mockPowerShellService
+            .Setup(s => s.GetCurrentLocationFromPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Location [FileSystem]: C:\\test");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        var result = await PowerShellTools.GetCurrentLocation(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            agent_id: null,
+            is_subagent: true);
+
+        Assert.Contains("🔑 Your agent_id is:", result);
+    }
+
+    [Fact]
+    public async Task GetCurrentLocation_SubAgentNewAllocation_PipeError_StillEmitsAgentIdNotice()
+    {
+        // Regression: previously the error / timeout / cached-completed branches did
+        // not emit 🔑. A sub-agent that hit any of those on its first call lost its
+        // allocated ID forever. The wrap-every-return refactor closes that hole.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        _mockPowerShellService
+            .Setup(s => s.GetCurrentLocationFromPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Pipe communication failed"));
+
+        var result = await PowerShellTools.GetCurrentLocation(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            agent_id: null,
+            is_subagent: true);
+
+        Assert.Contains("🔑 Your agent_id is:", result);
+        Assert.Contains("Failed to get current location", result);
+    }
+
+    [Fact]
+    public async Task GetCurrentLocation_DefaultAgent_DoesNotEmitAgentIdNotice()
+    {
+        // Non-sub-agent (default) calls must NOT carry the 🔑 notice — it would just
+        // be noise. Verifies the wrap helper is a no-op when isNewlyAllocated=false.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        _mockPowerShellService
+            .Setup(s => s.GetCurrentLocationFromPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Location [FileSystem]: C:\\test");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        var result = await PowerShellTools.GetCurrentLocation(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object);
+
+        Assert.DoesNotContain("🔑", result);
+    }
+
+    [Fact]
+    public async Task GetCurrentLocation_ProvidedAgentId_DoesNotEmitAgentIdNotice()
+    {
+        // When the AI passes back a previously-issued agent_id, no allocation happens
+        // so the 🔑 notice would be a duplicate. Must stay silent.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        _mockPowerShellService
+            .Setup(s => s.GetCurrentLocationFromPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Location [FileSystem]: C:\\test");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        // Use a valid sa-* shaped ID so IsValidAgentId returns true
+        var validSubAgentId = ConsoleSessionManager.Instance.AllocateSubAgentId();
+        var result = await PowerShellTools.GetCurrentLocation(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            agent_id: validSubAgentId,
+            is_subagent: true);
+
+        Assert.DoesNotContain("🔑", result);
+    }
+
+    [Fact]
     public async Task GetCurrentLocation_ConsoleSwitched_SetsWindowTitle()
     {
         // Regression: GetCurrentLocation previously discarded FindReadyPipeAsync's
