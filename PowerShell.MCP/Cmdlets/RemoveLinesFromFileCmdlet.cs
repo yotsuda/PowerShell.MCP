@@ -365,8 +365,15 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                 }
                                 else
                                 {
-                                    // Process final line
-                                    if (writer != null && !shouldRemove && metadata.HasTrailingNewline)
+                                    // Process final line.
+                                    // Trailing newline is preserved whenever the file originally had one
+                                    // AND at least one line was kept. The previous condition `!shouldRemove`
+                                    // only worked when the *very last* line was kept; if the last line was
+                                    // deleted, the prior kept line was written via the next-line "write NL
+                                    // first" pattern (line 335-338) which never fired for the deleted final
+                                    // line, leaving the file with no trailing newline. `!isFirstOutputLine`
+                                    // correctly captures "we wrote at least one kept line".
+                                    if (writer != null && !isFirstOutputLine && metadata.HasTrailingNewline)
                                     {
                                         writer.Write(metadata.NewlineSequence);
                                     }

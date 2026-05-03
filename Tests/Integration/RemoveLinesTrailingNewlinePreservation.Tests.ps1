@@ -143,5 +143,44 @@ Line3
             $content = [System.IO.File]::ReadAllText($testFile)
             $content | Should -Match "(?s)Line1.*Line3"
         }
+
+        It "Should preserve trailing newline when removing the LAST line" {
+            # Regression: previously the final-line trailing-newline check was gated on
+            # `!shouldRemove` of the LAST processed line. When the last line was the one
+            # being deleted, the gate was false → no trailing newline written → the new
+            # last kept line lost its trailing CRLF.
+            $testFile = Join-Path $script:testDir "test_lastline.txt"
+            [System.IO.File]::WriteAllText($testFile, "Line1`r`nLine2`r`nLine3`r`n", [System.Text.Encoding]::UTF8)
+
+            Remove-LinesFromFile -Path $testFile -LineRange 3
+
+            $bytesAfter = [System.IO.File]::ReadAllBytes($testFile)
+            $bytesAfter[-2] | Should -Be 0x0D -Because "末尾行を削除しても元のCRLFは保持されるべき"
+            $bytesAfter[-1] | Should -Be 0x0A
+        }
+
+        It "Should preserve trailing newline when removing a tail range" {
+            $testFile = Join-Path $script:testDir "test_tailrange.txt"
+            [System.IO.File]::WriteAllText($testFile, "Line1`r`nLine2`r`nLine3`r`nLine4`r`n", [System.Text.Encoding]::UTF8)
+
+            Remove-LinesFromFile -Path $testFile -LineRange 3,4
+
+            $bytesAfter = [System.IO.File]::ReadAllBytes($testFile)
+            $bytesAfter[-2] | Should -Be 0x0D
+            $bytesAfter[-1] | Should -Be 0x0A
+            (Get-Content $testFile).Count | Should -Be 2
+        }
+    }
+
+    Context "When file has NO trailing newline" {
+        It "Should NOT add a trailing newline when removing the last line" {
+            $testFile = Join-Path $script:testDir "test_notrailing.txt"
+            [System.IO.File]::WriteAllText($testFile, "Line1`r`nLine2`r`nLine3", [System.Text.Encoding]::UTF8)
+
+            Remove-LinesFromFile -Path $testFile -LineRange 3
+
+            $bytesAfter = [System.IO.File]::ReadAllBytes($testFile)
+            $bytesAfter[-1] | Should -Not -Be 0x0A -Because "元から末尾改行がなかった場合は付与しないこと"
+        }
     }
 }
