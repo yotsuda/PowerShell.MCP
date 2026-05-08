@@ -170,6 +170,22 @@ public class PowerShellProcessManager
 /// </summary>
 internal static class PwshLauncherShared
 {
+    // Force the new console's active code page to UTF-8 BEFORE PSReadLine
+    // imports. On Japanese / Chinese / Korean Windows the system code page
+    // is 932 / 936 / 949, and CREATE_NEW_CONSOLE inherits that as the
+    // console's active code page. PowerShell 7 sets [Console]::OutputEncoding
+    // to UTF-8 but leaves InputEncoding alone, so PSReadLine's menu rendering
+    // (which goes through Win32 console APIs that respect the active code
+    // page in some paths) ends up reinterpreting UTF-8 writes as the legacy
+    // multibyte encoding and produces mojibake on tab completion menus.
+    // Setting chcp + both Console encodings BEFORE Import-Module PSReadLine
+    // makes the launched console UTF-8 throughout. Safe on non-CJK systems
+    // (UTF-8 covers ASCII / Latin-1 just as well).
+    internal const string EncodingPrelude =
+        "chcp 65001 | Out-Null; "
+        + "[Console]::InputEncoding = [System.Text.Encoding]::UTF8; "
+        + "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ";
+
     // Install-PSResource on case-sensitive file systems (Linux, case-sensitive APFS on macOS)
     // may create the module directory as 'powershell.mcp'. Rename it so Import-Module can
     // locate the PascalCase name. No-op on case-insensitive file systems.
@@ -189,7 +205,7 @@ internal static class PwshLauncherShared
             : $"Set-Location -LiteralPath '{startLocation.Replace("'", "''")}'; ";
 
         var escapedAgentId = agentId.Replace("'", "''");
-        var core = $"{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+        var core = $"{EncodingPrelude}{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
     }
 }
@@ -278,16 +294,19 @@ public static class PwshLauncherWindows
             var pi = new PROCESS_INFORMATION();
 
             // Build command with optional startup commands (pre-built Write-Host statements)
-            // Set global variables with proxy PID and agent ID before importing module
+            // Set global variables with proxy PID and agent ID before importing module.
+            // Prelude flips the new console's active code page + Console.* encodings to
+            // UTF-8 BEFORE PSReadLine imports, so menu rendering on CJK Windows doesn't
+            // mojibake. See PwshLauncherShared.EncodingPrelude for the rationale.
             var proxyPid = Process.GetCurrentProcess().Id;
             string command;
             if (!string.IsNullOrEmpty(startupCommands))
             {
-                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine; {startupCommands}";
+                command = $"{PwshLauncherShared.EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine; {startupCommands}";
             }
             else
             {
-                command = $"$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
+                command = $"{PwshLauncherShared.EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
             }
             string commandLine = $"pwsh.exe -NoExit -Command \"{command}\"";
 
