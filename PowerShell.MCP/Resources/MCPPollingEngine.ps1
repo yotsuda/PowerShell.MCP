@@ -872,12 +872,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             $cmdSlot = [PowerShell.MCP.Services.McpServerHost]::ConsumeCommand()
             $cmd = $cmdSlot.Command
             if ($cmd) {
-                # Check for elevation patterns and prepend user consent prompt
-                if ($cmd -match '-Verb\s+RunAs|(?<!\w)runas[\s/]|(?<!\w)gsudo\s|(?<!\w)sudo\s') {
-                    $global:__mcpElevationCmd = $cmd
-                    $cmd = 'Write-Host "`n⚠  ELEVATION REQUEST DETECTED" -ForegroundColor Yellow; Write-Host $global:__mcpElevationCmd; $r = Read-Host "`nAllow? (Y/N)"; Remove-Variable __mcpElevationCmd -Scope Global -EA SilentlyContinue; if ($r -ne "Y" -and $r -ne "y") { throw "Elevation denied by user" }; ' + $cmd
-                }
-
                 # Inject variables if provided (set before pipeline execution to bypass parser)
                 $cmdVariables = $cmdSlot.Variables
                 if ($cmdVariables) {
