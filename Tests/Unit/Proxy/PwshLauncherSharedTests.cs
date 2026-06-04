@@ -60,4 +60,40 @@ public class PwshLauncherSharedTests
         Assert.True(caseFixIdx >= 0, "case-fix snippet must be present");
         Assert.True(caseFixIdx < importIdx, "case-fix must run before Import-Module");
     }
+
+    [Fact]
+    public void BuildWindowsCommandLine_IncludesNoProfile()
+    {
+        var commandLine = PwshLauncherShared.BuildWindowsCommandLine("Import-Module PowerShell.MCP");
+
+        Assert.Contains("pwsh.exe -NoProfile -NoExit -Command", commandLine);
+    }
+
+    [Fact]
+    public void BuildMacOSDoScriptCommand_IncludesNoProfile()
+    {
+        var command = PwshLauncherShared.BuildMacOSDoScriptCommand("/tmp/pwsh-mcp-init-test.ps1");
+
+        Assert.Equal("pwsh -NoProfile -NoExit -File '/tmp/pwsh-mcp-init-test.ps1'", command);
+    }
+
+    [Fact]
+    public void BuildLinuxPwshCommand_IncludesNoProfile()
+    {
+        var command = PwshLauncherShared.BuildLinuxPwshCommand("encoded");
+
+        Assert.Equal("exec pwsh -NoProfile -NoExit -EncodedCommand encoded", command);
+    }
+
+    [Fact]
+    public void BuildHeadlessPwshArguments_IncludesNoProfileBeforeNoExit()
+    {
+        var arguments = PwshLauncherShared.BuildHeadlessPwshArguments("Import-Module PowerShell.MCP");
+
+        Assert.Equal(4, arguments.Length);
+        Assert.Equal("-NoProfile", arguments[0]);
+        Assert.Equal("-NoExit", arguments[1]);
+        Assert.Equal("-Command", arguments[2]);
+        Assert.Equal("Import-Module PowerShell.MCP", arguments[3]);
+    }
 }
