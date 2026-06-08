@@ -17,7 +17,10 @@ param(
     [string]$Configuration = 'Release',
     [string]$OutputBase,
     [switch]$Sign,
-    [string]$PfxPath = 'C:\MyProj\vault\yotsuda.pfx',
+    # Local signing cert for -Sign. Set $env:POWERSHELLMCP_PFX_PATH to your
+    # PFX location; kept out of this public repo so the cert's storage path
+    # isn't disclosed. Override per-invocation with -PfxPath.
+    [string]$PfxPath = $env:POWERSHELLMCP_PFX_PATH,
     [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 
@@ -223,8 +226,8 @@ if ('WinX64' -in $Target) {
 if ($signTargets -and $Sign) {
     Write-Host "[Sign] Authenticode-signing Windows binaries..." -ForegroundColor Yellow
 
-    if (-not (Test-Path $PfxPath)) {
-        Write-Error "  PFX not found at $PfxPath. Cannot sign."
+    if (-not $PfxPath -or -not (Test-Path $PfxPath)) {
+        Write-Error "  PFX not found. Set `$env:POWERSHELLMCP_PFX_PATH to your signing cert or pass -PfxPath. (got: '$PfxPath')"
         exit 1
     }
 
