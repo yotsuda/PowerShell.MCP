@@ -1,3 +1,30 @@
+# Version: 1.9.0
+
+## Highlights
+
+**AI working-directory tracking now follows `Set-Location` correctly, and the elevation consent prompt is gone.** Pre-1.9 the DLL tracked the OS *process* cwd, but PowerShell's `Set-Location` moves only `$PWD` / the PSDrive — so once the AI `cd`'d anywhere, cwd tracking was silently pinned to the startup directory, and busy-route / auto-start spawned new consoles at `$HOME` instead of resuming the AI's workspace. That tracking is now correct. Separately, the `sudo` / `runas` / `gsudo` Y/N consent prompt has been removed (#48) — it blocked unattended use, was never a real security boundary, and PowerShell.MCP's safety model is the visible, human-watched console.
+
+## Behavior Changes
+- **Removed the `sudo` / `runas` / `gsudo` elevation consent prompt (#48).** The `Read-Host` Y/N gate hung with no human to answer under unattended / SSH-admin use, and was never a real security boundary: any startup-read flag is settable by the agent itself and inherited by a freshly spawned console, so the gate never actually contained a misaligned agent. PowerShell.MCP's real safety model is the visible, human-watched console; singling out elevation was arbitrary, and the matching regex also misfired on incidental mentions of `sudo`.
+
+## Improvements
+- **PSDrive-aware working-directory tracking.** The DLL now captures `$PWD` on the polling engine's home thread (instead of the OS process cwd, which `Set-Location` never updates) and uses it for every cwd-emitting response — busy, status, and post-execution success / timeout / completed. Busy-route and auto-start now resume the AI's actual workspace instead of `$HOME`. User-`cd` drift between AI calls is handled safety-first: the proxy returns a `Pipeline NOT executed` notice carrying prev → new cwd and a single-quote-escaped `Set-Location` revert hint, rather than silently auto-`cd`'ing.
+- **Clearer Markdown-preview (mdp) guidance for the AI.** When the module is installed, the hint distinguishes `mdp` (full-file preview) from `Show-TextFiles` (grep / line-range) so the AI stops reaching for `mdp` on `-Pattern` / `-Contains` tasks, and points at the `show_markdown` MCP tool. When not installed, it explains the value (Mermaid / KaTeX, slide mode, PPTX import/export) and now requires user consent before `Install-Module -Scope CurrentUser`, replacing text that read like an implicit go-ahead.
+
+## Bug Fixes
+- **Tab-completion menus no longer mojibake on CJK Windows.** Consoles created via `CREATE_NEW_CONSOLE` inherited the system code page (932 / 936 / 949 on JP / CN / KR Windows). A shared encoding prelude now runs `chcp 65001` plus the `[Console]::*Encoding` sets *before* PSReadLine loads, so e.g. Japanese asset names render cleanly in a `Get-OrchAsset <Tab>` menu.
+- **Sub-agents no longer lose their `🔑 agent_id` notice.** The notice — a freshly allocated sub-agent's only way to learn its own ID — was emitted on just a few return paths; a sub-agent whose first call landed on a timeout / cached / error / drift-bail branch could lose its ID forever. Every return now routes through one helper that prepends the notice exactly when the ID was newly allocated.
+- **`Remove-LinesFromFile` preserves the trailing newline when the last line is removed.** Deleting the final line of a file with a CRLF tail previously dropped the tail.
+- **`-Encoding gb18030` no longer collapses to GB2312.** GB18030 (CP 54936) is a 4-byte Unicode superset; it was aliased to CP 936 (GBK), which silently substituted out-of-GBK 4-byte CJK characters with `?`. It now resolves to CP 54936.
+- **Regex display and combined `-Contains -Pattern` matching corrected.** `Update-MatchInFile` regex mode now expands `$1` / `$2` capture-group references in the AI-visible display (the written file and `-WhatIf` path were already correct). `Show-TextFiles` and `Remove-LinesFromFile` now wrap each side of the combined `Contains | Pattern` regex in a non-capturing group, so a Pattern with top-level alternation or a `{0,3}`-style quantifier no longer matches every line.
+- **Proxy-liveness poll no longer leaks process handles.** `GetProcessById` returns a `Process` holding an OS handle; it is now disposed on every ~5 s poll instead of waiting on the GC finalizer.
+
+## Internal
+- Full-codebase review cleanup: removed an unreachable prompt-localization overload (`WithLocalizedPromptsFromAssembly` + `LocalizedParameterNameAttribute`), dead helpers, stale comments, a doc-comment segment-count error, and a literal typo — no behavior change.
+- Test / CI reliability: each test instance now allocates a unique sub-agent id to deflake parallel xunit runs; the Linux Named-Pipe integration test was updated for the same-call switch-and-execute shape; the CwdDrift revert-hint assertion was made platform-agnostic.
+- Dropped the orphan `dist/PowerShell.MCP.psm1` snapshot and added an explicit `dist/` gitignore rule — `Staging/` is the only module source.
+
+
 # Version: 1.8.0
 
 ## Highlights
