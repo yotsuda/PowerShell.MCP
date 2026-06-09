@@ -15,6 +15,31 @@ permissions:
   contents: read
 
 jobs:
+  version-consistency:
+    # Pre-tag guard: catch a forgotten version bump on push to main, before a
+    # release tag is ever cut. release.yml re-checks the same sources against the
+    # tag at release time; this just surfaces drift earlier.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Verify psd1 and both csproj versions agree
+      shell: pwsh
+      run: |
+        $psd1 = (Import-PowerShellDataFile Staging/PowerShell.MCP.psd1).ModuleVersion
+        [xml]$main  = Get-Content PowerShell.MCP/PowerShell.MCP.csproj
+        [xml]$proxy = Get-Content PowerShell.MCP.Proxy/PowerShell.MCP.Proxy.csproj
+        $mainVer  = $main.Project.PropertyGroup.Version  | Where-Object { $_ } | Select-Object -First 1
+        $proxyVer = $proxy.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+        $expectedCsproj = "$psd1.0"   # psd1 is 3-part, csproj carries the 4-part assembly version
+        $problems = @()
+        if ($mainVer  -ne $expectedCsproj) { $problems += "PowerShell.MCP.csproj <Version>=$mainVer != $expectedCsproj" }
+        if ($proxyVer -ne $expectedCsproj) { $problems += "PowerShell.MCP.Proxy.csproj <Version>=$proxyVer != $expectedCsproj" }
+        if ($problems) {
+          $problems | ForEach-Object { Write-Host "::error::$_" }
+          throw "Version sources disagree (psd1 ModuleVersion=$psd1). Bump Staging/PowerShell.MCP.psd1 and BOTH .csproj together."
+        }
+        Write-Host "Version sources agree: psd1=$psd1, csproj=$expectedCsproj"
+
   test:
     strategy:
       fail-fast: false
