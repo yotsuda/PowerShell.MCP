@@ -136,37 +136,6 @@ public static partial class PipelineHelper
         }
     }
 
-    /// <summary>
-    /// Check if input/output contains .md files and return a one-time hint about MarkdownPointer module (per agent).
-    /// </summary>
-    private static readonly HashSet<string> _markdownHintShownAgents = new(StringComparer.OrdinalIgnoreCase);
-    public static string? CheckMarkdownFileHint(string text, string agentId)
-    {
-        lock (_markdownHintShownAgents)
-        {
-            if (_markdownHintShownAgents.Contains(agentId)) return null;
-            if (!MarkdownFileRegex().IsMatch(text)) return null;
-
-            _markdownHintShownAgents.Add(agentId);
-        }
-
-        if (!OperatingSystem.IsWindows())
-            return null;
-
-        if (IsMarkdownPointerInstalled())
-            return "💡 .md detected — Use `mdp <file.md>` to render Markdown (Mermaid/KaTeX, slide mode). For full-file preview prefer mdp over `Get-Content`/`cat`/`Show-TextFiles`; keep `Show-TextFiles` for grep/line-range queries (`-Pattern`, `-Contains`, `-LineRange`). The mdp server also exposes a `show_markdown` MCP tool. Already installed — just use it, no need to ask the user.";
-        else
-            return "💡 .md detected — MarkdownPointer is not installed. Tell the user it adds visual Markdown preview (Mermaid/KaTeX, slide mode), PPTX import/export, and a `show_markdown` MCP tool you can use directly, then ask consent to install via `Install-Module MarkdownPointer -Scope CurrentUser`. Do not install without user consent.";
-    }
-
-    /// <summary>
-    /// Resets the markdown hint state. For testing only.
-    /// </summary>
-    internal static void ResetMarkdownHintState()
-    {
-        lock (_markdownHintShownAgents) { _markdownHintShownAgents.Clear(); }
-    }
-
     // TODO: Uncomment when JsonDuo is published to PS Gallery
     // /// <summary>
     // /// Check if input/output contains .json files and return a one-time hint about JsonDuo module (per agent).
@@ -241,8 +210,6 @@ public static partial class PipelineHelper
         }
         return false;
     }
-
-    private static bool IsMarkdownPointerInstalled() => IsModuleInstalled("MarkdownPointer");
 
     [GeneratedRegex(@"\$(?!script:|global:|env:|using:|null\b|true\b|false\b|_\b|\?\b|\^\b|\$\b|args\b|input\b|foreach\b|switch\b|Matches\b|PSItem\b)([a-zA-Z_]\w*)\s*=")]
     private static partial Regex LocalVariableRegex();
@@ -342,9 +309,6 @@ public static partial class PipelineHelper
 
     [GeneratedRegex(@"(?<![/\\])\bAdd-Content\b", RegexOptions.IgnoreCase)]
     private static partial Regex AddContentRegex();
-
-    [GeneratedRegex(@"\S+\.(?:md|markdown)\b", RegexOptions.IgnoreCase)]
-    private static partial Regex MarkdownFileRegex();
 
     // TODO: Uncomment when JsonDuo is published to PS Gallery
     // [GeneratedRegex(@"\S+\.jsonc?\b", RegexOptions.IgnoreCase)]

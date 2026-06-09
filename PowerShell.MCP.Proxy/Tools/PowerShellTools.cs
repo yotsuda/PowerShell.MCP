@@ -670,13 +670,6 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     successResponse.AppendLine();
                                     successResponse.AppendLine(scopeWarning);
                                 }
-                                // One-time hint about MarkdownPointer module (pipeline-only; output checks caused false positives on incidental .md mentions).
-                                var markdownHint = PipelineHelper.CheckMarkdownFileHint(pipeline, agentId);
-                                if (!string.IsNullOrEmpty(markdownHint))
-                                {
-                                    successResponse.AppendLine();
-                                    successResponse.AppendLine(markdownHint);
-                                }
                                 // TODO: Uncomment when JsonDuo is published to PS Gallery
                                 // var jsonHint = PipelineHelper.CheckJsonFileHint(pipeline, agentId)
                                 //     ?? PipelineHelper.CheckJsonFileHint(output, agentId);
