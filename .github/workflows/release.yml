@@ -233,7 +233,7 @@ jobs:
         shell: pwsh
         run: |
           $version = '${{ steps.ver.outputs.version }}'
-          $lines = Get-Content Staging/ReleaseNotes.md
+          $lines = Get-Content CHANGELOG.md
           $inSection = $false
           $section = New-Object System.Collections.Generic.List[string]
           foreach ($line in $lines) {
@@ -245,7 +245,7 @@ jobs:
           }
           $body = ($section -join "`n").Trim()
           if ([string]::IsNullOrWhiteSpace($body)) {
-            throw "No release notes section found for version $version in Staging/ReleaseNotes.md"
+            throw "No release notes section found for version $version in CHANGELOG.md"
           }
           $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           Set-Content -Path $notesPath -Value $body -Encoding UTF8

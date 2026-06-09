@@ -1,3 +1,22 @@
+# Changelog
+
+All notable changes to **PowerShell.MCP** are documented here. Each release is
+grouped under a `# Version: X.Y.Z` heading, newest first. Releases earlier than
+1.7.7 are listed on the
+[GitHub Releases page](https://github.com/yotsuda/PowerShell.MCP/releases).
+
+<!--
+Format contract (load-bearing — do not change the heading shape):
+  # Version: X.Y.Z
+  ## Highlights / New Features / Improvements / Bug Fixes / Internal
+  - Bullet point
+
+The release.yml workflow extracts the section whose heading matches the pushed
+tag (v1.9.0 -> "# Version: 1.9.0") to build the GitHub Release body. Tagging
+without a matching section here fails the workflow on purpose. Add new version
+sections at the TOP of the file; keep older sections for history.
+-->
+
 # Version: 1.9.0
 
 ## Highlights
@@ -9,8 +28,6 @@
 
 ## Improvements
 - **PSDrive-aware working-directory tracking.** The DLL now captures `$PWD` on the polling engine's home thread (instead of the OS process cwd, which `Set-Location` never updates) and uses it for every cwd-emitting response — busy, status, and post-execution success / timeout / completed. Busy-route and auto-start now resume the AI's actual workspace instead of `$HOME`. User-`cd` drift between AI calls is handled safety-first: the proxy returns a `Pipeline NOT executed` notice carrying prev → new cwd and a single-quote-escaped `Set-Location` revert hint, rather than silently auto-`cd`'ing.
-- **Clearer Markdown-preview (mdp) guidance for the AI.** When the module is installed, the hint distinguishes `mdp` (full-file preview) from `Show-TextFiles` (grep / line-range) so the AI stops reaching for `mdp` on `-Pattern` / `-Contains` tasks, and points at the `show_markdown` MCP tool. When not installed, it explains the value (Mermaid / KaTeX, slide mode, PPTX import/export) and now requires user consent before `Install-Module -Scope CurrentUser`, replacing text that read like an implicit go-ahead.
-
 ## Bug Fixes
 - **Tab-completion menus no longer mojibake on CJK Windows.** Consoles created via `CREATE_NEW_CONSOLE` inherited the system code page (932 / 936 / 949 on JP / CN / KR Windows). A shared encoding prelude now runs `chcp 65001` plus the `[Console]::*Encoding` sets *before* PSReadLine loads, so e.g. Japanese asset names render cleanly in a `Get-OrchAsset <Tab>` menu.
 - **Sub-agents no longer lose their `🔑 agent_id` notice.** The notice — a freshly allocated sub-agent's only way to learn its own ID — was emitted on just a few return paths; a sub-agent whose first call landed on a timeout / cached / error / drift-bail branch could lose its ID forever. Every return now routes through one helper that prepends the notice exactly when the ID was newly allocated.
@@ -68,18 +85,3 @@
 
 ## Bug Fixes
 - Status line truncation was broken for pipelines beginning with leading whitespace.
-
----
-
-<!--
-Release notes format:
-  # Version: X.Y.Z
-  ## New Features / Improvements / Bug Fixes / Internal
-  - Bullet point
-
-The release.yml workflow extracts the section matching the pushed tag version
-(v1.7.8 → finds "# Version: 1.7.8"). Releasing a tag without a matching section
-here will fail the workflow on purpose.
-
-Add new version sections at the TOP of the file. Keep older sections for history.
--->
