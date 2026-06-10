@@ -170,6 +170,8 @@ public class PowerShellProcessManager
 /// </summary>
 internal static class PwshLauncherShared
 {
+    internal const string NoProfileArgument = "-NoProfile";
+
     // Force the new console's active code page to UTF-8 BEFORE PSReadLine
     // imports. On Japanese / Chinese / Korean Windows the system code page
     // is 932 / 936 / 949, and CREATE_NEW_CONSOLE inherits that as the
@@ -208,6 +210,18 @@ internal static class PwshLauncherShared
         var core = $"{EncodingPrelude}{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
     }
+
+    internal static string BuildWindowsCommandLine(string command) =>
+        $"pwsh.exe {NoProfileArgument} -NoExit -Command \"{command}\"";
+
+    internal static string BuildMacOSDoScriptCommand(string tempFile) =>
+        $"pwsh {NoProfileArgument} -NoExit -File '{tempFile}'";
+
+    internal static string BuildLinuxPwshCommand(string encodedCommand) =>
+        $"exec pwsh {NoProfileArgument} -NoExit -EncodedCommand {encodedCommand}";
+
+    internal static string[] BuildHeadlessPwshArguments(string initCommand) =>
+        [NoProfileArgument, "-NoExit", "-Command", initCommand];
 }
 
 /// <summary>
@@ -308,7 +322,7 @@ public static class PwshLauncherWindows
             {
                 command = $"{PwshLauncherShared.EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
             }
-            string commandLine = $"pwsh.exe -NoExit -Command \"{command}\"";
+            string commandLine = PwshLauncherShared.BuildWindowsCommandLine(command);
 
             bool ok = CreateProcessW(
                 null,
@@ -381,7 +395,7 @@ public static class PwshLauncherMacOS
         {
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"pwsh -NoExit -File '{tempFile}'\"");
+            process.StandardInput.WriteLine($"    do script \"{PwshLauncherShared.BuildMacOSDoScriptCommand(tempFile)}\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
@@ -472,7 +486,7 @@ public static class PwshLauncherLinux
 
             // Command to launch pwsh with encoded initialization via login shell
             // exec replaces the shell with pwsh to keep the process tree clean
-            var pwshCommand = $"exec pwsh -NoExit -EncodedCommand {encodedCommand}";
+            var pwshCommand = PwshLauncherShared.BuildLinuxPwshCommand(encodedCommand);
 
             // setsid <terminal> ... <shell> -l -c '<pwshCommand>'
             psi.ArgumentList.Add(terminal);
@@ -565,9 +579,10 @@ public static class PwshLauncherLinux
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        psi.ArgumentList.Add("-NoExit");
-        psi.ArgumentList.Add("-Command");
-        psi.ArgumentList.Add(initCommand);
+        foreach (var argument in PwshLauncherShared.BuildHeadlessPwshArguments(initCommand))
+        {
+            psi.ArgumentList.Add(argument);
+        }
 
         var process = Process.Start(psi);
         if (process != null)
