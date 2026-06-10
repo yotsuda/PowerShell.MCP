@@ -61,32 +61,62 @@ public class PwshLauncherSharedTests
         Assert.True(caseFixIdx < importIdx, "case-fix must run before Import-Module");
     }
 
-    [Fact]
-    public void BuildWindowsCommandLine_IncludesNoProfile()
-    {
-        var commandLine = PwshLauncherShared.BuildWindowsCommandLine("Import-Module PowerShell.MCP");
+    // Interactive launchers (Windows/macOS/Linux) gate -NoProfile on the noProfile
+    // flag — default off so the user's $PROFILE loads in these human-facing shells,
+    // on only when the operator passes the proxy's `--no-profile` flag.
 
-        Assert.Contains("pwsh.exe -NoProfile -NoExit -Command", commandLine);
+    [Fact]
+    public void BuildWindowsCommandLine_OmitsNoProfileByDefault()
+    {
+        var commandLine = PwshLauncherShared.BuildWindowsCommandLine("Import-Module PowerShell.MCP", noProfile: false);
+
+        Assert.Equal("pwsh.exe -NoExit -Command \"Import-Module PowerShell.MCP\"", commandLine);
+        Assert.DoesNotContain("-NoProfile", commandLine);
     }
 
     [Fact]
-    public void BuildMacOSDoScriptCommand_IncludesNoProfile()
+    public void BuildWindowsCommandLine_IncludesNoProfileWhenRequested()
     {
-        var command = PwshLauncherShared.BuildMacOSDoScriptCommand("/tmp/pwsh-mcp-init-test.ps1");
+        var commandLine = PwshLauncherShared.BuildWindowsCommandLine("Import-Module PowerShell.MCP", noProfile: true);
+
+        Assert.Equal("pwsh.exe -NoProfile -NoExit -Command \"Import-Module PowerShell.MCP\"", commandLine);
+    }
+
+    [Fact]
+    public void BuildMacOSDoScriptCommand_OmitsNoProfileByDefault()
+    {
+        var command = PwshLauncherShared.BuildMacOSDoScriptCommand("/tmp/pwsh-mcp-init-test.ps1", noProfile: false);
+
+        Assert.Equal("pwsh -NoExit -File '/tmp/pwsh-mcp-init-test.ps1'", command);
+    }
+
+    [Fact]
+    public void BuildMacOSDoScriptCommand_IncludesNoProfileWhenRequested()
+    {
+        var command = PwshLauncherShared.BuildMacOSDoScriptCommand("/tmp/pwsh-mcp-init-test.ps1", noProfile: true);
 
         Assert.Equal("pwsh -NoProfile -NoExit -File '/tmp/pwsh-mcp-init-test.ps1'", command);
     }
 
     [Fact]
-    public void BuildLinuxPwshCommand_IncludesNoProfile()
+    public void BuildLinuxPwshCommand_OmitsNoProfileByDefault()
     {
-        var command = PwshLauncherShared.BuildLinuxPwshCommand("encoded");
+        var command = PwshLauncherShared.BuildLinuxPwshCommand("encoded", noProfile: false);
+
+        Assert.Equal("exec pwsh -NoExit -EncodedCommand encoded", command);
+    }
+
+    [Fact]
+    public void BuildLinuxPwshCommand_IncludesNoProfileWhenRequested()
+    {
+        var command = PwshLauncherShared.BuildLinuxPwshCommand("encoded", noProfile: true);
 
         Assert.Equal("exec pwsh -NoProfile -NoExit -EncodedCommand encoded", command);
     }
 
+    // The headless / CI launcher always uses -NoProfile, independent of the flag.
     [Fact]
-    public void BuildHeadlessPwshArguments_IncludesNoProfileBeforeNoExit()
+    public void BuildHeadlessPwshArguments_AlwaysIncludesNoProfileBeforeNoExit()
     {
         var arguments = PwshLauncherShared.BuildHeadlessPwshArguments("Import-Module PowerShell.MCP");
 

@@ -18,6 +18,13 @@ namespace PowerShell.MCP.Proxy
             // For testing: Force Japanese locale (comment out after verification)
             //System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("ja-JP");
             //System.Globalization.CultureInfo.CurrentUICulture = new System.Globalization.CultureInfo("fr-FR");
+            // Opt-in: `--no-profile` makes the interactive launchers (Windows/macOS/Linux)
+            // start pwsh with -NoProfile. Default off — those are real human-facing shells,
+            // so the user's $PROFILE loads unless the operator asks for lean consoles.
+            // (The headless/CI launcher always uses -NoProfile, independent of this flag.)
+            PwshLauncherShared.SuppressProfileOnInteractive =
+                Array.Exists(args, a => string.Equals(a, "--no-profile", StringComparison.OrdinalIgnoreCase));
+
             var builder = Host.CreateApplicationBuilder(args);
 
             builder.Logging.AddConsole(consoleLogOptions =>

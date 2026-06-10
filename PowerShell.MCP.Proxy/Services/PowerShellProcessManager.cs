@@ -211,15 +211,30 @@ internal static class PwshLauncherShared
         return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
     }
 
-    internal static string BuildWindowsCommandLine(string command) =>
-        $"pwsh.exe {NoProfileArgument} -NoExit -Command \"{command}\"";
+    // Set once at startup from the proxy's `--no-profile` command-line flag.
+    // Gates -NoProfile on the *interactive* launchers (Windows/macOS/Linux) only.
+    // Default false: those consoles are real human-facing shells, so they load the
+    // user's $PROFILE (prompt, aliases, PSReadLine, theme) unless the operator opts
+    // out. The headless launcher always uses -NoProfile regardless — see
+    // BuildHeadlessPwshArguments.
+    internal static bool SuppressProfileOnInteractive { get; set; }
 
-    internal static string BuildMacOSDoScriptCommand(string tempFile) =>
-        $"pwsh {NoProfileArgument} -NoExit -File '{tempFile}'";
+    private static string InteractiveProfileArg(bool noProfile) =>
+        noProfile ? $"{NoProfileArgument} " : string.Empty;
 
-    internal static string BuildLinuxPwshCommand(string encodedCommand) =>
-        $"exec pwsh {NoProfileArgument} -NoExit -EncodedCommand {encodedCommand}";
+    internal static string BuildWindowsCommandLine(string command, bool noProfile) =>
+        $"pwsh.exe {InteractiveProfileArg(noProfile)}-NoExit -Command \"{command}\"";
 
+    internal static string BuildMacOSDoScriptCommand(string tempFile, bool noProfile) =>
+        $"pwsh {InteractiveProfileArg(noProfile)}-NoExit -File '{tempFile}'";
+
+    internal static string BuildLinuxPwshCommand(string encodedCommand, bool noProfile) =>
+        $"exec pwsh {InteractiveProfileArg(noProfile)}-NoExit -EncodedCommand {encodedCommand}";
+
+    // The headless / CI launcher (no window, redirected stdout) always suppresses
+    // the profile: there's no interactive UX to preserve, and a profile there only
+    // adds nondeterminism, startup latency, host-write noise, and the risk of
+    // blocking on input (e.g. Read-Host) in a process with no console.
     internal static string[] BuildHeadlessPwshArguments(string initCommand) =>
         [NoProfileArgument, "-NoExit", "-Command", initCommand];
 }
@@ -322,7 +337,7 @@ public static class PwshLauncherWindows
             {
                 command = $"{PwshLauncherShared.EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
             }
-            string commandLine = PwshLauncherShared.BuildWindowsCommandLine(command);
+            string commandLine = PwshLauncherShared.BuildWindowsCommandLine(command, PwshLauncherShared.SuppressProfileOnInteractive);
 
             bool ok = CreateProcessW(
                 null,
@@ -395,7 +410,7 @@ public static class PwshLauncherMacOS
         {
             process.StandardInput.WriteLine("tell application \"Terminal\"");
             process.StandardInput.WriteLine("    activate");
-            process.StandardInput.WriteLine($"    do script \"{PwshLauncherShared.BuildMacOSDoScriptCommand(tempFile)}\"");
+            process.StandardInput.WriteLine($"    do script \"{PwshLauncherShared.BuildMacOSDoScriptCommand(tempFile, PwshLauncherShared.SuppressProfileOnInteractive)}\"");
             process.StandardInput.WriteLine("end tell");
             process.StandardInput.Close();
             process.WaitForExit(5000);
@@ -486,7 +501,7 @@ public static class PwshLauncherLinux
 
             // Command to launch pwsh with encoded initialization via login shell
             // exec replaces the shell with pwsh to keep the process tree clean
-            var pwshCommand = PwshLauncherShared.BuildLinuxPwshCommand(encodedCommand);
+            var pwshCommand = PwshLauncherShared.BuildLinuxPwshCommand(encodedCommand, PwshLauncherShared.SuppressProfileOnInteractive);
 
             // setsid <terminal> ... <shell> -l -c '<pwshCommand>'
             psi.ArgumentList.Add(terminal);
