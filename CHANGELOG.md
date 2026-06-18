@@ -20,16 +20,13 @@ sections at the TOP of the file; keep older sections for history.
 # Version: 1.10.0
 
 ## New Features
-- **`--no-profile` flag for lean interactive consoles (#49).** Pass `--no-profile` in the MCP server's `args` and the interactive launchers (Windows / macOS / Linux) start pwsh with `-NoProfile`, skipping the user's `$PROFILE` (prompt, aliases, PSReadLine, theme). Default off — those consoles are real human-facing shells, so the profile loads unless the operator opts out. One line in the client config makes every console the server launches lean.
+- **`--no-profile` flag for lean interactive consoles (#49, thanks [@sharpninja](https://github.com/sharpninja)).** Pass `--no-profile` in the MCP server's `args` and the interactive launchers (Windows / macOS / Linux) start pwsh with `-NoProfile`, skipping the user's `$PROFILE` (prompt, aliases, PSReadLine, theme). Default off — those consoles are real human-facing shells, so the profile loads unless the operator opts out. One line in the client config makes every console the server launches lean.
 
 ## Behavior Changes
 - **The headless / CI launcher always starts pwsh with `-NoProfile`,** independent of the `--no-profile` flag. It only runs when no terminal emulator is available — no window, stdout redirected — so there is no interactive experience to preserve, and a profile there only adds nondeterminism, startup latency, and the risk of blocking on input (e.g. `Read-Host`) in a process with no console.
 
 ## Internal
 - Launcher command-line construction is centralized in shared per-platform `Build*` helpers (#49); `-NoProfile` is emitted from a single `noProfile`-gated point per interactive platform, covered by unit tests for both flag states plus the always-on headless path.
-
-## Acknowledgements
-- This release's `--no-profile` work was contributed by [@sharpninja](https://github.com/sharpninja) (Payton Byrd) in [#49](https://github.com/yotsuda/PowerShell.MCP/pull/49). Thank you!
 
 
 # Version: 1.9.0
