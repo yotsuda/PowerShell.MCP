@@ -249,6 +249,32 @@ Register-PwshToClaudeDesktop
 
 ---
 
+## Configuration
+
+### Lean consoles (`--no-profile`)
+
+By default, every console the proxy launches loads your PowerShell `$PROFILE` (prompt, aliases, PSReadLine, theme) — these are real interactive shells, not just automation targets. Pass `--no-profile` to start them with `-NoProfile` instead, for faster startup and a clean, deterministic environment.
+
+**Claude Code:**
+```powershell
+claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --no-profile
+```
+
+**Claude Desktop / other MCP clients:** add an `args` array with `--no-profile` to the `pwsh` entry in your config:
+
+```json
+"mcpServers": {
+  "pwsh": {
+    "command": "...PowerShell.MCP.Proxy.exe",
+    "args": ["--no-profile"]
+  }
+}
+```
+
+> The headless / CI launcher always uses `-NoProfile` regardless of this flag.
+
+---
+
 ## First-Time Demo
 
 Experience PowerShell.MCP's capabilities:
