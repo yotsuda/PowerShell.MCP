@@ -1030,7 +1030,7 @@ public class PowerShellToolsTests
         // Assert: pipeline NOT executed, notice describes the change
         Assert.False(executed, "Pipeline must not execute when user-cd drift is detected");
         Assert.Contains("Pipeline NOT executed", result);
-        Assert.Contains("User changed cwd", result);
+        Assert.Contains("outside the AI's commands", result);
         Assert.Contains(aiCwd, result);
         Assert.Contains(liveCwd, result);
         Assert.Contains("Re-issue", result);

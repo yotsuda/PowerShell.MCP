@@ -194,7 +194,21 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             }
             else if (status.Status == PipeStatus.Completed)
             {
-                if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
+                if (status.Pid > 0)
+                {
+                    _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
+                    // Record where this completed command left the cwd. A
+                    // backgrounded AI Set-Location harvested here (e.g. via
+                    // wait_for_completion, which never set LastAiCwd) would
+                    // otherwise leave LastAiCwd stale, so the next
+                    // invoke_expression sees the moved cwd as drift and
+                    // misattributes it to the user. Only MCP/AI-initiated
+                    // commands ever reach Completed (user interactive commands
+                    // return to Standby, never Completed), so this never
+                    // records a user-initiated cwd change.
+                    if (!string.IsNullOrEmpty(status.Cwd))
+                        _sessionManager.SetLastAiCwd(agentId, status.Pid, status.Cwd);
+                }
                 var output = await _powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
                 if (!string.IsNullOrEmpty(output))
                 {

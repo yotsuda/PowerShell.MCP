@@ -377,7 +377,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 bailResponse.AppendLine(startupNotice);
                 bailResponse.AppendLine();
             }
-            bailResponse.AppendLine($"ℹ️ User changed cwd in console {driftConsoleName} from '{drift.Value.AiCwd}' to '{drift.Value.LiveCwd}'.");
+            bailResponse.AppendLine($"ℹ️ cwd in console {driftConsoleName} changed from '{drift.Value.AiCwd}' to '{drift.Value.LiveCwd}' outside the AI's commands (e.g. a `cd` typed in the console).");
             bailResponse.AppendLine($"Pipeline NOT executed. Re-issue to run at '{drift.Value.LiveCwd}', or prepend `Set-Location -LiteralPath '{drift.Value.AiCwd.Replace("'", "''")}';` to revert.");
             return Wrap(bailResponse.ToString());
         }
