@@ -28,6 +28,9 @@ sections at the TOP of the file; keep older sections for history.
 ## Internal
 - Launcher command-line construction is centralized in shared per-platform `Build*` helpers (#49); `-NoProfile` is emitted from a single `noProfile`-gated point per interactive platform, covered by unit tests for both flag states plus the always-on headless path.
 
+## Acknowledgements
+- This release's `--no-profile` work was contributed by [@sharpninja](https://github.com/sharpninja) (Payton Byrd) in [#49](https://github.com/yotsuda/PowerShell.MCP/pull/49). Thank you!
+
 
 # Version: 1.9.0
 
