@@ -9,7 +9,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     # Trim PSReadLine history file if it exceeds 1MB to prevent input lag
     if ($IsWindows) {
         try {
-            $histPath = (Invoke-Expression 'Get-PSReadLineOption').HistorySavePath
+            $histPath = (Get-PSReadLineOption).HistorySavePath
             if ($histPath -and (Test-Path $histPath) -and (Get-Item $histPath).Length -gt 1MB) {
                 $lines = Get-Content $histPath -Tail 4096
                 [System.IO.File]::WriteAllLines($histPath, $lines)
@@ -351,7 +351,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
             # Cache PSReadLine options (Windows only) - retrieved once for performance
             $script:cachedPSReadLineOptions = if ($IsWindows) {
-                try { Invoke-Expression 'Get-PSReadLineOption' } catch { $null }
+                try { Get-PSReadLineOption } catch { $null }
             } else { $null }
 
             function Write-ColoredCommand {
@@ -883,7 +883,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 $mcpOutput = $null
                 try {
                     # Add to PSReadLine history (best-effort, before command display)
-                    if ($IsWindows -and ($cmd -split "`n").Count -le 2) { try { Invoke-Expression '[Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd)' } catch {} }
+                    if ($IsWindows -and ($cmd -split "`n").Count -le 2) { try { [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($cmd) } catch {} }
 
                     # Display command in console
                     [Console]::WriteLine()
