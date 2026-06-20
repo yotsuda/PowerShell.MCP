@@ -650,6 +650,26 @@ Please provide how to update the MCP client configuration to the user.";
                 var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement)
                     ? pipelineElement.GetString() ?? "" : "";
 
+                // Engine not running (startup blocked, e.g. AMSI/AV false
+                // positive). Fast-fail with guidance instead of stashing the
+                // command and blocking until the full timeout — without the
+                // polling engine nothing would ever consume it. Mirrors the
+                // normal success envelope so the proxy renders the body as-is,
+                // no new error contract required.
+                if (!MCPModuleInitializer.EngineReady)
+                {
+                    var pidNotReady = Process.GetCurrentProcess().Id;
+                    var notReadyHeader = JsonSerializer.Serialize(new
+                    {
+                        pid = pidNotReady,
+                        status = "success",
+                        pipeline = TruncatePipeline(pipeline),
+                        duration = 0.0
+                    });
+                    await SendMessageAsync(pipeServer, notReadyHeader + "\n\n" + MCPModuleInitializer.GetEngineNotReadyMessage(), cancellationToken);
+                    return;
+                }
+
                 var cmdletWarning = BuildGetSetContentWarning(pipeline);
 
                 // Wait for heartbeat to confirm runspace is available

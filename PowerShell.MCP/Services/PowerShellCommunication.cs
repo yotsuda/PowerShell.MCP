@@ -165,6 +165,12 @@ public static class McpServerHost
     /// </summary>
     public static string ExecuteSilentCommand(string command)
     {
+        // Engine not running (startup blocked, e.g. AMSI/AV false positive):
+        // nothing would consume the stashed command, so WaitForResult would
+        // block the full timeout. Fast-fail with guidance instead.
+        if (!MCPModuleInitializer.EngineReady)
+            return MCPModuleInitializer.GetEngineNotReadyMessage();
+
         _executionLock.Wait();
         try
         {

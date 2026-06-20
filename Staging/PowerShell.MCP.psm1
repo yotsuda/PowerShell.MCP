@@ -446,5 +446,39 @@ function Stop-AllPwsh {
     Stop-Process -Id $PID -Force
 }
 
+function Restart-MCPServer {
+    <#
+    .SYNOPSIS
+        Retries starting the PowerShell.MCP console engine.
+    .DESCRIPTION
+        If the embedded polling engine was blocked at import (usually a
+        transient antivirus/AMSI false positive), the module stays loaded but
+        commands are unavailable until the engine starts. Run this in the
+        affected console to retry. Safe to run when the engine is already
+        running (the engine setup is idempotent).
+    .EXAMPLE
+        Restart-MCPServer
+    #>
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param()
+
+    $started = [PowerShell.MCP.MCPModuleInitializer]::TryStartEngine()
+
+    if ($started) {
+        Write-Host '[PowerShell.MCP] Console engine is running.' -ForegroundColor Green
+    }
+    else {
+        $err = [PowerShell.MCP.MCPModuleInitializer]::LastEngineErrorMessage
+        Write-Warning "[PowerShell.MCP] Console engine still not running. Last error: $err"
+        Write-Warning "If this persists, it may be Constrained Language Mode / WDAC or an AV policy rather than a transient AMSI block. See https://github.com/yotsuda/PowerShell.MCP"
+    }
+
+    [PSCustomObject]@{
+        EngineReady = [PowerShell.MCP.MCPModuleInitializer]::EngineReady
+        LastError   = [PowerShell.MCP.MCPModuleInitializer]::LastEngineErrorMessage
+    }
+}
+
 
 

@@ -17,6 +17,17 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.10.1
+
+## New Features
+- **`Restart-MCPServer` command** to retry starting the console engine in the affected console — no need to restart PowerShell.
+
+## Bug Fixes
+- **Reduced an AMSI / antivirus false positive that could block startup (#50).** The embedded polling engine no longer uses `Invoke-Expression`. Its three call sites only wrapped literal strings (cmdlet/type resolution is already deferred to runtime, and each was inside `try/catch`), so they added nothing but the single highest-weighted AMSI heuristic token — which helped the engine script get flagged as malicious at `Import-Module`. They are now direct calls; the engine contains zero `Invoke-Expression`.
+
+## Improvements
+- **Graceful degradation when the engine is blocked at startup.** If an antivirus/AMSI scan blocks the embedded engine during `Import-Module` (often transient), the module now stays loaded and emits one actionable warning instead of failing with a bare error. While the engine is down, commands fast-fail with guidance (run `Restart-MCPServer`) instead of hanging until the request times out.
+
 # Version: 1.10.0
 
 ## New Features
