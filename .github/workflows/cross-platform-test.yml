@@ -4,17 +4,89 @@ on:
   workflow_dispatch:  # Manual trigger
   push:
     branches: [ main ]
-    paths:
+    paths: &codepaths
       - 'PowerShell.MCP/**'
       - 'PowerShell.MCP.Proxy/**'
       - 'Staging/**'
       - 'Tests/**'
+      - '.github/workflows/**'
+      - 'Build-AllPlatforms.ps1'
+  # Run on PRs too, so the suite gates a merge instead of only catching
+  # breakage after it has already landed on main. Same path filter as push.
+  pull_request:
+    branches: [ main ]
+    paths: *codepaths
 
 
 permissions:
   contents: read
 
 jobs:
+  syntax-check:
+    # Fast gate for the PowerShell sources the C# xUnit suite never touches:
+    # the module psm1, the embedded engine scripts, and the manifest. A parse
+    # error or a bad manifest here would otherwise only surface at Import-Module
+    # time on a user's machine. Also pins the #50 fix: the polling engine must
+    # stay free of Invoke-Expression (the AMSI-heuristic regression guard).
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Parse PowerShell sources and validate manifest
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $failed = $false
+
+        # 1. Parse every first-party .ps1/.psm1 (skip Tests fixtures — they may
+        #    intentionally contain malformed input).
+        $files = Get-ChildItem -Recurse -Include *.ps1,*.psm1 -Path `
+          'Staging','PowerShell.MCP/Resources','Build-AllPlatforms.ps1' -ErrorAction SilentlyContinue
+        foreach ($f in $files) {
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)
+          if ($errors) {
+            $failed = $true
+            foreach ($e in $errors) {
+              Write-Host "::error file=$($f.FullName),line=$($e.Extent.StartLineNumber)::$($e.Message)"
+            }
+          } else {
+            Write-Host "OK parse: $($f.FullName)"
+          }
+        }
+
+        # 2. Regression guard for #50: the embedded polling engine must contain
+        #    zero Invoke-Expression. IEX is the single highest-weighted AMSI
+        #    heuristic token and re-introducing it risks the startup false
+        #    positive we removed in 1.10.1.
+        $engine = 'PowerShell.MCP/Resources/MCPPollingEngine.ps1'
+        $iexHits = Select-String -Path $engine -Pattern 'Invoke-Expression' -AllMatches
+        if ($iexHits) {
+          $failed = $true
+          foreach ($h in $iexHits) {
+            Write-Host "::error file=$engine,line=$($h.LineNumber)::Invoke-Expression is banned in the polling engine (AMSI #50 regression guard)"
+          }
+        } else {
+          Write-Host "OK: no Invoke-Expression in $engine"
+        }
+
+        # 3. The manifest must parse as a data file. Full Test-ModuleManifest is
+        #    NOT used here: it probes the NestedModule binary (PowerShell.MCP.dll),
+        #    which this fast job does not build, so it would always throw. The
+        #    matrix job below builds the DLL, stages the module, and does a real
+        #    Import-Module — that is where full manifest validation happens.
+        #    Here we just catch a malformed psd1 (bad hashtable / syntax).
+        try {
+          $manifest = Import-PowerShellDataFile 'Staging/PowerShell.MCP.psd1' -ErrorAction Stop
+          if (-not $manifest.ModuleVersion) { throw 'ModuleVersion missing from manifest' }
+          Write-Host "OK: manifest parses (ModuleVersion=$($manifest.ModuleVersion))"
+        } catch {
+          $failed = $true
+          Write-Host "::error file=Staging/PowerShell.MCP.psd1::$($_.Exception.Message)"
+        }
+
+        if ($failed) { throw 'syntax-check failed (see ::error annotations above)' }
+        Write-Host "`nsyntax-check passed."
+
   version-consistency:
     # Pre-tag guard: catch a forgotten version bump on push to main, before a
     # release tag is ever cut. release.yml re-checks the same sources against the
@@ -41,6 +113,9 @@ jobs:
         Write-Host "Version sources agree: psd1=$psd1, csproj=$expectedCsproj"
 
   test:
+    # Gate the expensive 3-OS matrix behind the fast checks so a parse error or
+    # a version drift fails in seconds instead of after a full cross-platform run.
+    needs: [syntax-check, version-consistency]
     strategy:
       fail-fast: false
       matrix:

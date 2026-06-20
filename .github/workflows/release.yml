@@ -57,6 +57,29 @@ jobs:
 
           Write-Host "All three version sources match: psd1=$expected, csproj=$expectedCsproj"
 
+      - name: Syntax check PowerShell sources (parse + AMSI #50 IEX guard)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $failed = $false
+          $files = Get-ChildItem -Recurse -Include *.ps1,*.psm1 -Path `
+            'Staging','PowerShell.MCP/Resources','Build-AllPlatforms.ps1' -ErrorAction SilentlyContinue
+          foreach ($f in $files) {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)
+            if ($errors) {
+              $failed = $true
+              foreach ($e in $errors) { Write-Host "::error file=$($f.FullName),line=$($e.Extent.StartLineNumber)::$($e.Message)" }
+            }
+          }
+          $engine = 'PowerShell.MCP/Resources/MCPPollingEngine.ps1'
+          if (Select-String -Path $engine -Pattern 'Invoke-Expression' -Quiet) {
+            $failed = $true
+            Write-Host "::error file=$engine::Invoke-Expression is banned in the polling engine (AMSI #50 regression guard)"
+          }
+          if ($failed) { throw 'Syntax check failed before release.' }
+          Write-Host 'Syntax check passed.'
+
       - name: Restore
         shell: pwsh
         run: |
