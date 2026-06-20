@@ -85,6 +85,25 @@ public class PowerShellTools
     }
 
     /// <summary>
+    /// Shows the green claim notice on a console that was just claimed — the
+    /// visible counterpart to the yellow "AI session disconnected" notice the
+    /// polling engine prints when a console loses its owner. Uses the
+    /// caller-supplied banner when present, otherwise the default
+    /// "AI session connected." line, so a custom banner naturally REPLACES
+    /// (never doubles) the generic notice. Rendered as a silent command (no
+    /// command echo) with a trailing prompt so the console is left ready.
+    /// </summary>
+    internal static async Task ShowClaimNoticeAsync(IPowerShellService powerShellService, string pipeName, string? banner, CancellationToken cancellationToken)
+    {
+        var message = string.IsNullOrEmpty(banner) ? "AI session connected." : banner;
+        var escaped = message.Replace("'", "''");
+        await powerShellService.ExecuteSilentAsync(
+            pipeName,
+            $"[Console]::WriteLine(); [Console]::WriteLine(); Write-Host '{escaped}' -ForegroundColor Green; [Console]::WriteLine(); try {{ $p = & {{ prompt }}; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ' + \"`e[0K\") }} catch {{ [Console]::Write(\"PS $((Get-Location).Path)> `e[0K\") }}",
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Resolves the agent ID from is_subagent and agent_id parameters.
     /// If is_subagent=true and agent_id is empty, allocates a new ID.
     /// Returns (agentId, isNewlyAllocated, errorMessage).
@@ -165,6 +184,7 @@ public class PowerShellTools
             if (consoleSwitched)
             {
                 await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+                await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
             }
 
             // Get location (DLL will include its own cached outputs automatically)
@@ -299,7 +319,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 ? sessionAiCwd
                 : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting at {autoStartLocation}... Reason: {allPipesStatusInfo}");
-            var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, null, autoStartLocation, cancellationToken);
+            // Spawning a console for the AI's pipeline is a new attach, so show
+            // the default green "AI session connected." notice at startup (same
+            // lifecycle marker as a claim).
+            var (success, locationResult) = await StartConsoleInternal(powerShellService, agentId, BuildStartupCommands(null, null), autoStartLocation, cancellationToken);
             if (!success)
             {
                 return Wrap(locationResult); // Error message
@@ -331,6 +354,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             // execute. Drift check below catches the case where the
             // sibling has its own LastAiCwd from prior AI work.
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
             startupNotice = $"ℹ️ Switched to console {GetConsoleName(readyPipeName)}. Pipeline running on the new console.";
         }
 
@@ -946,16 +970,16 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 if (discoveryResult.ConsoleSwitched)
                 {
                     await SetConsoleTitleAsync(powerShellService, discoveryResult.ReadyPipeName, cancellationToken);
+                    // Newly claimed: show the caller's banner, or the default
+                    // "AI session connected." notice when none was given.
+                    await ShowClaimNoticeAsync(powerShellService, discoveryResult.ReadyPipeName, banner, cancellationToken);
                 }
-
-                // Display banner on the existing console silently (message only, no command echo)
-                if (!string.IsNullOrEmpty(banner))
+                else if (!string.IsNullOrEmpty(banner))
                 {
-                    var escaped = banner.Replace("'", "''");
-                    await powerShellService.ExecuteSilentAsync(
-                        discoveryResult.ReadyPipeName,
-                        $"[Console]::WriteLine(); [Console]::WriteLine(); Write-Host '{escaped}' -ForegroundColor Green; [Console]::WriteLine(); try {{ $p = & {{ prompt }}; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ' + \"`e[0K\") }} catch {{ [Console]::Write(\"PS $((Get-Location).Path)> `e[0K\") }}",
-                        cancellationToken);
+                    // Reused an already-owned standby console with an explicit
+                    // banner — still surface the AI's banner (a greeting / joke),
+                    // but no generic "connected" notice since nothing was claimed.
+                    await ShowClaimNoticeAsync(powerShellService, discoveryResult.ReadyPipeName, banner, cancellationToken);
                 }
 
                 var reuseLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
@@ -1028,27 +1052,25 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     }
 
     /// <summary>
-    /// Builds PowerShell commands to display banner and/or reason at console startup.
-    /// Banner is shown in green, reason in dark yellow.
-    /// Returns null if both are empty, or a string of PowerShell commands.
+    /// Builds PowerShell commands to display the startup notice on a newly
+    /// spawned console. A spawned console is a new AI attach, so it always
+    /// shows a green line — the caller's banner when given, otherwise the
+    /// default "AI session connected." (mirroring the claim path's
+    /// ShowClaimNoticeAsync, so a custom banner replaces rather than doubles
+    /// the generic notice). The optional reason is appended in dark yellow.
     /// </summary>
-    private static string? BuildStartupCommands(string? banner, string? reason)
+    internal static string BuildStartupCommands(string? banner, string? reason)
     {
-        if (string.IsNullOrEmpty(banner) && string.IsNullOrEmpty(reason))
-            return null;
-
         var parts = new List<string>();
-        if (!string.IsNullOrEmpty(banner))
-        {
-            var escaped = banner.Replace("'", "''");
-            parts.Add($"Write-Host '{escaped}' -ForegroundColor Green");
-        }
+
+        // Green lifecycle line — banner if supplied, else the default notice.
+        var greenLine = string.IsNullOrEmpty(banner) ? "AI session connected." : banner;
+        parts.Add($"Write-Host '{greenLine.Replace("'", "''")}' -ForegroundColor Green");
+
         if (!string.IsNullOrEmpty(reason))
         {
-            if (parts.Count > 0)
-                parts.Add("Write-Host ''");  // blank line between banner and reason
-            var escaped = reason.Replace("'", "''");
-            parts.Add($"Write-Host 'Reason: {escaped}' -ForegroundColor DarkYellow");
+            parts.Add("Write-Host ''");  // blank line between notice and reason
+            parts.Add($"Write-Host 'Reason: {reason.Replace("'", "''")}' -ForegroundColor DarkYellow");
         }
         parts.Add("Write-Host ''");  // blank line before prompt
         return string.Join("; ", parts);
