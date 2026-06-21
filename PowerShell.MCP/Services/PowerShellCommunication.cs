@@ -80,6 +80,21 @@ public static class PowerShellCommunication
             return (false, _resultShouldCache);
         }
     }
+
+    /// <summary>
+    /// Test hook: resets the submitted/completed generation counters to a known
+    /// balanced state so unit tests of the wait/notify protocol are independent
+    /// of execution order. Not used in production.
+    /// </summary>
+    internal static void ResetGenerationsForTests()
+    {
+        lock (_lock)
+        {
+            _submittedGeneration = 0;
+            _completedGeneration = 0;
+            _resultShouldCache = false;
+        }
+    }
 }
 
 /// <summary>
