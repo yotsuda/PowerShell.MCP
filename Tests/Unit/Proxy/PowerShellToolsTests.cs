@@ -1306,6 +1306,107 @@ public class PowerShellToolsTests
         sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
     }
 
+    [Fact]
+    public async Task InvokeExpression_UserCdDrift_WarnsExactlyOnce_ThenReissueExecutes()
+    {
+        // End-to-end "warned exactly once" property, driven through the SAME
+        // ConsoleSessionManager state across two real calls (not hand-reset
+        // between them): the user typed `cd` in the console, so call 1 bails
+        // with a drift warning WITHOUT executing. That bail updates LastAiCwd
+        // to the live cwd, clearing the drift — so call 2 (same pipeline, the
+        // console still sitting at the user's cwd) executes with no warning.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88840;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var aiCwd = Path.Combine(Path.GetTempPath(), "ai-was-here");
+        var userCwd = Path.Combine(Path.GetTempPath(), "user-cd-here");
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, aiCwd);
+
+        // User moved once; live cwd is userCwd and stays there for both calls.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, userCwd));
+
+        var executions = 0;
+        var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-ChildItem", duration = 0.01, cwd = userCwd });
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Callback(() => executions++)
+            .ReturnsAsync(headerJson + "\n\n✓ done");
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        // Call 1: user-cd drift → warn, must NOT execute.
+        var first = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
+        Assert.Contains("Pipeline NOT executed", first);
+        Assert.Contains("outside the AI's commands", first);
+        Assert.Equal(0, executions);
+
+        // Call 2: re-issue. Drift cleared by call 1 → execute, no second warning.
+        var second = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
+        Assert.DoesNotContain("Pipeline NOT executed", second);
+        Assert.Equal(1, executions);
+
+        // Cleanup
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
+    public async Task InvokeExpression_AiChangesOwnCwd_NeverWarns_AndTracksTheMove()
+    {
+        // The other half of the asymmetry: when the AI moves its OWN cwd
+        // (Set-Location in its pipeline) there is no warning on that call, and
+        // the move is recorded as LastAiCwd — so the next call (console now at
+        // the AI's new cwd) also runs with no warning. Only a cwd change the AI
+        // did NOT make (the user) ever warns.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88841;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var oldCwd = Path.Combine(Path.GetTempPath(), "ai-start");
+        var newCwd = Path.Combine(Path.GetTempPath(), "ai-moved-here");
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, oldCwd);
+
+        // Live cwd: oldCwd before the AI's Set-Location, newCwd after it.
+        _mockPipeDiscoveryService
+            .SetupSequence(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, oldCwd))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, newCwd));
+
+        var sentPipelines = new List<string>();
+        // Both executed pipelines report ending at newCwd (call 1 moved there,
+        // call 2 stayed) — this is what the success path snapshots as LastAiCwd.
+        var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "x", duration = 0.01, cwd = newCwd });
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipelines.Add(p))
+            .ReturnsAsync(headerJson + "\n\n✓ done");
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        // Call 1: AI moves its own cwd. No drift (live==LastAi==oldCwd) → runs,
+        // no warning; the move is recorded.
+        var first = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object,
+            $"Set-Location -LiteralPath '{newCwd.Replace("'", "''")}'", agent_id: TestAgentId);
+        Assert.DoesNotContain("Pipeline NOT executed", first);
+        Assert.Equal(newCwd, sessionManager.GetLastAiCwd(testPid));
+
+        // Call 2: console now at newCwd, LastAiCwd matches → still no warning.
+        var second = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
+        Assert.DoesNotContain("Pipeline NOT executed", second);
+        Assert.Equal(2, sentPipelines.Count); // both calls executed
+
+        // Cleanup
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
     #endregion
 
     #region StartConsole unowned-claim gating
