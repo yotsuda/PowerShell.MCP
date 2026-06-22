@@ -190,8 +190,15 @@ public class ConsoleSessionManager
     /// <summary>
     /// Extracts pwsh PID from pipe name (last segment: {name}.{pwshPid} or {name}.{proxyPid}.{pwshPid})
     /// </summary>
-    public static int? GetPidFromPipeName(string pipeName)
+    public static int? GetPidFromPipeName(string? pipeName)
     {
+        // Null/empty is a valid "no pipe" state (e.g. an agent with no active
+        // pipe); callers like GetConsoleDisplayName(string?) rely on getting
+        // null back rather than an NRE so their "unknown" fallback is reached.
+        if (string.IsNullOrEmpty(pipeName))
+        {
+            return null;
+        }
         var parts = pipeName.Split('.');
         if (parts.Length > 0 && int.TryParse(parts[^1], out var pid))
         {
