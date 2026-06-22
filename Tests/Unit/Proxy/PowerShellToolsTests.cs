@@ -1086,6 +1086,99 @@ public class PowerShellToolsTests
     }
 
     [Fact]
+    public async Task InvokeExpression_TrailingSlashCwdDifference_IsNotDrift()
+    {
+        // DetectCwdDrift normalizes via Path.GetFullPath, so "…\proj" and
+        // "…\proj\" are the same directory and must NOT trigger a spurious
+        // drift bail. Holds on every OS (the trailing separator is stripped
+        // before the comparison).
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88830;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var baseCwd = Path.Combine(Path.GetTempPath(), "trailing-slash-cwd");
+        var aiCwd = baseCwd;
+        var liveCwd = baseCwd + Path.DirectorySeparatorChar; // same dir, trailing sep
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, aiCwd);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, liveCwd));
+
+        string? sentPipeline = null;
+        var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = liveCwd });
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
+            .ReturnsAsync(headerJson + "\n\n✓ done");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        var result = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            "Get-Date",
+            agent_id: TestAgentId);
+
+        Assert.Equal("Get-Date", sentPipeline);                 // executed verbatim
+        Assert.DoesNotContain("Pipeline NOT executed", result); // no drift bail
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
+    public async Task InvokeExpression_CaseOnlyCwdDifference_DriftIsOSDependent()
+    {
+        // DetectCwdDrift compares case-insensitively on Windows (NTFS) and
+        // case-sensitively elsewhere. A cwd differing ONLY in letter case must
+        // therefore be "no drift" on Windows but genuine drift on Linux/macOS —
+        // this test pins that documented per-OS behavior on whichever OS runs it.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88831;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var aiCwd = Path.Combine(Path.GetTempPath(), "CwdCaseProj");
+        var liveCwd = Path.Combine(Path.GetTempPath(), "cwdcaseproj"); // same but lowercased leaf
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, aiCwd);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, liveCwd));
+
+        string? sentPipeline = null;
+        var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = liveCwd });
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
+            .ReturnsAsync(headerJson + "\n\n✓ done");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        var result = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            "Get-Date",
+            agent_id: TestAgentId);
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal("Get-Date", sentPipeline);                 // case-insensitive → no drift
+            Assert.DoesNotContain("Pipeline NOT executed", result);
+        }
+        else
+        {
+            Assert.Null(sentPipeline);                              // case-sensitive → drift bail
+            Assert.Contains("Pipeline NOT executed", result);
+        }
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
     public async Task InvokeExpression_NoLastAiCwd_ExecutesPipelineVerbatim()
     {
         // Arrange: fresh console — no LastAiCwd recorded yet. Even if liveCwd

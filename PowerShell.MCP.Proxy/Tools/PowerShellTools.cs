@@ -39,11 +39,13 @@ public class PowerShellTools
         if (!pid.HasValue) return null;
         var aiCwd = ConsoleSessionManager.Instance.GetLastAiCwd(pid.Value);
         if (string.IsNullOrEmpty(aiCwd)) return null;
-        // Case-insensitive comparison on Windows; Path.GetFullPath normalizes
-        // separators and trailing slashes so "C:\Project" and "C:\Project\"
-        // don't trigger a spurious cd.
-        var normalizedAi = Path.GetFullPath(aiCwd);
-        var normalizedLive = Path.GetFullPath(liveCwd);
+        // Normalize separators (GetFullPath) and strip a trailing directory
+        // separator (TrimEndingDirectorySeparator — GetFullPath alone keeps it)
+        // so "C:\Project" and "C:\Project\" don't trigger a spurious cd. Drive
+        // roots ("C:\", "/") keep their separator. Comparison is
+        // case-insensitive on Windows, case-sensitive elsewhere.
+        var normalizedAi = Path.TrimEndingDirectorySeparator(Path.GetFullPath(aiCwd));
+        var normalizedLive = Path.TrimEndingDirectorySeparator(Path.GetFullPath(liveCwd));
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
