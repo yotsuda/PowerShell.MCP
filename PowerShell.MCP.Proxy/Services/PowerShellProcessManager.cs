@@ -7,46 +7,6 @@ namespace PowerShell.MCP.Proxy.Services;
 
 public class PowerShellProcessManager
 {
-    private const string PowerShellExecutableName = "pwsh";
-
-    /// <summary>
-    /// Checks if a PowerShell process is running
-    /// </summary>
-    /// <returns>true if PowerShell process is found</returns>
-    public static bool IsPowerShellProcessRunning()
-    {
-        try
-        {
-            var processes = Process.GetProcessesByName(PowerShellExecutableName);
-            var found = processes.Length > 0;
-
-            // Release process object resources
-            foreach (var process in processes)
-            {
-                process.Dispose();
-            }
-
-            return found;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error checking PowerShell process: {ex.Message}");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Starts PowerShell process with PowerShell.MCP module imported
-    /// </summary>
-    /// <param name="agentId">Agent ID for console isolation</param>
-    /// <param name="startupCommands">Optional PowerShell commands to execute after module import (e.g. Write-Host statements)</param>
-    /// <returns>true if startup succeeded</returns>
-    public static async Task<bool> StartPowerShellWithModuleAsync(string agentId, string? startupCommands = null)
-    {
-        var (success, _) = await StartPowerShellWithModuleAndPipeNameAsync(agentId, startupCommands);
-        return success;
-    }
-
     /// <summary>
     /// Starts PowerShell process with PowerShell.MCP module imported and returns pipe name
     /// </summary>
@@ -151,7 +111,7 @@ public class PowerShellProcessManager
                 using var doc = System.Text.Json.JsonDocument.Parse(response);
                 var status = doc.RootElement.GetProperty("status").GetString();
 
-                if (status == PipeStatus.Standby || status == PipeStatus.Completed)
+                if (PipeStatus.IsReady(status))
                 {
                     return pipe;
                 }
@@ -208,6 +168,23 @@ internal static class PwshLauncherShared
 
         var escapedAgentId = agentId.Replace("'", "''");
         var core = $"{EncodingPrelude}{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+        return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
+    }
+
+    // Windows counterpart to BuildInitCommand. Diverges deliberately from the
+    // non-Windows body in two ways, hence a separate builder rather than a flag:
+    //  - it KEEPS PSReadLine (Import, not Remove) — on Windows the real console
+    //    host uses PSReadLine for editing/prediction, whereas the Unix launchers
+    //    swap in the custom PSConsoleHostReadLine polling shim;
+    //  - it omits Set-Location and ModuleCaseFix — Windows sets the cwd via the
+    //    CreateProcessW lpCurrentDirectory argument, and its file system is
+    //    case-insensitive so the powershell.mcp -> PowerShell.MCP rename is moot.
+    // agentId is escaped per PowerShell's '' convention, matching BuildInitCommand
+    // so a future ID format that contained a quote can't break the launch line.
+    internal static string BuildWindowsInitCommand(int proxyPid, string agentId, string? startupCommands)
+    {
+        var escapedAgentId = agentId.Replace("'", "''");
+        var core = $"{EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
         return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
     }
 
@@ -328,15 +305,7 @@ public static class PwshLauncherWindows
             // UTF-8 BEFORE PSReadLine imports, so menu rendering on CJK Windows doesn't
             // mojibake. See PwshLauncherShared.EncodingPrelude for the rationale.
             var proxyPid = Process.GetCurrentProcess().Id;
-            string command;
-            if (!string.IsNullOrEmpty(startupCommands))
-            {
-                command = $"{PwshLauncherShared.EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine; {startupCommands}";
-            }
-            else
-            {
-                command = $"{PwshLauncherShared.EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{agentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
-            }
+            string command = PwshLauncherShared.BuildWindowsInitCommand(proxyPid, agentId, startupCommands);
             string commandLine = PwshLauncherShared.BuildWindowsCommandLine(command, PwshLauncherShared.SuppressProfileOnInteractive);
 
             bool ok = CreateProcessW(

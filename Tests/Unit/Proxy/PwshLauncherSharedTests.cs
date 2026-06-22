@@ -61,6 +61,54 @@ public class PwshLauncherSharedTests
         Assert.True(caseFixIdx < importIdx, "case-fix must run before Import-Module");
     }
 
+    // BuildWindowsInitCommand is the Windows counterpart to BuildInitCommand.
+    // It deliberately diverges: KEEPS PSReadLine (the real Windows console host
+    // uses it), and omits Set-Location + the case-fix (cwd comes from
+    // CreateProcessW's lpCurrentDirectory; Windows FS is case-insensitive).
+    // It must still escape agentId the same way so a quoted ID can't break the
+    // launch line — the asymmetry that previously existed in the inline builder.
+
+    [Fact]
+    public void BuildWindowsInitCommand_KeepsPSReadLine_AndSetsGlobals()
+    {
+        var cmd = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, DefaultAgentId, null);
+
+        Assert.Contains($"$global:PowerShellMCPProxyPid = {DefaultPid}", cmd);
+        Assert.Contains("$global:PowerShellMCPAgentId = 'default'", cmd);
+        Assert.Contains("Import-Module PowerShell.MCP -Force", cmd);
+        Assert.Contains("Import-Module PSReadLine", cmd);          // kept, not removed
+        Assert.DoesNotContain("Remove-Module PSReadLine", cmd);
+    }
+
+    [Fact]
+    public void BuildWindowsInitCommand_OmitsSetLocationAndCaseFix()
+    {
+        // Windows establishes cwd via CreateProcessW lpCurrentDirectory and is
+        // case-insensitive, so neither belongs in the Windows init script.
+        var cmd = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, DefaultAgentId, null);
+
+        Assert.DoesNotContain("Set-Location", cmd);
+        Assert.DoesNotContain("Rename-Item", cmd);
+    }
+
+    [Fact]
+    public void BuildWindowsInitCommand_AgentIdWithSingleQuote_IsEscaped()
+    {
+        var cmd = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, "te'st", null);
+
+        Assert.Contains("$global:PowerShellMCPAgentId = 'te''st'", cmd);
+    }
+
+    [Fact]
+    public void BuildWindowsInitCommand_AppendsStartupCommandsWhenProvided()
+    {
+        var without = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, DefaultAgentId, null);
+        var with = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, DefaultAgentId, "Write-Host 'hi'");
+
+        Assert.DoesNotContain("Write-Host 'hi'", without);
+        Assert.EndsWith("; Write-Host 'hi'", with);
+    }
+
     // Interactive launchers (Windows/macOS/Linux) gate -NoProfile on the noProfile
     // flag — default off so the user's $PROFILE loads in these human-facing shells,
     // on only when the operator passes the proxy's `--no-profile` flag.

@@ -99,7 +99,7 @@ public class NamedPipeClient
                 using var doc = JsonDocument.Parse(response);
                 var status = doc.RootElement.GetProperty("status").GetString();
 
-                if (status == PipeStatus.Standby || status == PipeStatus.Completed)
+                if (PipeStatus.IsReady(status))
                 {
                     Console.Error.WriteLine($"[INFO] Named Pipe '{pipeName}' ready with status '{status}' after {attempt} attempts");
                     return true;
