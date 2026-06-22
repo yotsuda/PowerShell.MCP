@@ -24,9 +24,19 @@ sections at the TOP of the file; keep older sections for history.
 
 ## Bug Fixes
 - **Reduced an AMSI / antivirus false positive that could block startup (#50).** The embedded polling engine no longer uses `Invoke-Expression`. Its three call sites only wrapped literal strings (cmdlet/type resolution is already deferred to runtime, and each was inside `try/catch`), so they added nothing but the single highest-weighted AMSI heuristic token — which helped the engine script get flagged as malicious at `Import-Module`. They are now direct calls; the engine contains zero `Invoke-Expression`.
+- **No more spurious "cwd changed" warnings caused by the AI's own work.** A directory change left by an AI command (including one harvested in the background via `wait_for_completion`) is now recorded, so the next command no longer misreads it as a user-typed `cd`. Paths that differ only by a trailing separator (`C:\proj` vs `C:\proj\`) no longer trip a false drift warning either.
+- **A disconnected AI session no longer leaks its output to the next one.** When the owning AI goes away, the console discards its undrained cached output and returns to a clean `standby` state, so a freshly-connecting AI can't drain the previous session's results.
+- **Fixed a possible `NullReferenceException`** when resolving a console's display name while no pipe was active.
 
 ## Improvements
 - **Graceful degradation when the engine is blocked at startup.** If an antivirus/AMSI scan blocks the embedded engine during `Import-Module` (often transient), the module now stays loaded and emits one actionable warning instead of failing with a bare error. While the engine is down, commands fast-fail with guidance (run `Restart-MCPServer`) instead of hanging until the request times out.
+- **A green `AI session connected.` line** is now shown when the AI claims or spawns a console — the visible counterpart to the yellow `AI session disconnected` notice.
+- **`Get-MCPOwner` and `Restart-MCPServer` share one `PowerShell.MCP.Status` output type** with identical columns (EngineReady / Owned / ProxyPid / AgentId / ClientName / LastError).
+
+## Internal
+- **Hardened console launching:** the Windows init command is built from the shared helper (escaping the agent id like the other platforms), console-readiness checks go through a single `PipeStatus.IsReady` definition, and dead launcher code was removed.
+- **Release safety gates:** tagged releases now run the full unit suite (net8.0 + net9.0) and an `Import-Module` smoke test of the assembled package before publishing to PSGallery; a missing CHANGELOG section fails fast; PRs are gated and the polling engine is checked to stay free of `Invoke-Expression` (the #50 regression guard).
+- **Expanded automated tests:** multi-console identity/routing, per-agent isolation, cross-AI console visibility (via real named pipes), cwd-drift detection and normalization, and engine graceful-degradation.
 
 # Version: 1.10.0
 
