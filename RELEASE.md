@@ -17,7 +17,18 @@ A release of PowerShell.MCP consists of:
 4. Commit + push to `main`
 5. Tag `vX.Y.Z` + push tag → GitHub Actions handles everything downstream
 
-The GitHub Actions workflow at `.github/workflows/release.yml` handles: multi-RID build, PlatyPS help XML generation, Authenticode signing (DLL + `win-x64` Proxy.exe only), signing-distribution assertion, PSGallery publish, and GitHub Release creation from `CHANGELOG.md`.
+The GitHub Actions workflow at `.github/workflows/release.yml` handles: version-consistency + syntax/IEX checks, CHANGELOG-section fail-fast, **the full unit suite (net8.0 + net9.0)**, multi-RID build, PlatyPS help XML generation, Authenticode signing (DLL + `win-x64` Proxy.exe only), signing-distribution assertion, **an Import-Module smoke test of the assembled artifact**, PSGallery publish, and GitHub Release creation from `CHANGELOG.md`.
+
+### Release gates (what blocks an irreversible publish)
+
+PSGallery publishes cannot be deleted or replaced — only unlisted. The workflow therefore re-proves the release on the runner instead of trusting the maintainer's local run; every gate below runs *before* `Publish to PSGallery`, and any failure aborts the release with nothing published:
+
+1. **Version consistency** — psd1 ModuleVersion and both `.csproj` `<Version>` must equal the tag.
+2. **PowerShell syntax + AMSI #50 IEX guard** — first-party `.ps1`/`.psm1` parse; the polling engine stays free of `Invoke-Expression`.
+3. **CHANGELOG section (fail fast)** — release notes for the tagged version must exist (extracted up front, so a forgotten section fails in seconds — not after publish).
+4. **Unit suite (net8.0 + net9.0)** — `dotnet test` on the exact tagged commit; CI never relies on the local `Run-AllTests.ps1` having been run.
+5. **Signing distribution** — the right files signed, script files left unsigned.
+6. **Assembled-module smoke test** — the staged, signed package is imported and must report the tagged version, expose its command surface (incl. `Restart-MCPServer`), and resolve its bundled proxy.
 
 Manual fallback is documented at the bottom but should rarely be needed.
 
@@ -143,15 +154,19 @@ git push origin v1.7.8
 That tag push starts `release.yml`, which:
 
 1. Verifies all 3 version sources match `v1.7.8`
-2. Builds DLL (net8.0) + Proxy for all 4 RIDs (`win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`, self-contained)
-3. Generates Get-Help XML via PlatyPS
-4. Assembles the module directory (DLL, psd1, psm1, Ude.NetStandard.dll, bin/\*/Proxy, en-US/\*.xml, licenses/\*, THIRD_PARTY_NOTICES.md)
-5. **Signs exactly two files**: `PowerShell.MCP.dll` + `bin/win-x64/PowerShell.MCP.Proxy.exe` with timestamp from DigiCert
-6. Asserts the signing distribution is correct (signed files signed, unsigned files unsigned) — fails publish if not
-7. Publishes to PSGallery
-8. Extracts the matching section from `CHANGELOG.md` and creates a GitHub Release with that body
+2. Syntax-checks the PowerShell sources and enforces the AMSI #50 IEX guard
+3. Extracts the matching `CHANGELOG.md` section **up front** — a missing section fails here, before any build or publish
+4. Runs the **full unit suite** (`dotnet test`, net8.0 + net9.0) — a red test aborts the release
+5. Builds DLL (net8.0) + Proxy for all 4 RIDs (`win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`, self-contained)
+6. Generates Get-Help XML via PlatyPS
+7. Assembles the module directory (DLL, psd1, psm1, Ude.NetStandard.dll, bin/\*/Proxy, en-US/\*.xml, licenses/\*, THIRD_PARTY_NOTICES.md)
+8. **Signs exactly two files**: `PowerShell.MCP.dll` + `bin/win-x64/PowerShell.MCP.Proxy.exe` with timestamp from DigiCert
+9. Asserts the signing distribution is correct (signed files signed, unsigned files unsigned) — fails publish if not
+10. **Smoke-tests the assembled package**: imports it, checks the version equals the tag, the command surface is present, and the bundled proxy resolves — the last gate before publish
+11. Publishes to PSGallery
+12. Creates a GitHub Release with the `CHANGELOG.md` body extracted in step 3
 
-Total runtime: ~3–5 minutes.
+Total runtime: ~4–6 minutes.
 
 ### 6. Post-release verification
 
@@ -237,6 +252,19 @@ gh secret set PSGALLERY_API_KEY --repo yotsuda/PowerShell.MCP
 ```
 
 If any secret is missing, the workflow's `Guard — Windows binaries must be signed for a tagged release` step throws before publishing.
+
+---
+
+## Optional hardening: require a human approval before publish
+
+The CI gates above are *automated* — they prove correctness but still publish the instant a `v*` tag is pushed. As the install base grows, a recommended extra gate is a **manual approval** so a person confirms intent right before the irreversible PSGallery push. This is a one-time repo-settings change (no workflow rewrite needed):
+
+1. **Settings → Environments → New environment**, name it `release`.
+2. Add yourself (and any co-maintainers) under **Required reviewers**.
+3. Move the three release secrets (`PSGALLERY_API_KEY`, `CODE_SIGNING_PFX_BASE64`, `CODE_SIGNING_PFX_PASSWORD`) from repo secrets into the `release` environment's secrets.
+4. In `release.yml`, add `environment: release` to the `release` job.
+
+With this, every tag push runs all the validation gates, then **pauses for a reviewer to approve** before the signing/publish steps can read the environment secrets. Approve from the Actions run page; reject to abort with nothing published. Until this is configured, releases publish automatically once the tag's gates go green.
 
 ---
 

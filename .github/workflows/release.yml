@@ -80,6 +80,35 @@ jobs:
           if ($failed) { throw 'Syntax check failed before release.' }
           Write-Host 'Syntax check passed.'
 
+      - name: Extract release notes for this version (fail fast)
+        id: notes
+        shell: pwsh
+        run: |
+          # Pulled ahead of build/publish so a tag with no matching CHANGELOG
+          # section fails in seconds, BEFORE the irreversible PSGallery publish
+          # (it used to run after publish, which RELEASE.md wrongly described as
+          # "fails before publish"). The output is consumed later by the GitHub
+          # Release step.
+          $version = '${{ steps.ver.outputs.version }}'
+          $lines = Get-Content CHANGELOG.md
+          $inSection = $false
+          $section = New-Object System.Collections.Generic.List[string]
+          foreach ($line in $lines) {
+            if ($line -match '^# Version:\s*(\S+)') {
+              if ($matches[1] -eq $version) { $inSection = $true; continue }
+              elseif ($inSection)            { break }
+            }
+            if ($inSection) { $section.Add($line) }
+          }
+          $body = ($section -join "`n").Trim()
+          if ([string]::IsNullOrWhiteSpace($body)) {
+            throw "No release notes section found for version $version in CHANGELOG.md"
+          }
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          Set-Content -Path $notesPath -Value $body -Encoding UTF8
+          "notes_path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Release notes for $version found ($($section.Count) lines)."
+
       - name: Restore
         shell: pwsh
         run: |
@@ -90,6 +119,20 @@ jobs:
         shell: pwsh
         run: |
           dotnet build PowerShell.MCP/PowerShell.MCP.csproj -c Release -f net8.0 --no-restore
+
+      - name: Run unit test suite (release gate)
+        shell: pwsh
+        run: |
+          # Release gate: the exact commit being published must pass the full
+          # xUnit suite on BOTH runtimes (net8.0 = the shipped DLL target,
+          # net9.0 = the Proxy target). PSGallery publishes are irreversible
+          # (a bad version can only be unlisted, never replaced), so we never
+          # rely on the maintainer having run tests locally — CI re-proves it
+          # here, before the slow multi-RID publish and well before publish.
+          # dotnet test restores+builds the Tests project itself (the upstream
+          # Restore step only covered the two shipping projects).
+          dotnet test Tests/PowerShell.MCP.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Unit tests failed — aborting release before publish.' }
 
       - name: Publish PowerShell.MCP.Proxy for all RIDs
         shell: pwsh
@@ -244,35 +287,46 @@ jobs:
           }
           Write-Host 'Signing distribution OK: DLL + win-x64 Proxy.exe signed; script files + Ude unsigned.'
 
+      - name: Smoke test — import the assembled module (last gate before publish)
+        shell: pwsh
+        run: |
+          # Final gate before the irreversible PSGallery publish: import the EXACT
+          # staged + signed artifact (not a separately-built copy) and prove it
+          # loads, reports the tagged version, exposes its commands, and can
+          # resolve its bundled proxy. Catches a broken manifest, a missing file,
+          # or a signed DLL that won't load — failures the C# unit suite cannot
+          # see because they only exist in the assembled package.
+          $ErrorActionPreference = 'Stop'
+          $stage    = '${{ steps.stage.outputs.stage }}'
+          $expected = '${{ steps.ver.outputs.version }}'
+
+          Import-Module (Join-Path $stage 'PowerShell.MCP.psd1') -Force -Verbose
+          $mod = Get-Module PowerShell.MCP
+          if (-not $mod)                       { throw 'Import-Module produced no loaded module.' }
+          if ($mod.Version.ToString() -ne $expected) {
+            throw "Loaded module version $($mod.Version) != tag v$expected"
+          }
+          Write-Host "Imported PowerShell.MCP $($mod.Version) from the staged package."
+
+          # Representative command surface, including the #50 graceful-degradation
+          # entry point (Restart-MCPServer) added in 1.10.1.
+          $required = @('Get-MCPProxyPath','Get-MCPOwner','Restart-MCPServer','Show-TextFiles')
+          $missing = $required | Where-Object { -not (Get-Command $_ -Module PowerShell.MCP -ErrorAction SilentlyContinue) }
+          if ($missing) { throw "Assembled module is missing expected commands: $($missing -join ', ')" }
+          Write-Host "Command surface OK: $($required -join ', ')"
+
+          # The bundled win-x64 proxy must resolve from inside the package.
+          $proxy = Get-MCPProxyPath
+          if (-not (Test-Path $proxy)) { throw "Get-MCPProxyPath returned a missing path: $proxy" }
+          Write-Host "Proxy resolves: $proxy"
+          Write-Host 'Assembled-module smoke test passed.'
+
       - name: Publish to PSGallery
         shell: pwsh
         env:
           PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
         run: |
           Publish-Module -Path '${{ steps.stage.outputs.stage }}' -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
-
-      - name: Extract release notes for this version
-        id: notes
-        shell: pwsh
-        run: |
-          $version = '${{ steps.ver.outputs.version }}'
-          $lines = Get-Content CHANGELOG.md
-          $inSection = $false
-          $section = New-Object System.Collections.Generic.List[string]
-          foreach ($line in $lines) {
-            if ($line -match '^# Version:\s*(\S+)') {
-              if ($matches[1] -eq $version) { $inSection = $true; continue }
-              elseif ($inSection)            { break }
-            }
-            if ($inSection) { $section.Add($line) }
-          }
-          $body = ($section -join "`n").Trim()
-          if ([string]::IsNullOrWhiteSpace($body)) {
-            throw "No release notes section found for version $version in CHANGELOG.md"
-          }
-          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
-          Set-Content -Path $notesPath -Value $body -Encoding UTF8
-          "notes_path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Create GitHub Release
         env:
