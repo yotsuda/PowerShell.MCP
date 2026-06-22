@@ -109,6 +109,43 @@ public class ExecutionStateTests
     }
 
     [Fact]
+    public void ClearCachedOutputs_DiscardsCache_AndStatusReturnsToStandby()
+    {
+        // Models the AI-disconnect path (MCPModuleInitializer.ReleaseConsole):
+        // a finished command left undrained output, so status is "completed".
+        // When the owning session dies, that output is orphaned — clearing it
+        // must drop the console back to "standby" so it presents as idle and
+        // claimable, not as having output a new AI would wrongly drain.
+        Reset();
+        ExecutionState.SetBusy("x");
+        ExecutionState.AddToCache("orphaned-output");
+        ExecutionState.CompleteExecution();
+        Assert.Equal("completed", ExecutionState.Status); // precondition
+
+        ExecutionState.ClearCachedOutputs();
+
+        Assert.False(ExecutionState.HasCachedOutput);
+        Assert.Empty(ExecutionState.PeekCachedOutputs());
+        Assert.Equal("standby", ExecutionState.Status);
+    }
+
+    [Fact]
+    public void ClearCachedOutputs_AlsoResetsShouldCacheFlag()
+    {
+        // A busy/timeout response sets the "cache on completion" flag so the
+        // result is held for the proxy to retrieve. If that proxy has died,
+        // nothing will retrieve it — clearing on release must also drop the
+        // flag so the next completion doesn't re-cache for a dead consumer.
+        Reset();
+        ExecutionState.MarkForCaching();
+        Assert.True(ExecutionState.ShouldCacheOutput);
+
+        ExecutionState.ClearCachedOutputs();
+
+        Assert.False(ExecutionState.ShouldCacheOutput);
+    }
+
+    [Fact]
     public void Heartbeat_MakesRunspaceAvailable()
     {
         ExecutionState.Heartbeat();

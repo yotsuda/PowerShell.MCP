@@ -289,6 +289,13 @@ namespace PowerShell.MCP
                     _tokenSource.Cancel();
                     _namedPipeServer.Dispose();
 
+                    // Discard the dead session's undrained output so the now-unowned
+                    // console reports 'standby' (idle, claimable) rather than
+                    // 'completed' — _cachedOutputs is static and survives the server
+                    // restart below, so without this a freshly-connecting AI would
+                    // drain the previous session's output as if it were its own.
+                    ExecutionState.ClearCachedOutputs();
+
                     // Create new server without proxy PID (unowned: 2-segment pipe name)
                     _namedPipeServer = new NamedPipeServer(null);
                     _tokenSource = new CancellationTokenSource();
