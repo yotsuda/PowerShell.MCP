@@ -41,6 +41,16 @@ public class ConsoleSessionManager
     private readonly Dictionary<string, AgentSessionState> _agentSessions = new();
 
     /// <summary>
+    /// Agent IDs for which this proxy has already acquired (spawned or
+    /// reclaimed) a console at least once in its lifetime. Used to detect the
+    /// "first attach" — the resume / cold-start boundary where the proxy's
+    /// runtime state is fresh but the AI may still carry intent from an earlier
+    /// session. Not cleared on console death (a mid-session re-attach is NOT a
+    /// first attach); resets naturally when the proxy restarts (new singleton).
+    /// </summary>
+    private readonly HashSet<string> _attachedAgents = new();
+
+    /// <summary>
     /// Set of agent IDs allocated to sub-agents via is_subagent=true
     /// </summary>
     private readonly HashSet<string> _allocatedSubAgentIds = new();
@@ -205,6 +215,33 @@ public class ConsoleSessionManager
             return pid;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Records that this proxy has acquired a console for the agent, returning
+    /// true only the FIRST time in the proxy's lifetime (the resume/cold-start
+    /// boundary). Subsequent calls — including mid-session console-death
+    /// recovery — return false. Callers use the true result to apply the
+    /// new-session treatment (move to $HOME, "new server session" notice).
+    /// </summary>
+    public bool TryMarkFirstAttach(string agentId)
+    {
+        lock (_lock)
+        {
+            return _attachedAgents.Add(agentId); // HashSet.Add is true iff newly added
+        }
+    }
+
+    /// <summary>
+    /// Whether this proxy has already attached a console for the agent, without
+    /// mutating the flag. For read-only checks (e.g. tests / diagnostics).
+    /// </summary>
+    public bool HasAttached(string agentId)
+    {
+        lock (_lock)
+        {
+            return _attachedAgents.Contains(agentId);
+        }
     }
 
     /// <summary>

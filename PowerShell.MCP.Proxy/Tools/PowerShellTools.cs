@@ -164,7 +164,7 @@ public class PowerShellTools
             return Wrap(error);
 
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, _) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -189,6 +189,19 @@ public class PowerShellTools
                 await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
             }
 
+            // First attach for this agent (resume / cold-start). Unlike
+            // invoke_expression, get_current_location is a query — its whole job
+            // is to report where the console is, so we PRESERVE the (possibly
+            // user-prepared) cwd and do not move to $HOME. We only surface the
+            // "new server session" notice so the AI knows prior variables/modules
+            // may not be present. Only fires on a genuine first reclaim
+            // (consoleSwitched); mid-session switches return false.
+            string? newSessionNotice = null;
+            if (consoleSwitched && ConsoleSessionManager.Instance.TryMarkFirstAttach(agentId))
+            {
+                newSessionNotice = BuildNewSessionNotice(GetConsoleName(readyPipeName), liveCwd ?? "the console's current location", null);
+            }
+
             // Get location (DLL will include its own cached outputs automatically)
             var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
 
@@ -200,6 +213,11 @@ public class PowerShellTools
             if (closedConsoleMessages.Count > 0)
             {
                 response.AppendLine(string.Join("\n", closedConsoleMessages));
+                response.AppendLine();
+            }
+            if (!string.IsNullOrEmpty(newSessionNotice))
+            {
+                response.AppendLine(newSessionNotice);
                 response.AppendLine();
             }
             if (busyStatusInfo.Length > 0)
@@ -370,6 +388,32 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         if (var1Error != null)
         {
             return Wrap(var1Error);
+        }
+
+        // First console attach for this agent in the proxy's lifetime — the
+        // resume / cold-start boundary. The proxy is fresh but the AI may carry
+        // a stale cwd/state assumption from earlier in the conversation, and the
+        // console we just spawned/reclaimed could be sitting anywhere. Normalize
+        // to $HOME so this first command runs at a predictable baseline (not an
+        // inherited or arbitrary cwd), and replace the plain spawn/switch notice
+        // with the "new server session" notice. We do NOT suppress: the move is
+        // prepended to the pipeline (one pipe call, no extra AI round-trip), and
+        // a reclaim's prior cwd is surfaced as a restore hint. Mid-session
+        // re-attaches (TryMarkFirstAttach == false) keep the existing notices.
+        if (readyPipeName != null && sessionManager.TryMarkFirstAttach(agentId))
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string? priorCwd = null;
+            if (!string.IsNullOrEmpty(liveCwd))
+            {
+                var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                var normLive = Path.TrimEndingDirectorySeparator(Path.GetFullPath(liveCwd));
+                var normHome = Path.TrimEndingDirectorySeparator(Path.GetFullPath(home));
+                if (!string.Equals(normLive, normHome, comparison)) priorCwd = liveCwd;
+            }
+            pipeline = $"Set-Location -LiteralPath '{home.Replace("'", "''")}'; {pipeline}";
+            liveCwd = home;
+            startupNotice = BuildNewSessionNotice(GetConsoleName(readyPipeName), home, priorCwd);
         }
 
         // Cwd drift detection: if the user typed `cd` in the visible console
@@ -951,16 +995,15 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         var forceNew = !string.IsNullOrEmpty(reason);
 
-        // Skip unowned-pipe discovery when the caller didn't pin a target
-        // cwd. Without an explicit start_location, the AI hasn't expressed
-        // a "where I want to be" intent; claiming an unowned console
-        // (whose cwd is whatever the user happened to be in when they
-        // ran Import-Module) would inherit an arbitrary cwd and confuse
-        // subsequent invoke_expression calls. A fresh console at the
-        // proxy's default home is the predictable baseline. Already-owned
-        // standby consoles are still reused — the skip only blocks the
-        // unowned-claim step.
-        var includeUnowned = !string.IsNullOrEmpty(start_location);
+        // Reuse first to keep the desktop from filling up with console windows:
+        // when no reason is given we reclaim ANY available console — an already
+        // owned standby OR an unowned one (a prior session's released console or
+        // a user-started one) — and only spawn a fresh one when nothing is
+        // available. The cwd a reclaimed console happens to sit at no longer
+        // needs an opt-in (the old start_location gate): the first-attach
+        // treatment below normalizes it (move to $HOME for execution) and the
+        // "new server session" notice tells the AI its prior context may differ.
+        var includeUnowned = true;
 
         // When no reason is given, try to reuse an existing standby console
         if (!forceNew)
@@ -986,7 +1029,24 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
                 var reuseLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
 
+                // First attach for this agent (resume / cold-start). Mark it so a
+                // following invoke_expression treats this console as owned-active
+                // (no second $HOME normalization). Like get_current_location,
+                // start_console is non-executing, so we preserve the console's cwd
+                // and only surface the "new server session" notice when we reclaimed
+                // an existing (unowned) console that may carry a prior session's state.
+                string? reuseNewSessionNotice = null;
+                if (ConsoleSessionManager.Instance.TryMarkFirstAttach(agentId) && discoveryResult.ConsoleSwitched)
+                {
+                    reuseNewSessionNotice = BuildNewSessionNotice(GetConsoleName(discoveryResult.ReadyPipeName), discoveryResult.LiveCwd ?? "the console's current location", null);
+                }
+
                 var reuseResponse = new StringBuilder();
+                if (!string.IsNullOrEmpty(reuseNewSessionNotice))
+                {
+                    reuseResponse.AppendLine(reuseNewSessionNotice);
+                    reuseResponse.AppendLine();
+                }
                 // Report closed consoles detected during discovery
                 if (discoveryResult.ClosedConsoleMessages.Count > 0)
                 {
@@ -1021,6 +1081,12 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             return Wrap(startResult); // Error message
         }
 
+        // Mark first attach so a following invoke_expression sees an owned-active
+        // console and does not re-normalize to $HOME. No "new server session"
+        // notice here: a freshly spawned console is clean (nothing carried over)
+        // and starts at the resolved start_location / $HOME the AI asked for.
+        ConsoleSessionManager.Instance.TryMarkFirstAttach(agentId);
+
         // Set console window title
         var newPipeName = ConsoleSessionManager.Instance.GetActivePipeName(agentId);
         if (newPipeName != null)
@@ -1051,6 +1117,30 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         response.AppendLine();
         response.Append(startResult);
         return Wrap(response.ToString());
+    }
+
+    /// <summary>
+    /// Builds the "new server session" notice shown on the proxy's FIRST
+    /// console attach for an agent (the resume / cold-start boundary). The proxy
+    /// restarted (or just started), so its runtime state is fresh, but the AI may
+    /// still carry intent from earlier in the conversation — variables, modules,
+    /// and cwd it set before are NOT guaranteed on this console. <paramref
+    /// name="currentCwd"/> is where the console now sits (for invoke_expression we
+    /// move it to $HOME; get_current_location reports it as-is). When the console
+    /// was reclaimed from a prior session/user and we moved away from its cwd,
+    /// <paramref name="priorCwdToRestore"/> carries that cwd as a one-line restore
+    /// hint (null when nothing was displaced, e.g. a fresh spawn or a preserved cwd).
+    /// </summary>
+    internal static string BuildNewSessionNotice(string consoleName, string currentCwd, string? priorCwdToRestore)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"🔄 New server session — attached to console {consoleName}, now at {currentCwd}. ");
+        sb.Append("Variables, modules, functions, and cwd from earlier in this conversation are not carried over to this console.");
+        if (!string.IsNullOrEmpty(priorCwdToRestore))
+        {
+            sb.Append($" The console was at '{priorCwdToRestore}' — run Set-Location -LiteralPath '{priorCwdToRestore.Replace("'", "''")}' to resume there.");
+        }
+        return sb.ToString();
     }
 
     /// <summary>
