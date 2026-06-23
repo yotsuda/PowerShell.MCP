@@ -572,20 +572,22 @@ jobs:
           } else {
 
           # Test: invoke_expression with Get-Date (first call).
-          # Since v1.9 (commit 32f0f56), the "switched to a sibling pipe" path no longer
-          # bails with "Pipeline NOT executed" — it folds the switch notice into the
-          # response and runs the pipeline in the same call. So the first call should
-          # show BOTH the "Switched to console" notice AND the actual Get-Date result.
+          # On a fresh proxy this is the first console attach for the agent — the
+          # resume / cold-start boundary — so the response carries the "New server
+          # session" notice and the working directory is normalized to $HOME (the
+          # pipeline is prefixed with a Set-Location), after which the Get-Date still
+          # runs in the same call. So the first call should show BOTH the "New server
+          # session" notice AND the actual Get-Date result.
           Write-Host "`n=== Test: invoke_expression (Get-Date) - First call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 60000
           Write-Host "Response (truncated): $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
 
           $today = Get-Date -Format "yyyy-MM-dd"
-          if ($response -match "Switched to console" -and $response -match $today) {
-            Write-Host "First invoke_expression: PASSED (switched + executed in one call)" -ForegroundColor Green
+          if ($response -match "New server session" -and $response -match $today) {
+            Write-Host "First invoke_expression: PASSED (new-session treatment + executed in one call)" -ForegroundColor Green
           } else {
-            throw "First invoke_expression did not return both ''Switched to console'' and today''s date ($today)"
+            throw "First invoke_expression did not return both ''New server session'' and today''s date ($today)"
           }
 
           # Test: invoke_expression with Get-Date (second call - reuses existing pipe, no switch notice)
