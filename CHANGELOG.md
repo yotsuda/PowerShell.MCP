@@ -17,10 +17,14 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
-# Version: 1.10.1
+# Version: 1.11.0
 
 ## New Features
 - **`Restart-MCPServer` command** to retry starting the console engine in the affected console — no need to restart PowerShell.
+
+## Behavior Changes
+- **Resume-safe console handling (new server session).** On the proxy's first console attach after a (re)start — the resume / cold-start boundary, where the runtime is fresh but the AI still carries cwd/variable/module assumptions from earlier in the conversation — `invoke_expression` normalizes the working directory to `$HOME` and announces a **new server session** (with a one-line restore hint for a reclaimed console's prior cwd), while `get_current_location` / `start_console` preserve the console's current cwd and only announce. This stops a resumed session from silently running at an unexpected cwd or relying on state that didn't carry over.
+- **Reuse-first console acquisition.** Without a `reason`, `start_console` now reclaims any available console — an owned standby **or** an unowned one (a prior session's released console, or a user-started one) — and only launches a new window when nothing is available. Previously an unowned console was reclaimed only when `start_location` was given; that guard is gone (the new-session normalization above handles the cwd concern), so the desktop no longer fills with console windows.
 
 ## Bug Fixes
 - **Reduced an AMSI / antivirus false positive that could block startup (#50).** The embedded polling engine no longer uses `Invoke-Expression`. Its three call sites only wrapped literal strings (cmdlet/type resolution is already deferred to runtime, and each was inside `try/catch`), so they added nothing but the single highest-weighted AMSI heuristic token — which helped the engine script get flagged as malicious at `Import-Module`. They are now direct calls; the engine contains zero `Invoke-Expression`.
@@ -36,7 +40,7 @@ sections at the TOP of the file; keep older sections for history.
 ## Internal
 - **Hardened console launching:** the Windows init command is built from the shared helper (escaping the agent id like the other platforms), console-readiness checks go through a single `PipeStatus.IsReady` definition, and dead launcher code was removed.
 - **Release safety gates:** tagged releases now run the full unit suite (net8.0 + net9.0) and an `Import-Module` smoke test of the assembled package before publishing to PSGallery; a missing CHANGELOG section fails fast; PRs are gated and the polling engine is checked to stay free of `Invoke-Expression` (the #50 regression guard).
-- **Expanded automated tests:** multi-console identity/routing, per-agent isolation, cross-AI console visibility (via real named pipes), cwd-drift detection and normalization, and engine graceful-degradation.
+- **Expanded automated tests:** multi-console identity/routing, per-agent isolation, cross-AI console visibility (via real named pipes), cwd-drift detection and normalization, the resume / first-attach new-session treatment, and engine graceful-degradation.
 
 # Version: 1.10.0
 
