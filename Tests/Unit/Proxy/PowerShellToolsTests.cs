@@ -1566,6 +1566,48 @@ public class PowerShellToolsTests
     }
 
     [Fact]
+    public async Task InvokeExpression_FirstAttachAlreadyAtHome_AnnouncesNewSessionWithoutRestoreHint()
+    {
+        // The spawn case (and any reclaim that happens to land at $HOME): on the
+        // first attach the console is already at $HOME, so the pipeline is still
+        // normalized to $HOME and the new-session notice fires, but there is NO
+        // prior cwd to restore (priorCwd is null when liveCwd == home). Complements
+        // the reclaim-at-a-different-cwd test, which DOES carry a restore hint.
+        var freshAgent = ConsoleSessionManager.Instance.AllocateSubAgentId(); // unmarked
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var pipeName = $"PSMCP.{ConsoleSessionManager.Instance.ProxyPid}.{freshAgent}.94005";
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(freshAgent, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, true, new List<string>(), null, home));
+        _mockPowerShellService
+            .Setup(s => s.SetWindowTitleAsync(pipeName, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        string? sentPipeline = null;
+        var headerJson = JsonSerializer.Serialize(new { pid = 94005, status = "success", pipeline = "x", duration = 0.01, cwd = home });
+        _mockPowerShellService
+            .Setup(s => s.InvokeExpressionToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
+            .ReturnsAsync(headerJson + "\n\n✓ done");
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        var result = await PowerShellTools.InvokeExpression(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: freshAgent);
+
+        Assert.NotNull(sentPipeline);
+        Assert.StartsWith("Set-Location -LiteralPath '", sentPipeline);     // still normalized to $HOME
+        Assert.EndsWith("; Get-ChildItem", sentPipeline);
+        Assert.DoesNotContain("Pipeline NOT executed", result);
+        Assert.Contains("New server session", result);
+        Assert.DoesNotContain("to resume there", result);                   // no restore hint: already at $HOME
+
+        ConsoleSessionManager.Instance.SetLastAiCwd(freshAgent, 94005, null);
+    }
+
+    [Fact]
     public async Task GetCurrentLocation_FirstAttach_PreservesCwdAndAnnouncesNewSession()
     {
         // get_current_location is a query — on first attach it PRESERVES the
