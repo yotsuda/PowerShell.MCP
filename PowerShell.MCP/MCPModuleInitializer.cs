@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Management.Automation;
 using System.Reflection;
 using PowerShell.MCP.Services;
@@ -30,6 +31,12 @@ namespace PowerShell.MCP
         private static readonly object _serverLock = new();
         private static CancellationTokenSource? _tokenSource;
         private static NamedPipeServer? _namedPipeServer;
+
+        // Single live handle to the owning proxy process, used for event-driven
+        // disconnect detection (see WatchProxyExit). Exactly one is held at a
+        // time — disposed before re-watching and on release — so reclaims don't
+        // accumulate process handles.
+        private static Process? _proxyExitWatcher;
         public static readonly string ServerVersion = Assembly.GetExecutingAssembly().GetName().Version!.ToString();
 
         /// <summary>
@@ -140,6 +147,13 @@ namespace PowerShell.MCP
                         Console.Error.WriteLine($"[ERROR] Named Pipe server failed: {ex.Message}");
                     }
                 }, token);
+
+                // Arm event-driven disconnect detection for proxy-launched
+                // (owned) consoles. Unowned consoles have no proxy to watch.
+                if (proxyPid.HasValue)
+                {
+                    WatchProxyExit(proxyPid.Value);
+                }
             }
             catch (Exception ex)
             {
@@ -261,6 +275,9 @@ namespace PowerShell.MCP
                         }
                     }, token);
 
+                    // Arm event-driven disconnect detection for the new owner.
+                    WatchProxyExit(proxyPid);
+
                     return _namedPipeServer.PipeName;
                 }
                 catch (Exception ex)
@@ -296,6 +313,9 @@ namespace PowerShell.MCP
                     // drain the previous session's output as if it were its own.
                     ExecutionState.ClearCachedOutputs();
 
+                    // Proxy is gone — release its process handle and stop watching.
+                    StopWatchingProxyExitInternal();
+
                     // Create new server without proxy PID (unowned: 2-segment pipe name)
                     _namedPipeServer = new NamedPipeServer(null);
                     _tokenSource = new CancellationTokenSource();
@@ -324,6 +344,57 @@ namespace PowerShell.MCP
                     Console.Error.WriteLine($"[ERROR] ReleaseConsole failed: {ex.Message}");
                     return null;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Registers an OS-level wait on the owning proxy process so its exit is
+        /// detected immediately (event-driven) instead of via the slow ~5s
+        /// liveness poll. The Exited handler runs on a thread-pool thread and
+        /// only sets a flag (ExecutionState.SignalProxyExited); the runspace's
+        /// polling-engine timer consumes it and performs the thread-affine
+        /// ReleaseConsole + disconnect notice on the home thread. Holds exactly
+        /// one Process/handle at a time, so reclaims don't leak handles.
+        /// </summary>
+        public static void WatchProxyExit(int proxyPid)
+        {
+            lock (_serverLock)
+            {
+                StopWatchingProxyExitInternal();
+                // Drop any stale signal from a previous proxy so this fresh
+                // watch doesn't make the engine release immediately.
+                ExecutionState.ConsumeProxyExited();
+                try
+                {
+                    var proc = Process.GetProcessById(proxyPid);
+                    proc.EnableRaisingEvents = true;
+                    proc.Exited += (_, _) => ExecutionState.SignalProxyExited();
+                    _proxyExitWatcher = proc;
+                    // Race: the proxy may have exited between GetProcessById and
+                    // the Exited subscription. HasExited closes that window.
+                    if (proc.HasExited) ExecutionState.SignalProxyExited();
+                }
+                catch
+                {
+                    // Proxy already gone / inaccessible — treat as exited so the
+                    // engine releases on its next tick.
+                    ExecutionState.SignalProxyExited();
+                }
+            }
+        }
+
+        /// <summary>Stops watching the proxy and releases the held handle.</summary>
+        public static void StopWatchingProxyExit()
+        {
+            lock (_serverLock) { StopWatchingProxyExitInternal(); }
+        }
+
+        private static void StopWatchingProxyExitInternal()
+        {
+            if (_proxyExitWatcher != null)
+            {
+                try { _proxyExitWatcher.Dispose(); } catch { }
+                _proxyExitWatcher = null;
             }
         }
 

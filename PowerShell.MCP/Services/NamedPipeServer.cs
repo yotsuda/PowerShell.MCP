@@ -293,6 +293,32 @@ public static class ExecutionState
             _shouldCacheOutput = false;
         }
     }
+
+    // ===== Proxy-exit signal (event-driven disconnect detection) =====
+    // Set by MCPModuleInitializer's Process.Exited handler — a thread-pool
+    // thread — the instant the owning proxy exits. Consumed on the runspace's
+    // home thread by MCPPollingEngine's timer tick, which then runs the
+    // thread-affine ReleaseConsole + disconnect notice (~100ms latency instead
+    // of the slow ~5s liveness poll). A single flag is enough: the engine only
+    // needs to learn "the proxy we were watching is gone" once.
+    private static bool _proxyExited;
+
+    /// <summary>Signals that the watched proxy process has exited (thread-safe).</summary>
+    public static void SignalProxyExited()
+    {
+        lock (_lock) { _proxyExited = true; }
+    }
+
+    /// <summary>Returns true once if a proxy exit was signaled, then clears it.</summary>
+    public static bool ConsumeProxyExited()
+    {
+        lock (_lock)
+        {
+            if (!_proxyExited) return false;
+            _proxyExited = false;
+            return true;
+        }
+    }
 }
 
 /// <summary>

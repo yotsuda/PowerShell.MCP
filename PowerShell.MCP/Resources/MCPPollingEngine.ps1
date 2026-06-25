@@ -72,34 +72,27 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # never updates.
             try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
 
-            # ===== Proxy Liveness Check (every ~5 seconds) =====
-            if (-not $global:__mcpProxyCheckCounter) { $global:__mcpProxyCheckCounter = 0 }
-            if ((++$global:__mcpProxyCheckCounter) -ge 50) {
-                $global:__mcpProxyCheckCounter = 0
-                # Extract proxy PID from pipe name (authoritative source, updated on claim)
-                # Owned: PSMCP.{proxyPid}.{agentId}.{pwshPid} = 4 segments
+            # ===== Proxy disconnect detection (event-driven) =====
+            # MCPModuleInitializer watches the owning proxy process via
+            # Process.Exited and sets this flag the instant it exits. We consume
+            # it here on the runspace's home thread each ~100ms tick and run the
+            # thread-affine ReleaseConsole + disconnect notice. Arming covers
+            # every owned path (OnImport owned launch + ClaimConsole reclaim), so
+            # no liveness poll is needed as a backstop.
+            if ([PowerShell.MCP.Services.ExecutionState]::ConsumeProxyExited()) {
+                # Act only when currently an owned console (4-segment pipe).
                 $pipeName = [PowerShell.MCP.MCPModuleInitializer]::GetPipeName()
                 $segments = if ($pipeName) { $pipeName.Split('.') } else { @() }
                 if ($segments.Length -eq 4) {
-                    $proxyPid = [int]$segments[1]
-                    # GetProcessById returns a Process holding an OS handle that is only released
-                    # by the finalizer if not Disposed. This poll fires every ~5s — without explicit
-                    # Dispose the handle count creeps up over a long-running session.
-                    $proxyAlive = $false
-                    $proxyProc = $null
-                    try { $proxyProc = [System.Diagnostics.Process]::GetProcessById($proxyPid); $proxyAlive = $true } catch { }
-                    finally { if ($proxyProc) { $proxyProc.Dispose() } }
-                    if (-not $proxyAlive) {
-                        [PowerShell.MCP.MCPModuleInitializer]::ReleaseConsole()
-                        $global:PowerShellMCPProxyPid = $null
-                        $global:PowerShellMCPAgentId = $null
-                        $Host.UI.RawUI.WindowTitle = "#$PID ____"
-                        [Console]::WriteLine()
-                        [Console]::WriteLine()
-                        Write-Host 'AI session disconnected. Waiting for next connection.' -ForegroundColor Yellow
-                        [Console]::WriteLine()
-                        try { $p = & { prompt }; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
-                    }
+                    [PowerShell.MCP.MCPModuleInitializer]::ReleaseConsole()
+                    $global:PowerShellMCPProxyPid = $null
+                    $global:PowerShellMCPAgentId = $null
+                    $Host.UI.RawUI.WindowTitle = "#$PID ____"
+                    [Console]::WriteLine()
+                    [Console]::WriteLine()
+                    Write-Host 'AI session disconnected. Waiting for next connection.' -ForegroundColor Yellow
+                    [Console]::WriteLine()
+                    try { $p = & { prompt }; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
                 }
             }
 

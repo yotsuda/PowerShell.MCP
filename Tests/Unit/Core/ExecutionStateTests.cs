@@ -32,6 +32,19 @@ public class ExecutionStateTests
     }
 
     [Fact]
+    public void ConsumeProxyExited_ReturnsTrueOnce_ThenClears()
+    {
+        // Event-driven disconnect: the proxy's Process.Exited handler signals,
+        // the polling-engine tick consumes exactly once and acts.
+        ExecutionState.ConsumeProxyExited();                 // drain any prior signal
+        Assert.False(ExecutionState.ConsumeProxyExited());   // nothing pending
+
+        ExecutionState.SignalProxyExited();
+        Assert.True(ExecutionState.ConsumeProxyExited());     // consumed once
+        Assert.False(ExecutionState.ConsumeProxyExited());    // and cleared (no re-fire)
+    }
+
+    [Fact]
     public void SetBusy_MakesStatusBusy_AndExposesPipeline()
     {
         Reset();
