@@ -137,6 +137,28 @@ public class PowerShellService : IPowerShellService
         }
     }
 
+    public async Task<CommandAckResponse?> CancelAsync(string pipeName, CancellationToken cancellationToken = default)
+    {
+        var requestParams = new CancelParams();
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.CancelParams);
+
+        var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+        if (string.IsNullOrEmpty(response))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize(ExtractResponseHeader(response), CommandAckResponseContext.Default.CommandAckResponse);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[WARN] CancelAsync parse failed: {ex.Message}");
+            return null;
+        }
+    }
+
     /// <summary>
     /// Extracts the body part from a response (content after "\n\n" separator)
     /// </summary>

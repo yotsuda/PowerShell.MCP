@@ -518,16 +518,40 @@ public class NamedPipeServer : IDisposable
                     var runningPipeline = ExecutionState.CurrentPipeline;
                     var truncatedPipeline = TruncatePipeline(runningPipeline);
                     var roundedDuration = Math.Round(elapsed, 2);
-                    var statusLine = BuildStatusLine("⧗", "Pipeline is running", "Busy", truncatedPipeline, roundedDuration);
-                    statusResponse = JsonSerializer.Serialize(new
+
+                    // The command may be busy specifically because it is parked
+                    // at an interactive prompt. Surface that as a distinct
+                    // status so the proxy/AI can choose to answer or close it
+                    // rather than treat it as a normal long-running command.
+                    if (PowerShellCommunication.IsAwaitingInput)
                     {
-                        pid,
-                        status = "busy",
-                        pipeline = truncatedPipeline,
-                        duration = roundedDuration,
-                        statusLine,
-                        cwd
-                    });
+                        var promptText = PowerShellCommunication.AwaitingPromptText;
+                        var promptInfo = string.IsNullOrEmpty(promptText) ? "" : $" ({promptText})";
+                        var awaitingStatusLine = BuildStatusLine("⌨", $"Console is waiting for input{promptInfo}", "AwaitingInput", truncatedPipeline, roundedDuration);
+                        statusResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "awaiting_input",
+                            pipeline = truncatedPipeline,
+                            duration = roundedDuration,
+                            message = promptText,
+                            statusLine = awaitingStatusLine,
+                            cwd
+                        });
+                    }
+                    else
+                    {
+                        var statusLine = BuildStatusLine("⧗", "Pipeline is running", "Busy", truncatedPipeline, roundedDuration);
+                        statusResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "busy",
+                            pipeline = truncatedPipeline,
+                            duration = roundedDuration,
+                            statusLine,
+                            cwd
+                        });
+                    }
                 }
                 else if (status == "completed")
                 {
@@ -584,6 +608,23 @@ public class NamedPipeServer : IDisposable
                     status = "success"
                 });
                 await SendMessageAsync(pipeServer, header + "\n\n" + combinedOutput, cancellationToken);
+                return;
+            }
+
+            // Handle cancel request - sends a real Ctrl+C to the console
+            // group. Handled BEFORE the busy gate (and the version check)
+            // because its whole purpose is to interrupt a command that is
+            // currently running/blocked. Runs on this background pipe
+            // thread, so it fires even while the home thread is stuck in a
+            // prompt. The interrupted command unwinds through its normal
+            // finally -> NotifyResultReady -> CompleteExecution, flipping
+            // the console back to completed/standby.
+            if (name == "cancel")
+            {
+                var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                var ok = ConsoleControl.SendCtrlC();
+                var resp = JsonSerializer.Serialize(new { pid, status = ok ? "success" : "error" });
+                await SendMessageAsync(pipeServer, resp, cancellationToken);
                 return;
             }
 
@@ -747,7 +788,7 @@ Please provide how to update the MCP client configuration to the user.";
 
                 try
                 {
-                    var (isTimeout, shouldCache) = await Task.Run(() => ExecuteInvokeExpression(requestRoot));
+                    var (isTimeout, shouldCache, awaitingInput, promptText) = await Task.Run(() => ExecuteInvokeExpression(requestRoot));
 
                     var pid = Process.GetCurrentProcess().Id;
                     var elapsed = ExecutionState.ElapsedSeconds;
@@ -764,7 +805,34 @@ Please provide how to update the MCP client configuration to the user.";
                     try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
                     catch { cwd = null; }
 
-                    if (isTimeout)
+                    if (awaitingInput)
+                    {
+                        // Prompt detected - the command is paused waiting for
+                        // interactive input. Hand control back to the AI now
+                        // (the command stays blocked; result is cached). The
+                        // proxy turns this into a "answer it or close it" notice.
+                        var promptInfo = string.IsNullOrEmpty(promptText) ? "" : $" ({promptText})";
+                        var statusLine = BuildStatusLine("⌨", $"Console is waiting for input{promptInfo}", "AwaitingInput", runningPipeline, roundedDuration);
+                        var awaitingResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "awaiting_input",
+                            pipeline = runningPipeline,
+                            duration = roundedDuration,
+                            message = promptText,
+                            statusLine,
+                            cwd
+                        });
+                        try
+                        {
+                            await SendMessageAsync(pipeServer, awaitingResponse, cancellationToken);
+                        }
+                        catch
+                        {
+                            // Pipe error - nothing to do
+                        }
+                    }
+                    else if (isTimeout)
                     {
                         // Timeout - send JSON response
                         var statusLine = BuildStatusLine("⧗", "Pipeline is still running", "Busy", runningPipeline, roundedDuration);
@@ -966,8 +1034,8 @@ Please provide how to update the MCP client configuration to the user.";
     /// <summary>
     /// Executes the invokeExpression tool
     /// </summary>
-    /// <returns>Tuple of (isTimeout, shouldCache)</returns>
-    private static (bool isTimeout, bool shouldCache) ExecuteInvokeExpression(JsonElement parameters)
+    /// <returns>Tuple of (isTimeout, shouldCache, awaitingInput, promptText)</returns>
+    private static (bool isTimeout, bool shouldCache, bool awaitingInput, string? promptText) ExecuteInvokeExpression(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
         var timeoutSeconds = parameters.TryGetProperty("timeout_seconds", out var timeoutElement)

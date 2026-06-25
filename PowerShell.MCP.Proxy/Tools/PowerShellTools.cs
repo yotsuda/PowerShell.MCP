@@ -1,5 +1,6 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Linq;
 using System.Text;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Models;
@@ -146,7 +147,7 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple invoke_expression commands in succession, calling once at the beginning is sufficient.")]
+    [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple execute_command commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
@@ -190,7 +191,7 @@ public class PowerShellTools
             }
 
             // First attach for this agent (resume / cold-start). Unlike
-            // invoke_expression, get_current_location is a query — its whole job
+            // execute_command, get_current_location is a query — its whole job
             // is to report where the console is, so we PRESERVE the (possibly
             // user-prepared) cwd and do not move to $HOME. We only surface the
             // "new server session" notice so the AI knows prior variables/modules
@@ -240,6 +241,83 @@ public class PowerShellTools
     }
 
     [McpServerTool]
+    [Description(@"Send Ctrl+C to the active console to interrupt the command currently running there — a long-running/runaway pipeline, or a NATIVE CLI waiting on stdin (git, npm, ssh, etc.). This is the programmatic equivalent of a human pressing Ctrl+C. IMPORTANT: it does NOT cancel a PowerShell host prompt (Read-Host, a missing mandatory parameter, Get-Credential) — those are reported as 'awaiting_input', and the only recoveries are to let the user answer in the console or to close_console it. Targets the agent's active console directly — it does NOT route to a different console.")]
+    public static async Task<string> Cancel(
+        IPowerShellService powerShellService,
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true.")]
+        string? agent_id = null,
+        [Description("Set to true if you are a sub-agent.")]
+        bool is_subagent = false,
+        CancellationToken cancellationToken = default)
+    {
+        var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
+        string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
+        if (resolveError != null)
+            return Wrap(resolveError);
+
+        var pipeName = ConsoleSessionManager.Instance.GetActivePipeName(agentId);
+        if (pipeName == null)
+            return Wrap("No active console to cancel. Run a command first with execute_command.");
+
+        var ack = await powerShellService.CancelAsync(pipeName, cancellationToken);
+        if (ack == null || ack.Status != "success")
+            return Wrap($"Cancel request to console {GetConsoleName(pipeName)} failed or was not acknowledged. The console may have already finished or been closed.");
+
+        return Wrap($"✓ Sent Ctrl+C to console {GetConsoleName(pipeName)}. The running command was interrupted and the console should be back to ready. Call execute_command (or get_current_location) to continue and to drain any output the cancelled command produced.");
+    }
+
+    [McpServerTool]
+    [Description(@"Forcibly close (kill) a PowerShell console by its PID. Use to abandon a console paused at an interactive prompt (see the awaiting-input notice) or stuck on a runaway command. The PID is the number shown in tool output as '#<pid> <name>'. Only consoles owned by this session can be closed. The next command auto-starts a fresh console.")]
+    public static Task<string> CloseConsole(
+        [Description("PID of the console to close (the number in '#<pid> <name>').")]
+        int pid,
+        [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true.")]
+        string? agent_id = null,
+        [Description("Set to true if you are a sub-agent.")]
+        bool is_subagent = false,
+        CancellationToken cancellationToken = default)
+    {
+        var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
+        string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
+        if (resolveError != null)
+            return Task.FromResult(Wrap(resolveError));
+
+        var sessionManager = ConsoleSessionManager.Instance;
+
+        // Safety: only kill a pwsh that this proxy/agent actually owns a pipe
+        // for — never an arbitrary PID.
+        var ownedPids = sessionManager.EnumeratePipes(sessionManager.ProxyPid, agentId)
+            .Select(ConsoleSessionManager.GetPidFromPipeName)
+            .Where(p => p.HasValue)
+            .Select(p => p!.Value)
+            .ToHashSet();
+
+        if (!ownedPids.Contains(pid))
+        {
+            var known = ownedPids.Count > 0 ? string.Join(", ", ownedPids.OrderBy(p => p)) : "none";
+            return Task.FromResult(Wrap($"PID {pid} is not a console owned by this session (owned: {known}). Refusing to close it."));
+        }
+
+        try
+        {
+            System.Diagnostics.Process.GetProcessById(pid).Kill();
+        }
+        catch (ArgumentException)
+        {
+            // Process already gone — fall through to clear tracking.
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(Wrap($"Failed to close console #{pid}: {ex.Message}"));
+        }
+
+        var pipeName = ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, agentId, pid);
+        sessionManager.ClearDeadPipe(agentId, pipeName);
+
+        return Task.FromResult(Wrap($"✓ Closed console #{pid}. The next command will auto-start a fresh console."));
+    }
+
+    [McpServerTool]
     [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help.
 
 📌 This is your primary tool for all command execution tasks: directory navigation, git operations, build/test commands, file system operations, process management, environment variable access, and any shell/terminal task. Sessions persist across calls—variables, modules, functions, and authentication stay active. Install any PowerShell Gallery module to extend capabilities (e.g., Az for Azure, AWS.Tools for AWS, Microsoft.Graph for M365).
@@ -247,7 +325,7 @@ public class PowerShellTools
 💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
 
 ⚠️ CRITICAL - Variable Scope:
-Local variables are NOT preserved between invoke_expression calls. Use $script: or $global: scope to share variables across calls.
+Local variables are NOT preserved between execute_command calls. Use $script: or $global: scope to share variables across calls.
 
 ⚠️ CRITICAL - String Interpolation:
 Double-quoted strings expand variables and subexpressions: ""$var"" becomes the value of $var, ""$(expr)"" evaluates expr. Use single quotes for literal strings: '$var' keeps the text $var as-is.
@@ -257,7 +335,7 @@ ALWAYS use the specialized cmdlets for text file editing: Show-TextFiles, Add-Li
 NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via var1-var4 parameters.
 Create new file: Add-LinesToFile path -Content $var1 (with var1 parameter containing the content)
 Edit existing file: Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile (use var1-var4 for content with $, backtick, or quotes)
-For detailed examples: invoke_expression('Get-Help <cmdlet-name> -Examples')
+For detailed examples: execute_command('Get-Help <cmdlet-name> -Examples')
 Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
 
 📌 Prefer these cmdlets over other file read/edit/search tools provided by the host application. They handle special characters ($, backtick, double-quote) safely via var1-var4 parameters, and keep all operations in a single persistent session without context switching.
@@ -268,7 +346,7 @@ Invoke-Claude ""prompt"" — Call Anthropic Claude API. Invoke-GPT ""prompt"" �
 🔤 Variables Parameter:
 Use var1/var2/var3/var4 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. Reference them as $var1/$var2/$var3/$var4 in the pipeline.
 When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]
-    public static async Task<string> InvokeExpression(
+    public static async Task<string> ExecuteCommand(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
         [Description("The PowerShell command or pipeline to execute. Multi-line commands (if, loops, try-catch, etc.) are supported.")]
@@ -417,7 +495,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         }
 
         // Cwd drift detection: if the user typed `cd` in the visible console
-        // since the AI's last successful invoke_expression, the live cwd has
+        // since the AI's last successful execute_command, the live cwd has
         // moved off AI's intended cwd. Bail out without executing — the AI's
         // pipeline was built assuming cwd=AiCwd, silently running at LiveCwd
         // could trigger destructive ops at the wrong place (e.g. Remove-Item
@@ -530,7 +608,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     // cadence. If it ever happens, the recursion would
                                     // spawn one more console and run there; no infinite
                                     // loop, just one extra console.
-                                    var retryResult = await InvokeExpression(
+                                    var retryResult = await ExecuteCommand(
                                         powerShellService, pipeDiscoveryService, pipeline,
                                         timeout_seconds, var1, var2, var3, var4,
                                         agentId, is_subagent: false,
@@ -604,7 +682,8 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     : $"⧗ Pipeline is still running | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 timeoutResponse.AppendLine(timeoutStatusLine);
                                 timeoutResponse.AppendLine();
-                                timeoutResponse.Append("Use wait_for_completion tool to wait and retrieve the result.");
+                                timeoutResponse.AppendLine("Use wait_for_completion to wait for the result.");
+                                timeoutResponse.Append($"If it is instead STUCK — a native CLI (git/npm/ssh) waiting on stdin, or a runaway command — use cancel to interrupt it (Ctrl+C; works on native/running commands but not on PowerShell host prompts), or close_console {jsonResponse.Pid} to abandon the console.");
                                 // Scope warning at the end (after instruction for better readability)
                                 if (!string.IsNullOrEmpty(scopeWarning))
                                 {
@@ -612,6 +691,46 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     timeoutResponse.AppendLine(scopeWarning);
                                 }
                                 return Wrap(timeoutResponse.ToString());
+
+                            case PipeStatus.AwaitingInput:
+                                // Command is parked at an interactive prompt. It will
+                                // NOT finish on its own and a PowerShell prompt cannot be
+                                // cancelled programmatically, so steer the AI to the only
+                                // two real moves: let the user answer it, or abandon the
+                                // console. (Marked busy for tracking; cwd snapshotted so a
+                                // later auto-route can resume where the AI was working.)
+                                if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(agentId, jsonResponse.Pid);
+                                if (jsonResponse.Pid > 0 && !string.IsNullOrEmpty(jsonResponse.Cwd))
+                                    sessionManager.SetLastAiCwd(agentId, jsonResponse.Pid, jsonResponse.Cwd);
+
+                                var awaitingConsole = ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid);
+                                var awaitingPromptInfo = string.IsNullOrEmpty(jsonResponse.Message) ? "" : $" — {jsonResponse.Message}";
+
+                                var awaitingResponse = new StringBuilder();
+                                if (closedConsoleMessages.Count > 0)
+                                {
+                                    awaitingResponse.AppendLine(string.Join("\n", closedConsoleMessages));
+                                    awaitingResponse.AppendLine();
+                                }
+                                if (!string.IsNullOrEmpty(startupNotice))
+                                {
+                                    awaitingResponse.AppendLine(startupNotice);
+                                    awaitingResponse.AppendLine();
+                                }
+                                if (!string.IsNullOrEmpty(jsonResponse.StatusLine))
+                                {
+                                    awaitingResponse.AppendLine(jsonResponse.StatusLine);
+                                    awaitingResponse.AppendLine();
+                                }
+                                awaitingResponse.AppendLine($"⌨ Console {awaitingConsole} is paused at a PowerShell HOST prompt{awaitingPromptInfo} — issued by a cmdlet/function (Read-Host, a missing mandatory parameter, Get-Credential, a confirmation). It will NOT finish on its own. NOTE: `cancel` does NOT work on a PowerShell host prompt (only on native CLIs / runaway commands), so do not call it here. Choose one:");
+                                awaitingResponse.AppendLine($"  • Ask the user to type the answer directly in console {awaitingConsole}.");
+                                awaitingResponse.AppendLine($"  • Abandon it with close_console {jsonResponse.Pid} (the next command auto-starts a fresh console).");
+                                if (!string.IsNullOrEmpty(scopeWarning))
+                                {
+                                    awaitingResponse.AppendLine();
+                                    awaitingResponse.AppendLine(scopeWarning);
+                                }
+                                return Wrap(awaitingResponse.ToString());
 
                             case PipeStatus.Completed:
                                 // Snapshot AI-intended cwd from the cached completion.
@@ -626,7 +745,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // sees the flag and routes the result to the console's local
                                 // cache, and the DLL returns a metadata-only "completed"
                                 // response assuming the original caller was no longer
-                                // listening. In practice the original InvokeExpression
+                                // listening. In practice the original ExecuteCommand
                                 // handler IS still running (this switch case is inside it)
                                 // and can still deliver the response through the pipe that
                                 // is currently being serviced. Same mechanism the "timeout"
@@ -686,7 +805,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                             case "success":
                                 // Snapshot AI-intended cwd at successful completion. This
                                 // is the post-execution cwd — where AI's pipeline left the
-                                // shell — so the next invoke_expression's drift check
+                                // shell — so the next execute_command's drift check
                                 // compares against the place AI actually finished at.
                                 if (jsonResponse.Pid > 0 && !string.IsNullOrEmpty(jsonResponse.Cwd))
                                     sessionManager.SetLastAiCwd(agentId, jsonResponse.Pid, jsonResponse.Cwd);
@@ -763,7 +882,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[ERROR] InvokeExpression failed: {ex.Message}");
+            Console.Error.WriteLine($"[ERROR] ExecuteCommand failed: {ex.Message}");
             // Detect and report closed consoles (the failed pipe + any others)
             var consoleName = sessionManager.GetConsoleDisplayName(readyPipeName);
             sessionManager.ClearDeadPipe(agentId, readyPipeName);
@@ -791,7 +910,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         // wait_for_completion requires an existing agent_id for sub-agents
         if (is_subagent && string.IsNullOrEmpty(agent_id))
-            return "❌ Sub-agents must obtain an agent_id by calling start_console, get_current_location, or invoke_expression with is_subagent=true before calling wait_for_completion.";
+            return "❌ Sub-agents must obtain an agent_id by calling start_console, get_current_location, or execute_command with is_subagent=true before calling wait_for_completion.";
 
         var agentId = string.IsNullOrEmpty(agent_id) ? "default" : agent_id;
 
@@ -1030,7 +1149,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 var reuseLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
 
                 // First attach for this agent (resume / cold-start). Mark it so a
-                // following invoke_expression treats this console as owned-active
+                // following execute_command treats this console as owned-active
                 // (no second $HOME normalization). Like get_current_location,
                 // start_console is non-executing, so we preserve the console's cwd
                 // and only surface the "new server session" notice when we reclaimed
@@ -1081,7 +1200,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             return Wrap(startResult); // Error message
         }
 
-        // Mark first attach so a following invoke_expression sees an owned-active
+        // Mark first attach so a following execute_command sees an owned-active
         // console and does not re-normalize to $HOME. No "new server session"
         // notice here: a freshly spawned console is clean (nothing carried over)
         // and starts at the resolved start_location / $HOME the AI asked for.
@@ -1125,7 +1244,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     /// restarted (or just started), so its runtime state is fresh, but the AI may
     /// still carry intent from earlier in the conversation — variables, modules,
     /// and cwd it set before are NOT guaranteed on this console. <paramref
-    /// name="currentCwd"/> is where the console now sits (for invoke_expression we
+    /// name="currentCwd"/> is where the console now sits (for execute_command we
     /// move it to $HOME; get_current_location reports it as-is). When the console
     /// was reclaimed from a prior session/user and we moved away from its cwd,
     /// <paramref name="priorCwdToRestore"/> carries that cwd as a one-line restore

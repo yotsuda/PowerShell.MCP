@@ -140,3 +140,22 @@ public class ExecuteSilentParams : PowerShellMcpParams
     [JsonPropertyName("pipeline")]
     public required string Pipeline { get; set; }
 }
+
+public class CancelParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "cancel";
+}
+
+// Ack returned by the cancel handler.
+public class CommandAckResponse
+{
+    [JsonPropertyName("pid")]
+    public int Pid { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+}
+
+[JsonSerializable(typeof(CommandAckResponse))]
+public partial class CommandAckResponseContext : JsonSerializerContext { }

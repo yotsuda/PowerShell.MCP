@@ -12,6 +12,17 @@ public static class PowerShellCommunication
     private static long _submittedGeneration = 0;
     private static long _completedGeneration = 0;
 
+    // Set by the host-UI decorator (TeePSHostUserInterface) the moment an
+    // AI-dispatched command enters an interactive read/prompt. A blocked
+    // prompt produces no result and no output, so without this signal
+    // WaitForResult would sit idle until the full timeout. Instead the
+    // signal wakes WaitForResult immediately so the proxy can hand control
+    // back to the AI (treated like a timeout) while the command stays
+    // blocked — the human can still answer at the terminal, or the AI can
+    // abandon the console (close_console).
+    private static bool _awaitingInput = false;
+    private static string? _promptText = null;
+
     /// <summary>
     /// Method to notify that the result is ready.
     /// Explicitly called from PowerShell script.
@@ -57,29 +68,75 @@ public static class PowerShellCommunication
     /// </summary>
     /// <param name="timeoutSeconds">Timeout in seconds (1-170)</param>
     /// <returns>Tuple of (isTimeout, shouldCache)</returns>
-    public static (bool isTimeout, bool shouldCache) WaitForResult(int timeoutSeconds = 170)
+    public static (bool isTimeout, bool shouldCache, bool awaitingInput, string? promptText) WaitForResult(int timeoutSeconds = 170)
     {
         lock (_lock)
         {
             _resultShouldCache = false;
+            _awaitingInput = false;
+            _promptText = null;
             var myGeneration = ++_submittedGeneration;
             var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
 
             while (_completedGeneration < myGeneration)
             {
+                // Prompt detected: the command is now blocked on an
+                // interactive read. Hand control back to the AI right away
+                // (same treatment as a timeout) rather than waiting out the
+                // full timeout. The command stays running/blocked; its
+                // eventual result is cached (MarkForCaching) for a later drain.
+                if (_awaitingInput)
+                {
+                    ExecutionState.MarkForCaching();
+                    return (false, false, true, _promptText);
+                }
+
                 var remaining = deadline - DateTime.UtcNow;
                 if (remaining <= TimeSpan.Zero)
                 {
                     // Timeout - mark for caching so NotifyResultReady will know
                     ExecutionState.MarkForCaching();
-                    return (true, false);
+                    return (true, false, false, null);
                 }
                 Monitor.Wait(_lock, remaining);
             }
 
-            return (false, _resultShouldCache);
+            return (false, _resultShouldCache, false, null);
         }
     }
+
+    /// <summary>
+    /// Called by the host-UI decorator when an AI-dispatched command enters
+    /// an interactive read/prompt. Wakes WaitForResult so the proxy can
+    /// return control to the AI immediately. The command itself stays
+    /// blocked in the read until answered at the terminal or the console
+    /// is closed.
+    /// </summary>
+    public static void SignalAwaitingInput(string? promptText)
+    {
+        lock (_lock)
+        {
+            _awaitingInput = true;
+            _promptText = promptText;
+            Monitor.PulseAll(_lock);
+        }
+    }
+
+    /// <summary>Cleared by the decorator when the interactive read returns.</summary>
+    public static void ClearAwaitingInput()
+    {
+        lock (_lock)
+        {
+            _awaitingInput = false;
+            _promptText = null;
+        }
+    }
+
+    /// <summary>True while a dispatched command is blocked at a prompt (for get_status).</summary>
+    public static bool IsAwaitingInput { get { lock (_lock) { return _awaitingInput; } } }
+
+    /// <summary>The prompt caption/field text the command is waiting on, if any.</summary>
+    public static string? AwaitingPromptText { get { lock (_lock) { return _promptText; } } }
 
     /// <summary>
     /// Test hook: resets the submitted/completed generation counters to a known
@@ -153,7 +210,7 @@ public static class McpServerHost
     /// </summary>
     /// <param name="command">PowerShell command to execute</param>
     /// <param name="timeoutSeconds">Timeout in seconds (1-170)</param>
-    public static (bool isTimeout, bool shouldCache) ExecuteCommand(string command, Dictionary<string, string>? variables = null, int timeoutSeconds = 170)
+    public static (bool isTimeout, bool shouldCache, bool awaitingInput, string? promptText) ExecuteCommand(string command, Dictionary<string, string>? variables = null, int timeoutSeconds = 170)
     {
         _executionLock.Wait();
         try
@@ -167,7 +224,7 @@ public static class McpServerHost
         }
         catch (Exception)
         {
-            return (false, false);
+            return (false, false, false, null);
         }
         finally
         {

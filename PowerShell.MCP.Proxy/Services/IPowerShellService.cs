@@ -11,4 +11,5 @@ public interface IPowerShellService
     Task<ClaimConsoleResponse?> ClaimConsoleAsync(string pipeName, int proxyPid, string agentId, CancellationToken cancellationToken = default);
     Task SetWindowTitleAsync(string pipeName, string title, CancellationToken cancellationToken = default);
     Task ExecuteSilentAsync(string pipeName, string pipeline, CancellationToken cancellationToken = default);
+    Task<CommandAckResponse?> CancelAsync(string pipeName, CancellationToken cancellationToken = default);
 }

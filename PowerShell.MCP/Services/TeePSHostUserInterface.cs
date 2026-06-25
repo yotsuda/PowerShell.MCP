@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Host;
 using System.Security;
@@ -49,10 +50,19 @@ namespace PowerShell.MCP.Services;
 /// them at the host UI level would double-count.
 /// </para>
 /// <para>
-/// All <c>Read*</c> / <c>Prompt*</c> methods are pure passthrough so
-/// interactive flows (Read-Host, credential prompts, ShouldContinue)
-/// continue to work against the real terminal. Capturing those would
-/// break interaction without giving the AI anything meaningful.
+/// All <c>Read*</c> / <c>Prompt*</c> methods stay passthrough so a human
+/// at the visible terminal can answer them (Read-Host, credential
+/// prompts, ShouldContinue, missing mandatory parameters). Each one first
+/// calls <see cref="PowerShellCommunication.SignalAwaitingInput"/> to wake
+/// the waiting proxy request, then blocks on the inner read until the
+/// human answers (or the console is closed). The signal lets the proxy
+/// hand control back to the AI immediately — treated like a timeout —
+/// instead of the AI waiting out the full timeout while the command is
+/// parked at a prompt. The AI then either asks the user to answer the
+/// prompt in that console, or abandons the console (close_console).
+/// Throwing from these methods to fail-fast was tried but it dropped the
+/// important "user answers the AI's prompt" use case, so it was reverted
+/// in favour of detect-and-return.
 /// </para>
 /// </remarks>
 public sealed class TeePSHostUserInterface : PSHostUserInterface
@@ -68,8 +78,19 @@ public sealed class TeePSHostUserInterface : PSHostUserInterface
 
     public override PSHostRawUserInterface RawUI => _inner.RawUI;
 
-    public override string ReadLine() => _inner.ReadLine();
-    public override SecureString ReadLineAsSecureString() => _inner.ReadLineAsSecureString();
+    public override string ReadLine()
+    {
+        PowerShellCommunication.SignalAwaitingInput("Read-Host");
+        try { return _inner.ReadLine(); }
+        finally { PowerShellCommunication.ClearAwaitingInput(); }
+    }
+
+    public override SecureString ReadLineAsSecureString()
+    {
+        PowerShellCommunication.SignalAwaitingInput("Read-Host (secure)");
+        try { return _inner.ReadLineAsSecureString(); }
+        finally { PowerShellCommunication.ClearAwaitingInput(); }
+    }
 
     public override void Write(string value)
     {
@@ -100,18 +121,36 @@ public sealed class TeePSHostUserInterface : PSHostUserInterface
     public override void WriteWarningLine(string message) => _inner.WriteWarningLine(message);
     public override void WriteProgress(long sourceId, ProgressRecord record) => _inner.WriteProgress(sourceId, record);
 
-    // Interactive prompts: pure passthrough. The user is at the
-    // visible terminal; the AI side does not need (and should not
-    // intercept) credential / Read-Host / ShouldContinue prompts.
+    // Interactive prompts: pure passthrough so a human at the visible
+    // terminal can answer. Each one first signals "awaiting input" so the
+    // proxy returns control to the AI immediately (the read still blocks
+    // here until the human answers or the console is closed).
     public override Dictionary<string, PSObject> Prompt(string caption, string message, Collection<FieldDescription> descriptions)
-        => _inner.Prompt(caption, message, descriptions);
+    {
+        var fields = descriptions is null ? "" : string.Join(", ", descriptions.Select(d => d.Name));
+        PowerShellCommunication.SignalAwaitingInput(string.IsNullOrEmpty(fields) ? "parameter prompt" : $"parameter(s): {fields}");
+        try { return _inner.Prompt(caption, message, descriptions); }
+        finally { PowerShellCommunication.ClearAwaitingInput(); }
+    }
 
     public override PSCredential PromptForCredential(string caption, string message, string userName, string targetName)
-        => _inner.PromptForCredential(caption, message, userName, targetName);
+    {
+        PowerShellCommunication.SignalAwaitingInput("credential");
+        try { return _inner.PromptForCredential(caption, message, userName, targetName); }
+        finally { PowerShellCommunication.ClearAwaitingInput(); }
+    }
 
     public override PSCredential PromptForCredential(string caption, string message, string userName, string targetName, PSCredentialTypes allowedCredentialTypes, PSCredentialUIOptions options)
-        => _inner.PromptForCredential(caption, message, userName, targetName, allowedCredentialTypes, options);
+    {
+        PowerShellCommunication.SignalAwaitingInput("credential");
+        try { return _inner.PromptForCredential(caption, message, userName, targetName, allowedCredentialTypes, options); }
+        finally { PowerShellCommunication.ClearAwaitingInput(); }
+    }
 
     public override int PromptForChoice(string caption, string message, Collection<ChoiceDescription> choices, int defaultChoice)
-        => _inner.PromptForChoice(caption, message, choices, defaultChoice);
+    {
+        PowerShellCommunication.SignalAwaitingInput(string.IsNullOrEmpty(caption) ? "choice" : $"choice: {caption}");
+        try { return _inner.PromptForChoice(caption, message, choices, defaultChoice); }
+        finally { PowerShellCommunication.ClearAwaitingInput(); }
+    }
 }

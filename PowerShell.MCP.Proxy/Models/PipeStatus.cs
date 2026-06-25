@@ -10,6 +10,14 @@ public static class PipeStatus
     public const string Completed = "completed";
 
     /// <summary>
+    /// A command is running but parked at an interactive prompt (Read-Host,
+    /// a missing mandatory parameter, a credential/choice prompt). It is a
+    /// sub-state of busy — NOT ready/routable — surfaced separately only so
+    /// the AI is told to answer-or-close rather than to wait.
+    /// </summary>
+    public const string AwaitingInput = "awaiting_input";
+
+    /// <summary>
     /// Returns true if a raw status string means the console is "ready" — i.e.
     /// not busy, so the proxy may route to it now. Standby is idle; Completed
     /// has undrained output but is still routable. This is the single

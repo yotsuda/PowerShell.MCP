@@ -349,7 +349,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -389,7 +389,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Start-Sleep 300",
@@ -437,7 +437,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Process",
@@ -493,7 +493,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Process",
@@ -528,7 +528,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -558,7 +558,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "$x = 1",
@@ -587,7 +587,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act: pass timeout > 170
-        await PowerShellTools.InvokeExpression(
+        await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "test",
@@ -617,7 +617,7 @@ public class PowerShellToolsTests
             .Returns(new List<string>());
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "bad-cmd",
@@ -649,7 +649,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act: agent_id = null
-        await PowerShellTools.InvokeExpression(
+        await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "test");
@@ -686,7 +686,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -724,7 +724,7 @@ public class PowerShellToolsTests
             .Returns(new List<string>());
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "bad-cmd",
@@ -756,7 +756,7 @@ public class PowerShellToolsTests
             .Returns(new List<string> { "  - ⚠ Console PID #9999 was closed" });
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "fail-cmd",
@@ -792,7 +792,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -888,7 +888,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        await PowerShellTools.InvokeExpression(
+        await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -939,7 +939,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        await PowerShellTools.InvokeExpression(
+        await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Start-Sleep 300",
@@ -989,7 +989,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        await PowerShellTools.InvokeExpression(
+        await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Process",
@@ -1031,7 +1031,7 @@ public class PowerShellToolsTests
             .ReturnsAsync("");
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Remove-Item *.tmp",
@@ -1080,7 +1080,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -1126,7 +1126,7 @@ public class PowerShellToolsTests
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CachedOutputResult("", ""));
 
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -1168,7 +1168,7 @@ public class PowerShellToolsTests
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CachedOutputResult("", ""));
 
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -1217,7 +1217,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        await PowerShellTools.InvokeExpression(
+        await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -1261,7 +1261,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -1296,7 +1296,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, liveCwd));
 
         // Act
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
             "Get-Date",
@@ -1349,14 +1349,14 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         // Call 1: user-cd drift → warn, must NOT execute.
-        var first = await PowerShellTools.InvokeExpression(
+        var first = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
         Assert.Contains("Pipeline NOT executed", first);
         Assert.Contains("outside the AI's commands", first);
         Assert.Equal(0, executions);
 
         // Call 2: re-issue. Drift cleared by call 1 → execute, no second warning.
-        var second = await PowerShellTools.InvokeExpression(
+        var second = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
         Assert.DoesNotContain("Pipeline NOT executed", second);
         Assert.Equal(1, executions);
@@ -1401,14 +1401,14 @@ public class PowerShellToolsTests
 
         // Call 1: AI moves its own cwd. No drift (live==LastAi==oldCwd) → runs,
         // no warning; the move is recorded.
-        var first = await PowerShellTools.InvokeExpression(
+        var first = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object,
             $"Set-Location -LiteralPath '{newCwd.Replace("'", "''")}'", agent_id: TestAgentId);
         Assert.DoesNotContain("Pipeline NOT executed", first);
         Assert.Equal(newCwd, sessionManager.GetLastAiCwd(testPid));
 
         // Call 2: console now at newCwd, LastAiCwd matches → still no warning.
-        var second = await PowerShellTools.InvokeExpression(
+        var second = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
         Assert.DoesNotContain("Pipeline NOT executed", second);
         Assert.Equal(2, sentPipelines.Count); // both calls executed
@@ -1517,7 +1517,7 @@ public class PowerShellToolsTests
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CachedOutputResult("", ""));
 
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: freshAgent);
 
         // Ran (not suppressed), prefixed with a Set-Location to $HOME.
@@ -1556,7 +1556,7 @@ public class PowerShellToolsTests
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CachedOutputResult("", ""));
 
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-Date", agent_id: freshAgent);
 
         Assert.Equal("Get-Date", sentPipeline); // verbatim, no $HOME prefix
@@ -1594,7 +1594,7 @@ public class PowerShellToolsTests
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CachedOutputResult("", ""));
 
-        var result = await PowerShellTools.InvokeExpression(
+        var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: freshAgent);
 
         Assert.NotNull(sentPipeline);
