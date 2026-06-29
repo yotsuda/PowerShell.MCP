@@ -533,7 +533,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // Execute the command
         try
         {
-            var result = await powerShellService.InvokeExpressionToPipeAsync(readyPipeName, pipeline, parsedVariables, timeout_seconds, cancellationToken);
+            var result = await powerShellService.ExecuteCommandToPipeAsync(readyPipeName, pipeline, parsedVariables, timeout_seconds, cancellationToken);
             // Parse response: header JSON (first line) + "\n\n" + body
             var separatorIndex = result.IndexOf("\n\n");
             var jsonHeader = separatorIndex >= 0 ? result.Substring(0, separatorIndex) : result;

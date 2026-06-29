@@ -86,7 +86,7 @@ jobs:
         screencapture -x /tmp/screenshot-after-start.png 2>/dev/null
         echo "Terminal.app with pwsh is running"
 
-    - name: Test invoke_expression via Named Pipe (Issue #38)
+    - name: Test execute_command via Named Pipe (Issue #38)
       shell: pwsh
       timeout-minutes: 3
       run: |
@@ -116,7 +116,7 @@ jobs:
           $client = [System.IO.Pipes.NamedPipeClientStream]::new('.', $pipeName)
           $client.Connect($TimeoutSec * 1000)
 
-          $json = @{ name = "invoke_expression"; pipeline = $Pipeline; proxy_version = $moduleVersion } | ConvertTo-Json -Compress
+          $json = @{ name = "execute_command"; pipeline = $Pipeline; proxy_version = $moduleVersion } | ConvertTo-Json -Compress
           $msgBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
           $lenBytes = [BitConverter]::GetBytes([int]$msgBytes.Length)
 

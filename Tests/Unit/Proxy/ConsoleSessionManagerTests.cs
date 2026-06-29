@@ -90,7 +90,7 @@ public class ConsoleSessionManagerTests
     {
         // Motivating scenario: AI's only console dies (default agent). The
         // per-pid entry is wiped by ClearDeadPipe, but the agent-level
-        // fallback must survive so the next invoke_expression's auto-start
+        // fallback must survive so the next execute_command's auto-start
         // can resume at the AI's last known cwd. The "default" agent never
         // gets evicted (it's the long-running session for primary AI use).
         const int pid = 91005;

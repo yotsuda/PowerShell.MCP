@@ -731,8 +731,8 @@ Please provide how to update the MCP client configuration to the user.";
                 return;
             }
 
-            // Execute tool with state management for invoke_expression
-            if (name == "invoke_expression")
+            // Execute tool with state management for execute_command
+            if (name == "execute_command")
             {
                 var pipeline = requestRoot.TryGetProperty("pipeline", out var pipelineElement)
                     ? pipelineElement.GetString() ?? "" : "";
@@ -788,7 +788,7 @@ Please provide how to update the MCP client configuration to the user.";
 
                 try
                 {
-                    var (isTimeout, shouldCache, awaitingInput, promptText) = await Task.Run(() => ExecuteInvokeExpression(requestRoot));
+                    var (isTimeout, shouldCache, awaitingInput, promptText) = await Task.Run(() => ExecuteCommandRequest(requestRoot));
 
                     var pid = Process.GetCurrentProcess().Id;
                     var elapsed = ExecutionState.ElapsedSeconds;
@@ -965,7 +965,7 @@ Please provide how to update the MCP client configuration to the user.";
     }
 
     /// <summary>
-    /// Executes a tool (except invoke_expression which is handled separately)
+    /// Executes a tool (except execute_command which is handled separately)
     /// </summary>
     private static string ExecuteTool(string method, JsonElement parameters)
     {
@@ -1035,7 +1035,7 @@ Please provide how to update the MCP client configuration to the user.";
     /// Executes the invokeExpression tool
     /// </summary>
     /// <returns>Tuple of (isTimeout, shouldCache, awaitingInput, promptText)</returns>
-    private static (bool isTimeout, bool shouldCache, bool awaitingInput, string? promptText) ExecuteInvokeExpression(JsonElement parameters)
+    private static (bool isTimeout, bool shouldCache, bool awaitingInput, string? promptText) ExecuteCommandRequest(JsonElement parameters)
     {
         var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
         var timeoutSeconds = parameters.TryGetProperty("timeout_seconds", out var timeoutElement)

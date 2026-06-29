@@ -77,7 +77,7 @@ public class ConsoleSessionManager
 
     /// <summary>
     /// Maps pwsh PIDs to the cwd the AI's most recent successful (or
-    /// timeout / cached) <c>invoke_expression</c> ended at. Captured from
+    /// timeout / cached) <c>execute_command</c> ended at. Captured from
     /// the DLL's response header (which now carries <c>cwd</c>) so the
     /// proxy never has to re-query a busy / dead pipe to know "where the
     /// AI thinks it is". Used to:
@@ -98,8 +98,8 @@ public class ConsoleSessionManager
     /// Session-scoped fallback for the agent's most recently observed AI
     /// cwd, surviving the death of the per-pid <c>_pidToLastAiCwd</c>
     /// entry. Updated alongside the per-pid entry whenever a pipe reports
-    /// a successful invoke_expression cwd. Used as the
-    /// <c>start_location</c> when invoke_expression auto-starts a console
+    /// a successful execute_command cwd. Used as the
+    /// <c>start_location</c> when execute_command auto-starts a console
     /// (no surviving pipe means no per-pid entry to fall back to, but the
     /// AI was still working *somewhere* and that somewhere is the right
     /// place for the new console to land — same rationale as busy-route).
@@ -448,11 +448,11 @@ public class ConsoleSessionManager
     }
 
     /// <summary>
-    /// Records the cwd the AI's most recent <c>invoke_expression</c> ended at
+    /// Records the cwd the AI's most recent <c>execute_command</c> ended at
     /// for the given pwsh PID. Called after a successful (or timeout / cached)
     /// pipe call by the proxy, with the cwd field the DLL emits in its
     /// response header. Also updates the agent-scoped fallback so a later
-    /// invoke_expression that has to auto-start a console can resume at
+    /// execute_command that has to auto-start a console can resume at
     /// the same place even after the pipe (and its per-pid entry) has died.
     /// Pass null to clear (e.g., on switch to a fresh console with no
     /// prior AI history) — only the per-pid entry is cleared; the

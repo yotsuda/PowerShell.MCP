@@ -18,10 +18,10 @@ public class GetCurrentLocationParams : PowerShellMcpParams
     public override string Name { get; } = "get_current_location";
 }
 
-public class InvokeExpressionParams : PowerShellMcpParams
+public class ExecuteCommandParams : PowerShellMcpParams
 {
     [JsonPropertyName("name")]
-    public override string Name { get; } = "invoke_expression";
+    public override string Name { get; } = "execute_command";
 
     [JsonPropertyName("pipeline")]
     public string Pipeline { get; set; } = string.Empty;

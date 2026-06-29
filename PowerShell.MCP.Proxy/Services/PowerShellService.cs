@@ -63,16 +63,16 @@ public class PowerShellService : IPowerShellService
         return ExtractResponseBody(response);
     }
 
-    public async Task<string> InvokeExpressionToPipeAsync(string pipeName, string pipeline, Dictionary<string, string>? variables = null, int timeoutSeconds = 170, CancellationToken cancellationToken = default)
+    public async Task<string> ExecuteCommandToPipeAsync(string pipeName, string pipeline, Dictionary<string, string>? variables = null, int timeoutSeconds = 170, CancellationToken cancellationToken = default)
     {
-        var requestParams = new InvokeExpressionParams
+        var requestParams = new ExecuteCommandParams
         {
             Pipeline = pipeline,
             TimeoutSeconds = timeoutSeconds,
             Variables = variables
         };
 
-        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.InvokeExpressionParams);
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.ExecuteCommandParams);
 
         var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
 

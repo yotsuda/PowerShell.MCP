@@ -7,7 +7,7 @@ namespace PowerShell.MCP.Proxy.Services;
 /// The cwd reported by get_status on the chosen ReadyPipeName, or null if
 /// the pipe didn't reply with a cwd (older DLL, network drive disconnected,
 /// or the discovery path that landed here didn't probe). Used by
-/// invoke_expression's drift check to compare against
+/// execute_command's drift check to compare against
 /// <c>ConsoleSessionManager.GetLastAiCwd</c> and inject a Set-Location
 /// preamble when the user has typed <c>cd</c> in the visible console
 /// between AI calls.
@@ -45,7 +45,7 @@ public interface IPipeDiscoveryService
     /// explicit <c>start_location</c>: the AI hasn't pinned its intended
     /// cwd, so claiming an arbitrary user-set cwd would mislead it. A
     /// fresh console at the proxy's default home is the predictable
-    /// baseline. <c>invoke_expression</c> and <c>get_current_location</c>
+    /// baseline. <c>execute_command</c> and <c>get_current_location</c>
     /// keep the default <c>true</c> because the AI is actively working
     /// and benefits from the user's existing module-loaded environment.
     /// </param>

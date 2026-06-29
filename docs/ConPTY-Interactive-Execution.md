@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add a ConPTY (Windows Pseudo Console) based interactive execution mode to PowerShell.MCP's `invoke_expression`.
+Add a ConPTY (Windows Pseudo Console) based interactive execution mode to PowerShell.MCP's `execute_command`.
 
 ## Background / Problem
 
@@ -40,7 +40,7 @@ In the current `Invoke-Expression` based implementation, when an external CLI to
 
 ## API Design
 
-### Adding invoke_expression Parameters
+### Adding execute_command Parameters
 
 ```json
 {
@@ -119,8 +119,8 @@ public class ConPtyProcess : IDisposable
 ### Phase 3: MCP Integration
 
 ```csharp
-// InvokeExpressionHandler.cs
-public async Task<string> ExecuteAsync(InvokeExpressionParams p)
+// ExecuteCommandHandler.cs
+public async Task<string> ExecuteAsync(ExecuteCommandParams p)
 {
     if (p.Interactive)
     {
@@ -129,8 +129,8 @@ public async Task<string> ExecuteAsync(InvokeExpressionParams p)
     }
     else
     {
-        // Existing Invoke-Expression based execution
-        return await ExecuteWithInvokeExpression(p.Pipeline);
+        // Existing scriptblock-based execution
+        return await ExecuteWithCommand(p.Pipeline);
     }
 }
 ```
@@ -162,7 +162,7 @@ PowerShell.MCP/
 │       │   ├── ConPtyProcess.cs      # Process management
 │       │   └── InteractiveRunner.cs  # MCP integration
 │       └── Handlers/
-│           └── InvokeExpressionHandler.cs  # Existing (modified)
+│           └── ExecuteCommandHandler.cs  # Existing (modified)
 ```
 
 ## Dependencies
@@ -189,13 +189,13 @@ public async Task ConPty_CapturesOutput()
 
 ```powershell
 # 1. Simple output
-invoke_expression -Interactive -Pipeline "dir"
+execute_command -Interactive -Pipeline "dir"
 
 # 2. Interactive input
-invoke_expression -Interactive -Pipeline "Read-Host 'Name'"
+execute_command -Interactive -Pipeline "Read-Host 'Name'"
 
 # 3. External CLI
-invoke_expression -Interactive -Pipeline "gcloud auth login"
+execute_command -Interactive -Pipeline "gcloud auth login"
 ```
 
 ## Risks / Issues

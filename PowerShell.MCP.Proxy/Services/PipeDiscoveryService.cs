@@ -201,7 +201,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     // backgrounded AI Set-Location harvested here (e.g. via
                     // wait_for_completion, which never set LastAiCwd) would
                     // otherwise leave LastAiCwd stale, so the next
-                    // invoke_expression sees the moved cwd as drift and
+                    // execute_command sees the moved cwd as drift and
                     // misattributes it to the user. Only MCP/AI-initiated
                     // commands ever reach Completed (user interactive commands
                     // return to Standby, never Completed), so this never

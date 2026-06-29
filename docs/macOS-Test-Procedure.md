@@ -161,11 +161,11 @@ Call `start_powershell_console` from an MCP client (or manually via JSON-RPC).
 - [ ] The PowerShell.MCP module is imported
 - [ ] The Named Pipe connection is established
 
-### 4.6 invoke_expression Test
+### 4.6 execute_command Test
 
 ```json
 {
-  "name": "invoke_expression",
+  "name": "execute_command",
   "pipeline": "Get-Process | Select-Object -First 5",
   "execute_immediately": true
 }
