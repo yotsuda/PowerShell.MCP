@@ -1,5 +1,5 @@
-# PowerShell.MCP コンテキスト表示機能 - 統合テストランナー
-Write-Host "=== PowerShell.MCP コンテキスト表示機能 - 全テスト実行 ===" -ForegroundColor Cyan
+# PowerShell.MCP context display feature - integration test runner
+Write-Host "=== PowerShell.MCP context display feature - running all tests ===" -ForegroundColor Cyan
 Write-Host ""
 
 $testFiles = @(
@@ -40,14 +40,14 @@ foreach ($testFile in $testFiles) {
     }
 }
 
-Write-Host "=== テスト結果サマリー ===" -ForegroundColor Cyan
+Write-Host "=== Test result summary ===" -ForegroundColor Cyan
 Write-Host "  Total:  $($passed + $failed)"
 Write-Host "  Passed: $passed" -ForegroundColor Green
 Write-Host "  Failed: $failed" -ForegroundColor $(if ($failed -eq 0) { "Green" } else { "Red" })
 
 if ($failed -eq 0) {
-    Write-Host "`n✓ 全テスト成功！" -ForegroundColor Green
+    Write-Host "`n✓ All tests passed!" -ForegroundColor Green
 }
 else {
-    Write-Host "`n✗ 一部テスト失敗" -ForegroundColor Red
+    Write-Host "`n✗ Some tests failed" -ForegroundColor Red
 }

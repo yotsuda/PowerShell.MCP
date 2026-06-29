@@ -1,167 +1,167 @@
-# PowerShell.MCP macOS テスト手順書
+# PowerShell.MCP macOS Test Procedure
 
-## 概要
+## Overview
 
-Scaleway M1 Mac mini を使用して PowerShell.MCP の macOS 動作確認を行う。
+Use a Scaleway M1 Mac mini to verify PowerShell.MCP behavior on macOS.
 
-## 1. Scaleway Mac mini M1 のセットアップ
+## 1. Setting Up the Scaleway Mac mini M1
 
-### 1.1 アカウント作成・インスタンス起動
+### 1.1 Create an Account / Launch an Instance
 
-1. https://console.scaleway.com にアクセス
-2. アカウント作成（クレジットカード登録必要）
-3. **Bare Metal** > **Apple Silicon** > **Mac mini M1** を選択
-4. リージョン: `Paris 3` (PAR3)
-5. OS: `macOS Sequoia` または最新版を選択
-6. SSH キーを登録
-7. インスタンス作成（**最低24時間課金: 約€2.64**）
+1. Go to https://console.scaleway.com
+2. Create an account (credit card registration required)
+3. Select **Bare Metal** > **Apple Silicon** > **Mac mini M1**
+4. Region: `Paris 3` (PAR3)
+5. OS: Select `macOS Sequoia` or the latest version
+6. Register an SSH key
+7. Create the instance (**minimum 24-hour billing: approx. €2.64**)
 
-### 1.2 接続情報の確認
+### 1.2 Check Connection Details
 
-インスタンス作成後、以下を確認：
-- **IP アドレス**: コンソールに表示
-- **VNC パスワード**: コンソールで生成・確認
+After creating the instance, check the following:
+- **IP address**: Shown in the console
+- **VNC password**: Generated / shown in the console
 
-### 1.3 SSH 接続
+### 1.3 SSH Connection
 
 ```bash
 ssh m1@<IP_ADDRESS>
 ```
 
-### 1.4 VNC 接続（GUI テスト用）
+### 1.4 VNC Connection (For GUI Testing)
 
-macOS / Windows / Linux から VNC クライアントで接続：
-- **アドレス**: `<IP_ADDRESS>:5900`
-- **パスワード**: コンソールで確認したもの
+Connect from macOS / Windows / Linux with a VNC client:
+- **Address**: `<IP_ADDRESS>:5900`
+- **Password**: The one shown in the console
 
 ---
 
-## 2. PowerShell 7 のインストール
+## 2. Installing PowerShell 7
 
-### 2.1 Homebrew インストール（未インストールの場合）
+### 2.1 Install Homebrew (If Not Already Installed)
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-インストール後、PATH に追加：
+After installing, add it to PATH:
 ```bash
 echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
-### 2.2 PowerShell 7 インストール
+### 2.2 Install PowerShell 7
 
 ```bash
 brew install powershell/tap/powershell
 ```
 
-### 2.3 インストール確認
+### 2.3 Verify Installation
 
 ```bash
 pwsh --version
-# 出力例: PowerShell 7.5.x
+# Example output: PowerShell 7.5.x
 ```
 
-### 2.4 pwsh のパス確認
+### 2.4 Check the pwsh Path
 
 ```bash
 which pwsh
-# 出力例: /opt/homebrew/bin/pwsh
+# Example output: /opt/homebrew/bin/pwsh
 ```
 
-> ⚠️ **重要**: Homebrew は `/opt/homebrew/bin` にインストールするが、
-> 現在の `PwshLauncherMacOS` は `/usr/local/bin:/usr/bin:/bin` のみを PATH に設定している。
-> これは修正が必要な可能性がある。
+> ⚠️ **Important**: Homebrew installs to `/opt/homebrew/bin`, but
+> the current `PwshLauncherMacOS` only sets `/usr/local/bin:/usr/bin:/bin` in PATH.
+> This may need to be fixed.
 
 ---
 
-## 3. PowerShell.MCP のインストール
+## 3. Installing PowerShell.MCP
 
-### 3.1 Option A: PowerShell Gallery からインストール（推奨）
+### 3.1 Option A: Install from PowerShell Gallery (Recommended)
 
 ```powershell
 pwsh -Command "Install-Module PowerShell.MCP -Scope CurrentUser"
 ```
 
-### 3.2 Option B: ソースからビルド
+### 3.2 Option B: Build from Source
 
 ```bash
-# .NET 9 SDK インストール
+# Install .NET 9 SDK
 brew install dotnet@9
 
-# リポジトリクローン
+# Clone the repository
 git clone https://github.com/yosbits/PowerShell.MCP.git
 cd PowerShell.MCP
 
-# ビルド（macOS 向け）
+# Build (for macOS)
 dotnet publish PowerShell.MCP.Proxy -c Release -r osx-arm64 -o ./out/osx-arm64
 dotnet build PowerShell.MCP -c Release
 ```
 
 ---
 
-## 4. テスト項目
+## 4. Test Items
 
-### 4.1 モジュールインポートテスト
+### 4.1 Module Import Test
 
 ```powershell
 pwsh
 Import-Module PowerShell.MCP
 ```
 
-**確認ポイント:**
-- [ ] エラーなくインポートできる
-- [ ] `[PowerShell.MCP] MCP server started` の Information メッセージ
-- [ ] Named Pipe サーバーが起動している
+**Checkpoints:**
+- [ ] Imports without errors
+- [ ] The `[PowerShell.MCP] MCP server started` Information message appears
+- [ ] The Named Pipe server is running
 
-### 4.2 Named Pipe 存在確認
+### 4.2 Verify Named Pipe Existence
 
 ```bash
 ls -la /tmp/CoreFxPipe_*
-# 期待: /tmp/CoreFxPipe_PowerShell.MCP.Communication が存在
+# Expected: /tmp/CoreFxPipe_PowerShell.MCP.Communication exists
 ```
 
-### 4.3 Get-MCPProxyPath テスト
+### 4.3 Get-MCPProxyPath Test
 
 ```powershell
 Get-MCPProxyPath
-# 期待: /path/to/PowerShell.MCP/bin/osx-arm64/PowerShell.MCP.Proxy
+# Expected: /path/to/PowerShell.MCP/bin/osx-arm64/PowerShell.MCP.Proxy
 ```
 
-### 4.4 Proxy 単体起動テスト
+### 4.4 Proxy Standalone Launch Test
 
-別ターミナルで：
+In a separate terminal:
 ```bash
 /path/to/PowerShell.MCP.Proxy
 ```
 
-**確認ポイント:**
-- [ ] Proxy が起動する
-- [ ] stderr に `[INFO]` ログが出力される
+**Checkpoints:**
+- [ ] The Proxy starts
+- [ ] `[INFO]` logs are written to stderr
 
-### 4.5 start_powershell_console テスト（最重要）
+### 4.5 start_powershell_console Test (Most Important)
 
-**事前準備:**
-1. pwsh を一度終了する（Named Pipe を閉じる）
-2. Terminal.app を閉じる
+**Preparation:**
+1. Exit pwsh once (close the Named Pipe)
+2. Close Terminal.app
 
-**テスト手順:**
+**Test steps:**
 
 ```bash
-# Proxy を起動
+# Launch the Proxy
 /path/to/PowerShell.MCP.Proxy
 ```
 
-MCP クライアント（または手動で JSON-RPC）から `start_powershell_console` を呼び出す。
+Call `start_powershell_console` from an MCP client (or manually via JSON-RPC).
 
-**確認ポイント:**
-- [ ] Terminal.app が新しいウィンドウで開く
-- [ ] pwsh が起動している
-- [ ] PowerShell.MCP モジュールがインポートされている
-- [ ] Named Pipe 接続が確立される
+**Checkpoints:**
+- [ ] Terminal.app opens in a new window
+- [ ] pwsh is running
+- [ ] The PowerShell.MCP module is imported
+- [ ] The Named Pipe connection is established
 
-### 4.6 invoke_expression テスト
+### 4.6 invoke_expression Test
 
 ```json
 {
@@ -171,120 +171,120 @@ MCP クライアント（または手動で JSON-RPC）から `start_powershell_
 }
 ```
 
-**確認ポイント:**
-- [ ] コマンドが実行される
-- [ ] 結果が返却される
-- [ ] Terminal.app にコマンドと結果が表示される
+**Checkpoints:**
+- [ ] The command runs
+- [ ] The result is returned
+- [ ] The command and result are shown in Terminal.app
 
-### 4.7 PSReadLine 無効化確認
+### 4.7 Verify PSReadLine Is Disabled
 
 ```powershell
 Get-Module PSReadLine
-# 期待: 何も返らない（モジュールがロードされていない）
+# Expected: nothing returned (the module is not loaded)
 ```
 
 ---
 
-## 5. 既知の問題と確認事項
+## 5. Known Issues and Items to Check
 
-### 5.1 PATH 問題
+### 5.1 PATH Issue
 
-**問題**: `PwshLauncherMacOS` が `/usr/local/bin:/usr/bin:/bin` のみを PATH に設定
+**Problem**: `PwshLauncherMacOS` only sets `/usr/local/bin:/usr/bin:/bin` in PATH
 
-**確認**: Homebrew の pwsh が見つからない可能性
+**Check**: Homebrew's pwsh may not be found
 ```csharp
 // PowerShellProcessManager.cs Line 196
 var path = "/usr/local/bin:/usr/bin:/bin";
 ```
 
-**修正候補**:
+**Candidate fix**:
 ```csharp
 var path = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
 ```
 
-### 5.2 AppleScript エスケープ問題
+### 5.2 AppleScript Escaping Issue
 
-**問題**: HOME パスに `'` が含まれる場合
+**Problem**: When the HOME path contains `'`
 
-**確認**: ユーザー名に特殊文字がある場合の動作
+**Check**: Behavior when the username contains special characters
 ```csharp
 // Line 213
 $"    do script \"env -i HOME='{home}' USER='{user}' ...
 ```
 
-### 5.3 Terminal.app 以外のターミナル
+### 5.3 Terminals Other Than Terminal.app
 
-**確認**: iTerm2 など他のターミナルがデフォルトの場合の動作
+**Check**: Behavior when another terminal such as iTerm2 is the default
 
 ---
 
-## 6. トラブルシューティング
+## 6. Troubleshooting
 
-### 6.1 pwsh が見つからない
+### 6.1 pwsh Not Found
 
 ```bash
-# シンボリックリンク作成
+# Create a symbolic link
 sudo ln -s /opt/homebrew/bin/pwsh /usr/local/bin/pwsh
 ```
 
-### 6.2 Named Pipe 接続タイムアウト
+### 6.2 Named Pipe Connection Timeout
 
 ```bash
-# Named Pipe の存在確認
+# Verify the Named Pipe exists
 ls -la /tmp/CoreFxPipe_*
 
-# パーミッション確認
+# Check permissions
 stat /tmp/CoreFxPipe_PowerShell.MCP.Communication
 ```
 
-### 6.3 Terminal.app が開かない
+### 6.3 Terminal.app Does Not Open
 
 ```bash
-# AppleScript を手動テスト
+# Test AppleScript manually
 osascript -e 'tell application "Terminal" to activate'
 osascript -e 'tell application "Terminal" to do script "echo test"'
 ```
 
-### 6.4 モジュールインポートエラー
+### 6.4 Module Import Error
 
 ```powershell
-# 詳細エラー確認
+# Check detailed errors
 $ErrorActionPreference = 'Continue'
 Import-Module PowerShell.MCP -Verbose
 ```
 
 ---
 
-## 7. テスト完了後
+## 7. After Testing Is Complete
 
-### 7.1 結果記録
+### 7.1 Record Results
 
-以下をメモ：
-- macOS バージョン
-- PowerShell バージョン
-- 各テスト項目の Pass/Fail
-- 発生したエラーメッセージ
-- スクリーンショット（VNC経由で取得）
+Note the following:
+- macOS version
+- PowerShell version
+- Pass/Fail for each test item
+- Any error messages that occurred
+- Screenshots (taken via VNC)
 
-### 7.2 インスタンス削除
+### 7.2 Delete the Instance
 
-**重要**: 24時間経過後、不要であればインスタンスを削除して課金を止める
+**Important**: After 24 hours, if no longer needed, delete the instance to stop billing
 
-Scaleway コンソール > Apple Silicon > インスタンス選択 > Delete
-
----
-
-## 8. 修正が必要と思われる箇所
-
-優先度順：
-
-1. **PATH に `/opt/homebrew/bin` を追加** - Homebrew インストールの pwsh が見つからない
-2. **AppleScript のエスケープ処理** - 特殊文字対応
-3. **Terminal.app 以外のターミナル対応** - iTerm2 等
+Scaleway console > Apple Silicon > select instance > Delete
 
 ---
 
-## 参考リンク
+## 8. Areas Likely to Need Fixing
+
+In priority order:
+
+1. **Add `/opt/homebrew/bin` to PATH** - Homebrew-installed pwsh is not found
+2. **AppleScript escaping** - special character support
+3. **Support terminals other than Terminal.app** - iTerm2, etc.
+
+---
+
+## Reference Links
 
 - [Scaleway Apple Silicon](https://www.scaleway.com/en/apple-silicon/)
 - [PowerShell on macOS](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-macos)

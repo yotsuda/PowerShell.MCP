@@ -1,5 +1,5 @@
 # Run-AllTests.ps1
-# すべてのテストを実行するヘルパースクリプト
+# Helper script that runs all tests
 
 [CmdletBinding()]
 param(
@@ -22,17 +22,17 @@ Write-Host "PowerShell.MCP Test Runner" -ForegroundColor Cyan
 Write-Host "==================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Pester のバージョン確認
+# Check the Pester version
 $pesterModule = Get-Module -ListAvailable -Name Pester | Sort-Object Version -Descending | Select-Object -First 1
 if ($null -eq $pesterModule) {
-    Write-Host "⚠ Pester モジュールがインストールされていません。" -ForegroundColor Yellow
-    Write-Host "インストールするには: Install-Module -Name Pester -Force -SkipPublisherCheck" -ForegroundColor Yellow
+    Write-Host "⚠ The Pester module is not installed." -ForegroundColor Yellow
+    Write-Host "To install it: Install-Module -Name Pester -Force -SkipPublisherCheck" -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "✓ Pester バージョン: $($pesterModule.Version)" -ForegroundColor Green
+Write-Host "✓ Pester version: $($pesterModule.Version)" -ForegroundColor Green
 
-# C# ユニットテストの実行
+# Run C# unit tests
 if ($TestType -in @("Unit", "All")) {
     Write-Host "`n--- C# Unit Tests ---" -ForegroundColor Cyan
     $testProjectPath = $scriptRoot
@@ -40,12 +40,12 @@ if ($TestType -in @("Unit", "All")) {
     if (Test-Path (Join-Path $testProjectPath "PowerShell.MCP.Tests.csproj")) {
         Push-Location $testProjectPath
         try {
-            Write-Host "dotnet test を実行中..." -ForegroundColor Yellow
+            Write-Host "Running dotnet test..." -ForegroundColor Yellow
             dotnet test --verbosity quiet --nologo
             if ($LASTEXITCODE -ne 0) {
-                Write-Host "❌ C# ユニットテストが失敗しました。" -ForegroundColor Red
+                Write-Host "❌ C# unit tests failed." -ForegroundColor Red
             } else {
-                Write-Host "✓ C# ユニットテストが成功しました。" -ForegroundColor Green
+                Write-Host "✓ C# unit tests passed." -ForegroundColor Green
             }
         }
         finally {
@@ -56,7 +56,7 @@ if ($TestType -in @("Unit", "All")) {
     }
 }
 
-# PowerShell 統合テストの実行
+# Run PowerShell integration tests
 if ($TestType -in @("Integration", "All")) {
     Write-Host "`n--- PowerShell Integration Tests ---" -ForegroundColor Cyan
     $integrationTestPath = Join-Path $scriptRoot "Integration"
@@ -65,7 +65,7 @@ if ($TestType -in @("Integration", "All")) {
         $testFiles = Get-ChildItem -Path $integrationTestPath -Filter "*.Tests.ps1"
         
         if ($testFiles.Count -eq 0) {
-            Write-Host "⚠ 統合テストファイルが見つかりません。" -ForegroundColor Yellow
+            Write-Host "⚠ No integration test files found." -ForegroundColor Yellow
         } else {
             Write-Host "Found $($testFiles.Count) test file(s)" -ForegroundColor Yellow
             
@@ -90,10 +90,10 @@ if ($TestType -in @("Integration", "All")) {
                 }
             }
             
-            # *.Tests.ps1 ファイルを探すようにPesterに指示
+            # Tell Pester to look for *.Tests.ps1 files
             $config = New-PesterConfiguration -Hashtable $pesterConfig
             $config.Run.Path = Get-ChildItem -Path $integrationTestPath -Filter "*.Tests.ps1" | Select-Object -ExpandProperty FullName
-            # テスト実行（Output.Verbosity = "None" で出力を最小限に）
+            # Run the tests (Output.Verbosity = "None" to minimize output)
             $result = Invoke-Pester -Configuration $config
             
             Write-Host "`n--- Test Results ---" -ForegroundColor Cyan
@@ -103,10 +103,10 @@ if ($TestType -in @("Integration", "All")) {
             Write-Host "Skipped: $($result.SkippedCount)" -ForegroundColor Yellow
             
             if ($result.FailedCount -gt 0) {
-                Write-Host "`n❌ 統合テストに失敗がありました。" -ForegroundColor Red
+                Write-Host "`n❌ There were integration test failures." -ForegroundColor Red
                 exit 1
             } else {
-                Write-Host "`n✓ すべての統合テストが成功しました。" -ForegroundColor Green
+                Write-Host "`n✓ All integration tests passed." -ForegroundColor Green
             }
         }
     } else {
@@ -120,29 +120,29 @@ Write-Host "==================================" -ForegroundColor Cyan
 
 <#
 .SYNOPSIS
-    PowerShell.MCP のすべてのテストを実行します。
+    Runs all PowerShell.MCP tests.
 
 .DESCRIPTION
-    このスクリプトは、C# ユニットテストと PowerShell 統合テストの両方を実行します。
+    This script runs both the C# unit tests and the PowerShell integration tests.
 
 .PARAMETER TestType
-    実行するテストのタイプを指定します。"Unit", "Integration", または "All" (デフォルト)。
+    Specifies the type of tests to run. "Unit", "Integration", or "All" (default).
 
 .PARAMETER Detailed
-    詳細な出力を表示します。
+    Shows detailed output.
 
 .PARAMETER CodeCoverage
-    コードカバレッジを有効にします (PowerShell 統合テストのみ)。
+    Enables code coverage (PowerShell integration tests only).
 
 .EXAMPLE
     .\Run-AllTests.ps1
-    すべてのテストを実行します。
+    Runs all tests.
 
 .EXAMPLE
     .\Run-AllTests.ps1 -TestType Unit
-    C# ユニットテストのみを実行します。
+    Runs only the C# unit tests.
 
 .EXAMPLE
     .\Run-AllTests.ps1 -TestType Integration -Detailed
-    PowerShell 統合テストのみを詳細出力で実行します。
+    Runs only the PowerShell integration tests with detailed output.
 #>

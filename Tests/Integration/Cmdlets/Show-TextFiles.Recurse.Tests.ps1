@@ -1,10 +1,10 @@
-# Show-TextFiles -Recurse のテスト（ワイルドカードパスサポート含む）
+# Tests for Show-TextFiles -Recurse (including wildcard path support)
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
 Describe "Show-TextFiles -Recurse Tests" {
     BeforeAll {
-        # テスト用のディレクトリ構造を作成
+        # Create a directory structure for testing
         # root/
         #   file1.txt  ("hello world")
         #   file2.cs   ("class Foo { }")
@@ -32,57 +32,57 @@ Describe "Show-TextFiles -Recurse Tests" {
         }
     }
 
-    Context "ディレクトリパスで再帰検索" {
-        It "ディレクトリ指定で全ファイルを再帰検索できる" {
+    Context "Recursive search by directory path" {
+        It "can recursively search all files when a directory is specified" {
             $result = Show-TextFiles $script:testRoot -Recurse -Contains "hello"
-            # file1.txt, file3.txt, file5.txt の3ファイルにマッチ
+            # Matches the 3 files file1.txt, file3.txt, file5.txt
             $matchedFiles = @($result | Where-Object { $_ -match "==> .+ <==" })
             $matchedFiles.Count | Should -Be 3
         }
 
-        It "サブディレクトリ内のファイルも検索できる" {
+        It "can also search files within subdirectories" {
             $result = Show-TextFiles $script:testRoot -Recurse -Contains "deep hello"
             $result | Should -Not -BeNullOrEmpty
             ($result | Where-Object { $_ -match "file5\.txt" }) | Should -Not -BeNullOrEmpty
         }
 
-        It "マッチしない場合は空結果" {
+        It "empty result when there is no match" {
             $result = Show-TextFiles $script:testRoot -Recurse -Contains "nonexistent_string_xyz"
             $result | Should -BeNullOrEmpty
         }
     }
 
-    Context "ワイルドカードパスで再帰検索" {
-        It "*.txt で .txt ファイルのみ再帰検索できる" {
+    Context "Recursive search by wildcard path" {
+        It "*.txt recursively searches only .txt files" {
             $pattern = Join-Path $script:testRoot "*.txt"
             $result = Show-TextFiles $pattern -Recurse -Contains "hello"
-            # file1.txt, file3.txt, file5.txt の3ファイルにマッチ
+            # Matches the 3 files file1.txt, file3.txt, file5.txt
             $matchedFiles = @($result | Where-Object { $_ -match "==> .+ <==" })
             $matchedFiles.Count | Should -Be 3
         }
 
-        It "*.cs で .cs ファイルのみ再帰検索できる" {
+        It "*.cs recursively searches only .cs files" {
             $pattern = Join-Path $script:testRoot "*.cs"
             $result = Show-TextFiles $pattern -Recurse -Contains "class"
-            # file2.cs, file4.cs の2ファイルにマッチ
+            # Matches the 2 files file2.cs, file4.cs
             $matchedFiles = @($result | Where-Object { $_ -match "==> .+ <==" })
             $matchedFiles.Count | Should -Be 2
         }
 
-        It "*.cs で .txt ファイルはマッチしない" {
+        It "*.cs does not match .txt files" {
             $pattern = Join-Path $script:testRoot "*.cs"
             $result = Show-TextFiles $pattern -Recurse -Contains "hello"
-            # .cs ファイルには "hello" がないのでマッチなし
+            # The .cs files do not contain "hello", so there is no match
             $result | Should -BeNullOrEmpty
         }
 
-        It "マッチしない拡張子パターンでは空結果" {
+        It "empty result for an extension pattern that matches nothing" {
             $pattern = Join-Path $script:testRoot "*.xyz"
             $result = Show-TextFiles $pattern -Recurse -Contains "hello"
             $result | Should -BeNullOrEmpty
         }
 
-        It "部分ワイルドカード file*.txt でフィルタできる" {
+        It "can filter with the partial wildcard file*.txt" {
             $pattern = Join-Path $script:testRoot "file*.txt"
             $result = Show-TextFiles $pattern -Recurse -Contains "hello"
             $matchedFiles = @($result | Where-Object { $_ -match "==> .+ <==" })
@@ -90,8 +90,8 @@ Describe "Show-TextFiles -Recurse Tests" {
         }
     }
 
-    Context "-Pattern との組み合わせ" {
-        It "ワイルドカードパス + -Pattern で正規表現検索できる" {
+    Context "Combination with -Pattern" {
+        It "can do a regular expression search with wildcard path + -Pattern" {
             $pattern = Join-Path $script:testRoot "*.cs"
             $result = Show-TextFiles $pattern -Recurse -Pattern "class\s+\w+"
             $matchedFiles = @($result | Where-Object { $_ -match "==> .+ <==" })
@@ -99,14 +99,14 @@ Describe "Show-TextFiles -Recurse Tests" {
         }
     }
 
-    Context "バリデーション" {
-        It "-Recurse は -Pattern または -Contains が必要" {
+    Context "Validation" {
+        It "-Recurse requires -Pattern or -Contains" {
             { Show-TextFiles $script:testRoot -Recurse -ErrorAction Stop } | Should -Throw
         }
 
-        It "存在しないパスでエラーになる" {
+        It "errors on a nonexistent path" {
             $result = Show-TextFiles (Join-Path $script:testRoot "nonexistent") -Recurse -Contains "test" -ErrorAction SilentlyContinue 2>&1
-            # ErrorAction SilentlyContinue なのでエラーは非終了エラー
+            # With ErrorAction SilentlyContinue, the error is a non-terminating error
         }
     }
 }

@@ -1,8 +1,8 @@
-# エッジケーステスト - Update-MatchInFile & Show-TextFiles
-Write-Host "=== Update-MatchInFile & Show-TextFiles エッジケーステスト ===" -ForegroundColor Cyan
+# Edge case test - Update-MatchInFile & Show-TextFiles
+Write-Host "=== Update-MatchInFile & Show-TextFiles edge case test ===" -ForegroundColor Cyan
 
-# テスト1: ファイル先頭でのマッチ
-Write-Host "`n【テスト1】ファイル先頭でのマッチ" -ForegroundColor Yellow
+# Test 1: Match at the beginning of the file
+Write-Host "`n[Test 1] Match at the beginning of the file" -ForegroundColor Yellow
 $content = @"
 Line 1: match
 Line 2
@@ -14,8 +14,8 @@ Set-Content -Path "edge-match1.txt" -Value $content
 Update-MatchInFile -Path "edge-match1.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match1.txt"
 
-# テスト2: ファイル末尾でのマッチ
-Write-Host "`n【テスト2】ファイル末尾でのマッチ" -ForegroundColor Yellow
+# Test 2: Match at the end of the file
+Write-Host "`n[Test 2] Match at the end of the file" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -27,8 +27,8 @@ Set-Content -Path "edge-match2.txt" -Value $content
 Update-MatchInFile -Path "edge-match2.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match2.txt"
 
-# テスト3: ファイル先頭と末尾の両方でマッチ
-Write-Host "`n【テスト3】ファイル先頭と末尾の両方でマッチ" -ForegroundColor Yellow
+# Test 3: Match at both the beginning and end of the file
+Write-Host "`n[Test 3] Match at both the beginning and end of the file" -ForegroundColor Yellow
 $content = @"
 Line 1: match
 Line 2
@@ -40,8 +40,8 @@ Set-Content -Path "edge-match3.txt" -Value $content
 Update-MatchInFile -Path "edge-match3.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match3.txt"
 
-# テスト4: 3行ファイルの中央行マッチ
-Write-Host "`n【テスト4】3行ファイルの中央行マッチ" -ForegroundColor Yellow
+# Test 4: Match on the middle line of a 3-line file
+Write-Host "`n[Test 4] Match on the middle line of a 3-line file" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2: match
@@ -51,8 +51,8 @@ Set-Content -Path "edge-match4.txt" -Value $content
 Update-MatchInFile -Path "edge-match4.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "edge-match4.txt"
 
-# テスト5: Show-TextFiles - ファイル先頭でのマッチ
-Write-Host "`n【テスト5】Show-TextFiles - ファイル先頭でのマッチ" -ForegroundColor Yellow
+# Test 5: Show-TextFiles - match at the beginning of the file
+Write-Host "`n[Test 5] Show-TextFiles - match at the beginning of the file" -ForegroundColor Yellow
 $content = @"
 Line 1: match
 Line 2
@@ -64,8 +64,8 @@ Set-Content -Path "edge-show1.txt" -Value $content
 Show-TextFiles -Path "edge-show1.txt" -Contains "match"
 Remove-Item "edge-show1.txt"
 
-# テスト6: Show-TextFiles - ファイル末尾でのマッチ
-Write-Host "`n【テスト6】Show-TextFiles - ファイル末尾でのマッチ" -ForegroundColor Yellow
+# Test 6: Show-TextFiles - match at the end of the file
+Write-Host "`n[Test 6] Show-TextFiles - match at the end of the file" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -77,4 +77,4 @@ Set-Content -Path "edge-show2.txt" -Value $content
 Show-TextFiles -Path "edge-show2.txt" -Contains "match"
 Remove-Item "edge-show2.txt"
 
-Write-Host "`n=== テスト完了 ===" -ForegroundColor Green
+Write-Host "`n=== Tests complete ===" -ForegroundColor Green

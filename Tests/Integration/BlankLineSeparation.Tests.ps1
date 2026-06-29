@@ -1,5 +1,5 @@
 # Blank Line Separation Tests
-# コンテキスト行とサマリ行の間に空行が挿入されることをテストする
+# Verifies that a blank line is inserted between context lines and the summary line
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
@@ -21,7 +21,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             Set-Content -Path $script:testFile -Value @("Line 1", "Line 2", "Line 3", "Line 4", "Line 5") -Encoding UTF8
         }
 
-        It "3行目への挿入時、コンテキストとサマリの間に空行がある" {
+        It "Has a blank line between context and summary when inserting at line 3" {
             $output = Add-LinesToFile -Path $script:testFile -LineNumber 3 -Content "Inserted" 6>&1 | Out-String
             
             $lines = $output -split "`r?`n"
@@ -54,7 +54,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             Set-Content -Path $script:testFile -Value @("Line 1", "Line 2", "Line 3", "Line 4", "Line 5") -Encoding UTF8
         }
 
-        It "行の更新時、コンテキストとサマリの間に空行がある" {
+        It "Has a blank line between context and summary when updating lines" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 3,4 -Content @("Updated 3", "Updated 4") 6>&1 | Out-String
             
             $lines = $output -split "`r?`n"
@@ -86,7 +86,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             Set-Content -Path $script:testFile -Value @("Line 1", "Line 2", "Line 3", "Line 4", "Line 5") -Encoding UTF8
         }
 
-        It "行の削除時、コンテキストとサマリの間に空行がある" {
+        It "Has a blank line between context and summary when removing lines" {
             $output = Remove-LinesFromFile -Path $script:testFile -LineRange 2,3 6>&1 | Out-String
             
             $lines = $output -split "`r?`n"
@@ -118,7 +118,7 @@ Describe "Blank Line Separation Between Context and Summary" {
             Set-Content -Path $script:testFile -Value @("Line 1", "Line 2: old value", "Line 3", "Line 4: old value", "Line 5") -Encoding UTF8
         }
 
-        It "マッチ置換時、コンテキストとサマリの間に空行がある" {
+        It "Has a blank line between context and summary when replacing a match" {
             $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" 6>&1 | Out-String
             
             $lines = $output -split "`r?`n"

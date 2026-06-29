@@ -1,8 +1,8 @@
-# エッジケーステスト - Add-LinesToFile
-Write-Host "=== Add-LinesToFile エッジケーステスト ===" -ForegroundColor Cyan
+# Edge case test - Add-LinesToFile
+Write-Host "=== Add-LinesToFile edge case test ===" -ForegroundColor Cyan
 
-# テスト1: ファイル先頭への挿入
-Write-Host "`n【テスト1】ファイル先頭への挿入" -ForegroundColor Yellow
+# Test 1: Insert at the beginning of the file
+Write-Host "`n[Test 1] Insert at the beginning of the file" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -14,8 +14,8 @@ Set-Content -Path "edge-add1.txt" -Value $content
 Add-LinesToFile -Path "edge-add1.txt" -LineNumber 1 -Content "NEW FIRST LINE"
 Remove-Item "edge-add1.txt"
 
-# テスト2: 2行ファイルへの挿入
-Write-Host "`n【テスト2】2行ファイルへの挿入（コンテキスト不足）" -ForegroundColor Yellow
+# Test 2: Insert into a 2-line file
+Write-Host "`n[Test 2] Insert into a 2-line file (insufficient context)" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -24,8 +24,8 @@ Set-Content -Path "edge-add2.txt" -Value $content
 Add-LinesToFile -Path "edge-add2.txt" -LineNumber 2 -Content "INSERTED"
 Remove-Item "edge-add2.txt"
 
-# テスト3: 末尾から2行目への挿入
-Write-Host "`n【テスト3】末尾から2行目への挿入" -ForegroundColor Yellow
+# Test 3: Insert at the second-to-last line
+Write-Host "`n[Test 3] Insert at the second-to-last line" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -37,4 +37,4 @@ Set-Content -Path "edge-add3.txt" -Value $content
 Add-LinesToFile -Path "edge-add3.txt" -LineNumber 4 -Content "INSERTED NEAR END"
 Remove-Item "edge-add3.txt"
 
-Write-Host "`n=== テスト完了 ===" -ForegroundColor Green
+Write-Host "`n=== Tests complete ===" -ForegroundColor Green

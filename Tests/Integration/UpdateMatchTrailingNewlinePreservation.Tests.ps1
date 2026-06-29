@@ -1,17 +1,17 @@
 # Trailing Newline Preservation Tests
-# Add-LinesToFile が元のファイルの末尾改行を保持することを確認する統合テスト
+# Integration tests verifying that Update-MatchInFile preserves the original file's trailing newline
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
 Describe "Update-MatchInFile Trailing Newline Preservation" {
     BeforeAll {
-        # テスト用の一時ディレクトリ
+        # Temporary directory for tests
         $script:testDir = Join-Path $env:TEMP "UpdateMatchTrailingNewlineTests_$(Get-Random)"
         New-Item -ItemType Directory -Path $script:testDir -Force | Out-Null
     }
 
     AfterAll {
-        # テストディレクトリのクリーンアップ
+        # Clean up the test directory
         if (Test-Path $script:testDir) {
             Remove-Item -Path $script:testDir -Recurse -Force
         }
@@ -23,18 +23,18 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             $testFile = Join-Path $script:testDir "test1.txt"
             "Line1`r`nLine2`r`nLine3`r`n" | Out-File -FilePath $testFile -Encoding utf8 -NoNewline
             
-            # 元のファイルに末尾改行があることを確認
+            # Verify the original file has a trailing newline
             $bytesBeforeAdd = [System.IO.File]::ReadAllBytes($testFile)
             $bytesBeforeAdd[-2] | Should -Be 0x0D  # CR
             $bytesBeforeAdd[-1] | Should -Be 0x0A  # LF
-            
+
             # Act
             Update-MatchInFile -Path $testFile -OldText "Line3" -Replacement "Line3Updated"
-            
+
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "末尾にCRが保持されるべき"
-            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "末尾にLFが保持されるべき"
+            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "the trailing CR should be preserved"
+            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "the trailing LF should be preserved"
         }
 
         It "Should preserve trailing newline when adding multiple lines (3 lines)" {
@@ -47,8 +47,8 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "複数行追加でも末尾にCRが保持されるべき"
-            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "複数行追加でも末尾にLFが保持されるべき"
+            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "the trailing CR should be preserved even when adding multiple lines"
+            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "the trailing LF should be preserved even when adding multiple lines"
         }
 
         It "Should preserve trailing newline when adding more than 6 lines (omission display case)" {
@@ -61,8 +61,8 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "7行追加（省略表示）でも末尾にCRが保持されるべき"
-            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "7行追加（省略表示）でも末尾にLFが保持されるべき"
+            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "the trailing CR should be preserved even when adding 7 lines (omission display)"
+            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "the trailing LF should be preserved even when adding 7 lines (omission display)"
         }
 
         It "Should preserve trailing newline when inserting in the middle" {
@@ -75,8 +75,8 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "途中挿入でも末尾にCRが保持されるべき"
-            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "途中挿入でも末尾にLFが保持されるべき"
+            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "the trailing CR should be preserved even when inserting in the middle"
+            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "the trailing LF should be preserved even when inserting in the middle"
         }
     }
 
@@ -86,16 +86,16 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             $testFile = Join-Path $script:testDir "test5.txt"
             "Line1`r`nLine2`r`nLine3" | Out-File -FilePath $testFile -Encoding utf8 -NoNewline
             
-            # 元のファイルに末尾改行がないことを確認
+            # Verify the original file has no trailing newline
             $bytesBeforeAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesBeforeAdd[-1] | Should -Not -Be 0x0A -Because "元のファイルは末尾改行なし"
-            
+            $bytesBeforeAdd[-1] | Should -Not -Be 0x0A -Because "the original file has no trailing newline"
+
             # Act
             Update-MatchInFile -Path $testFile -OldText "Line3" -Replacement "Line3Updated"
-            
+
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesAfterAdd[-1] | Should -Not -Be 0x0A -Because "元のファイルに改行がないので、追加後も改行なしのはず"
+            $bytesAfterAdd[-1] | Should -Not -Be 0x0A -Because "since the original file has no newline, there should be none after the change either"
         }
 
         It "Should preserve no trailing newline when adding multiple lines" {
@@ -108,16 +108,16 @@ Describe "Update-MatchInFile Trailing Newline Preservation" {
             
             # Assert
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesAfterAdd[-1] | Should -Not -Be 0x0A -Because "元のファイルに改行がないので、複数行追加でも末尾改行なし"
+            $bytesAfterAdd[-1] | Should -Not -Be 0x0A -Because "since the original file has no newline, there is no trailing newline even when adding multiple lines"
         }
     }
 
     Context "Regression test for the original bug" {
         It "Should fix the original issue where trailing newline was lost" {
-            # Arrange: 元の問題を再現するケース
+            # Arrange: case that reproduces the original problem
             $testFile = Join-Path $script:testDir "test_regression.txt"
-            
-            # 元の問題のセットアップと同じ方法でファイルを作成
+
+            # Create the file the same way as the original problem's setup
             $initialContent = @'
 Line1
 Line2
@@ -125,21 +125,21 @@ Line3
 '@
             $initialContent | Out-File -FilePath $testFile -Encoding utf8 -NoNewline
             "`r`n" | Out-File -FilePath $testFile -Encoding utf8 -Append -NoNewline
-            
-            # 元のファイルに末尾改行があることを確認
+
+            # Verify the original file has a trailing newline
             $bytesBeforeAdd = [System.IO.File]::ReadAllBytes($testFile)
             $bytesBeforeAdd[-2] | Should -Be 0x0D
             $bytesBeforeAdd[-1] | Should -Be 0x0A
-            
-            # Act: 元の問題の操作
+
+            # Act: the original problem's operation
             Update-MatchInFile -Path $testFile -OldText "Line3" -Replacement "Line3Updated"
-            
-            # Assert: バグ修正後は末尾改行が保持されるはず
+
+            # Assert: after the bug fix, the trailing newline should be preserved
             $bytesAfterAdd = [System.IO.File]::ReadAllBytes($testFile)
-            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "修正後は元の問題が解決され、末尾にCRが保持されるべき"
-            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "修正後は元の問題が解決され、末尾にLFが保持されるべき"
-            
-            # 内容も確認（Line3がLine3Updatedに置換されているはず）
+            $bytesAfterAdd[-2] | Should -Be 0x0D -Because "after the fix, the original problem is resolved and the trailing CR should be preserved"
+            $bytesAfterAdd[-1] | Should -Be 0x0A -Because "after the fix, the original problem is resolved and the trailing LF should be preserved"
+
+            # Verify the content too (Line3 should have been replaced with Line3Updated)
             $content = [System.IO.File]::ReadAllText($testFile)
             $content | Should -Match "(?s)Line1.*Line2.*Line3Updated"
         }

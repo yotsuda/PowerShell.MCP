@@ -1,11 +1,11 @@
 # Remove-LinesFromFile.Tests.ps1
-# Remove-LinesFromFile コマンドレットの統合テスト
+# Integration tests for the Remove-LinesFromFile cmdlet
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
 Describe "Remove-LinesFromFile Integration Tests" {
     BeforeEach {
-        # 各テストの前に新しい一時ファイルを作成
+        # Create a new temp file before each test
         $script:testFile = [System.IO.Path]::GetTempFileName()
         $script:initialContent = @(
             "# Header"
@@ -23,24 +23,24 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
     }
 
     AfterEach {
-        # 各テスト後にクリーンアップ
+        # Clean up after each test
         if (Test-Path $script:testFile) {
             Remove-Item $script:testFile -Force
         }
-        # バックアップファイルもクリーンアップ
+        # Clean up backup files too
         Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*" | 
             Where-Object { $_.FullName -ne $script:testFile } | Remove-Item -Force
     }
 
-    Context "行範囲による削除" {
-        It "単一行を削除できる" {
+    Context "Deletion by line range" {
+        It "can delete a single line" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 2
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 9
             $result -notcontains "Line 1: First line" | Should -Be $true
         }
 
-        It "連続する複数行を削除できる" {
+        It "can delete multiple consecutive lines" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 2,4
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 7
@@ -49,43 +49,43 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $result -notcontains "Line 3: Third line" | Should -Be $true
         }
 
-        It "最初の行を削除できる" {
+        It "can delete the first line" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 1
             $result = Get-Content $script:testFile
             $result[0] | Should -Be "Line 1: First line"
             $result.Count | Should -Be 9
         }
 
-        It "最後の行を削除できる" {
+        It "can delete the last line" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 10
             $result = Get-Content $script:testFile
-            $result[-1] | Should -Be "Line 5: Fifth line"  # 最後の行は元の9行目
+            $result[-1] | Should -Be "Line 5: Fifth line"  # The last line is the original line 9
             $result.Count | Should -Be 9
         }
     }
 
-    Context "テキストマッチによる削除（Contains）" {
-        It "指定したテキストを含む行を削除できる" {
+    Context "Deletion by text match (Contains)" {
+        It "can delete lines that contain the specified text" {
             Remove-LinesFromFile -Path $script:testFile -Contains "ERROR"
             $result = Get-Content $script:testFile
             $result -notcontains "ERROR: Connection timeout" | Should -Be $true
             $result.Count | Should -Be 9
         }
 
-        It "複数の行がマッチする場合、すべて削除される" {
+        It "when multiple lines match, all of them are deleted" {
             Remove-LinesFromFile -Path $script:testFile -Contains "Line"
             $result = Get-Content $script:testFile
-            $result.Count | Should -Be 5  # Header, ERROR, error, WARNING, Footer のみ残る
+            $result.Count | Should -Be 5  # Only Header, ERROR, error, WARNING, Footer remain
         }
 
-        It "大文字小文字を区別する（case-sensitive）" {
+        It "is case-sensitive" {
             Remove-LinesFromFile -Path $script:testFile -Contains "error"
             $result = Get-Content $script:testFile
-            $result -contains "ERROR: Connection timeout" | Should -Be $true  # 大文字ERRORは残る
-            $result -notcontains "error: invalid input" | Should -Be $true    # 小文字errorは削除される
+            $result -contains "ERROR: Connection timeout" | Should -Be $true  # Uppercase ERROR remains
+            $result -notcontains "error: invalid input" | Should -Be $true    # Lowercase error is deleted
         }
 
-        It "マッチする行がない場合、何も変更されない" {
+        It "when no line matches, nothing is changed" {
             $originalContent = Get-Content $script:testFile
             Remove-LinesFromFile -Path $script:testFile -Contains "NonExistentText"
             $result = Get-Content $script:testFile
@@ -93,15 +93,15 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
         }
     }
 
-    Context "正規表現による削除（Pattern）" {
-        It "正規表現にマッチする行を削除できる" {
+    Context "Deletion by regular expression (Pattern)" {
+        It "can delete lines that match a regular expression" {
             Remove-LinesFromFile -Path $script:testFile -Pattern "^ERROR:"
             $result = Get-Content $script:testFile
             $result -notcontains "ERROR: Connection timeout" | Should -Be $true
             $result.Count | Should -Be 9
         }
 
-        It "複雑な正規表現パターンを使用できる" {
+        It "can use a complex regular expression pattern" {
             Remove-LinesFromFile -Path $script:testFile -Pattern "^(ERROR|WARNING):"
             $result = Get-Content $script:testFile
             $result -notcontains "ERROR: Connection timeout" | Should -Be $true
@@ -109,36 +109,36 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $result.Count | Should -Be 8
         }
 
-        It "行番号パターンで特定形式の行を削除" {
+        It "deletes lines of a specific format using a line-number pattern" {
             Remove-LinesFromFile -Path $script:testFile -Pattern "Line \d+:"
             $result = Get-Content $script:testFile
-            $result.Count | Should -Be 5  # Header, ERROR, error, WARNING, Footer のみ残る
+            $result.Count | Should -Be 5  # Only Header, ERROR, error, WARNING, Footer remain
         }
     }
 
-    Context "範囲内での条件削除" {
-        It "LineRange と Contains を組み合わせられる" {
+    Context "Conditional deletion within a range" {
+        It "can combine LineRange and Contains" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 2,6 -Contains "ERROR"
             $result = Get-Content $script:testFile
-            # 2-6行目の範囲内でERRORを含む5行目だけが削除される
+            # Within the range of lines 2-6, only line 5 (which contains ERROR) is deleted
             $result -notcontains "ERROR: Connection timeout" | Should -Be $true
-            $result -contains "WARNING: This is a warning" | Should -Be $true  # 範囲外なので残る
+            $result -contains "WARNING: This is a warning" | Should -Be $true  # Outside the range, so it remains
         }
 
-        It "LineRange と Pattern を組み合わせられる" {
+        It "can combine LineRange and Pattern" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 1,5 -Pattern "^Line \d+:"
             $result = Get-Content $script:testFile
-            # 1-5行目の範囲内でパターンマッチする行が削除される
+            # Lines matching the pattern within the range of lines 1-5 are deleted
             $result -notcontains "Line 1: First line" | Should -Be $true
             $result -notcontains "Line 2: Second line" | Should -Be $true
             $result -notcontains "Line 3: Third line" | Should -Be $true
-            $result -contains "Line 4: Fourth line" | Should -Be $true  # 範囲外
-            $result -contains "Line 5: Fifth line" | Should -Be $true   # 範囲外
+            $result -contains "Line 4: Fourth line" | Should -Be $true  # Outside the range
+            $result -contains "Line 5: Fifth line" | Should -Be $true   # Outside the range
         }
     }
 
-    Context "エンコーディング" {
-        It "UTF-8ファイルを正しく処理できる" {
+    Context "Encoding" {
+        It "can process a UTF-8 file correctly" {
             $content = @("日本語 Line 1", "English Line 2", "日本語 Line 3")
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             Remove-LinesFromFile -Path $script:testFile -Contains "English" -Encoding UTF8
@@ -148,14 +148,14 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
         }
     }
 
-    Context "バックアップ機能" {
-        It "-Backup を指定するとバックアップファイルが作成される" {
+    Context "Backup feature" {
+        It "creates a backup file when -Backup is specified" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 1 -Backup
             $backupFiles = Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*.bak"
             $backupFiles.Count | Should -BeGreaterThan 0
         }
 
-        It "バックアップファイルに元の内容が保存される" {
+        It "saves the original content in the backup file" {
             $originalContent = Get-Content $script:testFile
             Remove-LinesFromFile -Path $script:testFile -LineRange 1 -Backup
             $backupFile = Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*.bak" | Select-Object -First 1
@@ -164,8 +164,8 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
         }
     }
 
-    Context "WhatIf と Confirm" {
-        It "-WhatIf を指定すると実際には変更しない" {
+    Context "WhatIf and Confirm" {
+        It "does not actually change the file when -WhatIf is specified" {
             $originalContent = Get-Content $script:testFile
             Remove-LinesFromFile -Path $script:testFile -Contains "ERROR" -WhatIf
             $result = Get-Content $script:testFile
@@ -173,31 +173,31 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
         }
     }
 
-    Context "エラーハンドリング" {
-        It "存在しないファイルでエラーになる" {
+    Context "Error handling" {
+        It "errors on a nonexistent file" {
             { Remove-LinesFromFile -Path "C:\NonExistent\file.txt" -LineRange 1 -ErrorAction Stop } | Should -Throw
         }
 
-        It "範囲外の行番号で警告を出すが続行する" {
+        It "warns on an out-of-range line number but continues" {
             $result = Remove-LinesFromFile -Path $script:testFile -LineRange 100 -WarningVariable warnings 3>&1
             $warnings | Should -Not -BeNullOrEmpty
         }
 
-        It "無効な範囲指定でエラーになる" {
+        It "errors on an invalid range specification" {
             { Remove-LinesFromFile -Path $script:testFile -LineRange 9,2 } | Should -Throw
         }
 
-        It "無効な正規表現でエラーになる" {
+        It "errors on an invalid regular expression" {
             { Remove-LinesFromFile -Path $script:testFile -Pattern "[invalid(" -ErrorAction Stop } | Should -Throw
         }
 
-        It "LineRange、Contains、Pattern のいずれも指定しない場合エラーになる" {
+        It "errors when none of LineRange, Contains, or Pattern is specified" {
             { Remove-LinesFromFile -Path $script:testFile } | Should -Throw
         }
     }
 
-    Context "パイプライン入力" {
-        It "パイプラインから複数のファイルを処理できる" {
+    Context "Pipeline input" {
+        It "can process multiple files from the pipeline" {
             $file2 = [System.IO.Path]::GetTempFileName()
             Set-Content -Path $file2 -Value @("ERROR: Error in file2", "Normal line")
             
@@ -214,92 +214,92 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
         }
     }
 
-    Context "コンテキスト表示" {
-        It "単一行削除時に前2行と後2行のコンテキストを表示する" {
+    Context "Context display" {
+        It "displays 2 lines of context before and after when deleting a single line" {
             $output = Remove-LinesFromFile -Path $script:testFile -LineRange 5,5 | Out-String
-            
-            # 前2行のコンテキスト（'-'で表示、削除後の行番号）
+
+            # 2 lines of context before (shown with '-', post-deletion line numbers)
             $output | Should -Match '3- Line 2: Second line'
             $output | Should -Match '4- Line 3: Third line'
-            
-            # 削除マーカー（':'で表示、行番号なし）
+
+            # Deletion marker (shown with ':', no line number)
             $output | Should -Match '   :'
-            
-            # 後2行のコンテキスト（'-'で表示、削除後の行番号）
+
+            # 2 lines of context after (shown with '-', post-deletion line numbers)
             $output | Should -Match '5- error: invalid input'
             $output | Should -Match '6- Line 4: Fourth line'
         }
 
-        It "飛び飛びで削除する場合に重複なくコンテキストを表示する" {
+        It "displays context without duplication when deleting non-contiguous lines" {
             $output = Remove-LinesFromFile -Path $script:testFile -Contains "ERROR" | Out-String
-            
-            # 1つ目の削除範囲（大文字ERROR、5行目を削除）
+
+            # First deletion range (uppercase ERROR, line 5 deleted)
             $output | Should -Match '3- Line 2: Second line'
             $output | Should -Match '4- Line 3: Third line'
             $output | Should -Match '   :'
             $output | Should -Match '5- error: invalid input'
             $output | Should -Match '6- Line 4: Fourth line'
-            
-            # コンテキスト行が重複していないことを確認
+
+            # Confirm context lines are not duplicated
             $contextLineCount = ([regex]::Matches($output, '6- Line 4: Fourth line')).Count
             $contextLineCount | Should -Be 1
         }
 
-        It "先頭行削除時にコンテキストが正しく表示される" {
+        It "displays context correctly when deleting the first line" {
             $output = Remove-LinesFromFile -Path $script:testFile -LineRange 1,1 | Out-String
-            
-            # 前2行は存在しない（先頭なので）
-            # 削除マーカー（行番号なし）
+
+            # No 2 preceding lines exist (because it is the first line)
+            # Deletion marker (no line number)
             $output | Should -Match '   :'
-            
-            # 後2行（'-'で表示、削除後の行番号）
+
+            # 2 lines after (shown with '-', post-deletion line numbers)
             $output | Should -Match '1- Line 1: First line'
             $output | Should -Match '2- Line 2: Second line'
         }
 
-        It "末尾行削除時にコンテキストが正しく表示される" {
+        It "displays context correctly when deleting the last line" {
             $output = Remove-LinesFromFile -Path $script:testFile -LineRange 9,10 | Out-String
-            
-            # 前2行
+
+            # 2 preceding lines
             $output | Should -Match '7- Line 4: Fourth line'
             $output | Should -Match '8- WARNING: This is a warning'
-            
-            # 削除マーカー（行番号なし）
+
+            # Deletion marker (no line number)
             $output | Should -Match '   :'
         }
 
-        It "連続する複数行削除時にマーカーは1つだけ表示される" {
+        It "displays only one marker when deleting multiple consecutive lines" {
             $output = Remove-LinesFromFile -Path $script:testFile -LineRange 2,4 | Out-String
-            
-            # 前2行（1行目しかない）
+
+            # 2 preceding lines (only line 1 exists)
             $output | Should -Match '1- # Header'
-            
-            # 削除マーカー（連続削除なので1回のみ表示）
+
+            # Deletion marker (shown only once because the deletion is contiguous)
             $markerCount = ([regex]::Matches($output, '(?m)^\s+:\s*$')).Count
             $markerCount | Should -Be 1
-            
-            # 後2行（'-'で表示、削除後の行番号）
+
+            # 2 lines after (shown with '-', post-deletion line numbers)
             $output | Should -Match '2- ERROR: Connection timeout'
             $output | Should -Match '3- error: invalid input'
         }
 
-        It "複数の削除範囲がある場合に各範囲ごとにマーカーが表示される" {
-            # "error" (小文字) で検索すると error: invalid input のみマッチ
+        It "displays a marker for each range when there are multiple deletion ranges" {
+            # Searching for "error" (lowercase) matches only "error: invalid input"
             $output = Remove-LinesFromFile -Path $script:testFile -Contains "error" | Out-String
-            
-            # 1つの削除範囲のみ（1行）
+
+            # Only one deletion range (1 line)
             $output | Should -Match '   :'
-            
-            # マーカーは1つのみ
+
+            # Only one marker
             $markerCount = ([regex]::Matches($output, '(?m)^\s+:\s*$')).Count
             $markerCount | Should -Be 1
         }
 
-        It "削除後の行番号が連続して正しく表示される" {
+        It "displays post-deletion line numbers consecutively and correctly" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 3,5
             $result = Get-Content $script:testFile
-            
-            # ファイルが正しく削除されている
+
+            # The file has been deleted correctly
             $result.Count | Should -Be 7
             $result[0] | Should -Be "# Header"
             $result[1] | Should -Be "Line 1: First line"
@@ -307,8 +307,8 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $result[3] | Should -Be "Line 4: Fourth line"
         }
 
-        It "前2行のコンテキストでoutputLineNumberを使って重複を回避する" {
-            # より複雑なケース：複数の削除範囲が近接している場合
+        It "uses outputLineNumber to avoid duplication in the 2 preceding lines of context" {
+            # A more complex case: when multiple deletion ranges are close together
             Set-Content -Path $script:testFile -Value @(
                 "Keep 1"
                 "Delete 1"
@@ -320,14 +320,14 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             
             $output = Remove-LinesFromFile -Path $script:testFile -Contains "Delete" | Out-String
             
-            # "Keep 2" は1回だけ表示されるべき
+            # "Keep 2" should be displayed only once
             $keep2Count = ([regex]::Matches($output, 'Keep 2')).Count
             $keep2Count | Should -Be 1
         }
     }
 
-    Context "-WhatIf エスケープシーケンス" {
-        It "Contains マッチ部分のみ黄色背景でハイライトされる" {
+    Context "-WhatIf escape sequences" {
+        It "highlights only the Contains-matched portion with a yellow background" {
             Set-Content -Path $script:testFile -Value @(
                 "Line 1"
                 "DELETE this line"
@@ -337,14 +337,14 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $result = Remove-LinesFromFile -Path $script:testFile -Contains "DELETE" -WhatIf
             $deleteLine = $result | Where-Object { $_ -match "DELETE" }
             
-            # マッチ部分は [31;43m (赤文字+黄色背景) で開始
+            # The matched portion starts with [31;43m (red text + yellow background)
             $deleteLine | Should -Match '\x1b\[31;43mDELETE'
-            
-            # マッチ後は [31;49m (赤文字+デフォルト背景) にリセット
+
+            # After the match, it resets to [31;49m (red text + default background)
             $deleteLine | Should -Match 'DELETE\x1b\[31;49m'
         }
-        
-        It "Pattern マッチ部分のみ黄色背景でハイライトされる" {
+
+        It "highlights only the Pattern-matched portion with a yellow background" {
             Set-Content -Path $script:testFile -Value @(
                 "Line 1"
                 "Error code 123 found"
@@ -354,14 +354,14 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $result = Remove-LinesFromFile -Path $script:testFile -Pattern "\d+" -WhatIf
             $matchLine = $result | Where-Object { $_ -match "123" }
             
-            # マッチ部分は [31;43m (赤文字+黄色背景) で開始
+            # The matched portion starts with [31;43m (red text + yellow background)
             $matchLine | Should -Match '\x1b\[31;43m123'
-            
-            # マッチ後は [31;49m (赤文字+デフォルト背景) にリセット
+
+            # After the match, it resets to [31;49m (red text + default background)
             $matchLine | Should -Match '123\x1b\[31;49m'
         }
-        
-        It "LineRange のみの場合は黄色背景ハイライトなし" {
+
+        It "no yellow background highlight when only LineRange is used" {
             Set-Content -Path $script:testFile -Value @(
                 "Line 1"
                 "Line 2"
@@ -371,10 +371,10 @@ Set-Content -Path $script:testFile -Value $script:initialContent -Encoding UTF8
             $result = Remove-LinesFromFile -Path $script:testFile -LineRange 2,2 -WhatIf
             $deleteLine = $result | Where-Object { $_ -match "Line 2" }
             
-            # 行全体が赤 [31m で表示
+            # The entire line is displayed in red [31m
             $deleteLine | Should -Match '\x1b\[31m'
-            
-            # 黄色背景 [43m は含まれない
+
+            # The yellow background [43m is not included
             $deleteLine | Should -Not -Match '\[43m'
         }
     }

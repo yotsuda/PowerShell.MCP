@@ -10,8 +10,8 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
         }
     }
 
-    Context "マッチしない場合の動作" {
-        It "Pattern がマッチしない場合、ファイルは変更されない" {
+    Context "Behavior when there is no match" {
+        It "does not change the file when Pattern does not match" {
             $testFile = Join-Path $script:testDir "no-match.txt"
             $originalContent = @("Line 1", "Line 2", "Line 3")
             Set-Content -Path $testFile -Value $originalContent
@@ -25,8 +25,8 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
         }
     }
 
-    Context "Replacement が特殊な値" {
-        It "Replacement が空文字列（マッチ部分を削除）" {
+    Context "Replacement with special values" {
+        It "Replacement is an empty string (deletes the matched portion)" {
             $testFile = Join-Path $script:testDir "empty-replacement.txt"
             Set-Content -Path $testFile -Value "Remove this word from the sentence"
             
@@ -37,8 +37,8 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
         }
     }
 
-    Context "キャプチャグループを使った置換" {
-        It "キャプチャグループで順序を入れ替え" {
+    Context "Replacement using capture groups" {
+        It "swaps order using capture groups" {
             $testFile = Join-Path $script:testDir "capture-group.txt"
             Set-Content -Path $testFile -Value "FirstName LastName"
             
@@ -49,14 +49,14 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
         }
     }
 
-    Context "エラーハンドリング" {
-        It "存在しないファイルへの置換でエラー" {
+    Context "Error handling" {
+        It "errors when replacing in a nonexistent file" {
             $nonExistentFile = Join-Path $script:testDir "nonexistent.txt"
             
             { Update-MatchInFile -Path $nonExistentFile -Pattern "test" -Replacement "new" -ErrorAction Stop } |
                 Should -Throw
         }
-        It "Pattern に改行が含まれている場合はエラー" {
+        It "errors when Pattern contains a newline" {
             $testFile = Join-Path $script:testDir "newline-pattern.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
@@ -64,7 +64,7 @@ Describe "Update-MatchInFile - Additional Edge Cases" {
                 Should -Throw "*cannot contain newline*"
         }
 
-        It "OldText に改行が含まれている場合は multiline モードで成功する" {
+        It "succeeds in multiline mode when OldText contains a newline" {
             $testFile = Join-Path $script:testDir "newline-contains.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 

@@ -10,8 +10,8 @@ Describe "Remove-LinesFromFile - Additional Edge Cases" {
         }
     }
 
-    Context "マッチしない場合の動作" {
-        It "Contains がマッチしない場合、ファイルは変更されない" {
+    Context "Behavior when there is no match" {
+        It "does not change the file when Contains does not match" {
             $testFile = Join-Path $script:testDir "no-match.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
             
@@ -22,8 +22,8 @@ Describe "Remove-LinesFromFile - Additional Edge Cases" {
         }
     }
 
-    Context "すべての行を削除" {
-        It "すべての行がマッチして削除される場合、空ファイルになる" {
+    Context "Deleting all lines" {
+        It "becomes an empty file when all lines match and are deleted" {
             $testFile = Join-Path $script:testDir "delete-all.txt"
             Set-Content -Path $testFile -Value @("Delete 1", "Delete 2", "Delete 3")
             
@@ -39,8 +39,8 @@ Describe "Remove-LinesFromFile - Additional Edge Cases" {
         }
     }
 
-    Context "特殊なパターン" {
-        It "空行を削除" {
+    Context "Special patterns" {
+        It "deletes empty lines" {
             $testFile = Join-Path $script:testDir "empty-lines.txt"
             Set-Content -Path $testFile -Value @("Line 1", "", "Line 3", "", "Line 5")
             
@@ -52,14 +52,14 @@ Describe "Remove-LinesFromFile - Additional Edge Cases" {
         }
     }
 
-    Context "エラーハンドリング" {
-        It "存在しないファイルからの削除でエラー" {
+    Context "Error handling" {
+        It "errors when deleting from a nonexistent file" {
             $nonExistentFile = Join-Path $script:testDir "nonexistent.txt"
             
             { Remove-LinesFromFile -Path $nonExistentFile -Contains "test" -ErrorAction Stop } | Should -Throw
         }
 
-        It "Pattern に改行が含まれている場合はエラー" {
+        It "errors when Pattern contains a newline" {
             $testFile = Join-Path $script:testDir "newline-pattern.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
@@ -67,7 +67,7 @@ Describe "Remove-LinesFromFile - Additional Edge Cases" {
                 Should -Throw "*cannot contain newline*"
         }
 
-        It "Contains に改行が含まれている場合は multiline モードで動作する" {
+        It "operates in multiline mode when Contains contains a newline" {
             $testFile = Join-Path $script:testDir "newline-contains.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 

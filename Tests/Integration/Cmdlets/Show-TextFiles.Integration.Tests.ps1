@@ -1,11 +1,11 @@
 # Test-ShowTextFileCmdlet.ps1
-# Show-TextFiles コマンドレットの統合テスト（既存 + HIGH優先度）
+# Integration tests for the Show-TextFiles cmdlet (existing + HIGH priority)
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
 Describe "Show-TextFiles Integration Tests" {
     BeforeAll {
-        # テスト用の一時ファイルを作成
+        # Create a temporary file for testing
         $script:testFile = [System.IO.Path]::GetTempFileName()
         $script:testContent = @(
             "Line 1: First line"
@@ -18,93 +18,93 @@ Describe "Show-TextFiles Integration Tests" {
     }
 
     AfterAll {
-        # クリーンアップ
+        # Cleanup
         if (Test-Path $script:testFile) {
             Remove-Item $script:testFile -Force
         }
     }
 
-    Context "基本的なファイル表示" {
-        It "ファイル全体を表示できる" {
+    Context "Basic file display" {
+        It "can display the entire file" {
             $result = Show-TextFiles -Path $script:testFile
             $result | Should -Not -BeNullOrEmpty
-            # ヘッダー行 + 5行のコンテンツ = 6行
+            # Header line + 5 content lines = 6 lines
             $result.Count | Should -Be 6
         }
 
-        It "行番号付きで表示できる" {
+        It "can display with line numbers" {
             $result = Show-TextFiles -Path $script:testFile
-            # ヘッダー行の次が実データ
+            # The line after the header is the actual data
             $result[1] | Should -Match "^\s*1:"
             $result[5] | Should -Match "^\s*5:"
         }
     }
 
-    Context "行範囲指定" {
-        It "指定した行範囲のみを表示できる" {
+    Context "Line range specification" {
+        It "can display only the specified line range" {
             $result = Show-TextFiles -Path $script:testFile -LineRange 2,4
-            # ヘッダー行 + 3行のコンテンツ = 4行
+            # Header line + 3 content lines = 4 lines
             $result.Count | Should -Be 4
             $result[1] | Should -Match "Line 2"
             $result[3] | Should -Match "Line 4"
         }
 
-        It "単一行を表示できる" {
+        It "can display a single line" {
             $result = Show-TextFiles -Path $script:testFile -LineRange 3,3
-            # ヘッダー行 + 1行のコンテンツ = 2行
+            # Header line + 1 content line = 2 lines
             $result.Count | Should -Be 2
             $result[1] | Should -Match "Line 3"
         }
     }
 
-    Context "テキスト検索" {
-        It "Contains パラメータで文字列を検索できる" {
+    Context "Text search" {
+        It "can search for a string with the Contains parameter" {
             $result = Show-TextFiles -Path $script:testFile -Contains "Third"
             $result | Should -Not -BeNullOrEmpty
-            # 新実装: 前後3行のコンテキストと共に表示されるため、結果内にマッチ行が含まれることを確認
+            # New implementation: results are shown with 3 lines of context before/after, so confirm the matched line is included in the result
             $result | Where-Object { $_ -match ':.*Third' } | Should -Not -BeNullOrEmpty
         }
 
-        It "Pattern パラメータで正規表現検索できる" {
+        It "can do a regular expression search with the Pattern parameter" {
             $result = Show-TextFiles -Path $script:testFile -Pattern "Line \d:"
-            # ヘッダー行 + マッチした5行 = 6行
+            # Header line + 5 matched lines = 6 lines
             $result.Count | Should -Be 6
         }
     }
 
-    Context "エンコーディング" {
-        It "UTF-8 エンコーディングで読み取れる" {
+    Context "Encoding" {
+        It "can read with UTF-8 encoding" {
             $result = Show-TextFiles -Path $script:testFile -Encoding "utf-8"
             $result | Should -Not -BeNullOrEmpty
         }
 
-        It "エンコーディング指定なしでも読み取れる" {
+        It "can read even without specifying an encoding" {
             $result = Show-TextFiles -Path $script:testFile
             $result | Should -Not -BeNullOrEmpty
         }
     }
 
-    Context "エラーハンドリング" {
-        It "存在しないファイルでエラーになる" {
+    Context "Error handling" {
+        It "errors on a nonexistent file" {
             { Show-TextFiles -Path "C:\NonExistent\File.txt" -ErrorAction Stop } | Should -Throw
         }
 
-        It "無効な行範囲で警告を出すが続行する" {
-            # 寛容な設計：警告を出すがエラーは投げない
+        It "warns but continues on an invalid line range" {
+            # Lenient design: emits a warning but does not throw an error
             $result = Show-TextFiles -Path $script:testFile -LineRange 100,200 -WarningAction SilentlyContinue
-            # 警告が出るが、処理は続行される
+            # A warning is emitted, but processing continues
             $result | Should -Not -BeNull
         }
     }
 
-    Context "HIGH優先度: エッジケースと境界値" {
-        It "H1. 空ファイルを表示できる" {
+    Context "HIGH priority: edge cases and boundary values" {
+        It "H1. can display an empty file" {
             $emptyFile = [System.IO.Path]::GetTempFileName()
             Set-Content -Path $emptyFile -Value @() -Encoding UTF8
             
             try {
                 $result = Show-TextFiles -Path $emptyFile
-                # ヘッダー行のみ
+                # Header line only
                 $result | Should -Not -BeNullOrEmpty
                 $result.Count | Should -Be 1
             }
@@ -113,13 +113,13 @@ Describe "Show-TextFiles Integration Tests" {
             }
         }
 
-        It "H2. 1行だけのファイルを表示できる" {
+        It "H2. can display a single-line file" {
             $singleLineFile = [System.IO.Path]::GetTempFileName()
             Set-Content -Path $singleLineFile -Value "Single line" -Encoding UTF8
-            
+
             try {
                 $result = Show-TextFiles -Path $singleLineFile
-                # ヘッダー行 + 1行 = 2行
+                # Header line + 1 line = 2 lines
                 $result.Count | Should -Be 2
                 $result[1] | Should -Match "Single line"
             }
@@ -128,40 +128,40 @@ Describe "Show-TextFiles Integration Tests" {
             }
         }
 
-        It "H3. LineRange + Contains の組み合わせが動作する" {
+        It "H3. the LineRange + Contains combination works" {
             $result = Show-TextFiles -Path $script:testFile -LineRange 2,4 -Contains "Third"
-            # 行範囲内でContainsにマッチする行のみ
+            # Only lines within the line range that match Contains
             $result | Should -Not -BeNullOrEmpty
             ($result -join "`n") | Should -Match "Third"
         }
 
-        It "H4. LineRange + Pattern の組み合わせが動作する" {
+        It "H4. the LineRange + Pattern combination works" {
             $result = Show-TextFiles -Path $script:testFile -LineRange 1,3 -Pattern "Line \d:"
-            # 行範囲内でPatternにマッチする行のみ
+            # Only lines within the line range that match Pattern
             $result | Should -Not -BeNullOrEmpty
             $result.Count | Should -BeGreaterThan 1
         }
 
-        It "H5. LineRange が逆順 [5,1] の場合はエラーになる" {
-            # 実装は逆順を拒否する
+        It "H5. errors when LineRange is reversed [5,1]" {
+            # The implementation rejects reversed ranges
             { Show-TextFiles -Path $script:testFile -LineRange 5,1 } | Should -Throw
         }
 
-        It "H6. LineRange = [0,0] の場合はパラメータ検証エラーになる" {
-            # 0は無効な行番号
-            { Show-TextFiles -Path $script:testFile -LineRange 0,0 -ErrorAction Stop } | 
+        It "H6. produces a parameter validation error when LineRange = [0,0]" {
+            # 0 is an invalid line number
+            { Show-TextFiles -Path $script:testFile -LineRange 0,0 -ErrorAction Stop } |
                 Should -Throw
         }
 
-        It "H7. LineRange が範囲外 [100,200] で警告を出す" {
-            # 既存のテストと重複するが、明示的に確認
+        It "H7. warns when LineRange is out of range [100,200]" {
+            # Overlaps with an existing test, but confirm explicitly
             $warnings = @()
             $result = Show-TextFiles -Path $script:testFile -LineRange 100,200 -WarningVariable warnings -WarningAction SilentlyContinue
-            # 警告メッセージが出力される
+            # A warning message is output
             $result | Should -Not -BeNull
         }
 
-        It "H8. 複数ファイル + LineRange が動作する" {
+        It "H8. multiple files + LineRange works" {
             $file1 = [System.IO.Path]::GetTempFileName()
             $file2 = [System.IO.Path]::GetTempFileName()
             Set-Content -Path $file1 -Value @("File1-Line1", "File1-Line2", "File1-Line3")
@@ -169,7 +169,7 @@ Describe "Show-TextFiles Integration Tests" {
             
             try {
                 $result = Show-TextFiles -Path $file1,$file2 -LineRange 1,2
-                # 各ファイルのヘッダー + 指定範囲の行
+                # Header for each file + lines in the specified range
                 $result | Should -Not -BeNullOrEmpty
                 ($result -join "`n") | Should -Match "File1-Line1"
                 ($result -join "`n") | Should -Match "File2-Line1"
@@ -179,7 +179,7 @@ Describe "Show-TextFiles Integration Tests" {
             }
         }
 
-        It "H9. 複数ファイル + Contains が動作する" {
+        It "H9. multiple files + Contains works" {
             $file1 = [System.IO.Path]::GetTempFileName()
             $file2 = [System.IO.Path]::GetTempFileName()
             Set-Content -Path $file1 -Value @("Apple", "Banana", "Cherry")
@@ -187,7 +187,7 @@ Describe "Show-TextFiles Integration Tests" {
             
             try {
                 $result = Show-TextFiles -Path $file1,$file2 -Contains "Elephant"
-                # Elephantを含むファイルのみ表示される
+                # Only the file containing Elephant is displayed
                 $result | Should -Not -BeNullOrEmpty
                 ($result -join "`n") | Should -Match "Elephant"
             }
@@ -196,7 +196,7 @@ Describe "Show-TextFiles Integration Tests" {
             }
         }
 
-        It "H10. ディレクトリパスを指定するとエラーになる" {
+        It "H10. errors when a directory path is specified" {
             $tempDir = Join-Path $env:TEMP "TestDir_$(Get-Random)"
             New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
             
@@ -208,12 +208,12 @@ Describe "Show-TextFiles Integration Tests" {
             }
         }
 
-        It "H11. アクセス権限なしファイルでエラーになる" {
+        It "H11. errors on a file without access permission" {
             $protectedFile = [System.IO.Path]::GetTempFileName()
             Set-Content -Path $protectedFile -Value "Protected content"
-            
+
             try {
-                # 読み取り専用に設定
+                # Set to deny read
                 $acl = Get-Acl $protectedFile
                 $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
                     [System.Security.Principal.WindowsIdentity]::GetCurrent().Name,
@@ -226,7 +226,7 @@ Describe "Show-TextFiles Integration Tests" {
                 { Show-TextFiles -Path $protectedFile -ErrorAction Stop } | Should -Throw
             }
             finally {
-                # ACLをリセット
+                # Reset the ACL
                 $acl = Get-Acl $protectedFile
                 $acl.Access | Where-Object { $_.AccessControlType -eq "Deny" } | ForEach-Object {
                     $acl.RemoveAccessRule($_) | Out-Null
@@ -236,10 +236,10 @@ Describe "Show-TextFiles Integration Tests" {
             }
         }
 
-        It "H12. 無効なエンコーディング名では警告を出すが続行する" {
-            # 実装は寛容で、警告を出して続行する
+        It "H12. warns but continues on an invalid encoding name" {
+            # The implementation is lenient: it warns and continues
             $result = Show-TextFiles -Path $script:testFile -Encoding "invalid-encoding-name" -WarningAction SilentlyContinue
-            # エラーにはならず、デフォルトエンコーディングで読み取る
+            # Does not error; reads with the default encoding
             $result | Should -Not -BeNullOrEmpty
         }
     }

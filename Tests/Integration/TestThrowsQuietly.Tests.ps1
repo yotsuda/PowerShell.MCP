@@ -5,19 +5,19 @@ BeforeAll {
 }
 
 Describe "Test-ThrowsQuietly Function Tests" -Skip {
-    It "正常に例外をキャッチする" {
+    It "Catches an exception successfully" {
         Test-ThrowsQuietly { throw "Test error" }
     }
-    
-    It "期待されるメッセージを検証する" {
+
+    It "Verifies the expected message" {
         Test-ThrowsQuietly { throw "File not found: test.txt" } -ExpectedMessage "File not found"
     }
-    
-    It "例外がスローされない場合は失敗する" -Skip {
+
+    It "Fails when no exception is thrown" -Skip {
         { Test-ThrowsQuietly { "No error" } } | Should -Throw
     }
-    
-    It "複雑な例外でも動作する" {
+
+    It "Works even with complex exceptions" {
         Test-ThrowsQuietly {
             $dict = @{}
             $null = $dict["nonexistent"].ToString()

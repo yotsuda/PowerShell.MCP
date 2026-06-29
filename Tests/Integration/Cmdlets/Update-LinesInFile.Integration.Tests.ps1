@@ -1,11 +1,11 @@
 # Update-LinesInFile.Tests.ps1
-# Update-LinesInFile コマンドレットの統合テスト
+# Integration tests for the Update-LinesInFile cmdlet
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
 Describe "Update-LinesInFile Integration Tests" {
     BeforeEach {
-        # 各テストの前に新しい一時ファイルを作成
+        # Create a new temp file before each test
         $script:testFile = [System.IO.Path]::GetTempFileName()
         $script:initialContent = @(
             "Line 1: First line"
@@ -18,38 +18,38 @@ Describe "Update-LinesInFile Integration Tests" {
     }
 
     AfterEach {
-        # 各テスト後にクリーンアップ
+        # Clean up after each test
         if (Test-Path $script:testFile) {
             Remove-Item $script:testFile -Force
         }
-        # バックアップファイルもクリーンアップ
+        # Clean up backup files too
         Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*" | 
             Where-Object { $_.FullName -ne $script:testFile } | Remove-Item -Force
     }
 
-    Context "単一行の更新" {
-        It "1行を新しい内容に置き換えられる" {
+    Context "Updating a single line" {
+        It "can replace one line with new content" {
             Update-LinesInFile -Path $script:testFile -LineRange 2 -Content "Updated Line 2"
             $result = Get-Content $script:testFile
             $result[1] | Should -Be "Updated Line 2"
             $result.Count | Should -Be 5
         }
 
-        It "最初の行を更新できる" {
+        It "can update the first line" {
             Update-LinesInFile -Path $script:testFile -LineRange 1 -Content "New First Line"
             $result = Get-Content $script:testFile
             $result[0] | Should -Be "New First Line"
         }
 
-        It "最後の行を更新できる" {
+        It "can update the last line" {
             Update-LinesInFile -Path $script:testFile -LineRange 5 -Content "New Last Line"
             $result = Get-Content $script:testFile
             $result[-1] | Should -Be "New Last Line"
         }
     }
 
-    Context "複数行の更新" {
-        It "連続する複数行を置き換えられる" {
+    Context "Updating multiple lines" {
+        It "can replace multiple consecutive lines" {
             $newContent = @("New Line 2", "New Line 3")
             Update-LinesInFile -Path $script:testFile -LineRange 2,3 -Content $newContent
             $result = Get-Content $script:testFile
@@ -58,14 +58,14 @@ Describe "Update-LinesInFile Integration Tests" {
             $result.Count | Should -Be 5
         }
 
-        It "複数行を1行に置き換えられる（行数減少）" {
+        It "can replace multiple lines with one line (line count decreases)" {
             Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content "Single Replacement"
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 3
             $result[1] | Should -Be "Single Replacement"
         }
 
-        It "1行を複数行に置き換えられる（行数増加）" {
+        It "can replace one line with multiple lines (line count increases)" {
             $newContent = @("Expanded Line A", "Expanded Line B", "Expanded Line C")
             Update-LinesInFile -Path $script:testFile -LineRange 3 -Content $newContent
             $result = Get-Content $script:testFile
@@ -74,19 +74,19 @@ Describe "Update-LinesInFile Integration Tests" {
         }
     }
 
-    Context "行の削除" {
-        It "Content省略時はエラーになる" {
+    Context "Deleting lines" {
+        It "errors when Content is omitted" {
             { Update-LinesInFile -Path $script:testFile -LineRange 3 } | Should -Throw "*Content is required*"
         }
 
-        It "-Content @() で単一行を削除できる" {
+        It "can delete a single line with -Content @()" {
             Update-LinesInFile -Path $script:testFile -LineRange 3,3 -Content @()
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 4
             $result -notcontains "Line 3: Third line" | Should -Be $true
         }
 
-        It "-Content @() で複数行を削除できる" {
+        It "can delete multiple lines with -Content @()" {
             Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content @()
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 2
@@ -95,39 +95,39 @@ Describe "Update-LinesInFile Integration Tests" {
         }
     }
 
-    Context "エンコーディング" {
-        It "UTF-8ファイルを正しく更新できる" {
+    Context "Encoding" {
+        It "can update a UTF-8 file correctly" {
             $content = "日本語テキスト 🎌"
             Update-LinesInFile -Path $script:testFile -LineRange 1 -Content $content -Encoding UTF8
             $result = Get-Content $script:testFile -Encoding UTF8
             $result[0] | Should -Be $content
         }
 
-        It "ASCII ファイルに日本語を更新すると自動的に UTF-8 にアップグレードされる" {
-            # ASCII エンコーディングでファイルを作成
+        It "updating an ASCII file with Japanese automatically upgrades it to UTF-8" {
+            # Create a file with ASCII encoding
             $asciiFile = [System.IO.Path]::GetTempFileName()
             [System.IO.File]::WriteAllLines($asciiFile, @("Line 1", "Line 2", "Line 3"), [System.Text.Encoding]::ASCII)
             
             try {
-                # ファイルのエンコーディングが ASCII であることを確認
+                # Confirm the file encoding is ASCII
                 $bytes = [System.IO.File]::ReadAllBytes($asciiFile)
                 $encoding = [System.Text.Encoding]::ASCII
                 $detectedText = $encoding.GetString($bytes)
                 $detectedText | Should -Not -BeNullOrEmpty
                 
-                # 日本語を含む内容で行を更新(Encoding パラメータは指定しない)
+                # Update the line with content containing Japanese (without specifying the Encoding parameter)
                 $infoMessages = @()
                 Update-LinesInFile -Path $asciiFile -LineRange 2 -Content "日本語の更新テスト" -InformationVariable infoMessages
                 
-                # エンコーディングアップグレードの情報メッセージが出ることを確認
+                # Confirm the encoding-upgrade information message is emitted
                 $infoMessages | Should -Not -BeNullOrEmpty
                 $infoMessages.MessageData -join ' ' | Should -Match 'UTF-8'
                 
-                # ファイルが UTF-8 で読めることを確認
+                # Confirm the file can be read as UTF-8
                 $result = Get-Content $asciiFile -Encoding UTF8
                 $result[1] | Should -Be "日本語の更新テスト"
-                
-                # UTF-8 として正しく保存されていることを確認
+
+                # Confirm it is correctly saved as UTF-8
                 $content = [System.IO.File]::ReadAllText($asciiFile, [System.Text.Encoding]::UTF8)
                 $content | Should -Match "日本語の更新テスト"
             }
@@ -139,14 +139,14 @@ Describe "Update-LinesInFile Integration Tests" {
         }
     }
 
-    Context "バックアップ機能" {
-        It "-Backup を指定するとバックアップファイルが作成される" {
+    Context "Backup feature" {
+        It "creates a backup file when -Backup is specified" {
             Update-LinesInFile -Path $script:testFile -LineRange 1 -Content "Updated" -Backup
             $backupFiles = Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*.bak"
             $backupFiles.Count | Should -BeGreaterThan 0
         }
 
-        It "バックアップファイルに元の内容が保存される" {
+        It "saves the original content in the backup file" {
             $originalContent = Get-Content $script:testFile
             Update-LinesInFile -Path $script:testFile -LineRange 1 -Content "Updated" -Backup
             $backupFile = Get-ChildItem -Path (Split-Path $script:testFile) -Filter "$([System.IO.Path]::GetFileName($script:testFile))*.bak" | Select-Object -First 1
@@ -155,8 +155,8 @@ Describe "Update-LinesInFile Integration Tests" {
         }
     }
 
-    Context "WhatIf と Confirm" {
-        It "-WhatIf を指定すると実際には変更しない" {
+    Context "WhatIf and Confirm" {
+        It "does not actually change the file when -WhatIf is specified" {
             $originalContent = Get-Content $script:testFile
             Update-LinesInFile -Path $script:testFile -LineRange 1 -Content "Updated" -WhatIf
             $result = Get-Content $script:testFile
@@ -164,25 +164,25 @@ Describe "Update-LinesInFile Integration Tests" {
         }
     }
 
-    Context "エラーハンドリング" {
-        It "存在しないファイルでエラーになる" {
+    Context "Error handling" {
+        It "errors on a nonexistent file" {
             { Update-LinesInFile -Path "C:\NonExistent\file.txt" -LineRange 1 -Content "Test" -ErrorAction Stop } | 
                 Should -Throw
         }
 
-        It "範囲外の行番号でエラーになる" {
+        It "errors on an out-of-range line number" {
             { Update-LinesInFile -Path $script:testFile -LineRange 100 -Content "Test" -ErrorAction Stop } | 
                 Should -Throw
         }
 
-        It "無効な範囲指定でエラーになる" {
+        It "errors on an invalid range specification" {
             { Update-LinesInFile -Path $script:testFile -LineRange 5,2 -Content "Test" -ErrorAction Stop } | 
                 Should -Throw
         }
     }
 
-    Context "パイプライン入力" {
-        It "パイプラインから複数のファイルを処理できる" {
+    Context "Pipeline input" {
+        It "can process multiple files from the pipeline" {
             $file2 = [System.IO.Path]::GetTempFileName()
             Set-Content -Path $file2 -Value @("File2 Line1", "File2 Line2")
             
@@ -197,25 +197,25 @@ Describe "Update-LinesInFile Integration Tests" {
         }
     }
 
-    Context "メッセージ表示" {
-        It "-LineRange 1,-1 で行範囲置換時は正しい行数を表示" {
+    Context "Message display" {
+        It "displays the correct line count when replacing a line range with -LineRange 1,-1" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 1,-1 -Content "A","B","C"
-            
-            # メッセージが "Replaced X line(s)" 形式で、正しい行数が表示されることを確認
+
+            # Confirm the message is in the "Replaced X line(s)" format and shows the correct line count
             $message = $output | Out-String
             $message | Should -Match "Replaced \d+ line\(s\) with \d+ line\(s\)"
-            $message | Should -Not -Match "\d{4,}"  # 4桁以上の数字（int.MaxValueなど）が含まれていないこと
+            $message | Should -Not -Match "\d{4,}"  # Must not contain a number with 4 or more digits (e.g. int.MaxValue)
         }
 
-        It "通常の LineRange では従来のメッセージを表示" {
+        It "displays the conventional message for a normal LineRange" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content "X","Y","Z"
-            
-            # メッセージが "Replaced X line(s)" 形式であることを確認
+
+            # Confirm the message is in the "Replaced X line(s)" format
             $message = $output | Out-String
             $message | Should -Match "Replaced \d+ line\(s\)"
         }
-        
-        It "削除時は Removed メッセージを表示" {
+
+        It "displays a Removed message on deletion" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content @()
             
             $message = $output | Out-String

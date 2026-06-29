@@ -1,131 +1,131 @@
 # PowerShell.MCP Tests
 
-このディレクトリには、PowerShell.MCP プロジェクトの包括的なテストスイートが含まれています。
+This directory contains the comprehensive test suite for the PowerShell.MCP project.
 
-## 📁 フォルダ構造
+## 📁 Folder Structure
 
 ```
 Tests/
-├── Unit/                                      # C# ユニットテスト
-│   ├── Core/                                  # コア機能のテスト
-│   │   ├── TextFileUtilityTests.cs            # ユーティリティクラス (20テスト)
-│   │   ├── TextFileCmdletBaseTests.cs         # 基底クラス (8テスト)
-│   │   └── ValidationAttributesTests.cs       # バリデーション属性 (5テスト)
-│   └── Cmdlets/                               # Cmdlet個別テスト
-│       ├── ShowTextFilesCmdletTests.cs         # Show-TextFiles (4テスト)
-│       ├── AddLinesToFileCmdletTests.cs       # Add-LinesToFile (5テスト)
-│       ├── UpdateLinesInFileCmdletTests.cs    # Update-LinesInFile (4テスト)
-│       ├── RemoveLinesFromFileCmdletTests.cs  # Remove-LinesFromFile (3テスト)
-│       ├── UpdateMatchInFileCmdletTests.cs    # Update-MatchInFile (4テスト)
-│       └── TestTextFileContainsCmdletTests.cs # Test-TextFileContains (4テスト)
-├── Integration/                               # PowerShell統合テスト
-│   ├── BlankLineSeparation.Tests.ps1          # 空行分離テスト
-│   ├── ContextDisplay.Tests.ps1               # コンテキスト表示テスト
-│   ├── ContextDisplay.EdgeCase.Tests.ps1      # コンテキスト表示エッジケース
-│   ├── NetDisplay.Tests.ps1                   # net 変化表示テスト
-│   ├── QuietErrorHandling.Tests.ps1           # Test-ThrowsQuietly 実用例
-│   ├── TestThrowsQuietly.Tests.ps1            # Test-ThrowsQuietly 関数テスト
-│   └── ErrorOutputComparison.Tests.ps1        # エラー出力比較テスト
-├── Manual/                                    # 手動テスト
-│   └── Show-TextFiles.Manual.Tests.ps1         # Show-TextFiles 手動テスト
-├── TestData/                                  # テストデータ
-│   ├── Encodings/                             # エンコーディングテスト用
-│   └── Samples/                               # サンプルファイル
-├── Shared/                                    # 共有ヘルパー
-│   └── TestHelpers.psm1                       # PowerShellヘルパー関数
+├── Unit/                                      # C# unit tests
+│   ├── Core/                                  # Core functionality tests
+│   │   ├── TextFileUtilityTests.cs            # Utility class (20 tests)
+│   │   ├── TextFileCmdletBaseTests.cs         # Base class (8 tests)
+│   │   └── ValidationAttributesTests.cs       # Validation attributes (5 tests)
+│   └── Cmdlets/                               # Per-cmdlet tests
+│       ├── ShowTextFilesCmdletTests.cs         # Show-TextFiles (4 tests)
+│       ├── AddLinesToFileCmdletTests.cs       # Add-LinesToFile (5 tests)
+│       ├── UpdateLinesInFileCmdletTests.cs    # Update-LinesInFile (4 tests)
+│       ├── RemoveLinesFromFileCmdletTests.cs  # Remove-LinesFromFile (3 tests)
+│       ├── UpdateMatchInFileCmdletTests.cs    # Update-MatchInFile (4 tests)
+│       └── TestTextFileContainsCmdletTests.cs # Test-TextFileContains (4 tests)
+├── Integration/                               # PowerShell integration tests
+│   ├── BlankLineSeparation.Tests.ps1          # Blank line separation tests
+│   ├── ContextDisplay.Tests.ps1               # Context display tests
+│   ├── ContextDisplay.EdgeCase.Tests.ps1      # Context display edge cases
+│   ├── NetDisplay.Tests.ps1                   # net change display tests
+│   ├── QuietErrorHandling.Tests.ps1           # Test-ThrowsQuietly practical examples
+│   ├── TestThrowsQuietly.Tests.ps1            # Test-ThrowsQuietly function tests
+│   └── ErrorOutputComparison.Tests.ps1        # Error output comparison tests
+├── Manual/                                    # Manual tests
+│   └── Show-TextFiles.Manual.Tests.ps1         # Show-TextFiles manual tests
+├── TestData/                                  # Test data
+│   ├── Encodings/                             # For encoding tests
+│   └── Samples/                               # Sample files
+├── Shared/                                    # Shared helpers
+│   └── TestHelpers.psm1                       # PowerShell helper functions
 │                                               # - New-TestFile
 │                                               # - Remove-TestFile
 │                                               # - Test-ThrowsQuietly
 ├── PowerShell.MCP.Tests.csproj
 ├── xunit.runner.json
-├── README.md                                  # このファイル
-├── COVERAGE.md                                # カバレッジレポート
-└── Run-AllTests.ps1                           # テスト実行スクリプト
+├── README.md                                  # This file
+├── COVERAGE.md                                # Coverage report
+└── Run-AllTests.ps1                           # Test runner script
 ```
 
-## 📊 テスト統計
+## 📊 Test Statistics
 
-- **総テスト数**: 約300+
-- **ユニットテスト (C#)**: 96
-- **統合テスト (PowerShell)**: 281
-- **成功率**: 100% ✅
+- **Total tests**: about 300+
+- **Unit tests (C#)**: 96
+- **Integration tests (PowerShell)**: 281
+- **Pass rate**: 100% ✅
 
-## 🎯 テスト戦略
+## 🎯 Test Strategy
 
-### ユニットテスト (C#)
-- **目的**: 個別メソッド/クラスの振る舞いを検証
-- **範囲**: public/internal メソッド
-- **モック**: 必要に応じてMoqを使用
-- **速度**: 高速 (< 100ms/テスト)
+### Unit Tests (C#)
+- **Purpose**: Verify the behavior of individual methods/classes
+- **Scope**: public/internal methods
+- **Mocking**: Use Moq as needed
+- **Speed**: Fast (< 100ms/test)
 
-### 統合テスト (PowerShell)
-- **目的**: Cmdletの実際の動作を検証
-- **範囲**: エンドツーエンドの動作
-- **モック**: なし (実ファイルを使用)
-- **速度**: 中速 (< 1s/テスト)
+### Integration Tests (PowerShell)
+- **Purpose**: Verify the actual behavior of cmdlets
+- **Scope**: End-to-end behavior
+- **Mocking**: None (uses real files)
+- **Speed**: Medium (< 1s/test)
 
-## 🚀 テストの実行
+## 🚀 Running the Tests
 
-### すべてのテストを実行
+### Run all tests
 ```powershell
 .\Tests\Run-AllTests.ps1
 ```
 
-### C# ユニットテストのみ実行（簡潔な出力）
+### Run only C# unit tests (concise output)
 ```powershell
 cd Tests
 dotnet test --verbosity quiet --nologo
 ```
 
-**詳細な出力が必要な場合:**
+**If you need detailed output:**
 ```powershell
 dotnet test --verbosity normal
 ```
 
-### PowerShell 統合テストのみ実行（簡潔な出力）
+### Run only PowerShell integration tests (concise output)
 ```powershell
-# Pester 5.0+ が必要
+# Pester 5.0+ is required
 Install-Module -Name Pester -Force -SkipPublisherCheck -MinimumVersion 5.0.0
 
-# 統合テスト実行（最小限の出力）
+# Run integration tests (minimal output)
 $config = New-PesterConfiguration
 $config.Run.Path = ".\Tests\Integration"
 $config.Output.Verbosity = "Minimal"
 Invoke-Pester -Configuration $config
 ```
 
-**詳細な出力が必要な場合:**
+**If you need detailed output:**
 ```powershell
 Invoke-Pester -Path .\Tests\Integration
 
-### 簡潔なエラー出力でテスト実行
+### Run tests with concise error output
 ```powershell
-# エラーメッセージをフィルタリングして読みやすく表示
+# Filter error messages for more readable display
 .\Tests\Invoke-PesterConcise.ps1
 
-# 特定のテストのみ実行
+# Run only specific tests
 .\Tests\Invoke-PesterConcise.ps1 -Path Integration/Cmdlets/Show-TextFiles.Tests.ps1
 
-# ヘルプを表示
+# Show help
 Get-Help .\Tests\Invoke-PesterConcise.ps1 -Examples
 ```
 
-**フィルタリング内容:**
-- 内部例外スタックトレース（`--->`, `--- End of`）
-- `System.Management.Automation.*Exception` の詳細行
-- 重複する例外メッセージ
-- 詳細なスタックトレース行
+**What is filtered:**
+- Inner exception stack traces (`--->`, `--- End of`)
+- `System.Management.Automation.*Exception` detail lines
+- Duplicate exception messages
+- Verbose stack trace lines
 ```
 
-### カバレッジ付きで実行
+### Run with coverage
 ```powershell
 cd Tests
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
-## 🧪 新しいテストの追加
+## 🧪 Adding New Tests
 
-### C# ユニットテストの追加
+### Adding a C# Unit Test
 
 ```csharp
 // Tests/Unit/Cmdlets/NewCmdletTests.cs
@@ -151,7 +151,7 @@ public class NewCmdletTests
 }
 ```
 
-### PowerShell 統合テストの追加
+### Adding a PowerShell Integration Test
 
 ```powershell
 # Tests/Integration/Cmdlets/New-Cmdlet.Integration.Tests.ps1
@@ -170,21 +170,21 @@ Describe "New-Cmdlet Integration Tests" {
         Remove-TestFile -Path $testFile
     }
 
-    Context "基本機能" {
-        It "期待通りに動作する" {
+    Context "Basic functionality" {
+        It "works as expected" {
             $result = New-Cmdlet -Path $testFile
             $result | Should -Not -BeNullOrEmpty
         }
     }
     
-    Context "エラーハンドリング" {
-        It "存在しないファイルでエラー" {
+    Context "Error handling" {
+        It "errors on a nonexistent file" {
             Test-ThrowsQuietly {
                 New-Cmdlet -Path "C:\NonExistent\file.txt"
             } -ExpectedMessage "File not found"
         }
         
-        It "無効なパラメータでエラー" {
+        It "errors on an invalid parameter" {
             Test-ThrowsQuietly {
                 New-Cmdlet -Path $testFile -InvalidParam -999
             } -ExpectedMessage "less than the minimum"
@@ -193,34 +193,34 @@ Describe "New-Cmdlet Integration Tests" {
 }
 ```
 
-**重要**: エラーケースのテストには必ず `Test-ThrowsQuietly` を使用してください。`Should -Throw` は大量のエラー出力を生成するため推奨されません。
+**Important**: Always use `Test-ThrowsQuietly` for error-case tests. `Should -Throw` is not recommended because it generates a large amount of error output.
 
-## 📚 ヘルパー関数
+## 📚 Helper Functions
 
-`Shared/TestHelpers.psm1` には以下のヘルパー関数があります:
+`Shared/TestHelpers.psm1` provides the following helper functions:
 
-- `New-TestFile`: テスト用の一時ファイルを作成
-- `Remove-TestFile`: テストファイルを安全に削除
-- `Test-ThrowsQuietly`: 例外を検証しながらエラー出力を完全に抑制（**推奨**）
+- `New-TestFile`: Create a temporary file for testing
+- `Remove-TestFile`: Safely delete a test file
+- `Test-ThrowsQuietly`: Verify an exception while completely suppressing error output (**recommended**)
 
-### Test-ThrowsQuietly の使用方法
+### How to Use Test-ThrowsQuietly
 
-**目的**: Pester テストでエラーケースを検証する際、大量のエラーメッセージとスタックトレースの出力を抑制し、トークン消費を大幅に削減します。
+**Purpose**: When verifying error cases in Pester tests, suppress the large volume of error messages and stack trace output, greatly reducing token consumption.
 
-**基本的な使用例:**
+**Basic usage example:**
 ```powershell
-# 従来の方法（大量のエラー出力が発生）
+# Conventional approach (produces a large amount of error output)
 It "Should throw on missing file" {
     { Show-TextFiles -Path "missing.txt" } | Should -Throw
 }
 
-# 推奨される方法（エラー出力を抑制）
+# Recommended approach (suppresses error output)
 It "Should throw on missing file" {
     Test-ThrowsQuietly { Show-TextFiles -Path "missing.txt" }
 }
 ```
 
-**メッセージ検証付き:**
+**With message verification:**
 ```powershell
 It "Should throw file not found error" {
     Test-ThrowsQuietly { 
@@ -229,7 +229,7 @@ It "Should throw file not found error" {
 }
 ```
 
-**複雑なエラーケース:**
+**Complex error case:**
 ```powershell
 It "Should throw on invalid LineRange" {
     $temp = New-TemporaryFile
@@ -244,23 +244,23 @@ It "Should throw on invalid LineRange" {
 }
 ```
 
-**動作の詳細:**
-- `$Error.Clear()` を try 前後で2回実行してエラー履歴をクリア
-- `*>&1` ですべての出力ストリームをリダイレクト
-- `$null = ...` で出力を完全に破棄
-- `ErrorActionPreference = 'Stop'` で非終了エラーを例外に変換
-- `$PSDefaultParameterValues['*:ErrorAction'] = 'Stop'` ですべてのコマンドに -ErrorAction Stop を自動適用
+**Behavior details:**
+- Runs `$Error.Clear()` twice, before and after the try, to clear the error history
+- `*>&1` redirects all output streams
+- `$null = ...` discards output completely
+- `ErrorActionPreference = 'Stop'` converts non-terminating errors into exceptions
+- `$PSDefaultParameterValues['*:ErrorAction'] = 'Stop'` automatically applies -ErrorAction Stop to all commands
 
-**適用されるエラータイプ:**
-- ✅ 終了エラー（ThrowTerminatingError）
-- ✅ パラメータ検証エラー（ValidateRange など）
-- ⚠️ 非終了エラー（WriteError）- PowerShell と C# cmdlet の制限により部分的にサポート
+**Error types covered:**
+- ✅ Terminating errors (ThrowTerminatingError)
+- ✅ Parameter validation errors (ValidateRange, etc.)
+- ⚠️ Non-terminating errors (WriteError) - partially supported due to PowerShell and C# cmdlet limitations
 
-## 🎯 エラーハンドリングのベストプラクティス
+## 🎯 Error Handling Best Practices
 
-### エラーテストの書き方
+### How to Write Error Tests
 
-**推奨**: すべてのエラーテストで `Test-ThrowsQuietly` を使用してください。
+**Recommended**: Use `Test-ThrowsQuietly` for all error tests.
 
 ```powershell
 Describe "Error Handling Tests" {
@@ -288,40 +288,40 @@ Describe "Error Handling Tests" {
 }
 ```
 
-### エラー出力の比較
+### Comparing Error Output
 
-**従来の Should -Throw:**
-- 各エラーごとに数百〜数千文字のスタックトレースを出力
-- トークン消費が激しい
-- テスト結果が読みにくい
+**Conventional Should -Throw:**
+- Outputs a hundreds-to-thousands-character stack trace for each error
+- Heavy token consumption
+- Test results are hard to read
 
 **Test-ThrowsQuietly:**
-- エラー出力を完全に抑制
-- トークン消費を大幅に削減（90%以上削減）
-- テスト結果が読みやすい
-- 例外の有無とメッセージのみを検証
+- Completely suppresses error output
+- Greatly reduces token consumption (over 90% reduction)
+- Test results are easy to read
+- Verifies only whether an exception occurred and its message
 
-### 実例
+### Real Examples
 
-Tests/Integration ディレクトリには以下の実例があります：
-- `QuietErrorHandling.Tests.ps1` - Test-ThrowsQuietly の実用例
-- `TestThrowsQuietly.Tests.ps1` - Test-ThrowsQuietly 関数自体のテスト
-- `ErrorOutputComparison.Tests.ps1` - Should -Throw との比較
-## 🔧 必要な環境
+The Tests/Integration directory contains the following real examples:
+- `QuietErrorHandling.Tests.ps1` - practical examples of Test-ThrowsQuietly
+- `TestThrowsQuietly.Tests.ps1` - tests of the Test-ThrowsQuietly function itself
+- `ErrorOutputComparison.Tests.ps1` - comparison with Should -Throw
+## 🔧 Required Environment
 
 - .NET 9.0 SDK
 - PowerShell 7.2+
-- xUnit (自動インストール)
-- Moq (自動インストール)
-- Pester 5.0+ (統合テスト用)
+- xUnit (installed automatically)
+- Moq (installed automatically)
+- Pester 5.0+ (for integration tests)
 
-## 📖 参考資料
+## 📖 References
 
-- [xUnit ドキュメント](https://xunit.net/)
-- [Moq ドキュメント](https://github.com/moq/moq4)
-- [Pester ドキュメント](https://pester.dev/)
-- [カバレッジレポート](COVERAGE.md)
+- [xUnit documentation](https://xunit.net/)
+- [Moq documentation](https://github.com/moq/moq4)
+- [Pester documentation](https://pester.dev/)
+- [Coverage report](COVERAGE.md)
 
-## ライセンス
+## License
 
-このテストスイートは PowerShell.MCP プロジェクトの一部であり、同じライセンスが適用されます。
+This test suite is part of the PowerShell.MCP project and is governed by the same license.

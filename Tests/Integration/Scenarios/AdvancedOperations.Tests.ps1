@@ -1,5 +1,5 @@
 # Test-AdvancedCmdlets.ps1
-# Update-LinesInFile, Remove-LinesFromFile, Update-MatchInFile の HIGH優先度テスト
+# HIGH priority tests for Update-LinesInFile, Remove-LinesFromFile, Update-MatchInFile
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
@@ -24,39 +24,39 @@ Describe "Update-LinesInFile HIGH Priority Tests" {
             Where-Object { $_.FullName -ne $script:testFile } | Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
-    Context "HIGH優先度: 境界値とエッジケース" {
-        It "H21. LineRange が逆順の場合はエラーになる" {
-            # 実装は逆順を許容せず、例外を投げる
-            { Update-LinesInFile -Path $script:testFile -LineRange 3,1 -Content "Updated" -ErrorAction Stop } | 
+    Context "HIGH priority: boundary values and edge cases" {
+        It "H21. errors when LineRange is reversed" {
+            # The implementation does not allow reversed ranges; it throws an exception
+            { Update-LinesInFile -Path $script:testFile -LineRange 3,1 -Content "Updated" -ErrorAction Stop } |
                 Should -Throw
         }
 
-        It "H22. -Content @() で行を削除できる" {
+        It "H22. -Content @() can delete lines" {
             $originalCount = (Get-Content $script:testFile).Count
             Update-LinesInFile -Path $script:testFile -LineRange 2,3 -Content @()
             $newCount = (Get-Content $script:testFile).Count
-            # 2行が削除される
+            # 2 lines are deleted
             $newCount | Should -Be ($originalCount - 2)
         }
 
-        It "H23. Content が元より多い行数でも処理できる" {
+        It "H23. can handle Content with more lines than the original" {
             Update-LinesInFile -Path $script:testFile -LineRange 2,2 -Content @("New Line 1", "New Line 2", "New Line 3")
             $result = Get-Content $script:testFile
-            # 1行を3行に置換
+            # Replace 1 line with 3 lines
             $result | Should -Contain "New Line 1"
             $result | Should -Contain "New Line 2"
             $result | Should -Contain "New Line 3"
         }
 
-        It "H24. Content が元より少ない行数でも処理できる" {
+        It "H24. can handle Content with fewer lines than the original" {
             Update-LinesInFile -Path $script:testFile -LineRange 2,4 -Content "Single Replacement"
             $result = Get-Content $script:testFile
-            # 3行を1行に置換
+            # Replace 3 lines with 1 line
             $result | Should -Contain "Single Replacement"
             $result.Count | Should -BeLessThan 5
         }
 
-        It "H25. 範囲外の LineRange で例外を出す" {
+        It "H25. throws an exception for an out-of-range LineRange" {
             $threw = $false
             try {
                 Update-LinesInFile -Path $script:testFile -LineRange 100,200 -Content "Test" -ErrorAction Stop
@@ -65,7 +65,7 @@ Describe "Update-LinesInFile HIGH Priority Tests" {
                 $_.Exception.Message | Should -Match "out of bounds"
             }
             $threw | Should -BeTrue
-            # ファイルは変更されていない
+            # The file is unchanged
             $result = Get-Content $script:testFile
             $result | Should -Not -BeNullOrEmpty
         }
@@ -93,11 +93,11 @@ Describe "Remove-LinesFromFile HIGH Priority Tests" {
             Where-Object { $_.FullName -ne $script:testFile } | Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
-    Context "HIGH優先度: エッジケースとエラー処理" {
-        It "H26. すべての行を削除できる" {
+    Context "HIGH priority: edge cases and error handling" {
+        It "H26. can delete all lines" {
             Remove-LinesFromFile -Path $script:testFile -LineRange 1,5
             $result = Get-Content $script:testFile -ErrorAction SilentlyContinue
-            # ファイルが空になる
+            # The file becomes empty
             if ($result) {
                 $result.Count | Should -Be 0
             } else {
@@ -105,19 +105,19 @@ Describe "Remove-LinesFromFile HIGH Priority Tests" {
             }
         }
 
-        It "H27. Contains でマッチなしの場合、何も削除されない" {
+        It "H27. nothing is deleted when Contains has no match" {
             $originalContent = Get-Content $script:testFile
             Remove-LinesFromFile -Path $script:testFile -Contains "NonExistent"
             $newContent = Get-Content $script:testFile
-            # 変更なし
+            # No change
             Compare-Object $originalContent $newContent | Should -BeNullOrEmpty
         }
 
-        It "H28. Pattern でマッチなしの場合、何も削除されない" {
+        It "H28. nothing is deleted when Pattern has no match" {
             $originalContent = Get-Content $script:testFile
             Remove-LinesFromFile -Path $script:testFile -Pattern "^Z.*"
             $newContent = Get-Content $script:testFile
-            # 変更なし
+            # No change
             Compare-Object $originalContent $newContent | Should -BeNullOrEmpty
         }
     }
@@ -142,20 +142,20 @@ Describe "Update-MatchInFile HIGH Priority Tests" {
             Where-Object { $_.FullName -ne $script:testFile } | Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
-    Context "HIGH優先度: マッチングとエッジケース" {
-        It "H29. Pattern がマッチしない場合、何も変更されない" {
+    Context "HIGH priority: matching and edge cases" {
+        It "H29. nothing is changed when Pattern does not match" {
             $originalContent = Get-Content $script:testFile
             Update-MatchInFile -Path $script:testFile -Pattern "nonexistent" -Replacement "test"
             $newContent = Get-Content $script:testFile
-            # 変更なし
+            # No change
             Compare-Object $originalContent $newContent | Should -BeNullOrEmpty
         }
 
-        It "H30. Pattern と Replacement を指定してマッチ部分を置換できる" {
-            # 正しい置換を確認
+        It "H30. can replace the matched portion by specifying Pattern and Replacement" {
+            # Confirm the correct replacement
             Update-MatchInFile -Path $script:testFile -Pattern "@example\.com" -Replacement "@newdomain.com"
             $result = Get-Content $script:testFile
-            # @example.com が @newdomain.com に置換される
+            # @example.com is replaced with @newdomain.com
             $result[0] | Should -Be "Email: user@newdomain.com"
             $result[1] | Should -Be "Email: admin@newdomain.com"
             $result[2] | Should -Be "Email: test@newdomain.com"

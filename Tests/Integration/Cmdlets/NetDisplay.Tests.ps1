@@ -13,14 +13,14 @@ Describe "Net Display in Summary Messages" {
     }
 
     Context "Add-LinesToFile net display" {
-        It "新規ファイル作成時に (net: +n) を表示" {
+        It "displays (net: +n) when creating a new file" {
             $testFile = Join-Path $script:testDir "new_file_add.txt"
             $output = Add-LinesToFile -Path $testFile -Content @("Line 1", "Line 2") | Out-String
             
             $output | Should -Match 'net: \+2'
         }
 
-        It "既存ファイルへの追加時に (net: +n) を表示" {
+        It "displays (net: +n) when appending to an existing file" {
             $testFile = Join-Path $script:testDir "existing_file_add.txt"
             Set-Content -Path $testFile -Value "Original"
             
@@ -31,7 +31,7 @@ Describe "Net Display in Summary Messages" {
     }
 
     Context "Remove-LinesFromFile net display" {
-        It "行削除時に (net: -n) を表示" {
+        It "displays (net: -n) when deleting lines" {
             $testFile = Join-Path $script:testDir "remove_test.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
             
@@ -43,7 +43,7 @@ Describe "Net Display in Summary Messages" {
 
     Context "Update-LinesInFile net display" {
 
-        It "行削除時に (net: -n) を表示" {
+        It "displays (net: -n) when deleting lines" {
             $testFile = Join-Path $script:testDir "delete_lines.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
             
@@ -52,13 +52,13 @@ Describe "Net Display in Summary Messages" {
             $output | Should -Match 'net: -3'
         }
 
-        It "行更新時に (net: +x/-y) を表示" {
+        It "displays (net: +x/-y) when updating lines" {
             $testFile = Join-Path $script:testDir "update_lines.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2")
             
             $output = Update-LinesInFile -Path $testFile -LineRange 1,2 -Content @("New 1", "New 2", "New 3") | Out-String
             
-            # 2行削除、3行追加なので net: +1
+            # 2 lines deleted, 3 lines added, so net: +1
             $output | Should -Match 'net: \+1'
         }
     }

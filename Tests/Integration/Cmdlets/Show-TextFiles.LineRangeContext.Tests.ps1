@@ -24,26 +24,26 @@ Describe "Show-TextFiles LineRange Context Display" {
 
     Context "Pattern with LineRange should show context" {
         It "Should display context lines (before and after) when match is in LineRange" {
-            # LineRange 4,4 を指定（4行目だけ）
-            # 期待：2,3行目（前2行）と5,6行目（後2行）もコンテキストとして表示される
+            # Specify LineRange 4,4 (line 4 only)
+            # Expected: lines 2,3 (2 lines before) and 5,6 (2 lines after) are also shown as context
             $result = Show-TextFiles -Path $script:testFile -Pattern "MATCH" -LineRange 4,4
-            
-            # ヘッダーを除外
+
+            # Exclude the header
             $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
-            
-            # 結果を表示（デバッグ用）
+
+            # Display the result (for debugging)
             Write-Host "Result lines:"
             $contentLines | ForEach-Object { Write-Host "  $_" }
-            
-            # 期待される行数：2（前）+ 1（マッチ）+ 2（後）= 5行
+
+            # Expected line count: 2 (before) + 1 (match) + 2 (after) = 5 lines
             $contentLines.Count | Should -Be 5
-            
-            # コンテキスト行の確認
-            $contentLines[0] | Should -Match "2- Line 2"  # 前2行
-            $contentLines[1] | Should -Match "3- Line 3"  # 前1行
-            $contentLines[2] | Should -Match "4:.*MATCH"  # マッチ行
-            $contentLines[3] | Should -Match "5- Line 5"  # 後1行
-            $contentLines[4] | Should -Match "6- Line 6"  # 後2行
+
+            # Verify the context lines
+            $contentLines[0] | Should -Match "2- Line 2"  # 2 lines before
+            $contentLines[1] | Should -Match "3- Line 3"  # 1 line before
+            $contentLines[2] | Should -Match "4:.*MATCH"  # matched line
+            $contentLines[3] | Should -Match "5- Line 5"  # 1 line after
+            $contentLines[4] | Should -Match "6- Line 6"  # 2 lines after
         }
     }
 
@@ -52,10 +52,10 @@ Describe "Show-TextFiles LineRange Context Display" {
             $result = Show-TextFiles -Path $script:testFile -Contains "MATCH" -LineRange 4,4
             
             $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
-            
-            # 期待される行数：2（前）+ 1（マッチ）+ 2（後）= 5行
+
+            # Expected line count: 2 (before) + 1 (match) + 2 (after) = 5 lines
             $contentLines.Count | Should -Be 5
-            
+
             $contentLines[0] | Should -Match "2- Line 2"
             $contentLines[1] | Should -Match "3- Line 3"
             $contentLines[2] | Should -Match "4:.*MATCH"
@@ -69,8 +69,8 @@ Describe "Show-TextFiles LineRange Context Display" {
             $result = Show-TextFiles -Path $script:testFile -Pattern "MATCH"
             
             $contentLines = $result | Where-Object { $_ -notmatch "==>" -and $_ -ne "" }
-            
-            # LineRange なしではコンテキストが表示される（ベースライン確認）
+
+            # Without LineRange, context is displayed (baseline check)
             $contentLines.Count | Should -BeGreaterThan 1
             $contentLines | Where-Object { $_ -match "MATCH" } | Should -Not -BeNullOrEmpty
         }

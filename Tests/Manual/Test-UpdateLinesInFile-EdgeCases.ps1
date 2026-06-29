@@ -1,8 +1,8 @@
-# エッジケーステスト - Update-LinesInFile
-Write-Host "=== Update-LinesInFile エッジケーステスト ===" -ForegroundColor Cyan
+# Edge case test - Update-LinesInFile
+Write-Host "=== Update-LinesInFile edge case test ===" -ForegroundColor Cyan
 
-# テスト1: ファイル先頭行の更新
-Write-Host "`n【テスト1】ファイル先頭行の更新" -ForegroundColor Yellow
+# Test 1: Update the first line of the file
+Write-Host "`n[Test 1] Update the first line of the file" -ForegroundColor Yellow
 $content = @"
 Line 1: original
 Line 2
@@ -14,8 +14,8 @@ Set-Content -Path "edge-update1.txt" -Value $content
 Update-LinesInFile -Path "edge-update1.txt" -LineRange 1,1 -Content "Line 1: UPDATED"
 Remove-Item "edge-update1.txt"
 
-# テスト2: ファイル末尾行の更新
-Write-Host "`n【テスト2】ファイル末尾行の更新" -ForegroundColor Yellow
+# Test 2: Update the last line of the file
+Write-Host "`n[Test 2] Update the last line of the file" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -27,8 +27,8 @@ Set-Content -Path "edge-update2.txt" -Value $content
 Update-LinesInFile -Path "edge-update2.txt" -LineRange 5,5 -Content "Line 5: UPDATED"
 Remove-Item "edge-update2.txt"
 
-# テスト3: 1行ファイルの更新
-Write-Host "`n【テスト3】1行ファイルの更新" -ForegroundColor Yellow
+# Test 3: Update a 1-line file
+Write-Host "`n[Test 3] Update a 1-line file" -ForegroundColor Yellow
 $content = @"
 Only one line
 "@
@@ -36,8 +36,8 @@ Set-Content -Path "edge-update3.txt" -Value $content
 Update-LinesInFile -Path "edge-update3.txt" -LineRange 1,1 -Content "UPDATED LINE"
 Remove-Item "edge-update3.txt"
 
-# テスト4: 2行ファイルの先頭行削除
-Write-Host "`n【テスト4】2行ファイルの先頭行削除" -ForegroundColor Yellow
+# Test 4: Delete the first line of a 2-line file
+Write-Host "`n[Test 4] Delete the first line of a 2-line file" -ForegroundColor Yellow
 $content = @"
 Line 1: delete me
 Line 2
@@ -46,8 +46,8 @@ Set-Content -Path "edge-update4.txt" -Value $content
 Update-LinesInFile -Path "edge-update4.txt" -LineRange 1,1
 Remove-Item "edge-update4.txt"
 
-# テスト5: ファイル先頭3行の削除
-Write-Host "`n【テスト5】ファイル先頭3行の削除" -ForegroundColor Yellow
+# Test 5: Delete the first 3 lines of the file
+Write-Host "`n[Test 5] Delete the first 3 lines of the file" -ForegroundColor Yellow
 $content = @"
 Line 1: delete
 Line 2: delete
@@ -60,8 +60,8 @@ Set-Content -Path "edge-update5.txt" -Value $content
 Update-LinesInFile -Path "edge-update5.txt" -LineRange 1,3
 Remove-Item "edge-update5.txt"
 
-# テスト6: ファイル末尾3行の削除
-Write-Host "`n【テスト6】ファイル末尾3行の削除" -ForegroundColor Yellow
+# Test 6: Delete the last 3 lines of the file
+Write-Host "`n[Test 6] Delete the last 3 lines of the file" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -74,8 +74,8 @@ Set-Content -Path "edge-update6.txt" -Value $content
 Update-LinesInFile -Path "edge-update6.txt" -LineRange 4,6
 Remove-Item "edge-update6.txt"
 
-# テスト7: ファイル全体の削除（全行削除）
-Write-Host "`n【テスト7】ファイル全体の削除" -ForegroundColor Yellow
+# Test 7: Delete the entire file (delete all lines)
+Write-Host "`n[Test 7] Delete the entire file" -ForegroundColor Yellow
 $content = @"
 Line 1
 Line 2
@@ -85,4 +85,4 @@ Set-Content -Path "edge-update7.txt" -Value $content
 Update-LinesInFile -Path "edge-update7.txt" -LineRange 1,3
 Remove-Item "edge-update7.txt"
 
-Write-Host "`n=== テスト完了 ===" -ForegroundColor Green
+Write-Host "`n=== Tests complete ===" -ForegroundColor Green

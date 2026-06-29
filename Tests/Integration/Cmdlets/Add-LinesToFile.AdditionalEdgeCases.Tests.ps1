@@ -11,8 +11,8 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
         }
     }
 
-    Context "空ファイルへの操作" {
-        It "空ファイルに行を追加できる" {
+    Context "Operations on an empty file" {
+        It "can add a line to an empty file" {
             $testFile = Join-Path $script:testDir "empty.txt"
             New-Item -Path $testFile -ItemType File -Force | Out-Null
 
@@ -22,7 +22,7 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
             $content | Should -Match "First line"
         }
 
-        It "空ファイルへの複数行追加" {
+        It "appends multiple lines to an empty file" {
             $testFile = Join-Path $script:testDir "empty2.txt"
             New-Item -Path $testFile -ItemType File -Force | Out-Null
 
@@ -36,8 +36,8 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
         }
     }
 
-    Context "LineNumber の境界値テスト" {
-        It "LineNumber が総行数+1（末尾への追加として処理される）" {
+    Context "LineNumber boundary value tests" {
+        It "LineNumber equal to total line count + 1 (treated as an append to the end)" {
             $testFile = Join-Path $script:testDir "boundary1.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
@@ -48,7 +48,7 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
             $content[3] | Should -Be "Line 4"
         }
 
-        It "LineNumber 1 で先頭に挿入" {
+        It "inserts at the beginning with LineNumber 1" {
             $testFile = Join-Path $script:testDir "boundary3.txt"
             Set-Content -Path $testFile -Value @("Line 2", "Line 3")
 
@@ -59,39 +59,39 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
             $content[1] | Should -Be "Line 2"
         }
 
-        It "LineNumber がファイル行数より大きい場合、サマリに実際の挿入位置が表示される" {
+        It "when LineNumber exceeds the file line count, the summary shows the actual insertion position" {
             $testFile = Join-Path $script:testDir "boundary-large.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
             $output = Add-LinesToFile -Path $testFile -LineNumber 100 -Content "New Line"
 
-            # ファイルは4行目に追加される
+            # The content is added at line 4
             $content = Get-Content $testFile
             $content.Count | Should -Be 4
             $content[3] | Should -Be "New Line"
 
-            # サマリ行には実際の挿入位置（4）が表示される（指定値の100ではない）
+            # The summary line shows the actual insertion position (4), not the specified value of 100
             $summaryLine = $output | Where-Object { $_ -match "Added.*line\(s\)" }
             $summaryLine | Should -Match "at line 4"
             $summaryLine | Should -Not -Match "at line 100"
         }
     }
 
-    Context "Content パラメータの特殊ケース" {
-        It "空配列を渡すとパラメータバインディングエラー" {
+    Context "Special cases for the Content parameter" {
+        It "passing an empty array causes a parameter binding error" {
             $testFile = Join-Path $script:testDir "empty-array.txt"
             Set-Content -Path $testFile -Value "Original"
 
-            # 空配列はContentパラメータに渡せない
+            # An empty array cannot be passed to the Content parameter
             { Add-LinesToFile -Path $testFile -Content @() } | Should -Throw
         }
     }
 
-    Context "新規ファイル作成の動作" {
-        It "存在しないファイルへの追加（LineNumber なし）で新規ファイル作成（警告なし）" {
+    Context "New file creation behavior" {
+        It "appending to a nonexistent file (no LineNumber) creates a new file (no warning)" {
             $nonExistentFile = Join-Path $script:testDir "newfile1.txt"
 
-            # 警告が出ないことを確認
+            # Confirm no warning is emitted
             $warnings = @()
             Add-LinesToFile -Path $nonExistentFile -Content "Line 1" -WarningVariable warnings
 
@@ -100,10 +100,10 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
             Get-Content $nonExistentFile | Should -Be "Line 1"
         }
 
-        It "存在しないファイルへの追加（LineNumber 1）で新規ファイル作成（警告なし）" {
+        It "appending to a nonexistent file (LineNumber 1) creates a new file (no warning)" {
             $nonExistentFile = Join-Path $script:testDir "newfile2.txt"
 
-            # 警告が出ないことを確認
+            # Confirm no warning is emitted
             $warnings = @()
             Add-LinesToFile -Path $nonExistentFile -LineNumber 1 -Content "Line 1" -WarningVariable warnings
 
@@ -112,10 +112,10 @@ Describe "Add-LinesToFile - Additional Edge Cases" {
             Get-Content $nonExistentFile | Should -Be "Line 1"
         }
 
-        It "存在しないファイルへの追加（LineNumber > 1）で警告を出して新規ファイル作成" {
+        It "appending to a nonexistent file (LineNumber > 1) warns and creates a new file" {
             $nonExistentFile = Join-Path $script:testDir "newfile3.txt"
 
-            # 警告が出ることを確認
+            # Confirm a warning is emitted
             $warnings = @()
             Add-LinesToFile -Path $nonExistentFile -LineNumber 5 -Content "Line 1" -WarningVariable warnings
 

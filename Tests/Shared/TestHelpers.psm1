@@ -19,15 +19,15 @@ function Remove-TestFile {
 function Test-ParameterValidationError {
     <#
     .SYNOPSIS
-    パラメータ検証エラーが発生することを検証する
-    
+    Verifies that a parameter validation error occurs
+
     .DESCRIPTION
-    PowerShellのパラメータ検証（ValidateRange、ValidateNotNullなど）が
-    エラーをスローすることを検証する
-    
+    Verifies that PowerShell parameter validation (ValidateRange, ValidateNotNull, etc.)
+    throws an error
+
     .PARAMETER ScriptBlock
-    実行するスクリプトブロック
-    
+    The script block to run
+
     .EXAMPLE
     Test-ParameterValidationError { Add-LinesToFile -Path "file.txt" -LineNumber -1 -Content "test" }
     #>

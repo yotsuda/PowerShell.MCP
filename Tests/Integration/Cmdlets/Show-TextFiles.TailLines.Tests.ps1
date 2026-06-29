@@ -21,7 +21,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
     }
 
     Context "Negative LineRange (Tail Lines)" {
-        It "-LineRange -5 で末尾5行を表示" {
+        It "-LineRange -5 displays the last 5 lines" {
             1..20 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange -5
@@ -31,7 +31,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[5] | Should -Match "^\s*20:"
         }
 
-        It "-LineRange -10 で末尾10行を表示" {
+        It "-LineRange -10 displays the last 10 lines" {
             1..20 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange -10
@@ -41,7 +41,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[10] | Should -Match "^\s*20:"
         }
 
-        It "-LineRange -10,-1 で末尾10行を表示（明示的）" {
+        It "-LineRange -10,-1 displays the last 10 lines (explicit)" {
             1..20 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange -10,-1
@@ -51,7 +51,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[10] | Should -Match "^\s*20:"
         }
 
-        It "ファイル行数より多い末尾行数を指定すると全行表示" {
+        It "displays all lines when the requested tail count exceeds the file's line count" {
             1..5 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange -10
@@ -61,7 +61,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[5] | Should -Match "^\s*5:"
         }
 
-        It "-LineRange -1 で最後の1行のみ表示" {
+        It "-LineRange -1 displays only the last line" {
             1..10 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange -1
@@ -70,7 +70,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[1] | Should -Match "^\s*10:.*Line 10"
         }
 
-        It "行番号が正しく表示される" {
+        It "displays line numbers correctly" {
             1..100 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange -3
@@ -82,7 +82,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
     }
 
     Context "Positive LineRange with -1 End (To End of File)" {
-        It "-LineRange 15,-1 で15行目から末尾まで表示" {
+        It "-LineRange 15,-1 displays from line 15 to the end" {
             1..20 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange 15,-1
@@ -92,7 +92,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[6] | Should -Match "^\s*20:"
         }
 
-        It "-LineRange 1,-1 で全行表示" {
+        It "-LineRange 1,-1 displays all lines" {
             1..5 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange 1,-1
@@ -100,7 +100,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output | Should -HaveCount 6  # header + 5 lines
         }
 
-        It "-LineRange 10,0 で10行目から末尾まで表示（0も末尾を意味する）" {
+        It "-LineRange 10,0 displays from line 10 to the end (0 also means the end)" {
             1..15 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange 10,0
@@ -112,7 +112,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
     }
 
     Context "Normal LineRange Still Works" {
-        It "-LineRange 5,10 で5-10行目を表示" {
+        It "-LineRange 5,10 displays lines 5-10" {
             1..20 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange 5,10
@@ -122,7 +122,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[6] | Should -Match "^\s*10:"
         }
 
-        It "-LineRange 1,5 で先頭5行を表示" {
+        It "-LineRange 1,5 displays the first 5 lines" {
             1..20 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange 1,5
@@ -132,7 +132,7 @@ Describe "Show-TextFiles Tail Lines Feature" {
             $output[5] | Should -Match "^\s*5:"
         }
 
-        It "LineRange なしで全行表示" {
+        It "displays all lines without LineRange" {
             1..5 | ForEach-Object { "Line $_" } | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile
@@ -142,17 +142,17 @@ Describe "Show-TextFiles Tail Lines Feature" {
     }
 
     Context "Edge Cases" {
-        It "0バイト空ファイルで末尾行を要求すると警告が出る" {
-            # 0バイトの空ファイルを作成
+        It "warns when requesting tail lines from a 0-byte empty file" {
+            # Create a 0-byte empty file
             [System.IO.File]::WriteAllBytes($script:testFile, @())
-            
+
             $output = Show-TextFiles -Path $script:testFile -LineRange -5 -WarningVariable warn 3>$null
-            
-            # 空ファイルの警告が出るはず（ProcessRecord で File is empty）
+
+            # An empty-file warning should be emitted (File is empty in ProcessRecord)
             $warn | Should -Not -BeNullOrEmpty
         }
 
-        It "1行ファイルで末尾5行を要求" {
+        It "requests the last 5 lines from a single-line file" {
             "Only line" | Set-Content -Path $script:testFile -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -LineRange -5

@@ -1,17 +1,17 @@
 # Context Display Feature Tests
-# v1.3.0以降のコンテキスト表示機能の統合テスト
+# Integration tests for the context display feature introduced in v1.3.0 and later
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
 Describe "Context Display Feature Tests" {
     BeforeAll {
-        # テスト用の一時ディレクトリ
+        # Temporary directory for tests
         $script:testDir = Join-Path $env:TEMP "ContextDisplayTests_$(Get-Random)"
         New-Item -ItemType Directory -Path $script:testDir -Force | Out-Null
     }
 
     AfterAll {
-        # テストディレクトリのクリーンアップ
+        # Clean up the test directory
         if (Test-Path $script:testDir) {
             Remove-Item -Path $script:testDir -Recurse -Force
         }
@@ -31,60 +31,60 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
         }
 
-        It "コンテキスト表示が含まれる（Contains モード）" {
-            # 情報ストリームをキャプチャ
+        It "Includes context display (Contains mode)" {
+            # Capture the information stream
             $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1
-            
-            # 置換が成功していることを確認
+
+            # Verify the replacement succeeded
             $result = Get-Content $script:testFile
             $result[1] | Should -Match "new value"
             $result[4] | Should -Match "new value"
-            
-            # コンテキスト情報が出力されていることを確認
+
+            # Verify context information was output
             $contextOutput = $output | Where-Object { $_ -match "^\s+\d+[:-]" }
             $contextOutput | Should -Not -BeNullOrEmpty
             $contextOutput.Count | Should -BeGreaterThan 3
         }
 
-        It "コンテキスト表示が含まれる（Pattern モード）" {
+        It "Includes context display (Pattern mode)" {
             $output = Update-MatchInFile -Path $script:testFile -Pattern "old\s+value" -Replacement "new value" -InformationAction Continue 6>&1
-            
-            # 置換が成功していることを確認
+
+            # Verify the replacement succeeded
             $result = Get-Content $script:testFile
             $result[1] | Should -Match "new value"
             $result[4] | Should -Match "new value"
-            
-            # コンテキスト情報が出力されていることを確認
+
+            # Verify context information was output
             $contextOutput = $output | Where-Object { $_ -match "^\s+\d+[:-]" }
             $contextOutput | Should -Not -BeNullOrEmpty
         }
 
-        It "置換行にマーカーが含まれる（: で表示）" {
+        It "Includes a marker on replaced lines (shown with :)" {
             $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1
-            
-            # 置換された行に : マーカーが含まれている
+
+            # Replaced lines include the : marker
             $matchedLines = $output | Where-Object { $_ -match "^\s+\d+:" }
             $matchedLines | Should -Not -BeNullOrEmpty
             $matchedLines.Count | Should -Be 2
         }
 
-        It "コンテキスト行にマーカーが含まれる（- で表示）" {
+        It "Includes a marker on context lines (shown with -)" {
             $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1
-            
-            # コンテキスト行に - マーカーが含まれている
+
+            # Context lines include the - marker
             $contextLines = $output | Where-Object { $_ -match "^\s+\d+-" }
             $contextLines | Should -Not -BeNullOrEmpty
         }
 
-        It "置換テキストのANSIエスケープシーケンスが含まれる" {
+        It "Includes ANSI escape sequences for the replacement text" {
             $output = Update-MatchInFile -Path $script:testFile -OldText "old value" -Replacement "new value" -InformationAction Continue 6>&1 | Out-String
-            
-            # 通常実行時は置換後のテキストのみ表示（緑）
-            $output | Should -Match '\x1b\[32m'  # 緑（置換後）
-            $output | Should -Match '\x1b\[0m'   # リセット
+
+            # During normal execution only the replaced text is shown (green)
+            $output | Should -Match '\x1b\[32m'  # green (after replacement)
+            $output | Should -Match '\x1b\[0m'   # reset
         }
 
-        It "複数マッチのギャップが適切に表示される" {
+        It "Displays the gap between multiple matches correctly" {
             $content = @(
                 "Line 1"
                 "Line 2"
@@ -97,8 +97,8 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
             $output = Update-MatchInFile -Path $script:testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
-            
-            # 両方のマッチが含まれている
+
+            # Both matches are included
             $output | Should -Match "Line 3"
             $output | Should -Match "Line 6"
         }
@@ -117,42 +117,42 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
         }
 
-        It "挿入時にコンテキストが表示される" {
+        It "Displays context when inserting" {
             $output = Add-LinesToFile -Path $script:testFile -LineNumber 3 -Content "Inserted Line" -InformationAction Continue 6>&1
-            
-            # 挿入が成功していることを確認
+
+            # Verify the insertion succeeded
             $result = Get-Content $script:testFile
             $result[2] | Should -Be "Inserted Line"
-            
-            # コンテキスト情報が出力されていることを確認
+
+            # Verify context information was output
             $contextOutput = $output | Where-Object { $_ -match "^\s+\d+[:-]" }
             $contextOutput | Should -Not -BeNullOrEmpty
         }
 
-        It "末尾追加時にコンテキストが表示される" {
+        It "Displays context when appending to the end" {
             $output = Add-LinesToFile -Path $script:testFile -Content "Appended Line" -InformationAction Continue 6>&1
-            
-            # 追加が成功していることを確認
+
+            # Verify the append succeeded
             $result = Get-Content $script:testFile
             $result[-1] | Should -Be "Appended Line"
-            
-            # コンテキスト情報が出力されていることを確認
+
+            # Verify context information was output
             $contextOutput = $output | Where-Object { $_ -match "^\s+\d+[:-]" }
             $contextOutput | Should -Not -BeNullOrEmpty
         }
 
-        It "挿入行にマーカー（:）が含まれる" {
+        It "Includes a marker (:) on the inserted line" {
             $output = Add-LinesToFile -Path $script:testFile -LineNumber 3 -Content "Inserted Line" -InformationAction Continue 6>&1
-            
-            # 挿入された行に : マーカーが含まれている
+
+            # The inserted line includes the : marker
             $matchedLines = $output | Where-Object { $_ -match "^\s+\d+:" }
             $matchedLines | Should -Not -BeNullOrEmpty
         }
 
-        It "反転表示マーカーが含まれる" {
+        It "Includes the inverse-display marker" {
             $output = Add-LinesToFile -Path $script:testFile -LineNumber 3 -Content "Inserted Line" -InformationAction Continue 6>&1 | Out-String
-            
-            # ANSIエスケープシーケンスが含まれている
+
+            # ANSI escape sequences are included
             $output | Should -Match '\x1b\[32m'
         }
     }
@@ -171,43 +171,43 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
         }
 
-        It "行置換時にコンテキストが表示される" {
+        It "Displays context when replacing lines" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 3,4 -Content @("New Line 3", "New Line 4") -InformationAction Continue 6>&1
-            
-            # 置換が成功していることを確認
+
+            # Verify the replacement succeeded
             $result = Get-Content $script:testFile
             $result[2] | Should -Be "New Line 3"
             $result[3] | Should -Be "New Line 4"
-            
-            # コンテキスト情報が出力されていることを確認
+
+            # Verify context information was output
             $contextOutput = $output | Where-Object { $_ -match "^\s+\d+[:-]" }
             $contextOutput | Should -Not -BeNullOrEmpty
         }
 
-        It "行削除時にコンテキストが表示される" {
+        It "Displays context when deleting lines" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 3,4 -Content @() -InformationAction Continue 6>&1
-            
-            # 削除が成功していることを確認
+
+            # Verify the deletion succeeded
             $result = Get-Content $script:testFile
             $result.Count | Should -Be 4
-            
-            # コンテキスト情報が出力されていることを確認
+
+            # Verify context information was output
             $contextOutput = $output | Where-Object { $_ -match "^\s+\d+[:-]" }
             $contextOutput | Should -Not -BeNullOrEmpty
         }
 
-        It "更新行にマーカーが含まれる" {
+        It "Includes a marker on updated lines" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 3,3 -Content "Updated Line" -InformationAction Continue 6>&1
-            
-            # 更新された行に : マーカーが含まれている
+
+            # The updated line includes the : marker
             $matchedLines = $output | Where-Object { $_ -match "^\s+\d+:" }
             $matchedLines | Should -Not -BeNullOrEmpty
         }
 
-        It "反転表示マーカーが含まれる" {
+        It "Includes the inverse-display marker" {
             $output = Update-LinesInFile -Path $script:testFile -LineRange 3,3 -Content "Updated Line" -InformationAction Continue 6>&1 | Out-String
-            
-            # ANSIエスケープシーケンスが含まれている
+
+            # ANSI escape sequences are included
             $output | Should -Match '\x1b\[32m'
         }
     }
@@ -217,48 +217,48 @@ Describe "Context Display Feature Tests" {
             $script:testFile = Join-Path $script:testDir "integration-test.txt"
         }
 
-        It "ギャップ1行の範囲が連続して表示される" {
+        It "Displays a one-line gap range contiguously" {
             $content = 1..20 | ForEach-Object { "Line $_" }
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            
-            # 3行目と6行目にマッチ（ギャップ2行）
+
+            # Match lines 3 and 6 (2-line gap)
             $newContent = $content.Clone()
             $newContent[2] = "Line 3: match"
             $newContent[5] = "Line 6: match"
             Set-Content -Path $script:testFile -Value $newContent -Encoding UTF8
-            
+
             $output = Update-MatchInFile -Path $script:testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
-            
-            # ギャップ1行以下なので、Line 4, 5 も表示される
+
+            # Since the gap is one line or less, Line 4 and 5 are also shown
             $output | Should -Match "Line 4"
             $output | Should -Match "Line 5"
         }
 
-        It "ギャップ2行以上の範囲が分離される（空行で分離）" {
+        It "Separates ranges with a gap of 2 or more lines (separated by a blank line)" {
             $content = 1..20 | ForEach-Object { "Line $_" }
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            
-            # 3行目と10行目にマッチ（ギャップ6行）
+
+            # Match lines 3 and 10 (6-line gap)
             $newContent = $content.Clone()
             $newContent[2] = "Line 3: match"
             $newContent[9] = "Line 10: match"
             Set-Content -Path $script:testFile -Value $newContent -Encoding UTF8
-            
+
             $output = Update-MatchInFile -Path $script:testFile -OldText "match" -Replacement "REPLACED" -InformationAction Continue 6>&1 | Out-String
-            
-            # ギャップが空行で分離されている（Line 5 と Line 8 の間に空行がある）
+
+            # The gap is separated by a blank line (there is a blank line between Line 5 and Line 8)
             $output | Should -Match "5-.*\n\s*\n\s*8-"
         }
     }
 
     Context "Show-TextFiles GapLine Duplicate Fix" {
-        # Issue: 近接するマッチでgapLine出力後にprevLineが重複出力される不具合の修正を検証
+        # Issue: verifies the fix for a bug where prevLine was output twice after a gapLine for nearby matches
         BeforeEach {
             $script:testFile = Join-Path $script:testDir "gapline-test.txt"
         }
 
-        It "近接マッチでコンテキスト行が重複しない（ギャップ1行）" {
-            # 実際の不具合再現ケース: 425と429行がマッチ、428行が重複出力されていた
+        It "Does not duplicate context lines for nearby matches (1-line gap)" {
+            # Actual bug reproduction case: lines 425 and 429 matched, and line 428 was output twice
             $content = @(
                 "Line 1: header"        # 1
                 "Line 2: normal"        # 2
@@ -275,19 +275,19 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -Contains "MATCH_" | Out-String
-            
-            # 各行が1回だけ出力されることを確認（行番号でカウント）
-            # Line 8 が2回出力されていないことを確認
+
+            # Verify each line is output exactly once (counted by line number)
+            # Verify Line 8 is not output twice
             $line8Matches = [regex]::Matches($output, "^\s*8[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
             $line8Matches.Count | Should -Be 1 -Because "Line 8 should appear exactly once (was duplicated before fix)"
-            
-            # 両方のマッチ行が含まれている（行番号で確認）
+
+            # Both match lines are included (verified by line number)
             $output | Should -Match "5:"
             $output | Should -Match "9:"
         }
 
-        It "連続するコンテキストで重複がない" {
-            # 後続コンテキストと前置コンテキストが重なるケース
+        It "Has no duplicates with consecutive context" {
+            # Case where trailing context and leading context overlap
             $content = @(
                 "Line 1"          # 1
                 "Line 2"          # 2  context before
@@ -302,8 +302,8 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -Contains "MATCH_" | Out-String
-            
-            # Line 5 と Line 6 が1回だけ出力されることを確認
+
+            # Verify Line 5 and Line 6 are each output exactly once
             $line5Matches = [regex]::Matches($output, "^\s*5[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
             $line6Matches = [regex]::Matches($output, "^\s*6[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
             
@@ -311,9 +311,9 @@ Describe "Context Display Feature Tests" {
             $line6Matches.Count | Should -Be 1 -Because "Line 6 should appear exactly once"
         }
 
-        It "gapLine が正しく1回だけ出力される（ギャップ1行のケース）" {
-            # gapLine (ギャップが1行の場合に連結出力される行) の動作確認
-            # 後続コンテキスト(2行) + gapLine(1行) + 前置コンテキスト(2行) で連続出力される
+        It "Outputs gapLine correctly exactly once (1-line gap case)" {
+            # Verifies gapLine behavior (the line output as a join when the gap is one line)
+            # Output contiguously as trailing context (2 lines) + gapLine (1 line) + leading context (2 lines)
             $content = @(
                 "Line 1"           # 1
                 "Line 2"           # 2  context before
@@ -331,20 +331,20 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -Contains "MATCH_" | Out-String
-            
-            # 重複がないことを確認
-            # Line 8 と Line 9 が1回だけ出力される（重複していない）
+
+            # Verify there are no duplicates
+            # Line 8 and Line 9 are each output exactly once (not duplicated)
             $line8Matches = [regex]::Matches($output, "^\s*8[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
             $line9Matches = [regex]::Matches($output, "^\s*9[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
             $line8Matches.Count | Should -Be 1 -Because "Line 8 should appear exactly once"
             $line9Matches.Count | Should -Be 1 -Because "Line 9 should appear exactly once"
-            
-            # マッチ行が出力されている
+
+            # The match lines are output
             $output | Should -Match "4:"
             $output | Should -Match "10:"
         }
 
-        It "Pattern モードでも重複がない" {
+        It "Has no duplicates in Pattern mode either" {
             $content = @(
                 "Line 1"
                 "Line 2"
@@ -357,8 +357,8 @@ Describe "Context Display Feature Tests" {
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             
             $output = Show-TextFiles -Path $script:testFile -Pattern "TARGET_\w+" | Out-String
-            
-            # 各行が最大1回だけ出力される
+
+            # Each line is output at most once
             foreach ($lineNum in 1..7) {
                 $matches = [regex]::Matches($output, "^\s*$lineNum[:-]", [System.Text.RegularExpressions.RegexOptions]::Multiline)
                 $matches.Count | Should -BeLessOrEqual 1 -Because "Line $lineNum should appear at most once"

@@ -10,8 +10,8 @@ Describe "Update-LinesInFile - Additional Edge Cases" {
         }
     }
 
-    Context "LineRange の境界値テスト" {
-        It "LineRange で最終行のみを更新" {
+    Context "LineRange boundary value tests" {
+        It "updates only the last line with LineRange" {
             $testFile = Join-Path $script:testDir "boundary2.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
             
@@ -21,7 +21,7 @@ Describe "Update-LinesInFile - Additional Edge Cases" {
             $content[2] | Should -Be "Updated Line 3"
         }
 
-        It "LineRange が -1（末尾）を使用" {
+        It "uses -1 (end) for LineRange" {
             $testFile = Join-Path $script:testDir "boundary3.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3", "Line 4", "Line 5")
             
@@ -34,15 +34,15 @@ Describe "Update-LinesInFile - Additional Edge Cases" {
         }
     }
 
-    Context "行の削除" {
-        It "Content 省略時はエラーになる" {
+    Context "Deleting lines" {
+        It "errors when Content is omitted" {
             $testFile = Join-Path $script:testDir "delete-error.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
             { Update-LinesInFile -Path $testFile -LineRange 2,2 } | Should -Throw "*Content is required*"
         }
 
-        It "-Content @() で指定範囲の行を削除できる" {
+        It "can delete the specified range of lines with -Content @()" {
             $testFile = Join-Path $script:testDir "delete1.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3", "Line 4", "Line 5")
 
@@ -55,8 +55,8 @@ Describe "Update-LinesInFile - Additional Edge Cases" {
         }
     }
 
-    Context "空文字列での置換" {
-        It "-Content `"`" で空行に置換できる" {
+    Context "Replacement with an empty string" {
+        It "can replace with an empty line using -Content `"`"" {
             $testFile = Join-Path $script:testDir "empty-string.txt"
             Set-Content -Path $testFile -Value @("Line 1", "Line 2", "Line 3")
 
@@ -70,8 +70,8 @@ Describe "Update-LinesInFile - Additional Edge Cases" {
         }
     }
 
-    Context "エラーハンドリング" {
-        It "存在しないファイルへの更新でエラー" {
+    Context "Error handling" {
+        It "errors when updating a nonexistent file" {
             $nonExistentFile = Join-Path $script:testDir "nonexistent.txt"
             
             { Update-LinesInFile -Path $nonExistentFile -LineRange 1,1 -Content "New" -ErrorAction Stop } |

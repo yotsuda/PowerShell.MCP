@@ -1,8 +1,8 @@
-# Update-MatchInFile コンテキスト表示機能のテスト
-Write-Host "=== Update-MatchInFile コンテキスト表示テスト ===" -ForegroundColor Cyan
+# Test for the Update-MatchInFile context display feature
+Write-Host "=== Update-MatchInFile context display test ===" -ForegroundColor Cyan
 
-# テスト1: Contains モード
-Write-Host "`n【テスト1】Contains モード - 3箇所の置換" -ForegroundColor Yellow
+# Test 1: Contains mode
+Write-Host "`n[Test 1] Contains mode - replace 3 occurrences" -ForegroundColor Yellow
 $content1 = @"
 Line 1: This is normal
 Line 2: This has old value here
@@ -21,8 +21,8 @@ Set-Content -Path "test-replace1.txt" -Value $content1
 Update-MatchInFile -Path "test-replace1.txt" -OldText "old value" -Replacement "new value"
 Remove-Item "test-replace1.txt"
 
-# テスト2: Pattern モード（正規表現）
-Write-Host "`n【テスト2】Pattern モード - 正規表現置換" -ForegroundColor Yellow
+# Test 2: Pattern mode (regular expression)
+Write-Host "`n[Test 2] Pattern mode - regular expression replacement" -ForegroundColor Yellow
 $content2 = @"
 function foo() {
   var x = 10;
@@ -37,8 +37,8 @@ Set-Content -Path "test-replace2.txt" -Value $content2
 Update-MatchInFile -Path "test-replace2.txt" -Pattern "\bvar\b" -Replacement "let"
 Remove-Item "test-replace2.txt"
 
-# テスト3: ギャップマージ確認（ギャップ2行）
-Write-Host "`n【テスト3】ギャップ2行 - マージされる" -ForegroundColor Yellow
+# Test 3: Gap merge check (2-line gap)
+Write-Host "`n[Test 3] 2-line gap - merged" -ForegroundColor Yellow
 $content3 = @"
 Line 1
 Line 2
@@ -57,8 +57,8 @@ Set-Content -Path "test-replace3.txt" -Value $content3
 Update-MatchInFile -Path "test-replace3.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "test-replace3.txt"
 
-# テスト4: ギャップ3行（マージ）
-Write-Host "`n【テスト4】ギャップ3行 - マージされる" -ForegroundColor Yellow
+# Test 4: 3-line gap (merge)
+Write-Host "`n[Test 4] 3-line gap - merged" -ForegroundColor Yellow
 $content4 = @"
 Line 1
 Line 2
@@ -78,8 +78,8 @@ Line 14
 Set-Content -Path "test-replace4.txt" -Value $content4
 Update-MatchInFile -Path "test-replace4.txt" -OldText "match" -Replacement "REPLACED"
 Remove-Item "test-replace4.txt"
-# テスト5: LineRange指定
-Write-Host "`n【テスト5】LineRange指定 - 5-10行目のみ置換" -ForegroundColor Yellow
+# Test 5: LineRange specification
+Write-Host "`n[Test 5] LineRange specification - replace only lines 5-10" -ForegroundColor Yellow
 $content5 = @"
 Line 1: old
 Line 2: old
@@ -98,4 +98,4 @@ Set-Content -Path "test-replace5.txt" -Value $content5
 Update-MatchInFile -Path "test-replace5.txt" -LineRange 5,10 -OldText "old" -Replacement "new"
 Remove-Item "test-replace5.txt"
 
-Write-Host "`n=== テスト完了 ===" -ForegroundColor Green
+Write-Host "`n=== Tests complete ===" -ForegroundColor Green

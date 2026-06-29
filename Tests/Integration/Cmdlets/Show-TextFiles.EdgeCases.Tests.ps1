@@ -7,132 +7,132 @@ Describe "Show-TextFiles - Additional Edge Cases" {
         Remove-Item $script:testFile -Force -ErrorAction SilentlyContinue
     }
 
-    Context "小さいファイルでのコンテキスト表示" {
-        It "1行ファイルでマッチした場合、コンテキストなしで表示" {
+    Context "Context display in small files" {
+        It "displays without context when a match occurs in a single-line file" {
             Set-Content -Path $script:testFile -Value "Target" -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Contains "Target"
-            
-            # ヘッダー + マッチ行のみ
+
+            # Header + matched line only
             $result.Count | Should -Be 2
             $result[1] | Should -Match ":.*Target"
         }
 
-        It "2行ファイルの1行目マッチ" {
+        It "match on line 1 of a two-line file" {
             $content = @("Target Line 1", "Line 2")
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Contains "Target"
-            
-            # ヘッダー + マッチ行 + 後コンテキスト1行
+
+            # Header + matched line + 1 line of following context
             $result.Count | Should -Be 3
         }
 
-        It "2行ファイルの2行目マッチ" {
+        It "match on line 2 of a two-line file" {
             $content = @("Line 1", "Target Line 2")
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Contains "Target"
-            
-            # ヘッダー + 前コンテキスト1行 + マッチ行
+
+            # Header + 1 line of preceding context + matched line
             $result.Count | Should -Be 3
         }
     }
 
-    Context "同一行内の複数マッチ" {
-        It "Contains: 同一行内の複数マッチがすべてハイライトされる" {
+    Context "Multiple matches within the same line" {
+        It "Contains: all matches within the same line are highlighted" {
             Set-Content -Path $script:testFile -Value "Test and Test and Test" -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Contains "Test"
-            
+
             $matchLine = $result | Where-Object { $_ -match ":" }
-            # 3箇所の "Test" がすべてハイライトされる
+            # All 3 occurrences of "Test" are highlighted
             $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[33m")).Count
             $highlightCount | Should -Be 3
         }
 
-        It "Pattern: 同一行内の複数マッチがすべてハイライトされる" {
+        It "Pattern: all matches within the same line are highlighted" {
             Set-Content -Path $script:testFile -Value "abc123def456ghi789" -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Pattern '\d+'
-            
+
             $matchLine = $result | Where-Object { $_ -match ":" }
-            # 3箇所の数字がすべてハイライトされる
+            # All 3 number occurrences are highlighted
             $highlightCount = ([regex]::Matches($matchLine, "$([char]27)\[33m")).Count
             $highlightCount | Should -Be 3
         }
     }
 
-    Context "範囲マージの境界条件" {
-        It "マッチが正確に7行離れている場合、範囲がマージされる" {
+    Context "Boundary conditions of range merging" {
+        It "merges ranges when matches are exactly 7 lines apart" {
             $content = 1..15 | ForEach-Object { "Line $_" }
             $content[0] = "Match Line 1"
-            $content[7] = "Match Line 8"  # 7行離れている
+            $content[7] = "Match Line 8"  # 7 lines apart
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Contains "Match"
-            
-            # マージされるため空行なし
+
+            # Merged, so no blank line
             $contentLines = $result | Select-Object -Skip 1
             $contentLines | Where-Object { $_ -eq "" } | Should -BeNullOrEmpty
         }
 
-        It "マッチが8行以上離れている場合、範囲が分離される" {
+        It "separates ranges when matches are 8 or more lines apart" {
             $content = 1..15 | ForEach-Object { "Line $_" }
             $content[0] = "Match Line 1"
-            $content[8] = "Match Line 9"  # 8行離れている
+            $content[8] = "Match Line 9"  # 8 lines apart
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Contains "Match"
-            
-            # 分離されるため空行あり
+
+            # Separated, so there is a blank line
             $contentLines = $result | Select-Object -Skip 1
             ($contentLines | Where-Object { $_ -eq "" }).Count | Should -BeGreaterThan 0
         }
     }
 
-    Context "負のLineRange値のバリエーション" {
-        It "5,-1 と 5,0 と 5,-99 はすべて5行目から末尾まで表示" {
+    Context "Variations of negative LineRange values" {
+        It "5,-1 and 5,0 and 5,-99 all display from line 5 to the end" {
             $content = 1..10 | ForEach-Object { "Line $_" }
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            
+
             $result1 = Show-TextFiles -Path $script:testFile -LineRange 5,-1
             $result2 = Show-TextFiles -Path $script:testFile -LineRange 5,0
             $result3 = Show-TextFiles -Path $script:testFile -LineRange 5,-99
-            
-            # すべて同じ結果（5行目から末尾まで = 6行 + ヘッダー1行 = 7行）
+
+            # All produce the same result (line 5 to the end = 6 lines + 1 header line = 7 lines)
             $result1.Count | Should -Be 7
             $result2.Count | Should -Be 7
             $result3.Count | Should -Be 7
         }
 
-        It "0も負の値と同様に末尾を意味する" {
+        It "0 also means the end, like negative values" {
             $content = 1..10 | ForEach-Object { "Line $_" }
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
-            
+
             $result1 = Show-TextFiles -Path $script:testFile -LineRange 5,-1
             $result2 = Show-TextFiles -Path $script:testFile -LineRange 5,0
-            
+
             $result1.Count | Should -Be $result2.Count
         }
     }
 
-    Context "バリデーションエラー" {
-        It "第1引数が負の値の場合はバリデーションエラーになる" {
+    Context "Validation errors" {
+        It "produces a validation error when the first argument is negative" {
             Set-Content -Path $script:testFile -Value "Test" -Encoding UTF8
             { Show-TextFiles -Path $script:testFile -LineRange -1,5 } | Should -Throw
         }
 
-        It "第1引数が0の場合もバリデーションエラーになる" {
+        It "also produces a validation error when the first argument is 0" {
             Set-Content -Path $script:testFile -Value "Test" -Encoding UTF8
             { Show-TextFiles -Path $script:testFile -LineRange 0,5 } | Should -Throw
         }
     }
 
-    Context "特殊なマッチケース" {
-        It "空行がマッチする場合も正しく表示" {
+    Context "Special match cases" {
+        It "displays correctly even when a blank line matches" {
             $content = @("Line 1", "", "Line 3")
             Set-Content -Path $script:testFile -Value $content -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Pattern '^$'
-            
-            # 空行がマッチとして表示される
+
+            # The blank line is displayed as a match
             $result | Where-Object { $_ -match "^\s+2:" } | Should -Not -BeNullOrEmpty
         }
 
-        It "非常に長い行でもハイライトが正しく適用される" {
+        It "applies highlighting correctly even on a very long line" {
             $longLine = "a" * 1000 + "TARGET" + "b" * 1000
             Set-Content -Path $script:testFile -Value $longLine -Encoding UTF8
             $result = Show-TextFiles -Path $script:testFile -Contains "TARGET"
@@ -142,8 +142,8 @@ Describe "Show-TextFiles - Additional Edge Cases" {
         }
     }
 
-    Context "複数ファイルでの新機能" {
-        It "複数ファイルでもコンテキスト表示が動作する" {
+    Context "New features with multiple files" {
+        It "context display works with multiple files too" {
             $file1 = [System.IO.Path]::GetTempFileName()
             $file2 = [System.IO.Path]::GetTempFileName()
             
@@ -152,8 +152,8 @@ Describe "Show-TextFiles - Additional Edge Cases" {
                 @("Line A", "Target", "Line C") | Set-Content $file2 -Encoding UTF8
                 
                 $result = Show-TextFiles -Path $file1,$file2 -Contains "Target"
-                
-                # 両方のファイルでヘッダーとコンテキストが表示される
+
+                # The header and context are displayed for both files
                 ($result | Where-Object { $_ -match "==>" }).Count | Should -Be 2
                 ($result | Where-Object { $_ -match "^\s+\d+:" }).Count | Should -Be 2
             }
@@ -163,8 +163,8 @@ Describe "Show-TextFiles - Additional Edge Cases" {
         }
     }
     
-    Context "改行を含むパターンのエラー" {
-        It "Pattern に改行が含まれている場合はエラー" {
+    Context "Errors for patterns containing newlines" {
+        It "errors when Pattern contains a newline" {
             $testFile = [System.IO.Path]::GetTempFileName()
             try {
                 "Line 1`nLine 2" | Set-Content $testFile -Encoding UTF8
@@ -176,7 +176,7 @@ Describe "Show-TextFiles - Additional Edge Cases" {
             }
         }
         
-        It "Contains に改行が含まれている場合は multiline モードで動作する" {
+        It "operates in multiline mode when Contains includes a newline" {
             $testFile = [System.IO.Path]::GetTempFileName()
             try {
                 @"

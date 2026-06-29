@@ -1,5 +1,5 @@
 # Add-LinesToFile.PipelineInput.Tests.ps1
-# Add-LinesToFile と Update-LinesInFile のパイプライン入力テスト
+# Pipeline input tests for Add-LinesToFile and Update-LinesInFile
 
 #Requires -Modules @{ ModuleName="Pester"; ModuleVersion="5.0.0" }
 
@@ -14,8 +14,8 @@ Describe "Add-LinesToFile Pipeline Input Tests" {
         }
     }
 
-    Context "パイプラインからの Content 入力" {
-        It "配列をパイプで渡して新規ファイルを作成できる" {
+    Context "Content input from the pipeline" {
+        It "can create a new file by piping an array" {
             "line1", "line2", "line3" | Add-LinesToFile -Path $script:testFile
             $result = @(Get-Content $script:testFile)
             $result.Count | Should -Be 3
@@ -24,15 +24,15 @@ Describe "Add-LinesToFile Pipeline Input Tests" {
             $result[2] | Should -Be "line3"
         }
 
-        It "単一文字列をパイプで渡せる" {
+        It "can pipe a single string" {
             "single line" | Add-LinesToFile -Path $script:testFile
             $result = @(Get-Content $script:testFile)
             $result.Count | Should -Be 1
             $result[0] | Should -Be "single line"
         }
 
-        It "パイプ入力が一括処理される（複数回のファイルアクセスではない）" {
-            # 既存ファイルに追加
+        It "pipe input is processed in a single batch (not multiple file accesses)" {
+            # Append to an existing file
             Set-Content -Path $script:testFile -Value "existing" -Encoding UTF8
             "new1", "new2" | Add-LinesToFile -Path $script:testFile
             $result = @(Get-Content $script:testFile)
@@ -42,7 +42,7 @@ Describe "Add-LinesToFile Pipeline Input Tests" {
             $result[2] | Should -Be "new2"
         }
 
-        It "引数で Content を指定した場合は従来通り動作する" {
+        It "works as before when Content is specified as an argument" {
             Add-LinesToFile -Path $script:testFile -Content "arg1", "arg2"
             $result = @(Get-Content $script:testFile)
             $result.Count | Should -Be 2
@@ -50,7 +50,7 @@ Describe "Add-LinesToFile Pipeline Input Tests" {
             $result[1] | Should -Be "arg2"
         }
 
-        It "LineNumber と組み合わせてパイプ入力できる" {
+        It "can use pipe input combined with LineNumber" {
             Set-Content -Path $script:testFile -Value @("line1", "line3") -Encoding UTF8
             "inserted" | Add-LinesToFile -Path $script:testFile -LineNumber 2
             $result = @(Get-Content $script:testFile)
@@ -74,8 +74,8 @@ Describe "Update-LinesInFile Pipeline Input Tests" {
         }
     }
 
-    Context "パイプラインからの Content 入力" {
-        It "配列をパイプで渡して行を置換できる" {
+    Context "Content input from the pipeline" {
+        It "can replace lines by piping an array" {
             "replaced1", "replaced2" | Update-LinesInFile -Path $script:testFile -LineRange 1,2
             $result = @(Get-Content $script:testFile)
             $result.Count | Should -Be 4
@@ -85,7 +85,7 @@ Describe "Update-LinesInFile Pipeline Input Tests" {
             $result[3] | Should -Be "line4"
         }
 
-        It "単一文字列をパイプで渡して行を置換できる" {
+        It "can replace lines by piping a single string" {
             "single" | Update-LinesInFile -Path $script:testFile -LineRange 2,3
             $result = @(Get-Content $script:testFile)
             $result.Count | Should -Be 3
@@ -94,7 +94,7 @@ Describe "Update-LinesInFile Pipeline Input Tests" {
             $result[2] | Should -Be "line4"
         }
 
-        It "パイプ入力が一括処理される" {
+        It "pipe input is processed in a single batch" {
             "new1", "new2", "new3" | Update-LinesInFile -Path $script:testFile -LineRange 2,2
             $result = @(Get-Content $script:testFile)
             $result.Count | Should -Be 6
@@ -106,7 +106,7 @@ Describe "Update-LinesInFile Pipeline Input Tests" {
             $result[5] | Should -Be "line4"
         }
 
-        It "引数で Content を指定した場合は従来通り動作する" {
+        It "works as before when Content is specified as an argument" {
             Update-LinesInFile -Path $script:testFile -LineRange 1,1 -Content "arg-replaced"
             $result = @(Get-Content $script:testFile)
             $result[0] | Should -Be "arg-replaced"

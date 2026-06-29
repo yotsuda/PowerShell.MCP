@@ -14,12 +14,12 @@ line5" | Set-Content -Path $script:testFile.FullName
         }
     }
     
-    It "連続するマッチ行で重複出力がないこと" {
+    It "no duplicate output for consecutive matched lines" {
         $result = Show-TextFiles -Path $script:testFile.FullName -Pattern "line"
-        # ヘッダー + 5行のマッチ行 = 6行（コンテキスト行は重複しない）
+        # Header + 5 matched lines = 6 lines (context lines are not duplicated)
         $result.Count | Should -Be 6
-        
-        # 各行が1回だけ出力されていることを確認
+
+        # Confirm each line is output only once
         ($result | Where-Object { $_ -match "^\s+1:" }).Count | Should -Be 1
         ($result | Where-Object { $_ -match "^\s+2:" }).Count | Should -Be 1
         ($result | Where-Object { $_ -match "^\s+3:" }).Count | Should -Be 1

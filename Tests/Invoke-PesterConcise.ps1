@@ -1,36 +1,36 @@
 <#
 .SYNOPSIS
-    Pesterテストを実行し、エラー出力を簡潔に表示するラッパースクリプト
+    A wrapper script that runs Pester tests and displays error output concisely
 
 .DESCRIPTION
-    Pesterテストを実行し、冗長なエラーメッセージをフィルタリングして
-    より読みやすい出力を提供します。
-    
-    フィルタリング内容:
-    - 内部例外スタックトレース（--->, --- End of）
-    - System.Management.Automation.*Exception の詳細行
-    - 重複する例外メッセージ（ArgumentNullException + MethodInvocationException）
-    - at System.*, at CallSite.* などのスタックトレース
-    - at $... で始まるスタックトレース行
+    Runs Pester tests and filters out verbose error messages to provide
+    more readable output.
+
+    What is filtered:
+    - Inner exception stack traces (--->, --- End of)
+    - System.Management.Automation.*Exception detail lines
+    - Duplicate exception messages (ArgumentNullException + MethodInvocationException)
+    - Stack traces such as at System.*, at CallSite.*
+    - Stack trace lines starting with at $...
 
 .PARAMETER Path
-    テストファイルまたはディレクトリのパス（デフォルト: Integration）
+    Path to a test file or directory (default: Integration)
 
 .EXAMPLE
     .\Invoke-PesterConcise.ps1
-    # Integration ディレクトリの全テストを実行（簡潔な出力）
+    # Run all tests in the Integration directory (concise output)
 
 .EXAMPLE
     .\Invoke-PesterConcise.ps1 -Path Integration/Cmdlets/Show-TextFiles.Tests.ps1
-    # 特定のテストファイルのみ実行
+    # Run only a specific test file
 
 .EXAMPLE
     .\Invoke-PesterConcise.ps1 -Path Unit
-    # Unit テストのみ実行
+    # Run only the Unit tests
 
 .NOTES
-    このスクリプトは PesterConfiguration.psd1 の設定（Verbosity = 'Minimal'）
-    と組み合わせて使用することで、最も簡潔な出力を実現します。
+    Used in combination with the PesterConfiguration.psd1 setting (Verbosity = 'Minimal'),
+    this script achieves the most concise output.
 #>
 param([string]$Path = "Integration")
 
@@ -42,7 +42,7 @@ try {
     $lastLine = ""
     
     foreach ($line in $lines) {
-        # 内部例外開始 - 次の "--- End of" までスキップ
+        # Start of inner exception - skip until the next "--- End of"
         if ($line -match '^\s*--->') {
             $skipUntilEnd = $true
             continue
@@ -51,14 +51,14 @@ try {
             if ($line -match '--- End of') { $skipUntilEnd = $false }
             continue
         }
-        
-        # 不要な行をスキップ
+
+        # Skip unwanted lines
         if ($line -match '^\s*at (System\.|CallSite\.)') { continue }
         if ($line -match 'at <ScriptBlock>') { continue }
-        if ($line -match '^\s*at \$') { continue }  # "at $result..." 行をスキップ
+        if ($line -match '^\s*at \$') { continue }  # Skip "at $result..." lines
         if ($line -match 'System\.Management\.Automation\.(RuntimeException|MethodInvocationException|ParameterBindingValidationException):') { continue }
-        
-        # ArgumentNullException をスキップ（前の行が MethodInvocationException の場合）
+
+        # Skip ArgumentNullException (when the previous line is MethodInvocationException)
         if ($line -match '^\s*ArgumentNullException:' -and $lastLine -match 'MethodInvocationException:') {
             continue
         }

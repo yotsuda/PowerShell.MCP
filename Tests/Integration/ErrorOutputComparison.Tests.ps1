@@ -4,8 +4,8 @@ BeforeAll {
     Import-Module "$PSScriptRoot/../Shared/TestHelpers.psm1" -Force
 }
 
-Describe "エラー出力比較テスト" -Skip {
-    Context "Should -Throw を使用（従来の方法）" -Skip {
+Describe "Error output comparison tests" -Skip {
+    Context "Using Should -Throw (the traditional approach)" -Skip {
         It "Test 1" {
             { throw "Error 1" } | Should -Throw
         }
@@ -17,7 +17,7 @@ Describe "エラー出力比較テスト" -Skip {
         }
     }
     
-    Context "Test-ThrowsQuietly を使用（新しい方法）" {
+    Context "Using Test-ThrowsQuietly (the new approach)" {
         It "Test 1" {
             Test-ThrowsQuietly { throw "Error 1" }
         }

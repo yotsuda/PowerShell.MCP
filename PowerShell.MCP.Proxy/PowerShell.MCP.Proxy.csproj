@@ -8,19 +8,19 @@
     <Version>1.11.0.0</Version>
     <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
 
-    <!-- Single File デプロイ設定 -->
+    <!-- Single-file deployment settings -->
     <PublishSingleFile>true</PublishSingleFile>
 
-    <!-- ファイルサイズ最適化設定 -->
+    <!-- File-size optimization settings -->
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>full</TrimMode>
     <PublishReadyToRun>false</PublishReadyToRun>
 
-    <!-- パフォーマンス最適化 -->
+    <!-- Performance optimization -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>embedded</DebugType>
 
-    <!-- 警告の抑制（トリミング関連） -->
+    <!-- Suppress warnings (trimming-related) -->
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
   </PropertyGroup>
 
@@ -32,18 +32,18 @@
     <!-- MCP SDK -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
-    <!-- 依存性注入の最小セット -->
+    <!-- Minimal dependency-injection set -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
   </ItemGroup>
 
-  <!-- トリミング設定: 必要なアセンブリを保護 -->
+  <!-- Trimming settings: protect required assemblies -->
   <ItemGroup>
     <TrimmerRootAssembly Include="PowerShell.MCP.Proxy" />
     <TrimmerRootAssembly Include="ModelContextProtocol" />
     <TrimmerRootAssembly Include="ModelContextProtocol.Core" />
   </ItemGroup>
 
-  <!-- リソースファイルの設定 -->
+  <!-- Resource file settings -->
   <ItemGroup>
     <EmbeddedResource Update="Resources\**\*.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -61,7 +61,7 @@
       <LastGenOutput>PromptDescriptions.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
-  <!-- プロンプトテンプレートを埋め込みリソースとして追加 -->
+  <!-- Add prompt templates as embedded resources -->
   <ItemGroup>
     <EmbeddedResource Include="Prompts\Templates\*.md" />
   </ItemGroup>
