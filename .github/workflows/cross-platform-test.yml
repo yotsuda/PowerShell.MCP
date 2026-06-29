@@ -394,7 +394,7 @@ jobs:
           $response = Send-JsonRpc $listRequest
           Write-Host "Response: $response"
 
-          if ($response -match '"get_current_location"' -and $response -match '"invoke_expression"') {
+          if ($response -match '"get_current_location"' -and $response -match '"execute_command"') {
             Write-Host "List Tools: PASSED" -ForegroundColor Green
           } else {
             throw "List Tools failed - expected tools not found"
@@ -554,7 +554,7 @@ jobs:
           $process.StandardInput.Flush()
           Start-Sleep -Milliseconds 200
 
-          # invoke_expression: On macOS in CI, the bgProcess has stdin redirected
+          # execute_command: On macOS in CI, the bgProcess has stdin redirected
           # (non-interactive mode). In this mode, Start-Sleep does NOT yield the runspace
           # for event processing, so the MCP timer action block never fires in the bgProcess.
           # The "Test timer event polling mechanism" step passes because that step's pwsh
@@ -564,42 +564,42 @@ jobs:
           # in that mode PSConsoleHostReadLine IS called and Start-Sleep yields correctly.
           # CI cannot replicate the interactive REPL; verify E2E with a real macOS VM.
           if ($IsMacOS) {
-            Write-Host "`n=== Skipping invoke_expression E2E on macOS CI ===" -ForegroundColor Yellow
+            Write-Host "`n=== Skipping execute_command E2E on macOS CI ===" -ForegroundColor Yellow
             Write-Host "Reason: bgProcess stdin is redirected (non-interactive); Start-Sleep does not"
             Write-Host "        yield the runspace on macOS in this mode. Timer events require"
             Write-Host "        interactive Terminal.app (verified by 'Test timer event polling')."
             Write-Host "`n=== Named Pipe tests passed (macOS: connectivity + timer mechanism) ===" -ForegroundColor Green
           } else {
 
-          # Test: invoke_expression with Get-Date (first call).
+          # Test: execute_command with Get-Date (first call).
           # On a fresh proxy this is the first console attach for the agent — the
           # resume / cold-start boundary — so the response carries the "New server
           # session" notice and the working directory is normalized to $HOME (the
           # pipeline is prefixed with a Set-Location), after which the Get-Date still
           # runs in the same call. So the first call should show BOTH the "New server
           # session" notice AND the actual Get-Date result.
-          Write-Host "`n=== Test: invoke_expression (Get-Date) - First call ===" -ForegroundColor Yellow
-          $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
+          Write-Host "`n=== Test: execute_command (Get-Date) - First call ===" -ForegroundColor Yellow
+          $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"execute_command","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 60000
           Write-Host "Response (truncated): $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
 
           $today = Get-Date -Format "yyyy-MM-dd"
           if ($response -match "New server session" -and $response -match $today) {
-            Write-Host "First invoke_expression: PASSED (new-session treatment + executed in one call)" -ForegroundColor Green
+            Write-Host "First execute_command: PASSED (new-session treatment + executed in one call)" -ForegroundColor Green
           } else {
-            throw "First invoke_expression did not return both ''New server session'' and today''s date ($today)"
+            throw "First execute_command did not return both ''New server session'' and today''s date ($today)"
           }
 
-          # Test: invoke_expression with Get-Date (second call - reuses existing pipe, no switch notice)
-          Write-Host "`n=== Test: invoke_expression (Get-Date) - Second call ===" -ForegroundColor Yellow
-          $invokeRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"invoke_expression","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
+          # Test: execute_command with Get-Date (second call - reuses existing pipe, no switch notice)
+          Write-Host "`n=== Test: execute_command (Get-Date) - Second call ===" -ForegroundColor Yellow
+          $invokeRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"execute_command","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 60000
           Write-Host "Response: $response"
 
           if ($response -match $today) {
-            Write-Host "Second invoke_expression (Get-Date): PASSED" -ForegroundColor Green
+            Write-Host "Second execute_command (Get-Date): PASSED" -ForegroundColor Green
           } else {
-            throw "Second invoke_expression failed - expected date $today not found"
+            throw "Second execute_command failed - expected date $today not found"
           }
 
           Write-Host "`n=== All Named Pipe tests passed ===" -ForegroundColor Green
