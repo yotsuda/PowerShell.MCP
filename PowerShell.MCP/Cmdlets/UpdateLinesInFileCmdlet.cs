@@ -180,7 +180,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         bool fileExists,
         string originalPath)
     {
-        var tempFile = System.IO.Path.GetTempFileName();
+        var tempFile = TextFileUtility.CreateTempFileNextTo(resolvedPath);
         int linesRemoved;
         int linesInserted;
 

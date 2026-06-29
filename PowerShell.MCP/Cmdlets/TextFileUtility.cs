@@ -159,6 +159,15 @@ public static class TextFileUtility
     }
 
     /// <summary>
+    /// Creates a unique temp file in the same directory as the target (same-volume, ACL-inheriting).
+    /// Use instead of Path.GetTempFileName() for files that will be atomically swapped into targetPath.
+    /// </summary>
+    public static string CreateTempFileNextTo(string targetPath)
+    {
+        return FileOperationHelper.CreateTempFileNextTo(targetPath);
+    }
+
+    /// <summary>
     /// Replaces file atomically using temp file
     /// </summary>
     public static void ReplaceFileAtomic(string targetPath, string tempFile)

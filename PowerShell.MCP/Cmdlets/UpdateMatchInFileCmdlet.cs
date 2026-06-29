@@ -186,7 +186,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
 
         // ===== Single pass: match check, replacement, and context display simultaneously =====
-        string? tempFile = dryRun ? null : System.IO.Path.GetTempFileName();
+        string? tempFile = dryRun ? null : TextFileUtility.CreateTempFileNextTo(resolvedPath);
         int replacementCount = 0;
         bool headerPrinted = false;
 
@@ -583,7 +583,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         else
         {
             // Write atomically
-            var tempFile = System.IO.Path.GetTempFileName();
+            var tempFile = TextFileUtility.CreateTempFileNextTo(resolvedPath);
             try
             {
                 File.WriteAllText(tempFile, newContent, metadata.Encoding);

@@ -17,6 +17,11 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Unreleased
+
+## Improvements
+- **Atomic file edits now stage the temp file in the target file's own directory** instead of `%TEMP%` (#51). This keeps the `File.Replace` / `File.Move` swap a same-volume rename — eliminating the cross-volume "not same device" failure mode — and lets a newly created file inherit the destination directory's ACEs on any configuration. Affects `Add-LinesToFile`, `Update-LinesInFile`, `Update-MatchInFile`, and `Remove-LinesFromFile`.
+
 # Version: 1.11.0
 
 ## New Features

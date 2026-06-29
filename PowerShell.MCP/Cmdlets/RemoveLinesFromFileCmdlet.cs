@@ -177,7 +177,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
                 }
 
-                string? tempFile = dryRun ? null : System.IO.Path.GetTempFileName();
+                string? tempFile = dryRun ? null : TextFileUtility.CreateTempFileNextTo(fileInfo.ResolvedPath);
                 int linesRemoved = 0;
 
                 // For context display (rotate buffer)
@@ -599,7 +599,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             var newContent = sb.ToString();
 
             // Write atomically
-            var tempFile = System.IO.Path.GetTempFileName();
+            var tempFile = TextFileUtility.CreateTempFileNextTo(resolvedPath);
             try
             {
                 File.WriteAllText(tempFile, newContent, metadata.Encoding);
@@ -638,7 +638,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             WriteInformation($"Created backup: {backupPath}", new string[] { "Backup" });
         }
 
-        string? tempFile = dryRun ? null : System.IO.Path.GetTempFileName();
+        string? tempFile = dryRun ? null : TextFileUtility.CreateTempFileNextTo(resolvedPath);
 
         try
         {

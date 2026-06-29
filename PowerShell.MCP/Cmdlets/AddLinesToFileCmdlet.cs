@@ -156,7 +156,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                 }
             }
 
-            var tempFile = System.IO.Path.GetTempFileName();
+            var tempFile = TextFileUtility.CreateTempFileNextTo(resolvedPath);
             int actualInsertAt = insertAt;
 
             try

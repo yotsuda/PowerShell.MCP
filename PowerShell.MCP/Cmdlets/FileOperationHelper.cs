@@ -20,6 +20,37 @@ internal static class FileOperationHelper
     }
 
     /// <summary>
+    /// Create a unique zero-length temp file in the SAME directory as <paramref name="targetPath"/>.
+    /// Keeping the temp on the target's volume guarantees the subsequent File.Replace / File.Move
+    /// stays an atomic same-volume rename (no cross-volume "not same device" failure) and lets a
+    /// newly created file inherit the destination directory's ACEs. Replaces Path.GetTempFileName(),
+    /// which always lands in %TEMP% and may be on a different volume than the file being edited.
+    /// </summary>
+    public static string CreateTempFileNextTo(string targetPath)
+    {
+        var fullPath = Path.GetFullPath(targetPath);
+        var dir = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrEmpty(dir))
+            dir = Directory.GetCurrentDirectory();
+
+        var name = Path.GetFileName(fullPath);
+        for (int attempt = 0; ; attempt++)
+        {
+            var candidate = Path.Combine(dir, $".{name}.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                // CreateNew guarantees uniqueness; matches Path.GetTempFileName()'s "file exists" contract.
+                using (new FileStream(candidate, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { }
+                return candidate;
+            }
+            catch (IOException) when (attempt < 5 && File.Exists(candidate))
+            {
+                // Astronomically unlikely GUID collision — retry with a fresh name.
+            }
+        }
+    }
+
+    /// <summary>
     /// Replace file atomically using File.Replace (NTFS transaction on Windows,
     /// rename(2) on Unix). Falls back to move-based replacement on error.
     /// </summary>
