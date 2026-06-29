@@ -20,7 +20,7 @@ sections at the TOP of the file; keep older sections for history.
 # Version: 1.12.0
 
 ## New Features
-- **`cancel` tool** — sends Ctrl+C to the active console to interrupt a running native CLI (git/npm/ssh) or a runaway command, then returns it to a ready state.
+- **`cancel` tool** — sends Ctrl+C to the agent's active console to interrupt the command running there: a long-running / runaway pipeline, or a native CLI waiting on stdin (git/npm/ssh). It does **not** cancel a PowerShell host prompt (`Read-Host`, a missing mandatory parameter, `Get-Credential`) — those surface as `awaiting_input` and are recovered by answering in the console or with `close_console`.
 - **`close_console` tool** — terminates a session-owned console by PID; use it to abandon a console stuck on a host prompt that cannot be answered programmatically.
 - **`awaiting_input` status** — when a command hits an interactive PowerShell host prompt (`Read-Host`, a missing mandatory parameter, `Get-Credential`, a confirmation), the call now returns control immediately instead of wedging the console until the timeout. The command stays blocked so a human can still answer at the terminal.
 
