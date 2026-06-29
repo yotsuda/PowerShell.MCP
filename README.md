@@ -122,7 +122,7 @@ Four tools provide maximum flexibility with minimum complexity:
 |------|---------|
 | `start_console` | Launch a persistent console for the MCP client |
 | `get_current_location` | Get current directory and available drives |
-| `invoke_expression` | Execute any PowerShell command or CLI tool |
+| `execute_command` | Execute any PowerShell command or CLI tool |
 | `wait_for_completion` | Wait for long-running commands to complete |
 
 ## Quick Start

@@ -2,7 +2,7 @@
 
 **USAGE:** Apply these technical guidelines when generating HTML files as specified in task instructions.
 
-**CRITICAL - Variable Scope:** Use `$script:` for ALL variables shared across invoke_expression calls.
+**CRITICAL - Variable Scope:** Use `$script:` for ALL variables shared across execute_command calls.
 
 **CRITICAL - Chart.js Data:** Extract arrays using ForEach-Object (%), NOT .Count.
 ```powershell

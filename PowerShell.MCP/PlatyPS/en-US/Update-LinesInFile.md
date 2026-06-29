@@ -306,7 +306,7 @@ File path(s) to process.
 
 - Omitting `-LineRange` replaces entire file.
 
-- To pass content containing `$`, backticks, or quotes, use the `var1` parameter of `invoke_expression`: `Update-LinesInFile path -LineRange 5 -Content $var1`
+- To pass content containing `$`, backticks, or quotes, use the `var1` parameter of `execute_command`: `Update-LinesInFile path -LineRange 5 -Content $var1`
 
 
 ## RELATED LINKS

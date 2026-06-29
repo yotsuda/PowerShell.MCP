@@ -54,7 +54,7 @@ public static class OutputTruncationHelper
         if (filePath != null)
         {
             sb.AppendLine($"Output too large ({output.Length} characters). Full output saved to: {filePath}");
-            sb.AppendLine($"Use invoke_expression('Show-TextFiles \"{filePath}\" -Contains \"search term\"') or -Pattern \"regex\" to search the output.");
+            sb.AppendLine($"Use execute_command('Show-TextFiles \"{filePath}\" -Contains \"search term\"') or -Pattern \"regex\" to search the output.");
         }
         else
         {

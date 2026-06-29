@@ -132,7 +132,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # other internal location/status probes) need the
                     # streams captured into the response hashtable but
                     # MUST NOT splash the captured items onto the
-                    # visible console. The user-facing invoke_expression
+                    # visible console. The user-facing execute_command
                     # path leaves this off so each item streams to the
                     # terminal in real time as the command runs.
                     [switch]$Silent

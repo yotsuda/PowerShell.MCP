@@ -350,7 +350,7 @@ File path(s) to process.
 
 - Newlines in `-Replacement` are normalized to match file's newline style.
 
-- To pass text containing `$`, backticks, or quotes, use `var1`/`var2` parameters of `invoke_expression`: `Update-MatchInFile path -OldText $var1 -Replacement $var2`
+- To pass text containing `$`, backticks, or quotes, use `var1`/`var2` parameters of `execute_command`: `Update-MatchInFile path -OldText $var1 -Replacement $var2`
 
 
 ## RELATED LINKS

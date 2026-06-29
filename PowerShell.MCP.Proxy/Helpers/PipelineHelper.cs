@@ -274,13 +274,13 @@ public static partial class PipelineHelper
         // Set-Content: requires var1 (for -Value)
         if (SetContentRegex().IsMatch(pipeline) && var1 == null)
         {
-            return "ERROR: Use Add-LinesToFile instead of Set-Content. Example: Add-LinesToFile \"path\" -Content $var1 (pass content via the var1 parameter of invoke_expression). Add-LinesToFile creates new files and handles $, backtick, and double-quote characters safely.";
+            return "ERROR: Use Add-LinesToFile instead of Set-Content. Example: Add-LinesToFile \"path\" -Content $var1 (pass content via the var1 parameter of execute_command). Add-LinesToFile creates new files and handles $, backtick, and double-quote characters safely.";
         }
 
         // Add-Content: requires var1 (for -Value)
         if (AddContentRegex().IsMatch(pipeline) && var1 == null)
         {
-            return "ERROR: Use Add-LinesToFile instead of Add-Content. Example: Add-LinesToFile \"path\" -Content $var1 (pass content via the var1 parameter of invoke_expression). Add-LinesToFile creates new files and handles $, backtick, and double-quote characters safely.";
+            return "ERROR: Use Add-LinesToFile instead of Add-Content. Example: Add-LinesToFile \"path\" -Content $var1 (pass content via the var1 parameter of execute_command). Add-LinesToFile creates new files and handles $, backtick, and double-quote characters safely.";
         }
 
         return null; // No issues

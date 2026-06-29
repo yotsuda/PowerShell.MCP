@@ -259,7 +259,7 @@ Exception: wildcards in `-Path` cannot create new files.
 
 - Omitting `-LineNumber` appends to end; `-LineNumber 1` inserts at beginning (existing lines shift down).
 
-- To pass content containing `$`, backticks, or quotes, use the `var1` parameter of `invoke_expression`: `Add-LinesToFile path -Content $var1`
+- To pass content containing `$`, backticks, or quotes, use the `var1` parameter of `execute_command`: `Add-LinesToFile path -Content $var1`
 
 
 ## RELATED LINKS

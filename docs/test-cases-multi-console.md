@@ -1,192 +1,192 @@
-# PowerShell.MCP 複数コンソール操作テストケース
+# PowerShell.MCP Multi-Console Operation Test Cases
 
-## 凡例
-- 🤖 Claude が実行
-- 👤 ユーザーが操作
-- ✅ 期待結果
-
----
-
-## 1. 基本動作確認
-
-### 1.1 単一コンソールの起動と実行
-🤖 `invoke_expression('Write-Output "Hello"')`
-✅ 新しいコンソールが起動し、"Hello" が返る
-
-### 1.2 コンソールの継続利用
-🤖 `invoke_expression('$x = 123; Write-Output $x')`
-✅ 同じコンソールで実行され、"123" が返る
+## Legend
+- 🤖 Executed by Claude
+- 👤 Performed by the user
+- ✅ Expected result
 
 ---
 
-## 2. 長時間コマンドとキャッシュ
+## 1. Basic Behavior
 
-### 2.1 タイムアウトとキャッシュ回収
-🤖 `invoke_expression('Start-Sleep -Seconds 200; Write-Output "Completed"')`
-✅ 約3分後に "Command is still running..." メッセージ
+### 1.1 Launch and execute in a single console
+🤖 `execute_command('Write-Output "Hello"')`
+✅ A new console launches and "Hello" is returned
+
+### 1.2 Reuse an existing console
+🤖 `execute_command('$x = 123; Write-Output $x')`
+✅ Runs in the same console and "123" is returned
+
+---
+
+## 2. Long-Running Commands and Caching
+
+### 2.1 Timeout and cache retrieval
+🤖 `execute_command('Start-Sleep -Seconds 200; Write-Output "Completed"')`
+✅ After about 3 minutes, a "Command is still running..." message
 
 🤖 `wait_for_completion(timeout_seconds=120)`
-✅ コマンド完了後、"Completed" を含むキャッシュが返る
+✅ After the command completes, the cache containing "Completed" is returned
 
-### 2.2 停止ボタン + wait_for_completion
-🤖 `invoke_expression('Start-Sleep -Seconds 60; Write-Output "Done at $(Get-Date)"')`
-👤 約10秒後に停止ボタンを押す
+### 2.2 Stop button + wait_for_completion
+🤖 `execute_command('Start-Sleep -Seconds 60; Write-Output "Done at $(Get-Date)"')`
+👤 Press the stop button after about 10 seconds
 
 🤖 `wait_for_completion(timeout_seconds=90)`
-✅ コマンド完了後、結果が返る（"Done at ..." を含む）
+✅ After the command completes, the result is returned (contains "Done at ...")
 
-### 2.3 wait_for_completion の早期リターン
-🤖 `invoke_expression('Start-Sleep -Seconds 10; Write-Output "Quick"')`
-👤 すぐに停止ボタンを押す
+### 2.3 Early return from wait_for_completion
+🤖 `execute_command('Start-Sleep -Seconds 10; Write-Output "Quick"')`
+👤 Press the stop button immediately
 
 🤖 `wait_for_completion(timeout_seconds=60)`
-✅ 10秒程度で結果が返る（60秒待たない）
+✅ The result returns in about 10 seconds (does not wait the full 60)
 
-### 2.4 busy コンソールがない場合
+### 2.4 When there is no busy console
 🤖 `wait_for_completion(timeout_seconds=30)`
-✅ 即座に "No busy consoles to wait for." が返る
+✅ "No busy consoles to wait for." is returned immediately
 
 ---
 
-## 3. 複数コンソールの並行操作
+## 3. Concurrent Operation of Multiple Consoles
 
-### 3.1 並行実行と別コンソールでの操作
-🤖 `invoke_expression('Start-Sleep -Seconds 60; Write-Output "Console1"')`
-👤 約10秒後に停止ボタンを押す
+### 3.1 Concurrent execution and operating in another console
+🤖 `execute_command('Start-Sleep -Seconds 60; Write-Output "Console1"')`
+👤 Press the stop button after about 10 seconds
 
-🤖 `invoke_expression('Write-Output "Console2"')`
-✅ 新しいコンソールが起動し、"Console2" が返る
-✅ レスポンスに Console1 の busy ステータスが含まれる
-
-🤖 `wait_for_completion(timeout_seconds=90)`
-✅ Console1 の結果 "Console1" が返る
-
-### 3.2 複数の busy コンソール
-🤖 コンソール1: `invoke_expression('Start-Sleep -Seconds 60; Write-Output "A"')`
-👤 停止ボタンを押す
-
-🤖 コンソール2で: `invoke_expression('Start-Sleep -Seconds 30; Write-Output "B"')`
-👤 停止ボタンを押す
+🤖 `execute_command('Write-Output "Console2"')`
+✅ A new console launches and "Console2" is returned
+✅ The response includes Console1's busy status
 
 🤖 `wait_for_completion(timeout_seconds=90)`
-✅ 短い方(B)が先に完了し、結果が返る
+✅ Console1's result "Console1" is returned
+
+### 3.2 Multiple busy consoles
+🤖 Console 1: `execute_command('Start-Sleep -Seconds 60; Write-Output "A"')`
+👤 Press the stop button
+
+🤖 In console 2: `execute_command('Start-Sleep -Seconds 30; Write-Output "B"')`
+👤 Press the stop button
 
 🤖 `wait_for_completion(timeout_seconds=90)`
-✅ 残り(A)の結果が返る
+✅ The shorter one (B) completes first and its result is returned
+
+🤖 `wait_for_completion(timeout_seconds=90)`
+✅ The remaining result (A) is returned
 
 ---
 
-## 4. コンソール切り替え
+## 4. Console Switching
 
-### 4.1 ユーザー起動コンソールへの切り替え
-👤 別の pwsh ウィンドウで `Start-McpServer` を実行
+### 4.1 Switching to a user-launched console
+👤 Run `Start-McpServer` in another pwsh window
 
-🤖 `invoke_expression('Write-Output "Test"')`
-✅ "Console switched. Pipeline NOT executed" メッセージ
+🤖 `execute_command('Write-Output "Test"')`
+✅ "Console switched. Pipeline NOT executed" message
 
-🤖 `invoke_expression('Write-Output "Test"')`
-✅ 正常に実行される
+🤖 `execute_command('Write-Output "Test"')`
+✅ Executes normally
 
-### 4.2 busy コンソールからの切り替え
-🤖 `invoke_expression('Start-Sleep -Seconds 120; Write-Output "Slow"')`
-👤 約10秒後に停止ボタンを押す
+### 4.2 Switching away from a busy console
+🤖 `execute_command('Start-Sleep -Seconds 120; Write-Output "Slow"')`
+👤 Press the stop button after about 10 seconds
 
-👤 別の pwsh ウィンドウで `Start-McpServer` を実行
+👤 Run `Start-McpServer` in another pwsh window
 
-🤖 `invoke_expression('Write-Output "Fast"')`
-✅ ユーザー起動コンソールに切り替わり実行
+🤖 `execute_command('Write-Output "Fast"')`
+✅ Switches to the user-launched console and executes
 
 🤖 `wait_for_completion(timeout_seconds=150)`
-✅ 元のコンソールの結果 "Slow" が返る
+✅ The original console's result "Slow" is returned
 
-### 4.3 completed コンソールへの切り替え時のキャッシュ集約
-🤖 コンソールA: `invoke_expression('pause')`
-👤 停止ボタンを押す（コンソールA は busy）
+### 4.3 Cache aggregation when switching to a completed console
+🤖 Console A: `execute_command('pause')`
+👤 Press the stop button (console A is busy)
 
-🤖 コンソールB: `invoke_expression('pause')`
-👤 停止ボタンを押す（コンソールB は busy）
+🤖 Console B: `execute_command('pause')`
+👤 Press the stop button (console B is busy)
 
-👤 コンソールA の pause を完了させる（Enter キー）
-（コンソールA は completed、キャッシュあり）
+👤 Complete the pause in console A (press Enter)
+(Console A is now completed, with a cached result)
 
-🤖 `invoke_expression('Get-Date')`
-✅ コンソールA に切り替わる
-✅ **pause の結果（ステータス行）がレスポンスに含まれる**
-✅ "Console switched. Pipeline NOT executed" メッセージ
-✅ コンソールB の busy ステータスが表示される
+🤖 `execute_command('Get-Date')`
+✅ Switches to console A
+✅ **The pause result (status line) is included in the response**
+✅ "Console switched. Pipeline NOT executed" message
+✅ Console B's busy status is shown
 
-🤖 `invoke_expression('Get-Date')`
-✅ 正常に Get-Date が実行される
+🤖 `execute_command('Get-Date')`
+✅ Get-Date executes normally
 
 ---
 
-## 5. エッジケース
+## 5. Edge Cases
 
-### 5.1 コンソールの強制終了
-🤖 `invoke_expression('Start-Sleep -Seconds 60; Write-Output "Test"')`
-👤 停止ボタンを押す
-👤 PowerShell コンソールウィンドウを閉じる
+### 5.1 Force-closing a console
+🤖 `execute_command('Start-Sleep -Seconds 60; Write-Output "Test"')`
+👤 Press the stop button
+👤 Close the PowerShell console window
 
 🤖 `wait_for_completion(timeout_seconds=30)`
-✅ エラーにならない（dead pipe として処理される）
+✅ No error (handled as a dead pipe)
 
-### 5.2 二重キャッシュ消費の防止
-🤖 `invoke_expression('Start-Sleep -Seconds 30; Write-Output "Once"')`
-👤 停止ボタンを押す
+### 5.2 Preventing double cache consumption
+🤖 `execute_command('Start-Sleep -Seconds 30; Write-Output "Once"')`
+👤 Press the stop button
 
 🤖 `wait_for_completion(timeout_seconds=60)`
-✅ "Once" が返る
+✅ "Once" is returned
 
 🤖 `wait_for_completion(timeout_seconds=10)`
-✅ "No busy consoles to wait for." が返る（二重取得されない）
+✅ "No busy consoles to wait for." is returned (not consumed twice)
 
-### 5.3 複数 completed コンソールからのキャッシュ集約
-🤖 コンソールA: `invoke_expression('pause')`
-👤 停止ボタンを押す
+### 5.3 Cache aggregation from multiple completed consoles
+🤖 Console A: `execute_command('pause')`
+👤 Press the stop button
 
-🤖 コンソールB: `invoke_expression('pause')`
-👤 停止ボタンを押す
+🤖 Console B: `execute_command('pause')`
+👤 Press the stop button
 
-🤖 コンソールC: `invoke_expression('pause')`
-👤 停止ボタンを押す
+🤖 Console C: `execute_command('pause')`
+👤 Press the stop button
 
-👤 コンソールA, B, C すべての pause を完了させる
+👤 Complete the pause in all of consoles A, B, and C
 
 🤖 `get_current_location()`
-✅ 3つのコンソールの pause 結果がすべて表示される
-✅ 現在のロケーション情報が返る
+✅ The pause results from all three consoles are shown
+✅ The current location information is returned
 
 ---
 
-## 6. get_current_location との統合
+## 6. Integration with get_current_location
 
-### 6.1 get_current_location でのキャッシュ回収
-🤖 `invoke_expression('Start-Sleep -Seconds 20; Write-Output "BG"')`
-👤 停止ボタンを押す
+### 6.1 Cache retrieval via get_current_location
+🤖 `execute_command('Start-Sleep -Seconds 20; Write-Output "BG"')`
+👤 Press the stop button
 
-🤖 約25秒後に `get_current_location()`
-✅ "BG" の結果と現在のロケーションが返る
+🤖 After about 25 seconds, `get_current_location()`
+✅ The "BG" result and the current location are returned
 
-### 6.2 get_current_location での completed コンソールキャッシュ回収
-🤖 コンソールA: `invoke_expression('pause')`
-👤 停止ボタンを押す
+### 6.2 Retrieving a completed console's cache via get_current_location
+🤖 Console A: `execute_command('pause')`
+👤 Press the stop button
 
-🤖 コンソールB で作業（コンソールB がアクティブになる）
+🤖 Work in console B (console B becomes active)
 
-👤 コンソールA の pause を完了させる
+👤 Complete the pause in console A
 
 🤖 `get_current_location()`
-✅ コンソールA の pause 結果が表示される（DLL が自動集約）
-✅ 現在のロケーション情報が返る
+✅ Console A's pause result is shown (auto-aggregated by the DLL)
+✅ The current location information is returned
 
 ---
 
-## 実行順序の推奨
+## Recommended Execution Order
 
-1. 2.4 → 1.1 → 1.2 （基本動作）
-2. 2.2 → 2.3 （wait_for_completion の基本）
-3. 3.1 （複数コンソール）
-4. **4.3 （completed コンソールへの切り替え時のキャッシュ集約）** ← 重要
-5. 5.2 （二重消費防止）
-6. 5.3 → 6.2 （複数キャッシュ集約）
-7. 必要に応じて他のケース
+1. 2.4 → 1.1 → 1.2 (basic behavior)
+2. 2.2 → 2.3 (wait_for_completion basics)
+3. 3.1 (multiple consoles)
+4. **4.3 (cache aggregation when switching to a completed console)** ← important
+5. 5.2 (double-consumption prevention)
+6. 5.3 → 6.2 (multi-cache aggregation)
+7. Other cases as needed

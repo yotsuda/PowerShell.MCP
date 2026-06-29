@@ -348,7 +348,7 @@ File path(s) to process.
 
 - `-LineRange` + `-Pattern`/`-Contains` = AND condition.
 
-- To pass literal text containing `$`, backticks, or quotes to `-Contains`, use the `var1` parameter of `invoke_expression`: `Remove-LinesFromFile path -Contains $var1`
+- To pass literal text containing `$`, backticks, or quotes to `-Contains`, use the `var1` parameter of `execute_command`: `Remove-LinesFromFile path -Contains $var1`
 
 
 ## RELATED LINKS
