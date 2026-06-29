@@ -17,10 +17,23 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
-# Unreleased
+# Version: 1.12.0
+
+## New Features
+- **`cancel` tool** — sends Ctrl+C to the active console to interrupt a running native CLI (git/npm/ssh) or a runaway command, then returns it to a ready state.
+- **`close_console` tool** — terminates a session-owned console by PID; use it to abandon a console stuck on a host prompt that cannot be answered programmatically.
+- **`awaiting_input` status** — when a command hits an interactive PowerShell host prompt (`Read-Host`, a missing mandatory parameter, `Get-Credential`, a confirmation), the call now returns control immediately instead of wedging the console until the timeout. The command stays blocked so a human can still answer at the terminal.
+
+## Behavior Changes
+- **The `invoke_expression` MCP tool is renamed to `execute_command`.** The old name implied `Invoke-Expression` (which the tool never used — it runs `[scriptblock]::Create` + `& $sb`) and tripped AMSI / security heuristics. Behavior and the `pipeline` parameter are unchanged. **Migration:** if you pinned the tool in an MCP permission allowlist (e.g. `mcp__PowerShell__invoke_expression`), update it to `execute_command`.
 
 ## Improvements
-- **Atomic file edits now stage the temp file in the target file's own directory** instead of `%TEMP%` (#51). This keeps the `File.Replace` / `File.Move` swap a same-volume rename — eliminating the cross-volume "not same device" failure mode — and lets a newly created file inherit the destination directory's ACEs on any configuration. Affects `Add-LinesToFile`, `Update-LinesInFile`, `Update-MatchInFile`, and `Remove-LinesFromFile`.
+- **Proxy-exit detection latency cut from ~5s to ~100ms.** The console now learns its owning proxy has exited via a `Process.Exited` event instead of a slow liveness poll, so the "session disconnected" notice and the `#PID ____` title update almost immediately.
+- **Atomic file edits preserve volume and ACLs (#51).** `Add-LinesToFile`, `Update-LinesInFile`, `Update-MatchInFile`, and `Remove-LinesFromFile` now stage their temp file in the target file's own directory, keeping the swap a same-volume rename (eliminating the cross-volume "not same device" failure) and letting a newly created file inherit the destination directory's ACEs.
+
+## Internal
+- Completed the `execute_command` rename through the Named Pipe wire protocol, DTOs, and handlers (previously only the MCP tool surface was renamed).
+- Translated the remaining Japanese documentation and test names/comments to English.
 
 # Version: 1.11.0
 
