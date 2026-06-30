@@ -974,7 +974,14 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
             }
 
-            if (status.Status == PipeStatus.Busy)
+            // AwaitingInput is a sub-state of busy: the command is still
+            // running, just parked at a host prompt. Treat it like Busy so
+            // wait_for_completion polls it until the human answers (→ Completed,
+            // drained) or the timeout elapses — the same contract as a normal
+            // timed-out command. Without this, an awaiting-input console matched
+            // none of the status branches, so it was never added to busyPipes
+            // and wait_for_completion returned "No commands to wait for" at once.
+            if (status.Status == PipeStatus.Busy || status.Status == PipeStatus.AwaitingInput)
             {
                 if (status.Pid > 0) sessionManager.MarkPipeBusy(agentId, status.Pid);
                 // Only track MCP-initiated commands, not user commands

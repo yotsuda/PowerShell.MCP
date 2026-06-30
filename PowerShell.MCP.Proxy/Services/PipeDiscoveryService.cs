@@ -223,8 +223,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     completedOutput.AppendLine();
                 }
             }
-            else if (status.Status == PipeStatus.Busy)
+            else if (status.Status == PipeStatus.Busy || status.Status == PipeStatus.AwaitingInput)
             {
+                // AwaitingInput is a busy sub-state (a command parked at a host
+                // prompt). Surface it in the busy list so a wait_for_completion
+                // that times out still tells the AI the console is occupied
+                // (its StatusLine carries the answer-or-close_console guidance).
                 if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
                 busyStatusInfo.AppendLine(PipelineHelper.FormatBusyStatus(status.StatusLine, status.Pid, status.Pipeline, status.Duration ?? 0));
             }
