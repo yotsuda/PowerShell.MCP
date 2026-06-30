@@ -241,7 +241,7 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description(@"Send Ctrl+C to the active console to interrupt the command currently running there — a long-running/runaway pipeline, or a NATIVE CLI waiting on stdin (git, npm, ssh, etc.). This is the programmatic equivalent of a human pressing Ctrl+C. IMPORTANT: it does NOT cancel a PowerShell host prompt (Read-Host, a missing mandatory parameter, Get-Credential) — those are reported as 'awaiting_input', and the only recoveries are to let the user answer in the console or to close_console it. Targets the agent's active console directly — it does NOT route to a different console.")]
+    [Description(@"Interrupt the command currently running in the agent's active console. Stops a runaway/long-running PowerShell pipeline (Start-Sleep, a loop, a slow cmdlet) by stopping the running pipeline, AND sends Ctrl+C to break a native CLI that is looping or waiting on stdin (git, npm, ssh, ping, etc.). A command stuck in a non-cooperative blocking call (e.g. [Threading.Thread]::Sleep, a blocking socket/read) may NOT stop — use close_console for that. It also does NOT cancel a PowerShell host prompt (Read-Host, a missing mandatory parameter, Get-Credential) — those are reported as 'awaiting_input', recovered by answering at the console or close_console. Targets the agent's active console directly — it does NOT route to a different console.")]
     public static async Task<string> Cancel(
         IPowerShellService powerShellService,
         [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true.")]
@@ -263,7 +263,7 @@ public class PowerShellTools
         if (ack == null || ack.Status != "success")
             return Wrap($"Cancel request to console {GetConsoleName(pipeName)} failed or was not acknowledged. The console may have already finished or been closed.");
 
-        return Wrap($"✓ Sent Ctrl+C to console {GetConsoleName(pipeName)}. The running command was interrupted and the console should be back to ready. Call execute_command (or get_current_location) to continue and to drain any output the cancelled command produced.");
+        return Wrap($"✓ Interrupt sent to console {GetConsoleName(pipeName)} (Ctrl+C + pipeline stop). A running PowerShell pipeline or native CLI should now be stopped and the console back to ready; a command stuck in a non-cooperative blocking call may still be running (use close_console). Call execute_command (or get_current_location) to confirm and to drain any output the cancelled command produced.");
     }
 
     [McpServerTool]

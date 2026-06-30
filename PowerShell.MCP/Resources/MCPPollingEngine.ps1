@@ -6,6 +6,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     $global:McpTimer = New-Object System.Timers.Timer 100
     $global:McpTimer.AutoReset = $false
 
+    # Hand C# the home runspace and the poll timer (captured here on the home
+    # thread, where DefaultRunspace is the module's runspace). The cancel tool,
+    # which runs on a pipe-server background thread, uses these to stop a
+    # running PowerShell command and to re-arm the engine through the stop.
+    try { [PowerShell.MCP.Services.ConsoleControl]::RegisterEngine([System.Management.Automation.Runspaces.Runspace]::DefaultRunspace, $global:McpTimer) } catch {}
+
     # Trim PSReadLine history file if it exceeds 1MB to prevent input lag
     if ($IsWindows) {
         try {

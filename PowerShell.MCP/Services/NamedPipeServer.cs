@@ -622,8 +622,21 @@ public class NamedPipeServer : IDisposable
             if (name == "cancel")
             {
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
-                var ok = ConsoleControl.SendCtrlC();
-                var resp = JsonSerializer.Serialize(new { pid, status = ok ? "success" : "error" });
+                // Ctrl+C reaches NATIVE children (git/npm/ssh waiting on
+                // stdin); stopping the home runspace's running pipeline
+                // reaches a PowerShell command (Start-Sleep, a loop), which
+                // Ctrl+C cannot. Only stop the pipeline when a command is
+                // actually in-flight, so an idle housekeeping tick is never
+                // interrupted; then re-arm the poll timer as a safety net so
+                // the engine keeps ticking through the stop's unwind.
+                var ctrlC = ConsoleControl.SendCtrlC();
+                var stoppedPipeline = false;
+                if (ExecutionState.Status == "busy")
+                {
+                    stoppedPipeline = ConsoleControl.StopRunningPipeline();
+                    ConsoleControl.EnsurePollTimerArmed();
+                }
+                var resp = JsonSerializer.Serialize(new { pid, status = (ctrlC || stoppedPipeline) ? "success" : "error" });
                 await SendMessageAsync(pipeServer, resp, cancellationToken);
                 return;
             }
