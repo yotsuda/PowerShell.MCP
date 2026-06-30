@@ -26,6 +26,19 @@ public static class PipeStatus
     /// </summary>
     public static bool IsReady(string? status)
         => status == Standby || status == Completed;
+
+    /// <summary>
+    /// Returns true if a raw status string means the console is "busy" — a
+    /// command is still running, INCLUDING the <see cref="AwaitingInput"/>
+    /// sub-state (a command parked at a host prompt). Centralized (mirroring
+    /// <see cref="IsReady"/>) so every caller that waits on or tracks busy
+    /// consoles — wait_for_completion's poll set and the busy-status collector
+    /// — treats awaiting_input uniformly, and a future status value is handled
+    /// in one place instead of being silently dropped by a switch that forgot
+    /// the new case. Null / unknown is treated as not-busy.
+    /// </summary>
+    public static bool IsBusy(string? status)
+        => status == Busy || status == AwaitingInput;
 }
 
 /// <summary>
