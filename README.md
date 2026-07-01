@@ -116,7 +116,7 @@ PowerShell.MCP complements your existing MCP setup by providing a flexible, gene
 
 ## Architecture
 
-Four tools provide maximum flexibility with minimum complexity:
+Six tools provide maximum flexibility with minimum complexity:
 
 | Tool | Purpose |
 |------|---------|
@@ -124,6 +124,8 @@ Four tools provide maximum flexibility with minimum complexity:
 | `get_current_location` | Get current directory and available drives |
 | `execute_command` | Execute any PowerShell command or CLI tool |
 | `wait_for_completion` | Wait for long-running commands to complete |
+| `cancel` | Interrupt the command currently running in the console |
+| `close_console` | Close a console by PID (e.g. one paused at an interactive prompt) |
 
 ## Quick Start
 
@@ -449,7 +451,7 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 
 ## Limitations
 
-- **AI Command Cancellation**: Commands executed by AI cannot be cancelled with Ctrl+C. Close the console to stop.
+- **AI Command Cancellation**: AI can interrupt a running command with the `cancel` tool — it stops a runaway/long-running PowerShell pipeline and sends Ctrl+C to a native CLI. A command stuck in a non-interruptible blocking call, or a console paused at an interactive prompt, can't be stopped that way — abandon it with the `close_console` tool.
 - **User Command Privacy**: Commands you execute are not visible to AI assistants.
 - **CLI stderr**: Not captured by default. Use `$result = & command.exe 2>&1` to capture.
 - **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
