@@ -351,7 +351,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         IPipeDiscoveryService pipeDiscoveryService,
         [Description("The PowerShell command or pipeline to execute. Multi-line commands (if, loops, try-catch, etc.) are supported.")]
         string pipeline,
-        [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next tool call. Use 0 for commands requiring user interaction (e.g., pause, Read-Host).")]
+        [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next tool call. PowerShell host prompts (Read-Host, Get-Credential, a missing mandatory parameter) return control immediately as awaiting_input regardless of this value. Use 0 for native CLIs that wait on stdin (e.g., cmd /c pause, ssh, npm login) so the call returns at once instead of waiting out the timeout.")]
         int timeout_seconds = 170,
         [Description("Literal string value injected as $var1 in the pipeline, bypassing the PowerShell parser.")]
         string? var1 = null,
