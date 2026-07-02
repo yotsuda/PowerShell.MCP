@@ -453,7 +453,6 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 
 - **AI Command Cancellation**: AI can interrupt a running command with the `cancel` tool — it stops a runaway/long-running PowerShell pipeline and sends Ctrl+C to a native CLI. A command stuck in a non-interruptible blocking call, or a console paused at an interactive prompt, can't be stopped that way — abandon it with the `close_console` tool.
 - **User Command Privacy**: Commands you execute are not visible to AI assistants.
-- **CLI stderr**: Not captured by default. Use `$result = & command.exe 2>&1` to capture.
 - **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
 - **Command History**: AI-executed single-line commands are added to console history. Multi-line commands are intentionally excluded to avoid history bloat.
 

@@ -147,7 +147,7 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns current_location and other_drive_locations array. Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple execute_command commands in succession, calling once at the beginning is sufficient.")]
+    [Description("Retrieves the current location and all available drives (providers) from the PowerShell session. Returns a JSON document with a system section (OS, PowerShell version, host, user, culture, timezone) and an available_drives array (each drive's name, provider, root, and current path). Call this when you need to understand the current PowerShell context, as users may change location during the session. When executing multiple execute_command commands in succession, calling once at the beginning is sufficient.")]
     public static async Task<string> GetCurrentLocation(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
@@ -1096,7 +1096,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     [McpServerTool]
     [Description(@"Ensure a PowerShell console is available, or launch a new one. When reason is empty or omitted, reuses an existing standby console if one is available. When reason is provided, always launches a new console regardless of existing ones.
 
-📌 This is your primary tool for all command execution tasks: directory navigation, git operations, build/test commands, file system operations, process management, environment variable access, and any shell/terminal task. Sessions persist across calls (authentication, variables, modules stay active). Install any PowerShell Gallery module without admin privileges to extend capabilities (e.g., Az for Azure, AWS.Tools for AWS, Microsoft.Graph for M365).")]
+📌 Calling this first is optional — execute_command auto-starts or reuses a console as needed. Call it explicitly to pre-warm a console at a specific start_location, to show a startup banner, or (with reason) to force an additional console.")]
     public static async Task<string> StartConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
