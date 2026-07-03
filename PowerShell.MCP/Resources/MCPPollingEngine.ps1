@@ -144,6 +144,34 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     [switch]$Silent
                 )
 
+                # Pre-parse gate: parse the WHOLE input before any
+                # execution machinery spins up. PowerShell compiles the
+                # full string first anyway — [scriptblock]::Create below
+                # would throw the same ParseException before running a
+                # single statement, so execution was already
+                # all-or-nothing; this gate changes WHEN the error is
+                # caught, not WHETHER anything runs. Returning the raw
+                # ParseError[] lets Format-McpOutput tell the AI
+                # explicitly that the command was NOT executed and point
+                # at each error's line/column, instead of surfacing one
+                # flattened exception message.
+                $parseTokens = $null
+                $parseErrors = $null
+                [void][System.Management.Automation.Language.Parser]::ParseInput(
+                    $Command, [ref]$parseTokens, [ref]$parseErrors)
+                if ($parseErrors -and $parseErrors.Count -gt 0) {
+                    return @{
+                        PipelineItems = @()
+                        Information = @()
+                        Exception = @()
+                        ParseErrors = $parseErrors
+                        ConsoleOut = ''
+                        ConsoleErr = ''
+                        HostWrite = ''
+                        LastExitReport = 0
+                    }
+                }
+
                 # Snapshot $LASTEXITCODE BEFORE the pipeline so we can
                 # tell whether this invocation TOUCHED it (a native exe
                 # ran and updated the variable) vs inherited a stale
@@ -737,6 +765,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 # Calculate statistics.
                 $errorCount += $StreamResults.Exception.Count
+                # ParseErrors only exists on the pre-parse-gate return
+                # shape (see Invoke-CommandWithAllStreams); executed
+                # commands never carry the key.
+                $parseErrorCount = if ($StreamResults.ContainsKey('ParseErrors')) {
+                    $StreamResults.ParseErrors.Count
+                } else {
+                    0
+                }
+                $errorCount += $parseErrorCount
                 # warningCount accumulates as we walked PipelineItems above
                 # — Warning records arrive on stream 3 and merge into
                 # pipelineStream via 3>&1, so they're counted there.
@@ -776,7 +813,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                 # Generate status line
                 $statusIcon = if ($hasErrors) { "✗" } else { "✓" }
-                $statusText = if ($hasErrors) { "executed with errors" } else { "executed successfully" }
+                # Syntax errors get their own status text: "executed
+                # with errors" would leave the AI unsure whether some
+                # statements ran before the failure. NOT executed is
+                # the whole point of the pre-parse gate — say it.
+                $statusText = if ($parseErrorCount -gt 0) {
+                    "NOT executed (syntax error)"
+                } elseif ($hasErrors) {
+                    "executed with errors"
+                } else {
+                    "executed successfully"
+                }
                 $durationText = "{0:F2}s" -f $Duration
 
                 # Get window title (contains PID and name like "#12345 Cat")
@@ -810,6 +857,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # console writes follow as separate sections only when
                 # non-empty, so the simple-success path stays terse.
                 $sections = @()
+                # Syntax errors lead the response: nothing executed, so
+                # every other section is empty by construction and the
+                # AI's first read is the reason plus the exact
+                # line/column of each error.
+                if ($parseErrorCount -gt 0) {
+                    $sections += "=== SYNTAX ERRORS (command was NOT executed) ==="
+                    foreach ($pe in $StreamResults.ParseErrors) {
+                        $sections += "Line $($pe.Extent.StartLineNumber), Col $($pe.Extent.StartColumnNumber): $($pe.Message) [$($pe.ErrorId)]"
+                    }
+                    $sections += ""
+                }
                 if ($pipelineText) {
                     $sections += $pipelineText
                     $sections += ""
@@ -934,6 +992,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             } else {
                                 Write-Host $ex.ToString() -ForegroundColor Red
                             }
+                        }
+                    }
+
+                    # Render parse errors on the visible console the way
+                    # an interactive session would: the mistyped command
+                    # is already echoed above, its parse errors follow
+                    # in red, and nothing executed. The echo is kept
+                    # deliberately — the console must show what the AI
+                    # attempted, including its failures.
+                    if ($streamResults.ContainsKey('ParseErrors') -and $streamResults.ParseErrors.Count -gt 0) {
+                        foreach ($pe in $streamResults.ParseErrors) {
+                            Write-Host "ParserError (Line $($pe.Extent.StartLineNumber), Col $($pe.Extent.StartColumnNumber)): $($pe.Message)" -ForegroundColor Red
                         }
                     }
 
