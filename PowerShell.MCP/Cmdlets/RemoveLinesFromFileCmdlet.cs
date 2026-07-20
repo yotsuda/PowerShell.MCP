@@ -193,7 +193,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     if (fileInfoObj.Length == 0)
                     {
                         WriteWarning("File is empty. Nothing to remove.");
-                        if (tempFile != null) File.Delete(tempFile);
+                        TextFileUtility.TryDeleteQuietly(tempFile);
                         continue;
                     }
 
@@ -395,7 +395,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                     if (linesRemoved == 0)
                     {
                         WriteWarning("No lines matched. File not modified.");
-                        if (tempFile != null) File.Delete(tempFile);
+                        TextFileUtility.TryDeleteQuietly(tempFile);
                         continue;
                     }
 
@@ -416,10 +416,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 }
                 catch
                 {
-                    if (tempFile != null && File.Exists(tempFile))
-                    {
-                        File.Delete(tempFile);
-                    }
+                    TextFileUtility.TryDeleteQuietly(tempFile);
                     throw;
                 }
             }
@@ -608,7 +605,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             }
             catch
             {
-                if (File.Exists(tempFile)) File.Delete(tempFile);
+                TextFileUtility.TryDeleteQuietly(tempFile);
                 throw;
             }
         }
@@ -647,7 +644,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             if (fileInfoObj.Length == 0)
             {
                 WriteWarning("File is empty. Nothing to remove.");
-                if (tempFile != null) File.Delete(tempFile);
+                TextFileUtility.TryDeleteQuietly(tempFile);
                 return;
             }
 
@@ -712,7 +709,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             if (linesRemoved == 0)
             {
                 WriteWarning("File has no lines to remove.");
-                if (tempFile != null) File.Delete(tempFile);
+                TextFileUtility.TryDeleteQuietly(tempFile);
                 return;
             }
 
@@ -768,10 +765,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
         }
         catch
         {
-            if (tempFile != null && File.Exists(tempFile))
-            {
-                File.Delete(tempFile);
-            }
+            TextFileUtility.TryDeleteQuietly(tempFile);
             throw;
         }
     }

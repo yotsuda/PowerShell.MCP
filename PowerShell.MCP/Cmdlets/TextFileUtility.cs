@@ -176,6 +176,15 @@ public static class TextFileUtility
     }
 
     /// <summary>
+    /// Removes a temp file we created, ignoring failures. Use for cleanup on paths that are
+    /// already reporting another outcome, so cleanup can never mask the real result.
+    /// </summary>
+    public static void TryDeleteQuietly(string? path)
+    {
+        FileOperationHelper.TryDeleteQuietly(path);
+    }
+
+    /// <summary>
     /// Joins a string[] LineRange parameter into a single string for parsing.
     /// Supports: -LineRange 5  |  -LineRange 10,20  |  -LineRange 10-20  |  -LineRange '10-20'
     /// </summary>

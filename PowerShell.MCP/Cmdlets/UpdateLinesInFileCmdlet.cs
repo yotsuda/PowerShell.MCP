@@ -264,10 +264,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
         }
         catch
         {
-            if (File.Exists(tempFile))
-            {
-                File.Delete(tempFile);
-            }
+            TextFileUtility.TryDeleteQuietly(tempFile);
             throw;
         }
     }

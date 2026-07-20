@@ -209,7 +209,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 {
                     WriteObject(AnsiColors.Info($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made"));
                 }
-                if (tempFile != null) File.Delete(tempFile);
+                TextFileUtility.TryDeleteQuietly(tempFile);
                 return;
             }
 
@@ -394,7 +394,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                 {
                     WriteObject(AnsiColors.Info($"{GetDisplayPath(originalPath, resolvedPath)}: 0 replacement(s) made"));
                 }
-                if (tempFile != null) File.Delete(tempFile);
+                TextFileUtility.TryDeleteQuietly(tempFile);
                 return;
             }
 
@@ -415,10 +415,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         }
         catch
         {
-            if (tempFile != null && File.Exists(tempFile))
-            {
-                File.Delete(tempFile);
-            }
+            TextFileUtility.TryDeleteQuietly(tempFile);
             throw;
         }
     }
@@ -592,7 +589,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             }
             catch
             {
-                if (File.Exists(tempFile)) File.Delete(tempFile);
+                TextFileUtility.TryDeleteQuietly(tempFile);
                 throw;
             }
         }

@@ -648,7 +648,9 @@ public class TextFileUtilityTests
         var tempFile = Path.GetTempFileName();
         File.WriteAllText(targetFile, "original");
         File.WriteAllText(tempFile, "new");
-        var backupTemp = targetFile + ".tmp";
+
+        var dir = Path.GetDirectoryName(Path.GetFullPath(targetFile))!;
+        var backupPattern = $".{Path.GetFileName(targetFile)}.*.bak";
 
         try
         {
@@ -656,7 +658,9 @@ public class TextFileUtilityTests
             TextFileUtility.ReplaceFileAtomic(targetFile, tempFile);
 
             // Assert
-            Assert.False(File.Exists(backupTemp)); // Temporary backup should be deleted
+            Assert.Empty(Directory.GetFiles(dir, backupPattern)); // scratch backup is deleted
+            Assert.False(File.Exists(targetFile + ".tmp"));       // and no longer uses a fixed name
+            Assert.Equal("new", File.ReadAllText(targetFile));
         }
         finally
         {
@@ -664,8 +668,57 @@ public class TextFileUtilityTests
                 File.Delete(targetFile);
             if (File.Exists(tempFile))
                 File.Delete(tempFile);
-            if (File.Exists(backupTemp))
-                File.Delete(backupTemp);
+            foreach (var leftover in Directory.GetFiles(dir, backupPattern))
+                File.Delete(leftover);
+        }
+    }
+
+    [Fact]
+    public void ReplaceFileAtomic_WhenTargetIsLocked_ReportsPathsAndLeavesFileIntact()
+    {
+        // File.Replace's lock semantics (ERROR_UNABLE_TO_MOVE_REPLACEMENT) are Windows-specific;
+        // on Unix the rename succeeds regardless of open handles, so there is nothing to assert.
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        // Arrange — a holder that denies sharing stands in for the antivirus scan / indexer /
+        // editor that made #55 fail after the preview was already printed.
+        var targetFile = Path.GetTempFileName();
+        var tempFile = Path.GetTempFileName();
+        File.WriteAllText(targetFile, "original");
+        File.WriteAllText(tempFile, "new");
+
+        var dir = Path.GetDirectoryName(Path.GetFullPath(targetFile))!;
+        var backupPattern = $".{Path.GetFileName(targetFile)}.*.bak";
+
+        try
+        {
+            IOException ex;
+            using (new FileStream(targetFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                // Act
+                ex = Assert.Throws<IOException>(() => TextFileUtility.ReplaceFileAtomic(targetFile, tempFile));
+            }
+
+            // Assert — the error must name the paths, not just the bare .NET sentence.
+            Assert.Contains(targetFile, ex.Message);
+            Assert.Contains(tempFile, ex.Message);
+            Assert.Contains("Win32 error", ex.Message);
+            Assert.NotNull(ex.InnerException);
+
+            // The target keeps its original content, and nothing is left behind to make the
+            // next edit of this file fail the same way.
+            Assert.Equal("original", File.ReadAllText(targetFile));
+            Assert.Empty(Directory.GetFiles(dir, backupPattern));
+        }
+        finally
+        {
+            if (File.Exists(targetFile))
+                File.Delete(targetFile);
+            if (File.Exists(tempFile))
+                File.Delete(tempFile);
+            foreach (var leftover in Directory.GetFiles(dir, backupPattern))
+                File.Delete(leftover);
         }
     }
 
