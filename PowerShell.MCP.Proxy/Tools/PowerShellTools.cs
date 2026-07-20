@@ -267,8 +267,9 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description(@"Forcibly close (kill) a PowerShell console by its PID. Use to abandon a console paused at an interactive prompt (see the awaiting-input notice) or stuck on a runaway command. The PID is the number shown in tool output as '#<pid> <name>'. Only consoles owned by this session can be closed. The next command auto-starts a fresh console.")]
-    public static Task<string> CloseConsole(
+    [Description(@"Forcibly close (kill) a PowerShell console by its PID. Use to abandon a console paused at an interactive prompt (see the awaiting-input notice) or stuck on a runaway command. The PID is the number shown in tool output as '#<pid> <name>'. Only consoles owned by this session can be closed. Any undrained output the console still holds from an already-finished command — including on a busy console that is running a new command while an earlier result sits uncollected — is harvested and returned in this response before the console is killed. The next command auto-starts a fresh console.")]
+    public static async Task<string> CloseConsole(
+        IPowerShellService powerShellService,
         [Description("PID of the console to close (the number in '#<pid> <name>').")]
         int pid,
         [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true.")]
@@ -280,7 +281,7 @@ public class PowerShellTools
         var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
         string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
         if (resolveError != null)
-            return Task.FromResult(Wrap(resolveError));
+            return Wrap(resolveError);
 
         var sessionManager = ConsoleSessionManager.Instance;
 
@@ -295,7 +296,33 @@ public class PowerShellTools
         if (!ownedPids.Contains(pid))
         {
             var known = ownedPids.Count > 0 ? string.Join(", ", ownedPids.OrderBy(p => p)) : "none";
-            return Task.FromResult(Wrap($"PID {pid} is not a console owned by this session (owned: {known}). Refusing to close it."));
+            return Wrap($"PID {pid} is not a console owned by this session (owned: {known}). Refusing to close it.");
+        }
+
+        var pipeName = ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, agentId, pid);
+
+        // Before killing, harvest any undrained output the console is still
+        // holding, REGARDLESS of its current status. A console that finished a
+        // command while the AI wasn't listening parks the result in the DLL's
+        // local cache — and this is not limited to the "completed" status: a
+        // BUSY console (running a new command) can still be holding an earlier
+        // command's undrained output, because ExecutionState.Status reports
+        // "busy" and masks the pending cache. consume_output only pulls
+        // already-cached completed results — it never touches the running
+        // command and returns empty when there is nothing — so it is safe in
+        // every state. Killing without this would silently discard that output.
+        // Best-effort: a console mid-teardown or an unreachable pipe must never
+        // block the close, so any failure here just proceeds to kill.
+        string? drainedOutput = null;
+        try
+        {
+            var output = await powerShellService.ConsumeOutputFromPipeAsync(pipeName, cancellationToken);
+            if (!string.IsNullOrEmpty(output))
+                drainedOutput = output;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[WARN] CloseConsole drain for #{pid} failed: {ex.Message}");
         }
 
         try
@@ -308,13 +335,19 @@ public class PowerShellTools
         }
         catch (Exception ex)
         {
-            return Task.FromResult(Wrap($"Failed to close console #{pid}: {ex.Message}"));
+            return Wrap($"Failed to close console #{pid}: {ex.Message}");
         }
 
-        var pipeName = ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, agentId, pid);
         sessionManager.ClearDeadPipe(agentId, pipeName);
 
-        return Task.FromResult(Wrap($"✓ Closed console #{pid}. The next command will auto-start a fresh console."));
+        var closeResponse = new StringBuilder();
+        if (!string.IsNullOrEmpty(drainedOutput))
+        {
+            closeResponse.AppendLine(drainedOutput);
+            closeResponse.AppendLine();
+        }
+        closeResponse.Append($"✓ Closed console #{pid}. The next command will auto-start a fresh console.");
+        return Wrap(closeResponse.ToString());
     }
 
     [McpServerTool]
