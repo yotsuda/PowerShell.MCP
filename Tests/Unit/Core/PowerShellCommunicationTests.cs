@@ -26,47 +26,68 @@ public class PowerShellCommunicationTests
     }
 
     [Fact]
-    public async Task WaitForResult_IsSatisfiedByCompletion()
+    public void WaitForResult_IsSatisfiedByCompletion()
     {
         PowerShellCommunication.ResetGenerationsForTests();
 
-        // A completion arrives shortly after the wait begins.
-        var notifier = Task.Run(() =>
-        {
-            Thread.Sleep(150);
-            PowerShellCommunication.NotifySilentResultReady("done");
-        });
-
-        // WaitForResult blocks the calling thread, so run it off the test thread.
-        var (isTimeout, _, _, _) = await Task.Run(() => PowerShellCommunication.WaitForResult(10));
-        await notifier;
+        // A completion arrives shortly after the wait begins; WaitForResult must
+        // wake on it well before the 10s timeout.
+        var (isTimeout, _, _, _) = WaitWhileSignaling(10,
+            () => PowerShellCommunication.NotifySilentResultReady("done"));
 
         Assert.False(isTimeout);
         ExecutionState.ConsumeCachedOutputs(); // clear what the notify cached
     }
 
     [Fact]
-    public async Task WaitForResult_SignalAwaitingInput_ReturnsAwaitingImmediately()
+    public void WaitForResult_SignalAwaitingInput_ReturnsAwaitingImmediately()
     {
         PowerShellCommunication.ResetGenerationsForTests();
 
-        // The command reaches an interactive prompt shortly after the wait begins.
-        var signaler = Task.Run(() =>
-        {
-            Thread.Sleep(150);
-            PowerShellCommunication.SignalAwaitingInput("Read-Host");
-        });
-
-        // WaitForResult must wake on the signal (well before the 10s timeout)
-        // and report awaitingInput with the prompt text — not isTimeout.
-        var (isTimeout, _, awaitingInput, promptText) = await Task.Run(() => PowerShellCommunication.WaitForResult(10));
-        await signaler;
+        // The command reaches an interactive prompt shortly after the wait begins;
+        // WaitForResult must wake on the signal and report awaitingInput with the
+        // prompt text — not isTimeout.
+        var (isTimeout, _, awaitingInput, promptText) = WaitWhileSignaling(10,
+            () => PowerShellCommunication.SignalAwaitingInput("Read-Host"));
 
         Assert.False(isTimeout);
         Assert.True(awaitingInput);
         Assert.Equal("Read-Host", promptText);
 
         PowerShellCommunication.ClearAwaitingInput();
+    }
+
+    /// <summary>
+    /// Runs WaitForResult on a DEDICATED thread and fires <paramref name="signal"/>
+    /// from the (dedicated) test thread after a short head-start, then returns the
+    /// wait's result. Both sides deliberately stay off the thread pool: the wait
+    /// blocks a thread for up to the timeout, and under a saturated pool — the
+    /// default net8.0+net9.0 concurrent run, or CI's parallel jobs — a pool-
+    /// scheduled signaler could be injected too late and the wait would time out
+    /// spuriously. That thread-pool starvation, not any product bug, is what made
+    /// these tests flaky. `new Thread` and the xUnit test thread are scheduled by
+    /// the OS, so neither is subject to the pool's slow thread injection. The
+    /// head-start lets the waiter enter the wait (and bump the generation counter)
+    /// before the signal, preserving the original wait-then-signal ordering.
+    /// </summary>
+    private static (bool isTimeout, bool shouldCache, bool awaitingInput, string? promptText)
+        WaitWhileSignaling(int timeoutSeconds, Action signal)
+    {
+        (bool isTimeout, bool shouldCache, bool awaitingInput, string? promptText) captured = default;
+        var waiter = new Thread(() =>
+        {
+            var r = PowerShellCommunication.WaitForResult(timeoutSeconds);
+            captured = (r.isTimeout, r.shouldCache, r.awaitingInput, r.promptText);
+        })
+        { IsBackground = true, Name = "WaitForResult-under-test" };
+        waiter.Start();
+
+        Thread.Sleep(150);
+        signal();
+
+        Assert.True(waiter.Join(TimeSpan.FromSeconds(timeoutSeconds + 5)),
+            "WaitForResult did not return after the signal.");
+        return captured; // waiter.Join happens-before this read, so captured is visible
     }
 
     [Fact]
