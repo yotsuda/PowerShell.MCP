@@ -64,6 +64,44 @@ if (-not (Test-Path Variable:global:McpTimer)) {
         $env:DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION = '1'
     }
 
+    # ===== Standby-console idle auto-reap config =====
+    # An OWNED standby console that neither the AI nor the user touches for
+    # $McpReapWarnSec seconds warns, then closes itself $McpReapGraceSec later
+    # unless used in the meantime. The most-recently-active console of a session
+    # is the "keeper" and never reaps, so exactly one survivor always remains.
+    # Set POWERSHELL_MCP_STANDBY_REAP_MINUTES=0 to disable entirely.
+    $reapMins = 10
+    if ($env:POWERSHELL_MCP_STANDBY_REAP_MINUTES) {
+        $parsedMins = 0
+        if ([int]::TryParse($env:POWERSHELL_MCP_STANDBY_REAP_MINUTES, [ref]$parsedMins) -and $parsedMins -ge 0) { $reapMins = $parsedMins }
+    }
+    $global:McpReapWarnSec = $reapMins * 60
+    $reapGrace = 60
+    if ($env:POWERSHELL_MCP_STANDBY_REAP_GRACE_SECONDS) {
+        $parsedGrace = 0
+        if ([int]::TryParse($env:POWERSHELL_MCP_STANDBY_REAP_GRACE_SECONDS, [ref]$parsedGrace) -and $parsedGrace -gt 0) { $reapGrace = $parsedGrace }
+    }
+    $global:McpReapGraceSec = $reapGrace
+    $global:McpNextReapCheck = [int64]0
+
+    # Count the user's own interactive commands as activity so a console the
+    # human is actively using is protected from reaping (it can even become the
+    # keeper). PowerShell calls prompt after each REPL command completes; AI
+    # commands run via the timer event, not the REPL, so they never hit this.
+    # Chain any pre-existing prompt so we don't clobber the user's.
+    if (-not $global:McpPromptChained) {
+        $global:McpPromptChained = $true
+        $global:McpPriorPrompt = $function:prompt
+        function global:prompt {
+            # McpActivityHook — sentinel: the reap loop re-installs this wrapper if
+            # the user later replaces global:prompt. Matching on this string is what
+            # stops it from re-wrapping (and thus infinitely self-chaining) our own.
+            try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch {}
+            if ($global:McpPriorPrompt) { & $global:McpPriorPrompt }
+            else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
+        }
+    }
+
     Register-ObjectEvent `
         -InputObject    $global:McpTimer `
         -EventName      Elapsed `
@@ -100,6 +138,104 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     [Console]::WriteLine()
                     try { $p = & { prompt }; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
                 }
+            }
+
+            # ===== Idle standby auto-reap =====
+            # Close an OWNED standby console that neither the AI nor the user has
+            # used for a while, keeping only the most-recently-active one alive.
+            # Every decision is local — a shared per-session marker directory is
+            # the only channel, no proxy round-trip — and the proxy rediscovers a
+            # closed console as a dead pipe and self-heals (same path as a killed
+            # console). Guarded so a fault here never wedges the engine tick.
+            # Throttle to ~every 2s: the tick is 100ms, but reap involves a
+            # directory read and the grace is measured in tens of seconds, so
+            # there is no reason to evaluate (or re-scan the marker dir) 10x/s —
+            # a long-lived keeper would otherwise poll the disk forever.
+            if ($global:McpReapWarnSec -gt 0 -and [Environment]::TickCount64 -ge [int64]$global:McpNextReapCheck) {
+                $global:McpNextReapCheck = [Environment]::TickCount64 + 2000
+                try {
+                    # Re-arm the interactive activity hook if global:prompt was
+                    # replaced after we first wrapped it (user redefined it, or a
+                    # profile / module loaded later). Without this, their typed
+                    # commands stop counting as activity and a console the human is
+                    # using could reap. The sentinel match guarantees we never
+                    # re-wrap our own wrapper — which would point McpPriorPrompt at
+                    # itself and self-recurse on the next prompt render.
+                    try {
+                        $curPrompt = $function:prompt
+                        if (-not $curPrompt -or ($curPrompt.ToString() -notmatch 'McpActivityHook')) {
+                            $global:McpPriorPrompt = $curPrompt
+                            function global:prompt {
+                                # McpActivityHook
+                                try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch {}
+                                if ($global:McpPriorPrompt) { & $global:McpPriorPrompt }
+                                else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
+                            }
+                        }
+                    } catch {}
+
+                    $rsAvail   = [PowerShell.MCP.Services.ExecutionState]::IsRunspaceAvailable
+                    $isStandby = [PowerShell.MCP.Services.ExecutionState]::Status -eq 'standby'
+
+                    # Text already typed at the prompt counts as "in use": the human
+                    # is mid-interaction even before pressing Enter. Checked on every
+                    # reap tick (not only during grace) so an actively typing user
+                    # never even sees the warning — honoring its own "just start
+                    # typing to keep it open" promise. A console left with stale
+                    # typed text therefore won't reap; that leans the same way as
+                    # every other guard here — toward keeping a console the user
+                    # touched. Only meaningful at an idle prompt, so gate on standby.
+                    if ($rsAvail -and $isStandby) {
+                        $rlLine = $null; $rlCur = $null
+                        try { [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$rlLine, [ref]$rlCur) } catch {}
+                        if ($rlLine) { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() }
+                    }
+
+                    $reapAct = [PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby)
+                    if ($reapAct -eq [PowerShell.MCP.Services.ReapAction]::Warn) {
+                        [Console]::WriteLine()
+                        Write-Host "⚠ This console has been idle and will close in $($global:McpReapGraceSec)s without use. Run any command (or just start typing) to keep it open." -ForegroundColor Yellow
+                        # Reprint via the PRIOR prompt, NOT the RecordActivity-wrapped
+                        # global one — invoking our wrapper here would stamp activity
+                        # and cancel the very close we just warned about.
+                        try {
+                            $p = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $((Get-Location).Path)> " }
+                            # Reprint the prompt exactly as produced — don't assume
+                            # it ends in '>'. A custom prompt like '❯ ' would be
+                            # mangled by trimming and re-appending '> '. Join in case
+                            # the prompt function returns multiple objects.
+                            [Console]::Write(($p -join ''))
+                        } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
+                    }
+                    elseif ($reapAct -eq [PowerShell.MCP.Services.ReapAction]::Close) {
+                        # Give the farewell line a moment to render before the
+                        # window vanishes — Exit(0) is otherwise instant and the
+                        # message is never seen. We are exiting anyway, so briefly
+                        # blocking the tick here is harmless.
+                        try { [Console]::WriteLine(); Write-Host 'Closing idle console.' -ForegroundColor DarkGray } catch {}
+                        try { [System.Threading.Thread]::Sleep(1000) } catch {}
+                        # A request can land on the pipe thread during that 1s
+                        # render — the request path stamps activity and flips the
+                        # console out of standby. Re-check before the point of no
+                        # return so we never Exit on top of an in-flight command;
+                        # if anything arrived, abort and re-arm. The marker is
+                        # dropped only here, once committed, so an abort leaves us
+                        # still in the group.
+                        $stillReapable = $false
+                        try {
+                            $stillReapable = [PowerShell.MCP.Services.ExecutionState]::IsRunspaceAvailable -and
+                                ([PowerShell.MCP.Services.ExecutionState]::Status -eq 'standby') -and
+                                ([PowerShell.MCP.Services.ConsoleLiveness]::IdleSeconds -ge 2)
+                        } catch {}
+                        if ($stillReapable) {
+                            [PowerShell.MCP.Services.ConsoleLiveness]::DeleteOwnMarker()
+                            [Environment]::Exit(0)
+                        }
+                        else {
+                            [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity()
+                        }
+                    }
+                } catch {}
             }
 
             # ===== Helper Functions (Defined within Action Block) =====
@@ -330,6 +466,14 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     if ($null -ne $origExternalUI -and $null -ne $externalUIField) {
                         try { $externalUIField.SetValue($uiSwapper, $origExternalUI) } catch { }
                     }
+                    # Stamp COMPLETION as activity, not just dispatch. The request
+                    # side stamps when the command arrives; without this a command
+                    # that ran for longer than the reap threshold would count as
+                    # idle for its entire runtime and become reapable the instant
+                    # it finished. AI commands never reach the prompt hook (they
+                    # run here, on the timer, not through the REPL), so this is
+                    # their only completion signal.
+                    try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch { }
                 }
 
                 # Deduplicate errors in the chronological stream.

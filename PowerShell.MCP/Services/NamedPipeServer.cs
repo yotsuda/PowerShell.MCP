@@ -488,6 +488,14 @@ public class NamedPipeServer : IDisposable
 
             var name = requestRoot.GetProperty("name").GetString();
 
+            // Record liveness activity for requests that deliberately target
+            // THIS console (run a command, read its location, cancel it). NOT
+            // get_status / consume_output — those are the proxy's discovery
+            // probes that hit every sibling, so counting them would keep an
+            // idle standby console alive forever and defeat auto-reaping.
+            if (name is "execute_command" or "get_current_location" or "cancel")
+                ConsoleLiveness.RecordActivity();
+
             // Handle get_status request FIRST - returns immediately without using main runspace
             // Must be before version check because version check uses ExecuteSilentCommand which requires main runspace
             if (name == "get_status")

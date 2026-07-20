@@ -153,6 +153,10 @@ namespace PowerShell.MCP
                 if (proxyPid.HasValue)
                 {
                     WatchProxyExit(proxyPid.Value);
+                    // Publish this owned console's liveness marker so idle
+                    // standby siblings can elect a single survivor and reap
+                    // themselves. Unowned consoles never participate.
+                    ConsoleLiveness.SetOwned(proxyPid.Value, agentId);
                 }
             }
             catch (Exception ex)
@@ -277,6 +281,9 @@ namespace PowerShell.MCP
 
                     // Arm event-driven disconnect detection for the new owner.
                     WatchProxyExit(proxyPid);
+                    // (Re)publish this console's liveness marker for the new
+                    // owner — a reclaimed console rejoins reaping fresh.
+                    ConsoleLiveness.SetOwned(proxyPid, agentId);
 
                     return _namedPipeServer.PipeName;
                 }
@@ -315,6 +322,11 @@ namespace PowerShell.MCP
 
                     // Proxy is gone — release its process handle and stop watching.
                     StopWatchingProxyExitInternal();
+
+                    // Drop this console's liveness marker: once unowned it must
+                    // not participate in idle-standby reaping (and a stale
+                    // marker must not linger for the group).
+                    ConsoleLiveness.SetUnowned();
 
                     // Create new server without proxy PID (unowned: 2-segment pipe name)
                     _namedPipeServer = new NamedPipeServer(null);
