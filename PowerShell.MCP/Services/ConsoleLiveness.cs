@@ -151,16 +151,29 @@ public static class ConsoleLiveness
 
     /// <summary>
     /// Decides whether this idle standby console should warn or close itself.
-    /// Only an OWNED, idle, genuinely-standby console that is NOT its group's
-    /// most-recently-active member is ever reaped. Returns <see cref="ReapAction.Close"/>
-    /// only after the warning has been shown and the grace has elapsed with no
-    /// intervening activity.
+    /// Only an OWNED, idle, genuinely-standby console with nothing typed at its
+    /// prompt that is NOT its group's most-recently-active member is ever reaped.
+    /// Returns <see cref="ReapAction.Close"/> only after the warning has been
+    /// shown and the grace has elapsed with no intervening activity.
+    ///
+    /// <para>Survivors are therefore the keeper PLUS any console the user has left
+    /// text in — not exactly one. That is intentional: the keeper rule alone could
+    /// not protect a console the human is mid-typing in without letting it steal
+    /// keeper from the console the AI is actually using.</para>
     /// </summary>
     /// <param name="warnSeconds">Idle seconds before warning (0 disables reaping).</param>
     /// <param name="graceSeconds">Seconds after the warning before closing.</param>
     /// <param name="runspaceAvailable"><c>ExecutionState.IsRunspaceAvailable</c> — false while a user command runs.</param>
     /// <param name="statusStandby">True when <c>ExecutionState.Status == "standby"</c> (not busy, no undrained output).</param>
-    public static ReapAction EvaluateReap(int warnSeconds, int graceSeconds, bool runspaceAvailable, bool statusStandby)
+    /// <param name="typedTextPresent">
+    /// True when the user has text sitting at the prompt, unsubmitted. This is a
+    /// LOCAL veto only: it keeps this console alive without touching the marker,
+    /// so a half-typed line can no longer win the keeper election and reap every
+    /// sibling — including the console the AI is actively working in. Contrast
+    /// with <see cref="RecordActivity"/>, which both resets idle AND re-stamps
+    /// the marker; the buffer check deliberately wants the former, not the latter.
+    /// </param>
+    public static ReapAction EvaluateReap(int warnSeconds, int graceSeconds, bool runspaceAvailable, bool statusStandby, bool typedTextPresent = false)
     {
         if (warnSeconds <= 0) { lock (_lock) { _warned = false; } return ReapAction.None; }
 
@@ -169,8 +182,9 @@ public static class ConsoleLiveness
 
         // Only reap an owned console that is idle AND truly standby: a running
         // user command (runspace unavailable), a busy AI pipeline, awaiting
-        // input, or undrained completed output all keep it alive.
-        if (!owned || !runspaceAvailable || !statusStandby)
+        // input, undrained completed output, or text half-typed at the prompt
+        // all keep it alive.
+        if (!owned || !runspaceAvailable || !statusStandby || typedTextPresent)
         {
             lock (_lock) { _warned = false; }
             return ReapAction.None;

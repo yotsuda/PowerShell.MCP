@@ -143,6 +143,67 @@ public class ConsoleLivenessTests : IDisposable
         Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, runspaceAvailable: true, statusStandby: true));
     }
 
+    [Fact]
+    public void Reap_None_WhenTypedTextPresent()
+    {
+        // A console the user is mid-typing in stays open even though it is idle,
+        // standby, and out-ranked by a newer sibling.
+        Own();
+        MakeReapableByNewerSibling();
+        Advance(Warn + Grace + 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
+    }
+
+    [Fact]
+    public void Reap_TypedTextVetoesWithoutCountingAsActivity()
+    {
+        // Regression for the keeper-theft bug: the buffer check used to call
+        // RecordActivity, which ALSO re-stamped the marker on every ~2s tick. A
+        // console left with a half-typed line therefore became the permanent
+        // keeper and reaped every sibling — including the console the AI was
+        // actively working in. The veto must keep THIS console alive without
+        // making it look recently used.
+        Own();
+        MakeReapableByNewerSibling();
+        Advance(Warn + 5);
+
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
+        Assert.True(ConsoleLiveness.IdleSeconds >= Warn,
+            "typed text must not reset the idle clock — that is what would steal the keeper election");
+    }
+
+    [Fact]
+    public void Reap_ResumesOnceTypedTextIsCleared()
+    {
+        // The veto is a live condition, not a latch: clearing the line (Esc,
+        // Ctrl+C, backspace) makes the console reapable again on the next tick.
+        Own();
+        MakeReapableByNewerSibling();
+        Advance(Warn + 5);
+
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: false));
+    }
+
+    [Fact]
+    public void Reap_TypedTextDuringGraceCancelsClose()
+    {
+        // The warning's own promise — "just start typing to keep it open".
+        Own();
+        MakeReapableByNewerSibling();
+        Advance(Warn + 5);
+
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Assert.True(ConsoleLiveness.IsReapPending);
+
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
+        Assert.False(ConsoleLiveness.IsReapPending);
+
+        // Still held open well past what would have been the close deadline.
+        Advance(Grace + 1);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
+    }
+
     // ── The warn → grace → close state machine ───────────────────────────────
 
     [Fact]

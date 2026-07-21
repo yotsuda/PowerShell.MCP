@@ -11,38 +11,51 @@ if (-not $IsWindows) {
 
     function global:PSConsoleHostReadLine {
         $line = [System.Text.StringBuilder]::new()
-        while ($true) {
-            if ([Console]::KeyAvailable) {
-                $key = [Console]::ReadKey($true)
-                switch ($key.Key) {
-                    'Enter' {
-                        [Console]::WriteLine()
-                        return $line.ToString()
-                    }
-                    'Backspace' {
-                        if ($line.Length -gt 0) {
-                            $line.Length--
-                            [Console]::Write("`b `b")
+        # Publish the in-progress line so the idle-reap tick can tell that the user
+        # is mid-typing and keep this console open (#53). PSReadLine's GetBufferState
+        # serves that role on Windows, but PSReadLine is removed here — without this
+        # the reap tick sees an empty prompt and closes a console the user is
+        # actively typing in. StringBuilder is a reference type, so the engine
+        # observes edits live; cleared on exit so a submitted or cancelled line is
+        # not mistaken for text still pending at the prompt.
+        $global:McpTypedBuffer = $line
+        try {
+            while ($true) {
+                if ([Console]::KeyAvailable) {
+                    $key = [Console]::ReadKey($true)
+                    switch ($key.Key) {
+                        'Enter' {
+                            [Console]::WriteLine()
+                            return $line.ToString()
+                        }
+                        'Backspace' {
+                            if ($line.Length -gt 0) {
+                                $line.Length--
+                                [Console]::Write("`b `b")
+                            }
+                        }
+                        default {
+                            # Ctrl+C: cancel current line
+                            if ($key.Key -eq 'C' -and ($key.Modifiers -band [ConsoleModifiers]::Control)) {
+                                [Console]::WriteLine("^C")
+                                return ""
+                            }
+                            if ($key.KeyChar -ge ' ') {
+                                $line.Append($key.KeyChar) | Out-Null
+                                [Console]::Write($key.KeyChar)
+                            }
                         }
                     }
-                    default {
-                        # Ctrl+C: cancel current line
-                        if ($key.Key -eq 'C' -and ($key.Modifiers -band [ConsoleModifiers]::Control)) {
-                            [Console]::WriteLine("^C")
-                            return ""
-                        }
-                        if ($key.KeyChar -ge ' ') {
-                            $line.Append($key.KeyChar) | Out-Null
-                            [Console]::Write($key.KeyChar)
-                        }
-                    }
+                } else {
+                    # No input available - sleep briefly.
+                    # PowerShell processes the event queue between pipeline statements,
+                    # so the MCP timer action block can run during this Sleep.
+                    Start-Sleep -Milliseconds 50
                 }
-            } else {
-                # No input available - sleep briefly.
-                # PowerShell processes the event queue between pipeline statements,
-                # so the MCP timer action block can run during this Sleep.
-                Start-Sleep -Milliseconds 50
             }
+        }
+        finally {
+            $global:McpTypedBuffer = $null
         }
     }
 }

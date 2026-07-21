@@ -185,13 +185,31 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # typed text therefore won't reap; that leans the same way as
                     # every other guard here — toward keeping a console the user
                     # touched. Only meaningful at an idle prompt, so gate on standby.
+                    #
+                    # This is passed to EvaluateReap as a LOCAL veto rather than
+                    # recorded as activity. Stamping activity here would also
+                    # refresh the marker every 2s, making a half-typed console the
+                    # permanent keeper and reaping every sibling — including the
+                    # console the AI is actively working in. Protecting this console
+                    # must not de-protect the others.
+                    #
+                    # Two sources, because the readline in use differs by platform:
+                    # PSReadLine on Windows, and the psm1's polling replacement on
+                    # macOS/Linux (which publishes its in-progress StringBuilder as
+                    # $global:McpTypedBuffer). Checking both keeps this OS-agnostic.
+                    $typedText = $false
                     if ($rsAvail -and $isStandby) {
                         $rlLine = $null; $rlCur = $null
                         try { [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$rlLine, [ref]$rlCur) } catch {}
-                        if ($rlLine) { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() }
+                        if (-not [string]::IsNullOrEmpty($rlLine)) {
+                            $typedText = $true
+                        }
+                        elseif ($null -ne $global:McpTypedBuffer -and $global:McpTypedBuffer.Length -gt 0) {
+                            $typedText = $true
+                        }
                     }
 
-                    $reapAct = [PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby)
+                    $reapAct = [PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby, $typedText)
                     if ($reapAct -eq [PowerShell.MCP.Services.ReapAction]::Warn) {
                         [Console]::WriteLine()
                         Write-Host "⚠ This console has been idle and will close in $($global:McpReapGraceSec)s without use. Run any command (or just start typing) to keep it open." -ForegroundColor Yellow
