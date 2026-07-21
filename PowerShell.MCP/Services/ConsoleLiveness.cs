@@ -135,6 +135,54 @@ public static class ConsoleLiveness
     /// Marks this console unowned (released after a disconnect, or never
     /// owned): deletes its marker and takes it out of reaping entirely.
     /// </summary>
+    // ── Human-presence sampling (close_console's guard) ──────────────────────
+    // Only PowerShell can read the readline buffer; only C# is reachable from
+    // the pipe thread. These fields are the hand-off between them: the polling
+    // engine samples the buffer every ~2s and pushes the result here, and the
+    // pipe thread serves it to the proxy without needing the runspace — which
+    // matters because close_console's whole point is a console whose runspace
+    // may be wedged.
+    private static bool _typedTextPresent;
+    private static long _typedTextSampledAtTicks;
+
+    /// <summary>
+    /// Records whether the user has unsubmitted text sitting at the prompt.
+    /// Called from the polling engine's tick INDEPENDENTLY of whether auto-reap
+    /// is enabled: close_console's human-presence guard needs this sample even
+    /// when <c>POWERSHELL_MCP_STANDBY_REAP_MINUTES=0</c> switches reaping off.
+    /// </summary>
+    public static void SetTypedTextPresent(bool present)
+    {
+        lock (_lock)
+        {
+            _typedTextPresent = present;
+            _typedTextSampledAtTicks = NowTicks();
+        }
+    }
+
+    /// <summary>True when the most recent sample saw text half-typed at the prompt.</summary>
+    public static bool TypedTextPresent { get { lock (_lock) { return _typedTextPresent; } } }
+
+    /// <summary>
+    /// Age of the typed-text sample, or <see cref="double.MaxValue"/> when the
+    /// engine has never reported one. A consumer that cannot get a fresh sample
+    /// must treat presence as UNKNOWN and fail open (proceed with the close) —
+    /// close_console is the escape hatch for a wedged console and must never be
+    /// blocked by a detection failure. Note this is the opposite default from
+    /// <see cref="EvaluateReap"/>, which fails toward keeping a console alive.
+    /// </summary>
+    public static double TypedTextSampleAgeSeconds
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_typedTextSampledAtTicks == 0) return double.MaxValue;
+                return (NowTicks() - _typedTextSampledAtTicks) / (double)TimeSpan.TicksPerSecond;
+            }
+        }
+    }
+
     public static void SetUnowned()
     {
         string? path;
@@ -387,6 +435,8 @@ public static class ConsoleLiveness
             _markerPath = null;
             _warned = false;
             _warnedAtTicks = 0;
+            _typedTextPresent = false;
+            _typedTextSampledAtTicks = 0;
         }
         UtcNow = () => DateTime.UtcNow;
         lock (_lock) { _lastActivityTicks = NowTicks(); }

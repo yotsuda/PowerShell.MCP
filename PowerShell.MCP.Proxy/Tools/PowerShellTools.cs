@@ -267,7 +267,9 @@ public class PowerShellTools
     }
 
     [McpServerTool]
-    [Description(@"Forcibly close (kill) a PowerShell console by its PID. Use to abandon a console paused at an interactive prompt (see the awaiting-input notice) or stuck on a runaway command. The PID is the number shown in tool output as '#<pid> <name>'. Only consoles owned by this session can be closed. Any undrained output the console still holds from an already-finished command — including on a busy console that is running a new command while an earlier result sits uncollected — is harvested and returned in this response before the console is killed. The next command auto-starts a fresh console.")]
+    [Description(@"Forcibly close (kill) a PowerShell console by its PID. Use to abandon a console paused at an interactive prompt (see the awaiting-input notice) or stuck on a runaway command. The PID is the number shown in tool output as '#<pid> <name>'. Only consoles owned by this session can be closed. Any undrained output the console still holds from an already-finished command — including on a busy console that is running a new command while an earlier result sits uncollected — is harvested and returned in this response before the console is killed. The next command auto-starts a fresh console.
+
+If the target has unsubmitted text at its prompt, a human is typing in it: the first call REFUSES, closes nothing, and leaves its pending output untouched. Call close_console for the same pid again to close it anyway — the retry is the confirmation, so only repeat it if you actually intend to kill a console someone is using. A console that is merely awaiting_input (a program waiting on Read-Host, not a human mid-keystroke) closes on the first call as usual.")]
     public static async Task<string> CloseConsole(
         IPowerShellService powerShellService,
         [Description("PID of the console to close (the number in '#<pid> <name>').")]
@@ -300,6 +302,43 @@ public class PowerShellTools
         }
 
         var pipeName = ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, agentId, pid);
+
+        // Human-presence gate. Probe with get_status FIRST — it has no side
+        // effects, unlike the drain below, which consumes the console's cached
+        // output. Draining before a possible refusal would swallow that output
+        // on a console we then leave alive, and it would look to the AI like the
+        // result simply vanished.
+        bool probeOk = false;
+        bool typedText = false;
+        double sampleAge = -1;
+        try
+        {
+            var st = await powerShellService.GetStatusFromPipeAsync(pipeName, cancellationToken);
+            if (st != null)
+            {
+                probeOk = true;
+                typedText = st.TypedText;
+                sampleAge = st.TypedTextAgeSeconds;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Fail open — see CloseConsoleGuard: an unreachable console is
+            // precisely what close_console exists to deal with.
+            Console.Error.WriteLine($"[WARN] CloseConsole presence probe for #{pid} failed: {ex.Message}");
+        }
+
+        if (CloseConsoleGuard.Evaluate(pipeName, typedText, sampleAge, probeOk) == CloseDecision.Refuse)
+        {
+            // Deliberately a normal successful result, never an error: the retry
+            // is the confirmation, so anything that auto-retries errors would
+            // turn a refusal into a kill.
+            return Wrap(
+                $"⚠ Console #{pid} has unsubmitted text at its prompt — a human appears to be typing there. " +
+                $"NOT closed, and its pending output was left untouched.\n\n" +
+                $"If you still need to close it, call close_console for the same pid again within " +
+                $"{CloseConsoleGuard.ArmTtlSeconds}s and it will close without this check.");
+        }
 
         // Before killing, harvest any undrained output the console is still
         // holding, REGARDLESS of its current status. A console that finished a
@@ -339,6 +378,7 @@ public class PowerShellTools
         }
 
         sessionManager.ClearDeadPipe(agentId, pipeName);
+        CloseConsoleGuard.Disarm(pipeName);
 
         var closeResponse = new StringBuilder();
         if (!string.IsNullOrEmpty(drainedOutput))
@@ -562,6 +602,12 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             bailResponse.AppendLine($"Pipeline NOT executed. Re-issue to run at '{drift.Value.LiveCwd}', or prepend `Set-Location -LiteralPath '{drift.Value.AiCwd.Replace("'", "''")}';` to revert.");
             return Wrap(bailResponse.ToString());
         }
+
+        // Running a command in a console contradicts the intent to abandon it,
+        // so a pending close confirmation for it is dropped: the next
+        // close_console starts over with a fresh human-presence check rather
+        // than killing on a single call.
+        CloseConsoleGuard.Disarm(readyPipeName);
 
         // Execute the command
         try

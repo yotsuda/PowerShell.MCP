@@ -140,7 +140,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
             }
 
-            # ===== Idle standby auto-reap =====
+            # ===== Human-presence sampling + idle standby auto-reap =====
             # Close an OWNED standby console that neither the AI nor the user has
             # used for a while, keeping only the most-recently-active one alive.
             # Every decision is local — a shared per-session marker directory is
@@ -151,7 +151,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # directory read and the grace is measured in tens of seconds, so
             # there is no reason to evaluate (or re-scan the marker dir) 10x/s —
             # a long-lived keeper would otherwise poll the disk forever.
-            if ($global:McpReapWarnSec -gt 0 -and [Environment]::TickCount64 -ge [int64]$global:McpNextReapCheck) {
+            #
+            # The THROTTLE gates this block; McpReapWarnSec gates only the reap
+            # decision inside it. The typed-text sample must keep running with
+            # reaping switched off (POWERSHELL_MCP_STANDBY_REAP_MINUTES=0),
+            # because close_console's human-presence guard consumes it — and the
+            # users most likely to disable reaping are exactly the ones managing
+            # consoles by hand, who most want that guard. Skipping EvaluateReap
+            # when disabled still avoids the marker-directory scan.
+            if ([Environment]::TickCount64 -ge [int64]$global:McpNextReapCheck) {
                 $global:McpNextReapCheck = [Environment]::TickCount64 + 2000
                 try {
                     # Re-arm the interactive activity hook if global:prompt was
@@ -209,7 +217,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         }
                     }
 
-                    $reapAct = [PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby, $typedText)
+                    # Publish for close_console's human-presence guard, which runs
+                    # on the pipe thread and cannot read the buffer itself. Stamped
+                    # with the sample time so a consumer can tell "no text" apart
+                    # from "the engine stopped ticking".
+                    try { [PowerShell.MCP.Services.ConsoleLiveness]::SetTypedTextPresent($typedText) } catch {}
+
+                    # No early-out when reaping is disabled: EvaluateReap checks
+                    # warnSeconds <= 0 first and returns None before touching the
+                    # marker directory, so the disk stays untouched. Returning here
+                    # instead would skip the helper-function definitions that the
+                    # rest of this action block relies on.
+                    $reapAct =[PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby, $typedText)
                     if ($reapAct -eq [PowerShell.MCP.Services.ReapAction]::Warn) {
                         [Console]::WriteLine()
                         Write-Host "⚠ This console has been idle and will close in $($global:McpReapGraceSec)s without use. Run any command (or just start typing) to keep it open." -ForegroundColor Yellow

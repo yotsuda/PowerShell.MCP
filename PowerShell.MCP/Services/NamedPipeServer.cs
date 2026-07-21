@@ -516,6 +516,26 @@ public class NamedPipeServer : IDisposable
                 try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
                 catch { cwd = null; }
 
+                // Human-presence sample for close_console's guard. Read here on
+                // the pipe thread — it needs no runspace, which is exactly what
+                // makes it usable against a console whose runspace is wedged
+                // (close_console's main use case). The sample AGE travels with
+                // the value so the proxy can tell "no text" apart from "the
+                // engine stopped ticking" and fail open on the latter.
+                // -1 means never sampled / unusably old.
+                bool typedText = false;
+                double typedTextAge = -1;
+                try
+                {
+                    var age = ConsoleLiveness.TypedTextSampleAgeSeconds;
+                    if (age <= 86_400)
+                    {
+                        typedText = ConsoleLiveness.TypedTextPresent;
+                        typedTextAge = Math.Round(age, 2);
+                    }
+                }
+                catch { }
+
                 string statusResponse;
                 if (status == "busy")
                 {
@@ -544,7 +564,9 @@ public class NamedPipeServer : IDisposable
                             duration = roundedDuration,
                             message = promptText,
                             statusLine = awaitingStatusLine,
-                            cwd
+                            cwd,
+                            typedText,
+                            typedTextAgeSeconds = typedTextAge
                         });
                     }
                     else
@@ -557,7 +579,9 @@ public class NamedPipeServer : IDisposable
                             pipeline = truncatedPipeline,
                             duration = roundedDuration,
                             statusLine,
-                            cwd
+                            cwd,
+                            typedText,
+                            typedTextAgeSeconds = typedTextAge
                         });
                     }
                 }
@@ -572,7 +596,9 @@ public class NamedPipeServer : IDisposable
                         status = "completed",
                         cachedCount = cachedOutputs.Count,
                         statusLine,
-                        cwd
+                        cwd,
+                        typedText,
+                        typedTextAgeSeconds = typedTextAge
                     });
                 }
                 else
@@ -581,7 +607,7 @@ public class NamedPipeServer : IDisposable
                     if (ExecutionState.IsRunspaceAvailable)
                     {
                         var statusLine = BuildStatusLine("●", "Console ready", "Standby");
-                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby", statusLine, cwd });
+                        statusResponse = JsonSerializer.Serialize(new { pid, status = "standby", statusLine, cwd, typedText, typedTextAgeSeconds = typedTextAge });
                     }
                     else
                     {
@@ -595,7 +621,9 @@ public class NamedPipeServer : IDisposable
                             pipeline = "(user command)",
                             duration = userDuration,
                             statusLine,
-                            cwd
+                            cwd,
+                            typedText,
+                            typedTextAgeSeconds = typedTextAge
                         });
                     }
                 }

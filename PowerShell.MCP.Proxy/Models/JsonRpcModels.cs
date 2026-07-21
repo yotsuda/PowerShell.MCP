@@ -71,6 +71,26 @@ public class GetStatusResponse
     [JsonPropertyName("statusLine")]
     public string? StatusLine { get; set; }
 
+    /// <summary>
+    /// True when the console's last sample saw unsubmitted text at its prompt —
+    /// a human is composing a command there right now. Consumed by
+    /// <c>close_console</c>'s human-presence guard. Sampled by the polling
+    /// engine and served from the pipe thread, so it stays available even when
+    /// the console's runspace is wedged.
+    /// </summary>
+    [JsonPropertyName("typedText")]
+    public bool TypedText { get; set; }
+
+    /// <summary>
+    /// Age of the <see cref="TypedText"/> sample in seconds, or -1 when the
+    /// console has never reported one. A stale or missing sample means UNKNOWN,
+    /// and every consumer must fail open (allow the close) rather than block —
+    /// <c>close_console</c> is the escape hatch for a wedged console and a
+    /// detection failure must never take it away.
+    /// </summary>
+    [JsonPropertyName("typedTextAgeSeconds")]
+    public double TypedTextAgeSeconds { get; set; } = -1;
+
     [JsonPropertyName("error")]
     public string? Error { get; set; }
 
