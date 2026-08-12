@@ -17,6 +17,11 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.13.1
+
+## Security
+- **The bundled .NET runtime is pinned to a patched 9.0.19 build.** The proxy binaries shipped in `bin/*` are self-contained, so they carry their own copy of the .NET runtime rather than using the machine's. That copy moves from 9.0.18 to **9.0.19**, picking up fixes for three .NET advisories flagged against this repo (CVE-2026-62899, CVE-2026-62901, CVE-2026-62909). None of the three is reachable in normal use of this module. The first two are HTTP stack issues (request smuggling and a network denial of service), and the proxy speaks stdio and local named pipes only, with no HTTP client or listener anywhere in it. The third is a local elevation of privilege caused by an improper ACL on .NET's diagnostics channel, which every .NET process creates by default; exploiting it requires an attacker who can already sign in to the same machine. No configuration change is needed, updating the module replaces the bundled binaries.
+
 # Version: 1.13.0
 
 ## New Features
