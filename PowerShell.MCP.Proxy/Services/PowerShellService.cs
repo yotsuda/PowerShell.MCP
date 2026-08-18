@@ -63,6 +63,20 @@ public class PowerShellService : IPowerShellService
         return ExtractResponseBody(response);
     }
 
+    public async Task<bool> CacheOutputToPipeAsync(string pipeName, string output)
+    {
+        var requestParams = new CacheOutputParams { Output = output };
+        var jsonRequest = JsonSerializer.Serialize(requestParams, PowerShellJsonRpcContext.Default.CacheOutputParams);
+
+        var response = await _namedPipeClient.SendRequestToAsync(pipeName, jsonRequest);
+
+        // SendRequestToAsync never throws: an unreachable console (the usual
+        // cause here is a pipe name that went stale when the user closed the
+        // console) comes back as an empty string. Without inspecting the
+        // reply the caller cannot tell a preserved result from a lost one.
+        return response.Contains("\"status\":\"success\"", StringComparison.Ordinal);
+    }
+
     public async Task<string> ExecuteCommandToPipeAsync(string pipeName, string pipeline, Dictionary<string, string>? variables = null, int timeoutSeconds = 170, CancellationToken cancellationToken = default)
     {
         var requestParams = new ExecuteCommandParams

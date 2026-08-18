@@ -7,6 +7,7 @@ namespace PowerShell.MCP.Proxy.Models;
 [JsonSerializable(typeof(ExecuteCommandParams))]
 [JsonSerializable(typeof(GetStatusParams))]
 [JsonSerializable(typeof(ConsumeOutputParams))]
+[JsonSerializable(typeof(CacheOutputParams))]
 [JsonSerializable(typeof(ClaimConsoleParams))]
 [JsonSerializable(typeof(SetWindowTitleParams))]
 [JsonSerializable(typeof(ExecuteSilentParams))]

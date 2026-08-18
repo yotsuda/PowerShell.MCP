@@ -390,6 +390,90 @@ If the target has unsubmitted text at its prompt, a human is typing in it: the f
         return Wrap(closeResponse.ToString());
     }
 
+    /// <summary>
+    /// Carries the resolved agent id back out of a handler that allocates it
+    /// internally, so the [McpServerTool] shell knows which console to stash
+    /// an undelivered response on.
+    /// </summary>
+    private sealed class AgentIdBox
+    {
+        public string? Value;
+    }
+
+    private const string UndeliveredResultNotice =
+        "⚠ Result of an earlier tool call that the client had already given up on (timeout or cancel), delivered here instead:";
+
+    /// <summary>
+    /// Delivery guard for a response the MCP client may no longer be
+    /// listening for.
+    ///
+    /// When a client cancels a call — Claude Code sends
+    /// <c>notifications/cancelled</c> on its tool timeout, which the MCP SDK
+    /// turns into the cancellation of this token — the JSON-RPC response we
+    /// are about to return is dropped: nothing is registered against its id
+    /// any more. For a pipeline that finished normally that is not a delay
+    /// but a loss, because the DLL already emptied the console's cache into
+    /// this very response (NamedPipeServer's "success" branch calls
+    /// ConsumeCachedOutputs). Nobody holds a second copy.
+    ///
+    /// So push the response back into the console's cache. Every existing
+    /// drain point picks it up on the next tool call — execute_command's
+    /// Completed branch, wait_for_completion, CollectAllCachedOutputsAsync —
+    /// and ExecutionState.Status flips to "completed", so the console
+    /// advertises that it is holding something.
+    ///
+    /// This is a net, not the primary defence: a client that abandons a call
+    /// WITHOUT sending notifications/cancelled leaves the token unsignalled
+    /// and this never fires. Keeping the DLL-side execute_command timeout
+    /// below the client's tool timeout stays the mechanism that actually
+    /// guarantees delivery.
+    /// </summary>
+    private static async Task<string> StashIfCancelledAsync(
+        IPowerShellService powerShellService,
+        string? agentId,
+        string response,
+        CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.IsCancellationRequested || string.IsNullOrWhiteSpace(response))
+            return response;
+
+        var pipeName = string.IsNullOrEmpty(agentId)
+            ? null
+            : ConsoleSessionManager.Instance.GetActivePipeName(agentId);
+
+        if (pipeName == null)
+        {
+            // No console to hand it to (all closed, or the agent never got
+            // one). Nothing left to do but say so in the server log.
+            Console.Error.WriteLine("[WARN] Client cancelled the call and no active console is available - response could not be preserved.");
+            return response;
+        }
+
+        var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
+        try
+        {
+            var preserved = await powerShellService.CacheOutputToPipeAsync(pipeName, UndeliveredResultNotice + "\n\n" + response);
+            if (preserved)
+            {
+                Console.Error.WriteLine($"[INFO] Client cancelled the call; response re-cached on console {consoleName} for delivery on the next tool call.");
+            }
+            else
+            {
+                // The active pipe name can be stale — the console may have been
+                // closed between the pipeline finishing and this pushback. The
+                // DLL already emptied its cache into the response we are
+                // holding, so there is no other copy left to recover.
+                Console.Error.WriteLine($"[WARN] Client cancelled the call and console {consoleName} did not accept the pushback - the result is lost.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[WARN] Failed to re-cache the cancelled call's response: {ex.Message}");
+        }
+
+        return response;
+    }
+
     [McpServerTool]
     [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help.
 
@@ -422,9 +506,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     public static async Task<string> ExecuteCommand(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
+        McpServer mcpServer,
         [Description("The PowerShell command or pipeline to execute. Multi-line commands (if, loops, try-catch, etc.) are supported.")]
         string pipeline,
-        [Description("Timeout in seconds (0-170, default: 170). On timeout, execution continues in background and result is cached for retrieval on next tool call. PowerShell host prompts (Read-Host, Get-Credential, a missing mandatory parameter) return control immediately as awaiting_input regardless of this value. Use 0 for native CLIs that wait on stdin (e.g., cmd /c pause, ssh, npm login) so the call returns at once instead of waiting out the timeout.")]
+        [Description("Timeout in seconds (default: 170). Automatically capped to what the connected MCP client is known to wait for, so a longer value is silently reduced. On timeout, execution continues in background and result is cached for retrieval on next tool call. PowerShell host prompts (Read-Host, Get-Credential, a missing mandatory parameter) return control immediately as awaiting_input regardless of this value. Use 0 for native CLIs that wait on stdin (e.g., cmd /c pause, ssh, npm login) so the call returns at once instead of waiting out the timeout.")]
         int timeout_seconds = 170,
         [Description("Literal string value injected as $var1 in the pipeline, bypassing the PowerShell parser.")]
         string? var1 = null,
@@ -440,8 +525,52 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         bool is_subagent = false,
         CancellationToken cancellationToken = default)
     {
-        // Clamp timeout to valid range
-        timeout_seconds = Math.Clamp(timeout_seconds, 0, 170);
+        // How long we may block before the DLL has to hand back a timeout
+        // depends on how long THIS client is willing to wait, which we can
+        // only infer from the identity it gave in the MCP handshake.
+        TimeoutCeiling.ObserveClient(mcpServer?.ClientInfo?.Name);
+
+        // Thin delivery-guard shell around the real handler. The busy
+        // auto-route recursion inside re-enters ExecuteCommandCore directly,
+        // so a nested call never stashes its own slice of a response the
+        // outer call is about to stash whole.
+        var agentIdBox = new AgentIdBox();
+        // Clock the whole call, not just the pipeline: everything before
+        // dispatch (console discovery, claim, a cold spawn) is spent out of
+        // the same budget the client is counting down. See
+        // TimeoutCeiling.RemainingFor.
+        var callClock = System.Diagnostics.Stopwatch.StartNew();
+        var response = await ExecuteCommandCore(
+            powerShellService, pipeDiscoveryService, pipeline, timeout_seconds,
+            var1, var2, var3, var4, agent_id, is_subagent, agentIdBox, callClock, cancellationToken);
+        return await StashIfCancelledAsync(powerShellService, agentIdBox.Value, response, cancellationToken);
+    }
+
+    /// <summary>
+    /// The execute_command handler proper. Split out from the
+    /// [McpServerTool] entry point above so the busy auto-route recursion
+    /// re-enters here rather than through the cancellation stash.
+    /// </summary>
+    private static async Task<string> ExecuteCommandCore(
+        IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
+        string pipeline,
+        int timeout_seconds,
+        string? var1,
+        string? var2,
+        string? var3,
+        string? var4,
+        string? agent_id,
+        bool is_subagent,
+        AgentIdBox? agentIdBox,
+        System.Diagnostics.Stopwatch callClock,
+        CancellationToken cancellationToken)
+    {
+        // Clamp to the ceiling in force for the connected client (see
+        // TimeoutCeiling): blocking past what the client will wait for turns
+        // a completed pipeline's output into something only a cancellation
+        // notification can rescue.
+        timeout_seconds = TimeoutCeiling.Clamp(timeout_seconds, 0);
 
         // Build variables dictionary from var1/var2/var3/var4 parameters
         Dictionary<string, string>? parsedVariables = null;
@@ -455,6 +584,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         }
 
         var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
+        // Hand the resolved id to the [McpServerTool] shell: for a sub-agent's
+        // first call the id is minted here, and the shell needs it to pick the
+        // console that an undelivered response gets stashed on.
+        if (agentIdBox != null) agentIdBox.Value = agentId;
         // Wrap every return so the 🔑 notice can never be dropped on a sub-agent's
         // first call regardless of which branch builds the response.
         string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
@@ -612,6 +745,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // Execute the command
         try
         {
+            // Charge the console work already done against the ceiling, so a
+            // cold spawn cannot push the response past the client's timeout.
+            timeout_seconds = TimeoutCeiling.RemainingFor(timeout_seconds, callClock.Elapsed);
             var result = await powerShellService.ExecuteCommandToPipeAsync(readyPipeName, pipeline, parsedVariables, timeout_seconds, cancellationToken);
             // Parse response: header JSON (first line) + "\n\n" + body
             var separatorIndex = result.IndexOf("\n\n");
@@ -687,10 +823,14 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     // cadence. If it ever happens, the recursion would
                                     // spawn one more console and run there; no infinite
                                     // loop, just one extra console.
-                                    var retryResult = await ExecuteCommand(
+                                    // Same clock: the spawn we just paid for
+                                    // comes out of the caller's budget too.
+                                    var retryResult = await ExecuteCommandCore(
                                         powerShellService, pipeDiscoveryService, pipeline,
                                         timeout_seconds, var1, var2, var3, var4,
                                         agentId, is_subagent: false,
+                                        agentIdBox: null,
+                                        callClock: callClock,
                                         cancellationToken: cancellationToken);
 
                                     // Surface the auto-route notice + closed-console
@@ -977,13 +1117,36 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     public static async Task<string> WaitForCompletion(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
-        [Description("Maximum seconds to wait for completion (1-170, default: 30). Returns early if a console completes.")]
+        McpServer mcpServer,
+        [Description("Maximum seconds to wait for completion (default: 30). Automatically capped to what the connected MCP client is known to wait for. Returns early if a console completes.")]
         int timeout_seconds = 30,
         [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
         [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
         bool is_subagent = false,
         CancellationToken cancellationToken = default)
+    {
+        TimeoutCeiling.ObserveClient(mcpServer?.ClientInfo?.Name);
+
+        // Same delivery guard as execute_command: this tool's whole job is to
+        // drain caches, so a response the client no longer listens for takes
+        // the drained output down with it.
+        var response = await WaitForCompletionCore(
+            powerShellService, pipeDiscoveryService, timeout_seconds, agent_id, is_subagent, cancellationToken);
+        return await StashIfCancelledAsync(
+            powerShellService,
+            string.IsNullOrEmpty(agent_id) ? "default" : agent_id,
+            response,
+            cancellationToken);
+    }
+
+    private static async Task<string> WaitForCompletionCore(
+        IPowerShellService powerShellService,
+        IPipeDiscoveryService pipeDiscoveryService,
+        int timeout_seconds,
+        string? agent_id,
+        bool is_subagent,
+        CancellationToken cancellationToken)
     {
         var sessionManager = ConsoleSessionManager.Instance;
 
@@ -997,7 +1160,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         if (!ConsoleSessionManager.Instance.IsValidAgentId(agentId))
             return $"❌ Invalid agent_id '{agentId}'. Sub-agents must first call start_console with is_subagent=true to obtain a valid agent_id. Do not pass arbitrary strings as agent_id.";
 
-        timeout_seconds = Math.Clamp(timeout_seconds, 1, 170);
+        timeout_seconds = TimeoutCeiling.Clamp(timeout_seconds, 1);
 
         const int pollIntervalMs = 1000;
         var endTime = DateTime.UtcNow.AddSeconds(timeout_seconds);

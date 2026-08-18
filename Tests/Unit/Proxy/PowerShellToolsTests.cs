@@ -341,7 +341,7 @@ public class PowerShellToolsTests
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.15 });
         var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready | Pipeline: Get-Date | Duration: 0.15s";
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n" + statusLine + "\n2025-01-15");
 
         _mockPipeDiscoveryService
@@ -352,6 +352,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -377,7 +380,7 @@ public class PowerShellToolsTests
             statusLine = "⧗ Pipeline is still running | Window: #2000 Cat | Status: Busy | Pipeline: Start-Sleep 300 | Duration: 170.00s"
         });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Start-Sleep 300", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Start-Sleep 300", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson);
 
         _mockPowerShellService
@@ -392,12 +395,145 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Start-Sleep 300",
             agent_id: TestAgentId);
 
         // Assert
         Assert.Contains("Pipeline is still running", result);
         Assert.Contains("wait_for_completion", result);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_DispatchesWithTheCeilingInForce()
+    {
+        // Every other test here accepts any timeout value, so that a machine
+        // with POWERSHELL_MCP_TIMEOUT_CEILING set does not fail the whole file
+        // on mismatched Moq setups. This test owns the clamp instead: a
+        // request far above the ceiling must reach the DLL reduced to it.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.15 });
+        var dispatched = -1;
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, _, _, t, _) => dispatched = t)
+            .ReturnsAsync(headerJson + "\n\n✓ ok\n2025-01-15");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            null!,
+            "Get-Date",
+            timeout_seconds: 9999,
+            agent_id: TestAgentId);
+
+        Assert.Equal(TimeoutCeiling.Seconds, dispatched);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_ClientCancelled_ReCachesResponseForNextCall()
+    {
+        // The MCP client gave up on this call (Claude Code sends
+        // notifications/cancelled when its tool timeout fires, which the SDK
+        // turns into a cancelled token). The DLL has already drained the
+        // console's cache into this response, so simply returning it would
+        // lose the output outright — no other copy exists. It has to go back
+        // into the console's cache.
+        ConsoleSessionManager.Instance.SetActivePipeName(TestAgentId, TestPipeName);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.15 });
+        var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready | Pipeline: Get-Date | Duration: 0.15s";
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(headerJson + "\n\n" + statusLine + "\n2025-01-15");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        string? recached = null;
+        _mockPowerShellService
+            .Setup(s => s.CacheOutputToPipeAsync(TestPipeName, It.IsAny<string>()))
+            .Callback<string, string>((_, text) => recached = text)
+            .ReturnsAsync(true);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Act
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
+            "Get-Date",
+            agent_id: TestAgentId,
+            cancellationToken: cts.Token);
+
+        // Assert: pushed back exactly once, carrying the output the client
+        // never got to see, tagged so the AI knows why it arrives late.
+        _mockPowerShellService.Verify(
+            s => s.CacheOutputToPipeAsync(TestPipeName, It.IsAny<string>()),
+            Times.Once);
+        Assert.NotNull(recached);
+        Assert.Contains("2025-01-15", recached);
+        Assert.Contains("delivered here instead", recached);
+        // The response is still returned unchanged — whether anyone is
+        // listening is not this layer's business.
+        Assert.Contains("2025-01-15", result);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_NotCancelled_DoesNotReCacheResponse()
+    {
+        // The mirror of the test above: on a live call the response is
+        // delivered normally and must NOT be duplicated into the cache,
+        // which would replay it on the following tool call.
+        ConsoleSessionManager.Instance.SetActivePipeName(TestAgentId, TestPipeName);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.15 });
+        var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready | Pipeline: Get-Date | Duration: 0.15s";
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(headerJson + "\n\n" + statusLine + "\n2025-01-15");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        // Act
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
+            "Get-Date",
+            agent_id: TestAgentId);
+
+        // Assert
+        Assert.Contains("2025-01-15", result);
+        _mockPowerShellService.Verify(
+            s => s.CacheOutputToPipeAsync(It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
     }
 
     [Fact]
@@ -423,7 +559,7 @@ public class PowerShellToolsTests
             statusLine = "✓ Pipeline completed (cached) | Window: #2000 Cat | Status: Completed"
         });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson);
 
         // consume_output drains the DLL's cache and returns the real body.
@@ -440,6 +576,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Process",
             agent_id: TestAgentId);
 
@@ -480,7 +619,7 @@ public class PowerShellToolsTests
             statusLine = "✓ Pipeline completed (cached) | Window: #2000 Cat | Status: Completed"
         });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson);
 
         // Simulate the race: consume_output returns empty.
@@ -496,6 +635,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Process",
             agent_id: TestAgentId);
 
@@ -520,7 +662,7 @@ public class PowerShellToolsTests
 
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.01 });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
@@ -531,6 +673,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -550,7 +695,7 @@ public class PowerShellToolsTests
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "$x = 1", duration = 0.01 });
         var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready | Pipeline: $x = 1 | Duration: 0.01s";
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "$x = 1", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "$x = 1", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n" + statusLine);
 
         _mockPipeDiscoveryService
@@ -561,6 +706,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "$x = 1",
             agent_id: TestAgentId);
 
@@ -579,7 +727,7 @@ public class PowerShellToolsTests
 
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "test", duration = 0.01 });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
@@ -590,13 +738,16 @@ public class PowerShellToolsTests
         await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "test",
             timeout_seconds: 999,
             agent_id: TestAgentId);
 
         // Assert: should have been clamped to 170
         _mockPowerShellService.Verify(
-            s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()),
+            s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -609,7 +760,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
 
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "bad-cmd", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "bad-cmd", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Connection lost"));
 
         _mockPipeDiscoveryService
@@ -620,6 +771,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "bad-cmd",
             agent_id: TestAgentId);
 
@@ -641,7 +795,7 @@ public class PowerShellToolsTests
 
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "test", duration = 0.01 });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
@@ -652,6 +806,9 @@ public class PowerShellToolsTests
         await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "test");
 
         // Assert: FindReadyPipeAsync called with "default"
@@ -678,7 +835,7 @@ public class PowerShellToolsTests
 
         var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.01 });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
@@ -689,6 +846,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -716,7 +876,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null));
 
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "bad-cmd", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "bad-cmd", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException($"PowerShell.MCP module communication to console {expectedDisplayName} failed for command: bad-cmd"));
 
         _mockPipeDiscoveryService
@@ -727,6 +887,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "bad-cmd",
             agent_id: TestAgentId);
 
@@ -748,7 +911,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
 
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "fail-cmd", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "fail-cmd", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Connection lost"));
 
         _mockPipeDiscoveryService
@@ -759,6 +922,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "fail-cmd",
             agent_id: TestAgentId);
 
@@ -784,7 +950,7 @@ public class PowerShellToolsTests
 
         var headerJson = System.Text.Json.JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.1 });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done\n2025-01-15");
 
         _mockPipeDiscoveryService
@@ -795,6 +961,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -818,6 +987,7 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.WaitForCompletion(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            null!,
             timeout_seconds: 1,
             agent_id: TestAgentId);
 
@@ -849,6 +1019,7 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.WaitForCompletion(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            null!,
             timeout_seconds: 1,
             agent_id: isolatedAgentId);
 
@@ -880,7 +1051,7 @@ public class PowerShellToolsTests
 
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = targetCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
@@ -891,6 +1062,9 @@ public class PowerShellToolsTests
         await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -927,7 +1101,7 @@ public class PowerShellToolsTests
             cwd = midExecCwd
         });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "Start-Sleep 300", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "Start-Sleep 300", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n");
 
         _mockPowerShellService
@@ -942,6 +1116,9 @@ public class PowerShellToolsTests
         await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Start-Sleep 300",
             agent_id: TestAgentId);
 
@@ -977,7 +1154,7 @@ public class PowerShellToolsTests
             cwd = completedCwd
         });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, "Get-Process", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(headerJson + "\n\n");
 
         _mockPowerShellService
@@ -992,6 +1169,9 @@ public class PowerShellToolsTests
         await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Process",
             agent_id: TestAgentId);
 
@@ -1034,6 +1214,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Remove-Item *.tmp",
             agent_id: TestAgentId);
 
@@ -1071,7 +1254,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = sameCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
@@ -1083,6 +1266,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -1118,7 +1304,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = liveCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
@@ -1129,6 +1315,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -1160,7 +1349,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = liveCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
@@ -1171,6 +1360,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -1208,7 +1400,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = liveCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
@@ -1220,6 +1412,9 @@ public class PowerShellToolsTests
         await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -1252,7 +1447,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = liveCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
@@ -1264,6 +1459,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -1299,6 +1497,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object,
             _mockPipeDiscoveryService.Object,
+            // No live MCP server in unit tests: the client is unidentified,
+            // so the conservative ceiling applies (see TimeoutCeiling).
+            null!,
             "Get-Date",
             agent_id: TestAgentId);
 
@@ -1341,7 +1542,7 @@ public class PowerShellToolsTests
         var executions = 0;
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-ChildItem", duration = 0.01, cwd = userCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback(() => executions++)
             .ReturnsAsync(headerJson + "\n\n✓ done");
         _mockPipeDiscoveryService
@@ -1350,14 +1551,14 @@ public class PowerShellToolsTests
 
         // Call 1: user-cd drift → warn, must NOT execute.
         var first = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: TestAgentId);
         Assert.Contains("Pipeline NOT executed", first);
         Assert.Contains("outside the AI's commands", first);
         Assert.Equal(0, executions);
 
         // Call 2: re-issue. Drift cleared by call 1 → execute, no second warning.
         var second = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: TestAgentId);
         Assert.DoesNotContain("Pipeline NOT executed", second);
         Assert.Equal(1, executions);
 
@@ -1392,7 +1593,7 @@ public class PowerShellToolsTests
         // call 2 stayed) — this is what the success path snapshots as LastAiCwd.
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "x", duration = 0.01, cwd = newCwd });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipelines.Add(p))
             .ReturnsAsync(headerJson + "\n\n✓ done");
         _mockPipeDiscoveryService
@@ -1402,14 +1603,14 @@ public class PowerShellToolsTests
         // Call 1: AI moves its own cwd. No drift (live==LastAi==oldCwd) → runs,
         // no warning; the move is recorded.
         var first = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object,
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!,
             $"Set-Location -LiteralPath '{newCwd.Replace("'", "''")}'", agent_id: TestAgentId);
         Assert.DoesNotContain("Pipeline NOT executed", first);
         Assert.Equal(newCwd, sessionManager.GetLastAiCwd(testPid));
 
         // Call 2: console now at newCwd, LastAiCwd matches → still no warning.
         var second = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: TestAgentId);
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: TestAgentId);
         Assert.DoesNotContain("Pipeline NOT executed", second);
         Assert.Equal(2, sentPipelines.Count); // both calls executed
 
@@ -1510,7 +1711,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = 94001, status = "success", pipeline = "x", duration = 0.01, cwd = "C:\\Users\\test" });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
         _mockPipeDiscoveryService
@@ -1518,7 +1719,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         var result = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: freshAgent);
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: freshAgent);
 
         // Ran (not suppressed), prefixed with a Set-Location to $HOME.
         Assert.NotNull(sentPipeline);
@@ -1549,7 +1750,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = 94002, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = "C:\\Users\\test" });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
         _mockPipeDiscoveryService
@@ -1557,7 +1758,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         var result = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-Date", agent_id: freshAgent);
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-Date", agent_id: freshAgent);
 
         Assert.Equal("Get-Date", sentPipeline); // verbatim, no $HOME prefix
         Assert.DoesNotContain("New server session", result);
@@ -1587,7 +1788,7 @@ public class PowerShellToolsTests
         string? sentPipeline = null;
         var headerJson = JsonSerializer.Serialize(new { pid = 94005, status = "success", pipeline = "x", duration = 0.01, cwd = home });
         _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), 170, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
             .ReturnsAsync(headerJson + "\n\n✓ done");
         _mockPipeDiscoveryService
@@ -1595,7 +1796,7 @@ public class PowerShellToolsTests
             .ReturnsAsync(new CachedOutputResult("", ""));
 
         var result = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, "Get-ChildItem", agent_id: freshAgent);
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: freshAgent);
 
         Assert.NotNull(sentPipeline);
         Assert.StartsWith("Set-Location -LiteralPath '", sentPipeline);     // still normalized to $HOME

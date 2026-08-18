@@ -45,6 +45,17 @@ public class ConsumeOutputParams : PowerShellMcpParams
     public override string Name { get; } = "consume_output";
 }
 
+// Pushes a tool response back into a console's cache after the MCP client
+// cancelled the call it was meant for. See PowerShellTools.StashIfCancelledAsync.
+public class CacheOutputParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "cache_output";
+
+    [JsonPropertyName("output")]
+    public required string Output { get; set; }
+}
+
 // Response type for get_status
 public class GetStatusResponse
 {

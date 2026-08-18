@@ -251,6 +251,28 @@ public static class ExecutionState
     }
 
     /// <summary>
+    /// Puts back output that was already drained into a response the MCP
+    /// client never received — it cancelled (or timed out) the tool call the
+    /// response belonged to, so the JSON-RPC reply had no handler left to
+    /// land in. The proxy pushes the text back here so the next tool call
+    /// drains it through the normal cache path.
+    ///
+    /// Two deliberate differences from <see cref="AddToCache"/>:
+    /// - <c>_shouldCacheOutput</c> is left untouched. That flag belongs to
+    ///   whatever command is running right now; clearing it here would
+    ///   reroute that command's own result away from the cache.
+    /// - The text is inserted at the front. It is chronologically older than
+    ///   anything a concurrent command may have added since the drain.
+    /// </summary>
+    public static void ReturnToCache(string output)
+    {
+        lock (_lock)
+        {
+            _cachedOutputs.Insert(0, output);
+        }
+    }
+
+    /// <summary>
     /// Peeks cached outputs without consuming them
     /// </summary>
     public static IReadOnlyList<string> PeekCachedOutputs()
@@ -644,6 +666,26 @@ public class NamedPipeServer : IDisposable
                     status = "success"
                 });
                 await SendMessageAsync(pipeServer, header + "\n\n" + combinedOutput, cancellationToken);
+                return;
+            }
+
+            // Handle cache_output request - puts back a response the proxy
+            // could not deliver because the MCP client had already cancelled
+            // (or timed out) the call it belonged to. Handled next to
+            // consume_output, BEFORE the busy gate: by the time the pushback
+            // arrives this console is often already running the next command,
+            // and the busy branch would answer "busy" and drop the text.
+            if (name == "cache_output")
+            {
+                var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                var cachedText = requestRoot.TryGetProperty("output", out JsonElement cacheOutputElement)
+                    ? cacheOutputElement.GetString() : null;
+                if (!string.IsNullOrEmpty(cachedText))
+                {
+                    ExecutionState.ReturnToCache(cachedText);
+                }
+                var cacheResp = JsonSerializer.Serialize(new { pid, status = "success" });
+                await SendMessageAsync(pipeServer, cacheResp, cancellationToken);
                 return;
             }
 
