@@ -436,7 +436,10 @@ public class PowerShellToolsTests
             timeout_seconds: 9999,
             agent_id: TestAgentId);
 
-        Assert.Equal(TimeoutCeiling.Seconds, dispatched);
+        // A tolerance, not an equality: the dispatched value is the ceiling
+        // minus whole seconds already spent in the call, so a slow first hit
+        // (JIT, a loaded CI box) legitimately shaves a second off it.
+        Assert.InRange(dispatched, TimeoutCeiling.Seconds - 3, TimeoutCeiling.Seconds);
     }
 
     [Fact]
@@ -717,39 +720,13 @@ public class PowerShellToolsTests
         Assert.Contains("$script:x", result);
     }
 
-    [Fact]
-    public async Task ExecuteCommand_TimeoutClamped_To170()
-    {
-        // Arrange
-        _mockPipeDiscoveryService
-            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
-            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
-
-        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "test", duration = 0.01 });
-        _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(headerJson + "\n\n✓ done");
-
-        _mockPipeDiscoveryService
-            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CachedOutputResult("", ""));
-
-        // Act: pass timeout > 170
-        await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object,
-            _mockPipeDiscoveryService.Object,
-            // No live MCP server in unit tests: the client is unidentified,
-            // so the conservative ceiling applies (see TimeoutCeiling).
-            null!,
-            "test",
-            timeout_seconds: 999,
-            agent_id: TestAgentId);
-
-        // Assert: should have been clamped to 170
-        _mockPowerShellService.Verify(
-            s => s.ExecuteCommandToPipeAsync(TestPipeName, "test", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
+    // ExecuteCommand_TimeoutClamped_To170 lived here. It pinned the dispatched
+    // timeout to the old fixed 170 and, once the ceiling became client-derived,
+    // could only be kept by loosening its Verify to It.IsAny<int>() — which
+    // left a test that asserted nothing while its name promised a clamp check.
+    // ExecuteCommand_DispatchesWithTheCeilingInForce covers the same intent
+    // (a request far above the cap must arrive reduced) and actually inspects
+    // the dispatched value.
 
     [Fact]
     public async Task ExecuteCommand_ExecutionError_ReturnsErrorMessage()

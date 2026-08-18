@@ -400,8 +400,15 @@ If the target has unsubmitted text at its prompt, a human is typing in it: the f
         public string? Value;
     }
 
+    // The stash keeps whatever the response was, including a timeout notice
+    // whose "use wait_for_completion / cancel / close_console" guidance was
+    // true when written and may well be obsolete by the time it is read. It is
+    // kept anyway — a timeout response also carries output drained from other
+    // consoles, which dropping it would destroy — so the banner has to warn
+    // that this is a snapshot rather than the current state.
     private const string UndeliveredResultNotice =
-        "⚠ Result of an earlier tool call that the client had already given up on (timeout or cancel), delivered here instead:";
+        "⚠ Result of an earlier tool call that the client had already given up on (timeout or cancel), delivered here instead. "
+        + "It is a snapshot from that moment: any instruction inside it (wait_for_completion, cancel, close_console) may no longer apply — check the current state before acting on it.";
 
     /// <summary>
     /// Delivery guard for a response the MCP client may no longer be
@@ -437,40 +444,48 @@ If the target has unsubmitted text at its prompt, a human is typing in it: the f
         if (!cancellationToken.IsCancellationRequested || string.IsNullOrWhiteSpace(response))
             return response;
 
-        var pipeName = string.IsNullOrEmpty(agentId)
-            ? null
-            : ConsoleSessionManager.Instance.GetActivePipeName(agentId);
-
-        if (pipeName == null)
+        if (string.IsNullOrEmpty(agentId))
         {
-            // No console to hand it to (all closed, or the agent never got
-            // one). Nothing left to do but say so in the server log.
-            Console.Error.WriteLine("[WARN] Client cancelled the call and no active console is available - response could not be preserved.");
+            Console.Error.WriteLine("[WARN] Client cancelled the call before an agent was resolved - response could not be preserved.");
             return response;
         }
 
-        var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
-        try
+        var sessionManager = ConsoleSessionManager.Instance;
+
+        // Any of the agent's live consoles will do. The response can hold
+        // output drained from several of them at once (CollectAllCachedOutputs),
+        // so it does not belong to one console in particular, and the active
+        // pipe name can be stale — the console may have been closed between the
+        // pipeline finishing and this pushback, which is exactly the case
+        // wait_for_completion's closed-console branch reports. Falling back
+        // keeps the text alive on a console that is still there instead of
+        // discarding it with the one that went away.
+        var active = sessionManager.GetActivePipeName(agentId);
+        var candidates = new List<string>();
+        if (active != null) candidates.Add(active);
+        candidates.AddRange(sessionManager.EnumeratePipes(sessionManager.ProxyPid, agentId)
+            .Where(p => p != active));
+
+        var payload = UndeliveredResultNotice + "\n\n" + response;
+        foreach (var pipeName in candidates)
         {
-            var preserved = await powerShellService.CacheOutputToPipeAsync(pipeName, UndeliveredResultNotice + "\n\n" + response);
-            if (preserved)
+            try
             {
-                Console.Error.WriteLine($"[INFO] Client cancelled the call; response re-cached on console {consoleName} for delivery on the next tool call.");
+                if (await powerShellService.CacheOutputToPipeAsync(pipeName, payload))
+                {
+                    Console.Error.WriteLine($"[INFO] Client cancelled the call; response re-cached on console {sessionManager.GetConsoleDisplayName(pipeName)} for delivery on the next tool call.");
+                    return response;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // The active pipe name can be stale — the console may have been
-                // closed between the pipeline finishing and this pushback. The
-                // DLL already emptied its cache into the response we are
-                // holding, so there is no other copy left to recover.
-                Console.Error.WriteLine($"[WARN] Client cancelled the call and console {consoleName} did not accept the pushback - the result is lost.");
+                Console.Error.WriteLine($"[WARN] Re-cache attempt on {pipeName} threw: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[WARN] Failed to re-cache the cancelled call's response: {ex.Message}");
         }
 
+        // The DLL already emptied its cache into the response we are holding,
+        // so with no console left to take it back there is no other copy.
+        Console.Error.WriteLine($"[WARN] Client cancelled the call and none of the agent's {candidates.Count} console(s) accepted the pushback - the result is lost.");
         return response;
     }
 
