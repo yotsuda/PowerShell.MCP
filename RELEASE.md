@@ -176,6 +176,7 @@ Find-Module PowerShell.MCP -RequiredVersion 1.7.8
 
 # Signature distribution (Save-Module pulls the published copy — does NOT install)
 $tmp = Join-Path $env:TEMP "verify-$(Get-Random)"
+New-Item -ItemType Directory -Path $tmp -Force | Out-Null   # Save-Module requires an existing directory
 Save-Module PowerShell.MCP -RequiredVersion 1.7.8 -Path $tmp
 $base = Join-Path $tmp 'PowerShell.MCP\1.7.8'
 Get-ChildItem $base -Recurse -File |
