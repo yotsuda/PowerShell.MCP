@@ -339,8 +339,17 @@ function Get-McpStatus {
             for ($i = 0; $currentProcess -and $i -lt 5; $i++) {
                 $processName = $currentProcess.ProcessName.ToLower()
                 $processPath = $currentProcess.Path
-                if ($processName -eq 'claude' -or $processPath -match 'AnthropicClaude') { $clientName = 'Claude Desktop'; break }
-                elseif ($processName -eq 'node' -or $processPath -match 'claude-code|claude_code') { $clientName = 'Claude Code'; break }
+                # Claude Desktop and the Claude Code CLI are BOTH a process
+                # named 'claude' (Windows: claude.exe; macOS: Claude). Only the
+                # install path separates them — Desktop lives under
+                # ...\AnthropicClaude\... or /Applications/Claude.app/..., while
+                # the CLI is a standalone binary such as ~/.local/bin/claude.
+                # So the path test has to come first: with the name test
+                # leading, every Claude Code session was reported as
+                # 'Claude Desktop' once the CLI stopped being an npm/node
+                # install and became its own executable.
+                if ($processPath -match 'AnthropicClaude|Claude\.app') { $clientName = 'Claude Desktop'; break }
+                elseif ($processName -eq 'claude' -or $processName -eq 'node' -or $processPath -match 'claude-code|claude_code') { $clientName = 'Claude Code'; break }
                 elseif ($processName -match '^code$|^code - insiders$') { $clientName = 'VS Code'; break }
                 elseif ($processName -match 'cursor') { $clientName = 'Cursor'; break }
                 $currentProcess = $currentProcess.Parent
