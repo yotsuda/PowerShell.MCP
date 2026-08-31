@@ -214,6 +214,23 @@ internal static class PwshLauncherShared
     // blocking on input (e.g. Read-Host) in a process with no console.
     internal static string[] BuildHeadlessPwshArguments(string initCommand) =>
         [NoProfileArgument, "-NoExit", "-Command", initCommand];
+
+    // STARTUPINFOW.dwFlags / wShowWindow values used by the Windows launcher.
+    internal const uint STARTF_USESHOWWINDOW = 0x00000001;
+    internal const ushort SW_SHOWNOACTIVATE = 4;
+
+    // Set once at startup from the proxy's --no-activate command-line flag.
+    // Gates SW_SHOWNOACTIVATE on the Windows console launcher only: macOS and
+    // Linux hand window creation to the user's terminal emulator, which the proxy
+    // does not control. Default false keeps today's behaviour, where the new
+    // console takes foreground.
+    internal static bool SuppressWindowActivation { get; set; }
+
+    // Extracted so the flag mapping is unit-testable without spawning a console.
+    // Returning (0, 0) leaves STARTUPINFOW untouched, so CreateProcessW applies its
+    // default activation - bit-for-bit the pre-flag code path.
+    internal static (uint DwFlags, ushort WShowWindow) BuildWindowsShowWindow(bool noActivate) =>
+        noActivate ? (STARTF_USESHOWWINDOW, SW_SHOWNOACTIVATE) : (0u, (ushort)0);
 }
 
 /// <summary>
@@ -297,6 +314,15 @@ public static class PwshLauncherWindows
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
             var si = new STARTUPINFOW { cb = (uint)Marshal.SizeOf<STARTUPINFOW>() };
+
+            // Opt-in (--no-activate): create the console without stealing focus.
+            // wShowWindow is ignored unless STARTF_USESHOWWINDOW is set, so the
+            // default path leaves both fields zeroed exactly as before.
+            var (showFlags, showWindow) = PwshLauncherShared.BuildWindowsShowWindow(
+                PwshLauncherShared.SuppressWindowActivation);
+            si.dwFlags |= showFlags;
+            si.wShowWindow = showWindow;
+
             var pi = new PROCESS_INFORMATION();
 
             // Build command with optional startup commands (pre-built Write-Host statements)

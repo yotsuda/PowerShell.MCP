@@ -25,6 +25,13 @@ namespace PowerShell.MCP.Proxy
             PwshLauncherShared.SuppressProfileOnInteractive =
                 Array.Exists(args, a => string.Equals(a, "--no-profile", StringComparison.OrdinalIgnoreCase));
 
+            // Opt-in: `--no-activate` starts the Windows console with SW_SHOWNOACTIVATE,
+            // so it does not pull focus away from whatever the user is typing into.
+            // Default off — a console that appears in front is usually what you want.
+            // No-op on macOS/Linux, where the terminal emulator owns window activation.
+            PwshLauncherShared.SuppressWindowActivation =
+                Array.Exists(args, a => string.Equals(a, "--no-activate", StringComparison.OrdinalIgnoreCase));
+
             var builder = Host.CreateApplicationBuilder(args);
 
             builder.Logging.AddConsole(consoleLogOptions =>

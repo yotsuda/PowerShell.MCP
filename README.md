@@ -275,6 +275,28 @@ claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --no-profile
 
 > The headless / CI launcher always uses `-NoProfile` regardless of this flag.
 
+### Background consoles (`--no-activate`, Windows)
+
+By default the console the proxy launches takes foreground when it appears. That is usually what you want — you asked the AI to run something and you want to watch it. If the console is long-lived and you keep working in another app while the AI uses it, that same behaviour steals focus mid-keystroke. Pass `--no-activate` to create the window with `SW_SHOWNOACTIVATE`: it still appears, is still fully visible and interactive (so `Read-Host`, credential and elevation prompts keep working), it just does not take focus.
+
+**Claude Code:**
+```powershell
+claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --no-activate
+```
+
+**Claude Desktop / other MCP clients:**
+
+```json
+"mcpServers": {
+  "pwsh": {
+    "command": "...PowerShell.MCP.Proxy.exe",
+    "args": ["--no-activate"]
+  }
+}
+```
+
+> Windows only. On macOS and Linux the terminal emulator owns window activation, so the flag is a no-op there. Combine with `--no-profile` if you want both.
+
 ---
 
 ## First-Time Demo
