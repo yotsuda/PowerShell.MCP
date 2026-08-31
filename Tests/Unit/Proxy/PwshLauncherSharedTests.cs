@@ -17,6 +17,34 @@ public class PwshLauncherSharedTests
     private const string DefaultAgentId = "default";
     private const int DefaultPid = 12345;
 
+    // --no-activate maps to STARTF_USESHOWWINDOW + SW_SHOWNOACTIVATE. Windows ignores
+    // wShowWindow unless STARTF_USESHOWWINDOW is present, so the default must leave
+    // both fields zeroed to stay bit-for-bit identical to the pre-flag behaviour.
+    [Fact]
+    public void BuildWindowsShowWindow_Default_LeavesStartupInfoUntouched()
+    {
+        var (dwFlags, wShowWindow) = PwshLauncherShared.BuildWindowsShowWindow(noActivate: false);
+
+        Assert.Equal(0u, dwFlags);
+        Assert.Equal((ushort)0, wShowWindow);
+    }
+
+    [Fact]
+    public void BuildWindowsShowWindow_NoActivate_RequestsShowNoActivate()
+    {
+        var (dwFlags, wShowWindow) = PwshLauncherShared.BuildWindowsShowWindow(noActivate: true);
+
+        Assert.Equal(PwshLauncherShared.STARTF_USESHOWWINDOW, dwFlags & PwshLauncherShared.STARTF_USESHOWWINDOW);
+        Assert.Equal(PwshLauncherShared.SW_SHOWNOACTIVATE, wShowWindow);
+    }
+
+    [Fact]
+    public void BuildWindowsShowWindow_UsesDocumentedWin32Constants()
+    {
+        Assert.Equal(0x00000001u, PwshLauncherShared.STARTF_USESHOWWINDOW);
+        Assert.Equal((ushort)4, PwshLauncherShared.SW_SHOWNOACTIVATE);
+    }
+
     [Fact]
     public void BuildInitCommand_DefaultAgent_ContainsNoDoubleSingleQuotes()
     {
