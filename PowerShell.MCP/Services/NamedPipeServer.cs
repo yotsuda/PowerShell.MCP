@@ -33,6 +33,17 @@ public static class ExecutionState
     private static bool _firstHeartbeatReceived = false;
     private const int HeartbeatTimeoutMs = 10000; // If no heartbeat for 10s, runspace is likely busy
 
+    // Startup window of a proxy-launched console (see BeginStartup). The grace
+    // matches how long the proxy itself waits for a new console's pipe.
+    private static bool _startupPending = false;
+    private static bool _firstPromptRendered = false;
+    private static DateTime _startupBeganUtc;
+    internal const int StartupGraceMs = 60000;
+
+    // Clock seam for the startup window, overridable from tests (via
+    // InternalsVisibleTo) so the grace can be crossed without a real wait.
+    internal static Func<DateTime> StartupClock = () => DateTime.UtcNow;
+
     // PowerShell PSDrive cwd as seen on the runspace's home thread. Updated
     // by MCPPollingEngine.ps1 every timer tick (~100ms when idle), so the
     // proxy's cwd-tracking sees AI's intended cwd ($PWD) — not the process
@@ -101,6 +112,81 @@ public static class ExecutionState
         {
             _lastHeartbeat = DateTime.UtcNow;
             _firstHeartbeatReceived = true;
+
+            // The first tick after the first prompt means the console is idle at
+            // an interactive prompt, so the startup window can close. Closing it
+            // at the render itself would be too early: the host still has to
+            // enter ReadLine (PSReadLine loads its history there) before the
+            // runspace ticks again.
+            if (_startupPending && _firstPromptRendered)
+            {
+                _startupPending = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens the startup window of a console launched by the proxy. Until the
+    /// console is idle at its first prompt, a gap in heartbeats is startup work
+    /// still running (the rest of the startup command, the first prompt render,
+    /// ReadLine loading its history): nobody can have typed a command into a
+    /// console that has not shown a prompt yet. Reporting that gap as a user
+    /// command made the proxy abandon a console it had spawned seconds earlier
+    /// and start a second one. The window closes on the first heartbeat after
+    /// the first prompt (<see cref="MarkFirstPromptRendered"/>), or after
+    /// <see cref="StartupGraceMs"/> for a launch that never gets there, so a
+    /// console that is genuinely wedged still ends up reported as busy.
+    /// </summary>
+    public static void BeginStartup()
+    {
+        lock (_lock)
+        {
+            _startupPending = true;
+            _firstPromptRendered = false;
+            _startupBeganUtc = StartupClock();
+        }
+    }
+
+    /// <summary>
+    /// Records that the host rendered a prompt. The startup window then closes
+    /// on the next heartbeat (see <see cref="Heartbeat"/>).
+    /// </summary>
+    public static void MarkFirstPromptRendered()
+    {
+        lock (_lock) { _firstPromptRendered = true; }
+    }
+
+    /// <summary>
+    /// Closes the startup window outright. Used on import into a console no
+    /// proxy launched, which is already sitting at a prompt.
+    /// </summary>
+    public static void MarkStartupComplete()
+    {
+        lock (_lock) { _startupPending = false; }
+    }
+
+    /// <summary>
+    /// True while a proxy-launched console is still inside its startup window.
+    /// </summary>
+    public static bool IsStartingUp
+    {
+        get { lock (_lock) { return InStartupWindowLocked(); } }
+    }
+
+    // Caller must hold _lock.
+    private static bool InStartupWindowLocked()
+        => _startupPending && (StartupClock() - _startupBeganUtc).TotalMilliseconds < StartupGraceMs;
+
+    /// <summary>
+    /// Test hook: backdates the last heartbeat, as if the runspace had stopped
+    /// ticking at <paramref name="utc"/>.
+    /// </summary>
+    internal static void SetLastHeartbeatForTests(DateTime utc)
+    {
+        lock (_lock)
+        {
+            _lastHeartbeat = utc;
+            _firstHeartbeatReceived = true;
         }
     }
 
@@ -135,7 +221,7 @@ public static class ExecutionState
         {
             lock (_lock)
             {
-                return !_firstHeartbeatReceived || (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
+                return !_firstHeartbeatReceived || InStartupWindowLocked() || (DateTime.UtcNow - _lastHeartbeat).TotalMilliseconds < HeartbeatTimeoutMs;
             }
         }
     }
@@ -168,7 +254,9 @@ public static class ExecutionState
 
         lock (_lock)
         {
-            if (!_firstHeartbeatReceived)
+            // Before the first tick, or inside a proxy launch's startup window,
+            // a heartbeat gap is startup work still running, not a user command.
+            if (!_firstHeartbeatReceived || InStartupWindowLocked())
             {
                 return true;
             }

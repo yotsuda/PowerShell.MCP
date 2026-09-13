@@ -97,8 +97,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # the user later replaces global:prompt. Matching on this string is what
             # stops it from re-wrapping (and thus infinitely self-chaining) our own.
             try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch {}
-            if ($global:McpPriorPrompt) { & $global:McpPriorPrompt }
-            else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
+            $rendered = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
+            # A prompt the host renders lets a proxy launch's startup window close
+            # on the next tick (ExecutionState.BeginStartup). The engine renders
+            # the prompt itself as well (the command echo, the post-command prompt,
+            # the disconnect notice) and flags those renders, so only the host's
+            # count. Checking for a busy Status instead missed the host's first
+            # prompt whenever a command had been accepted but not yet started,
+            # which is exactly what a stalled startup leaves behind.
+            try { if (-not $global:McpEngineRenderingPrompt) { [PowerShell.MCP.Services.ExecutionState]::MarkFirstPromptRendered() } } catch {}
+            $rendered
         }
     }
 
@@ -136,7 +144,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     [Console]::WriteLine()
                     Write-Host 'AI session disconnected. Waiting for next connection.' -ForegroundColor Yellow
                     [Console]::WriteLine()
-                    try { $p = & { prompt }; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
+                    try { $global:McpEngineRenderingPrompt = $true; try { $p = & { prompt } } finally { $global:McpEngineRenderingPrompt = $false }; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
                 }
             }
 
@@ -176,8 +184,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             function global:prompt {
                                 # McpActivityHook
                                 try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch {}
-                                if ($global:McpPriorPrompt) { & $global:McpPriorPrompt }
-                                else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
+                                $rendered = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
+                                try { if (-not $global:McpEngineRenderingPrompt) { [PowerShell.MCP.Services.ExecutionState]::MarkFirstPromptRendered() } } catch {}
+                                $rendered
                             }
                         }
                     } catch {}
@@ -1147,7 +1156,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Display command in console
                     [Console]::WriteLine()
                     try {
-                        $promptText = & { prompt }
+                        $global:McpEngineRenderingPrompt = $true
+                        try { $promptText = & { prompt } } finally { $global:McpEngineRenderingPrompt = $false }
                         $cleanPrompt = $promptText.TrimEnd(' ').TrimEnd('>')
                         [Console]::Write("${cleanPrompt}> ")
                     }
@@ -1240,7 +1250,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # bare "PS> " keeps the line correct even if both
                     # earlier paths threw on this iteration.
                     try {
-                        $promptText = & { prompt }
+                        $global:McpEngineRenderingPrompt = $true
+                        try { $promptText = & { prompt } } finally { $global:McpEngineRenderingPrompt = $false }
                         # Force cursor to col 0 of a fresh line before
                         # writing the prompt. Out-Host's flush of the
                         # last pipeline item can leave the cursor at a

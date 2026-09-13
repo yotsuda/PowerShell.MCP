@@ -101,6 +101,20 @@ namespace PowerShell.MCP
                     _tokenSource = new CancellationTokenSource();
                 }
 
+                // Open the startup window before the engine can tick: until the
+                // first prompt, a heartbeat gap is the startup command still
+                // running, not a user command (ExecutionState.BeginStartup). A
+                // console the module was imported into by hand is already at a
+                // prompt, so it starts out complete.
+                if (proxyPid.HasValue)
+                {
+                    ExecutionState.BeginStartup();
+                }
+                else
+                {
+                    ExecutionState.MarkStartupComplete();
+                }
+
                 // Set initial window title for unowned consoles (Proxy-launched consoles get titled immediately after)
                 if (!proxyPid.HasValue)
                 {
