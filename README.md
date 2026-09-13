@@ -12,7 +12,7 @@
 
 *The universal MCP server—one installation gives AI access to 10,000+ PowerShell modules and any CLI tool.*
 
-PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through a single MCP server. You and AI collaborate in the same PowerShell console—every command is visible, auditable, and saved to history.
+PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through a single MCP server. You and AI collaborate in the same PowerShell console—every command the AI runs appears there as it runs, and a transcript can record all of it (see [Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/6ebec366-832f-484a-ae74-285bc754c437" alt="social-image" width="640" />
@@ -81,7 +81,7 @@ PowerShell.MCP complements your existing MCP setup by providing a flexible, gene
 - You and AI collaborate in the same PowerShell session with full transparency
 - Every command AI executes appears in your console in real-time
 - You can respond to interactive prompts directly in the console
-- Commands are saved to history—learn by watching AI work
+- Short commands are added to the console history on Windows—learn by watching AI work
 
 **🔄 Persistent Session State**
 - Authenticate once, stay authenticated: Azure, AWS, Microsoft 365, and more
@@ -105,7 +105,7 @@ PowerShell.MCP complements your existing MCP setup by providing a flexible, gene
 
 **🔐 Enterprise-Ready Security**
 - Local-only named pipe communication—no network exposure
-- Every command visible and auditable
+- Every command visible, and recordable with `Start-Transcript` or Script Block Logging ([Auditing an AI Session](SECURITY.md#auditing-an-ai-session))
 - Integrates with existing security policies
 
 **🔒 Secrets stay with you, not the AI**
@@ -138,7 +138,7 @@ Six tools provide maximum flexibility with minimum complexity:
 | Platform | OS Requirements |
 |----------|-----------------|
 | Windows | Windows 10/11 or Windows Server 2016+ |
-| Linux | Ubuntu 22.04+, Debian 11+, RHEL 8+, or distributions with GUI desktop |
+| Linux | Ubuntu 22.04+, Debian 11+, RHEL 8+, or another distribution PowerShell 7.4 supports; a GUI desktop to see the console |
 | macOS | macOS 12 (Monterey)+, Intel or Apple Silicon |
 
 ---
@@ -217,7 +217,7 @@ Register-PwshToClaudeDesktop
 #### 1. Install PowerShell 7
 ```bash
 brew install --cask powershell
-# If the cask is unavailable, install from GitHub Release:
+# If the cask is unavailable, install from GitHub Release (on an Intel Mac, use osx-x64 instead of osx-arm64):
 # curl -sSL -o /tmp/powershell.tar.gz https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-osx-arm64.tar.gz
 # sudo mkdir -p /usr/local/microsoft/powershell/7
 # sudo tar zxf /tmp/powershell.tar.gz -C /usr/local/microsoft/powershell/7
@@ -249,6 +249,35 @@ Register-PwshToClaudeDesktop
 
 </details>
 
+### Updating
+
+Every installed version lives in its own folder, so the proxy path your MCP client launches changes with each update. Re-register after updating: otherwise the client keeps starting the previous version's proxy, and commands fail with *"PowerShell.MCP.Proxy version is outdated"*.
+
+#### 1. Update the module
+Open a **new** PowerShell 7 window (not one of the PowerShell.MCP consoles) and run:
+```powershell
+Update-PSResource PowerShell.MCP
+```
+
+#### 2. Re-register from another new window
+A window that has already loaded PowerShell.MCP keeps the old version, so open one more new window, which loads the version just installed:
+```powershell
+chmod +x "$(Get-MCPProxyPath)"   # Linux / macOS only: the new proxy needs the execute bit again
+
+Register-PwshToClaudeCode        # Claude Code
+Register-PwshToClaudeDesktop     # Claude Desktop
+```
+Both replace the existing `pwsh` entry and keep the arguments and environment variables already set on it, such as `--no-profile`. **For other MCP clients:** replace the path in your configuration with the output of `Get-MCPProxyPath -Escape`.
+
+#### 3. Close the old consoles and restart your MCP client
+Close the PowerShell.MCP console windows (titled like `#12345 Taxi`) — each keeps running the version it was started with — then quit and restart your MCP client.
+
+To see what is installed, and remove a version no console is using any more:
+```powershell
+Get-InstalledPSResource PowerShell.MCP
+Uninstall-PSResource PowerShell.MCP -Version <old version>
+```
+
 ---
 
 ## Configuration
@@ -259,10 +288,12 @@ By default, every console the proxy launches loads your PowerShell `$PROFILE` (p
 
 **Claude Code:**
 ```powershell
+claude mcp remove pwsh -s user   # if pwsh is already registered: 'claude mcp add' refuses an existing name
 claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --no-profile
 ```
+From then on `Register-PwshToClaudeCode` keeps the flag, including when you re-register after an update.
 
-**Claude Desktop / other MCP clients:** add an `args` array with `--no-profile` to the `pwsh` entry in your config:
+**Claude Desktop / other MCP clients:** add an `args` array with `--no-profile` to the `pwsh` entry in your config (`Register-PwshToClaudeDesktop` keeps it when it re-registers):
 
 ```json
 "mcpServers": {
@@ -274,6 +305,32 @@ claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --no-profile
 ```
 
 > The headless / CI launcher always uses `-NoProfile` regardless of this flag.
+
+### Idle consoles close themselves
+
+When consoles pile up, an owned console that neither the AI nor you have used for 10 minutes prints a warning and closes itself 60 seconds later. The most recently used console of each session is always kept, and a console that is busy, waiting at a prompt, still holding output that has not been collected, or has text typed at its prompt is never closed. Typing anything, or any AI command, cancels a pending close.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `POWERSHELL_MCP_STANDBY_REAP_MINUTES` | `10` | Idle minutes before the warning; `0` turns closing off |
+| `POWERSHELL_MCP_STANDBY_REAP_GRACE_SECONDS` | `60` | Seconds between the warning and the close |
+
+Set these as **user or system environment variables** (Windows: System Properties → Environment Variables, or `setx`; macOS / Linux: your login shell's profile), not in your MCP client's `env` block. Each console is a new terminal window rather than a child of the proxy, so a variable set only for the proxy generally does not reach it.
+
+### Timeout ceiling
+
+A blocking call is capped to what your MCP client will actually wait for: **170 seconds for Claude Code** and **50 seconds for any other client**. Nothing is lost when the cap is reached: the command keeps running, and its result arrives with the next tool call. If your client waits longer than 50 seconds, raise the cap with `POWERSHELL_MCP_TIMEOUT_CEILING` (seconds, at most 170). This one is read by the proxy, so set it in your MCP client's `env` block:
+
+```json
+"mcpServers": {
+  "pwsh": {
+    "command": "...PowerShell.MCP.Proxy.exe",
+    "env": { "POWERSHELL_MCP_TIMEOUT_CEILING": "120" }
+  }
+}
+```
+
+With the Claude Code CLI, pass it as `-e POWERSHELL_MCP_TIMEOUT_CEILING=120` to `claude mcp add`; `Register-PwshToClaudeCode` and `Register-PwshToClaudeDesktop` keep it when they re-register.
 
 ---
 
@@ -438,13 +495,13 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 - Full color support for PowerShell output
 
 ### Linux
-- Requires a GUI desktop environment (GNOME, KDE, XFCE, etc.)
+- A GUI desktop environment (GNOME, KDE, XFCE, etc.) is needed to see and type into the console. Without a supported terminal emulator the console still starts, headless: the AI can run commands, but there is no window to watch or type into.
 - Supported terminal emulators: gnome-terminal, konsole, xfce4-terminal, xterm, lxterminal, mate-terminal, terminator, tilix, alacritty, kitty
-- PSReadLine is automatically removed (not supported on Linux)
+- PSReadLine is replaced by a simpler line editor of the module's own: on Linux, PSReadLine keeps the timer that runs AI commands from firing while the prompt waits for input
 
 ### macOS
 - Works with Terminal.app (default)
-- PSReadLine is automatically removed (not supported on macOS)
+- PSReadLine is replaced by a simpler line editor of the module's own, for the same reason as on Linux
 - Both Apple Silicon (M1/M2/M3/M4) and Intel Macs are supported
 
 ---
@@ -454,7 +511,7 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 - **AI Command Cancellation**: AI can interrupt a running command with the `cancel` tool — it stops a runaway/long-running PowerShell pipeline and sends Ctrl+C to a native CLI. A command stuck in a non-interruptible blocking call, or a console paused at an interactive prompt, can't be stopped that way — abandon it with the `close_console` tool.
 - **User Command Privacy**: Commands you execute are not visible to AI assistants.
 - **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
-- **Command History**: AI-executed single-line commands are added to console history. Multi-line commands are intentionally excluded to avoid history bloat.
+- **Command History**: On Windows, AI-executed commands of one or two lines are added to the console's PSReadLine history; longer multi-line commands are intentionally excluded to avoid history bloat. On Linux and macOS, AI-executed commands are not added to history.
 
 ## Enterprise Deployment (WDAC / Device Guard)
 
@@ -471,8 +528,7 @@ The certificate thumbprint is also published in each GitHub release's notes.
 
 ```powershell
 # Quick verify on installed binaries
-Get-AuthenticodeSignature `
-    "$((Get-Module PowerShell.MCP -ListAvailable).ModuleBase)\bin\win-x64\PowerShell.MCP.Proxy.exe"
+Get-AuthenticodeSignature (Get-MCPProxyPath)   # the proxy of the version this window loaded
 ```
 
 ## Disclaimer
