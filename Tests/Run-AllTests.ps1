@@ -62,7 +62,7 @@ if ($TestType -in @("Integration", "All")) {
     $integrationTestPath = Join-Path $scriptRoot "Integration"
     
     if (Test-Path $integrationTestPath) {
-        $testFiles = Get-ChildItem -Path $integrationTestPath -Filter "*.Tests.ps1"
+        $testFiles = Get-ChildItem -Path $integrationTestPath -Filter "*.Tests.ps1" -Recurse
         
         if ($testFiles.Count -eq 0) {
             Write-Host "⚠ No integration test files found." -ForegroundColor Yellow
@@ -90,9 +90,11 @@ if ($TestType -in @("Integration", "All")) {
                 }
             }
             
-            # Tell Pester to look for *.Tests.ps1 files
+            # Tell Pester to look for *.Tests.ps1 files. -Recurse, or the
+            # Cmdlets\ and Scenarios\ suites are silently skipped: this runner
+            # is what RELEASE.md has the maintainer run before tagging.
             $config = New-PesterConfiguration -Hashtable $pesterConfig
-            $config.Run.Path = Get-ChildItem -Path $integrationTestPath -Filter "*.Tests.ps1" | Select-Object -ExpandProperty FullName
+            $config.Run.Path = $testFiles.FullName
             # Run the tests (Output.Verbosity = "None" to minimize output)
             $result = Invoke-Pester -Configuration $config
             
