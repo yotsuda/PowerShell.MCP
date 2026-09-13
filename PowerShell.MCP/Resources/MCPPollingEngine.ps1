@@ -585,11 +585,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     $tokens = [System.Management.Automation.PSParser]::Tokenize($Command, [ref]$null)
 
+                    # Build the whole colored line first — see the Write-Host
+                    # at the end of this try block for why the echo must be
+                    # one call rather than one per token.
+                    $sb = [System.Text.StringBuilder]::new()
+
                     $lastEnd = 0
                     foreach ($token in $tokens) {
-                        # Write any text between tokens (whitespace, etc.)
+                        # Append any text between tokens (whitespace, etc.)
                         if ($token.Start -gt $lastEnd) {
-                            [Console]::Write($Command.Substring($lastEnd, $token.Start - $lastEnd))
+                            [void]$sb.Append($Command.Substring($lastEnd, $token.Start - $lastEnd))
                         }
 
                         # Get token text
@@ -632,21 +637,37 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             }
                         }
 
-                        # Write colored token
-                        [Console]::Write("${ansiColor}${tokenText}`e[0m")
+                        # Append colored token
+                        [void]$sb.Append("${ansiColor}${tokenText}`e[0m")
                         $lastEnd = $token.Start + $token.Length
                     }
 
-                    # Write any remaining text
+                    # Append any remaining text
                     if ($lastEnd -lt $Command.Length) {
-                        [Console]::Write($Command.Substring($lastEnd))
+                        [void]$sb.Append($Command.Substring($lastEnd))
                     }
 
-                    [Console]::WriteLine()
+                    # One Write-Host for the whole line, deliberately — not
+                    # a per-token [Console]::Write. Two reasons:
+                    #   1. [Console]::Write bypasses the host UI, which is
+                    #      where Start-Transcript taps. The AI's command
+                    #      therefore never reached the user's transcript —
+                    #      only its output did, leaving a log with no record
+                    #      of what was run. Write-Host goes through the host
+                    #      and is transcribed (transcription strips the ANSI,
+                    #      so the transcript keeps a plain, greppable line).
+                    #   2. Transcription writes one record per call, so a
+                    #      per-token echo lands in the transcript shredded
+                    #      one line per token. A single call keeps the
+                    #      command on one line.
+                    # This runs before Invoke-CommandWithAllStreams installs
+                    # its $Host.UI tee, so the echo is not captured back into
+                    # the result the AI sees.
+                    Write-Host $sb.ToString()
                 }
                 catch {
                     # Fallback to simple output if parsing fails
-                    [Console]::WriteLine($Command)
+                    Write-Host $Command
                 }
             }
 

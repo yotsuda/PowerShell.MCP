@@ -65,11 +65,17 @@ If you discover security issues, please report them privately via:
 - **Permission Audits**: Periodically audit user permissions
 - **Vulnerability Scanning**: Include in regular security scans
 
+## Auditing an AI Session
+Nothing is recorded by default. Two mechanisms, both opt-in, both built into PowerShell rather than this module:
+
+- **Per-console transcript.** `Start-Transcript` records the commands run in that console and their output, in order, to a text file. Run it by hand in a console, or put it in your PowerShell `$PROFILE` and every console the proxy launches starts one of its own — those consoles load your profile unless the server was started with `--no-profile`. **Requires 1.14.1 or later**: earlier versions recorded a command's output but not the command itself. A transcript is written by the very session it records, so treat it as an operator's log rather than tamper-proof evidence — anyone who can run a command in that console can stop it or delete the file.
+- **PowerShell Script Block Logging.** Once it is turned on, PowerShell 7 logs every script block it compiles as event 4104, whoever submitted it and by whatever route. On Windows, enable it with Group Policy under *Administrative Templates → PowerShell Core → Turn on PowerShell Script Block Logging* (add those templates first with `InstallPSCorePolicyDefinitions.ps1` from `$PSHOME`), or with `ScriptBlockLogging` under `PowerShellPolicies` in `$PSHOME/powershell.config.json`; the events go to the `PowerShellCore/Operational` log. The Windows PowerShell policy of the same name applies to `powershell.exe`, and its `Microsoft-Windows-PowerShell/Operational` log is not where `pwsh` writes. On Linux and macOS the `powershell.config.json` setting sends the events to the system log. It is machine-wide, outlives the console it came from, and is the right choice when the record has to stand up as evidence — more so when the events are forwarded to a SIEM, out of reach of the session being audited.
+
 ## Known Limitations
 - Commands executed via MCP cannot be canceled with Ctrl+C
 - No built-in command filtering or sandboxing
 - Inherits all security limitations of PowerShell itself
-- No audit trail for commands executed via MCP protocol
+- No audit trail is kept by default — see [Auditing an AI Session](#auditing-an-ai-session) for the two ways to turn one on
 
 ## Security Best Practices
 1. **Environment Isolation**: Use in dedicated, isolated environments
