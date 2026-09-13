@@ -29,7 +29,10 @@ This cmdlet has no aliases.
 
 ## DESCRIPTION
 
-Adds or updates the 'pwsh' entry in Claude Desktop's claude_desktop_config.json. Existing settings in the file are preserved.
+Adds or updates the 'pwsh' entry in Claude Desktop's claude_desktop_config.json. Existing settings in
+the file are preserved, including the entry's own 'args' and 'env': only its command is repointed at
+this module's proxy, so proxy flags (such as --no-profile) and environment settings (such as
+POWERSHELL_MCP_TIMEOUT_CEILING) survive a re-registration.
 
 ## EXAMPLES
 

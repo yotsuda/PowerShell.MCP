@@ -67,7 +67,10 @@ if (-not $IsWindows) {
 
 .DESCRIPTION
     Adds or updates the "pwsh" entry in Claude Desktop's
-    claude_desktop_config.json. Existing settings in the file are preserved.
+    claude_desktop_config.json. Existing settings in the file are preserved,
+    including the entry's own "args" and "env": only its command is repointed
+    at this module's proxy, so proxy flags and environment settings survive a
+    re-registration.
     If a legacy "PowerShell" entry pointing to PowerShell.MCP.Proxy exists,
     it is removed and replaced with the new "pwsh" entry.
 
@@ -128,15 +131,38 @@ function Register-PwshToClaudeDesktop {
         }
     }
 
-    $action = if ($config['mcpServers'].ContainsKey($serverName)) { 'Updated' } else { 'Added' }
-    $config['mcpServers'][$serverName] = @{ command = $command }
+    # Update the command in place rather than replacing the entry. An entry the
+    # user had configured also carries "args" (proxy flags such as
+    # --no-profile) and "env" (settings such as POWERSHELL_MCP_TIMEOUT_CEILING);
+    # assigning a fresh @{ command = ... } over it dropped both, silently, and
+    # the loss only showed up later as a flag that had stopped taking effect.
+    if ($config['mcpServers'].ContainsKey($serverName)) {
+        $action = 'Updated'
+        $entry = $config['mcpServers'][$serverName]
+        if ($entry -isnot [System.Collections.IDictionary]) { $entry = @{} }
+    }
+    else {
+        $action = 'Added'
+        $entry = @{}
+    }
+
+    $entry['command'] = $command
+    $config['mcpServers'][$serverName] = $entry
 
     $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath -Encoding UTF8 -NoNewline
     Write-Host "$action '$serverName' in $configPath" -ForegroundColor Green
     Write-Host "  command: $command" -ForegroundColor Gray
-    if ($action -eq 'Added') {
-        Write-Host "Restart Claude Desktop to apply changes." -ForegroundColor Yellow
+    if ($entry['args']) {
+        Write-Host "  args: $($entry['args'] -join ' ')" -ForegroundColor Gray
     }
+    if ($entry['env']) {
+        $pairs = foreach ($key in $entry['env'].Keys) { "$key=$($entry['env'][$key])" }
+        Write-Host "  env: $($pairs -join ', ')" -ForegroundColor Gray
+    }
+
+    # Both paths need the restart: an updated entry is the case where the point
+    # of registering was to move Claude Desktop onto a newly installed proxy.
+    Write-Host "Restart Claude Desktop to apply changes." -ForegroundColor Yellow
 }
 
 <#
@@ -144,12 +170,32 @@ function Register-PwshToClaudeDesktop {
     Registers PowerShell.MCP as an MCP server in Claude Code.
 
 .DESCRIPTION
-    Runs 'claude mcp add pwsh -s user' with the current module's
-    proxy executable path. If a legacy "PowerShell" entry pointing to
-    PowerShell.MCP.Proxy exists, it is removed first.
+    Registers this module's proxy executable as the 'pwsh' MCP server at user
+    scope, via the claude CLI.
+
+    If a 'pwsh' entry already exists at that scope — typically written by an
+    earlier install and still pointing at that install's proxy — it is replaced,
+    because 'claude mcp add' refuses a name that is already registered. The
+    arguments and environment variables the old entry carried (proxy flags such
+    as --no-profile, settings such as POWERSHELL_MCP_TIMEOUT_CEILING) are
+    carried over to the new one, and if the new entry cannot be added the old
+    one is put back.
+
+    An entry at local or project scope for the current directory takes
+    precedence over the user-scope entry there. It is left alone, and a warning
+    names it.
+
+    A legacy "PowerShell" entry pointing at PowerShell.MCP.Proxy is removed
+    first.
 
 .EXAMPLE
     Register-PwshToClaudeCode
+
+.EXAMPLE
+    Update-Module PowerShell.MCP
+    Register-PwshToClaudeCode
+
+    Points Claude Code at the proxy of the version just installed.
 
 .OUTPUTS
     None. Passes through output from the claude CLI.
@@ -163,15 +209,124 @@ function Register-PwshToClaudeCode {
         return
     }
 
-    # Remove legacy "PowerShell" entry if it points to our proxy
-    $legacyInfo = claude mcp get PowerShell -s user 2>&1
-    if ($legacyInfo -match 'PowerShell\.MCP\.Proxy') {
-        claude mcp remove PowerShell -s user
-        Write-Host "Removed legacy 'PowerShell' entry from Claude Code." -ForegroundColor DarkYellow
+    $serverName = 'pwsh'
+    $legacyName = 'PowerShell'
+    $proxyPath = Get-MCPProxyPath
+
+    # 'claude mcp get' reports only the entry that wins for the current directory
+    # (local, then project, then user), so inside a project with an entry of its
+    # own the user-scope entry this cmdlet manages is hidden. Asked from an empty
+    # directory it reports the user-scope entry itself. ('mcp get' takes no -s
+    # switch: passing one fails with "unknown option", which is why the legacy
+    # migration below never used to run.)
+    $neutralDirectory = Join-Path ([System.IO.Path]::GetTempPath()) 'PowerShell.MCP.Register'
+
+    function ConvertFrom-McpGetOutput([object[]]$Output) {
+        $entry = [pscustomobject]@{ Scope = $null; Command = $null; Args = @(); Env = @() }
+        $inEnvironment = $false
+        foreach ($item in $Output) {
+            $line = [string]$item
+            if ($inEnvironment) {
+                if ($line -match '^\s{4}(\S[^=]*=.*)$') { $entry.Env += $Matches[1]; continue }
+                $inEnvironment = $false
+            }
+            if ($line -match '^\s*Scope:\s*(\w+)') { $entry.Scope = $Matches[1] }
+            elseif ($line -match '^\s*Command:\s*(\S.*)$') { $entry.Command = $Matches[1].Trim() }
+            elseif ($line -match '^\s*Args:\s*(\S.*)$') { $entry.Args = @($Matches[1].Trim() -split '\s+') }
+            elseif ($line -match '^\s*Environment:\s*$') { $inEnvironment = $true }
+        }
+        return $entry
     }
 
-    $proxyPath = Get-MCPProxyPath
-    claude mcp add pwsh -s user -- $proxyPath
+    function Get-UserScopeEntry([string]$Name) {
+        New-Item -ItemType Directory -Path $neutralDirectory -Force | Out-Null
+        Push-Location -LiteralPath $neutralDirectory
+        try {
+            $output = @(claude mcp get $Name 2>&1)
+            $found = ($LASTEXITCODE -eq 0)
+        }
+        finally {
+            Pop-Location
+        }
+        if (-not $found) { return $null }
+        $entry = ConvertFrom-McpGetOutput $output
+        if ($entry.Scope -ne 'User') { return $null }
+        return $entry
+    }
+
+    function Add-UserScopeEntry([string]$Command, [string[]]$CommandArgs, [string[]]$Environment, [switch]$Quiet) {
+        $envArgs = @(foreach ($pair in $Environment) { '-e'; $pair })
+        if ($Quiet) { claude mcp add $serverName -s user @envArgs -- $Command @CommandArgs 2>&1 | Out-Null }
+        else { claude mcp add $serverName -s user @envArgs -- $Command @CommandArgs 2>&1 | Out-Host }
+        return ($LASTEXITCODE -eq 0)
+    }
+
+    # Remove the legacy "PowerShell" entry if it is ours.
+    $legacy = Get-UserScopeEntry $legacyName
+    if ($legacy -and $legacy.Command -match 'PowerShell\.MCP\.Proxy') {
+        claude mcp remove $legacyName -s user 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Removed legacy '$legacyName' entry from Claude Code." -ForegroundColor DarkYellow
+        }
+        else {
+            Write-Warning "Could not remove the legacy '$legacyName' entry (exit code $LASTEXITCODE). Remove it with: claude mcp remove $legacyName -s user"
+        }
+    }
+
+    # 'claude mcp add' refuses a name that already exists at the same scope, so a
+    # registration written by an older install could never be updated: the add
+    # failed and Claude Code kept launching that install's proxy. Remove the
+    # user-scope entry first, carrying its arguments and environment variables
+    # across, and put it back if the new one cannot be added.
+    $existing = Get-UserScopeEntry $serverName
+    $commandArgs = @()
+    $environment = @()
+    if ($existing) {
+        $commandArgs = @($existing.Args)
+        $environment = @($existing.Env)
+
+        claude mcp remove $serverName -s user 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Could not remove the existing user-scope '$serverName' entry (exit code $LASTEXITCODE); it still points at: $($existing.Command)"
+            return
+        }
+    }
+
+    if (-not (Add-UserScopeEntry $proxyPath $commandArgs $environment)) {
+        $exitCode = $LASTEXITCODE
+        if (-not $existing) {
+            Write-Error "'claude mcp add $serverName' failed with exit code $exitCode."
+        }
+        elseif (Add-UserScopeEntry $existing.Command $commandArgs $environment -Quiet) {
+            Write-Error "'claude mcp add $serverName' failed with exit code $exitCode. The previous entry was restored; it still points at: $($existing.Command)"
+        }
+        else {
+            Write-Error ("'claude mcp add $serverName' failed with exit code $exitCode, and restoring the previous entry failed as well. " +
+                "It was: $($existing.Command) $($commandArgs -join ' ') (environment: $($environment -join ', '))")
+        }
+        return
+    }
+
+    $action = if ($existing) { 'Updated' } else { 'Added' }
+    Write-Host "$action '$serverName' (user scope)" -ForegroundColor Green
+    Write-Host "  command: $proxyPath" -ForegroundColor Gray
+    if ($commandArgs) { Write-Host "  args: $($commandArgs -join ' ')" -ForegroundColor Gray }
+    if ($environment) { Write-Host "  env: $($environment -join ', ')" -ForegroundColor Gray }
+
+    # An entry at local or project scope for this directory still wins over the
+    # user-scope one here. Leave it alone, but say so, or the update would look as
+    # if it had not taken effect.
+    $visible = @(claude mcp get $serverName 2>&1)
+    if ($LASTEXITCODE -eq 0) {
+        $winner = ConvertFrom-McpGetOutput $visible
+        if ($winner.Scope -and $winner.Scope -ne 'User') {
+            $scope = $winner.Scope.ToLowerInvariant()
+            Write-Warning ("A '$serverName' MCP server is also configured at $scope scope for $((Get-Location).Path) and takes precedence over the user-scope entry there; it points at $($winner.Command). " +
+                "Remove it with: claude mcp remove $serverName -s $scope")
+        }
+    }
+
+    Write-Host "Restart Claude Code to pick up the change." -ForegroundColor Yellow
 }
 
 

@@ -29,16 +29,32 @@ This cmdlet has no aliases.
 
 ## DESCRIPTION
 
-Runs 'claude mcp add pwsh -s user' with the current module's
-proxy executable path.
-If a legacy "PowerShell" entry pointing to
-PowerShell.MCP.Proxy exists, it is removed first.
+Registers this module's proxy executable as the 'pwsh' MCP server at user scope, via the claude CLI.
+
+If a 'pwsh' entry already exists at that scope (typically written by an earlier install, and still
+pointing at that install's proxy), it is replaced, because 'claude mcp add' refuses a name that is
+already registered.
+The arguments and environment variables the old entry carried (proxy flags such as --no-profile,
+settings such as POWERSHELL_MCP_TIMEOUT_CEILING) are carried over to the new one, and if the new
+entry cannot be added the old one is put back.
+
+An entry at local or project scope for the current directory takes precedence over the user-scope
+entry there. It is left alone, and a warning names it.
+
+A legacy "PowerShell" entry pointing at PowerShell.MCP.Proxy is removed first.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 
 Register-PwshToClaudeCode
+
+### EXAMPLE 2
+
+Update-Module PowerShell.MCP
+Register-PwshToClaudeCode
+
+Points Claude Code at the proxy of the version just installed.
 
 ## PARAMETERS
 
