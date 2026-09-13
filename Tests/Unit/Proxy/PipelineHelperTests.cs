@@ -331,6 +331,19 @@ public class PipelineHelperTests
         Assert.Null(result);
     }
 
+    [Fact]
+    public void CheckVar1Enforcement_Var2AssignedInsideThePipeline_SaysItMustBeTheToolArgument()
+    {
+        // Assigning $var2 in the pipeline is not the var2 tool argument. The
+        // message has to say so, or the caller retries the same pipeline.
+        var result = PipelineHelper.CheckVar1Enforcement(
+            "$var2 = 'new'; Update-MatchInFile -Path test.txt -OldText $var1 -Replacement $var2", "old", null);
+
+        Assert.NotNull(result);
+        Assert.Contains("var2 argument of execute_command", result);
+        Assert.Contains("assigning $var2 inside the pipeline does not count", result);
+    }
+
     [Theory]
     [InlineData("Add-LinesToFile -Path test.txt -Content 'hello'")]
     [InlineData("Update-LinesInFile -Path test.txt -LineRange 1 -Content 'hello'")]

@@ -970,6 +970,8 @@ public class PowerShellToolsTests
 
         // Assert
         Assert.Contains("No commands to wait for completion", result);
+        // ...and why that is not a lost command when the client backgrounded a call.
+        Assert.Contains("moved an earlier call to the background", result);
     }
 
     [Fact]

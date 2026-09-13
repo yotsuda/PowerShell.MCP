@@ -244,22 +244,22 @@ public static partial class PipelineHelper
         // Add-LinesToFile: always requires var1 (for -Content)
         if (AddLinesToFileRegex().IsMatch(pipeline) && var1 == null)
         {
-            return "ERROR: Add-LinesToFile requires the var1 parameter for -Content to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the content via var1 and reference it as $var1 in the pipeline.";
+            return "ERROR: Add-LinesToFile requires the var1 argument of execute_command for -Content, to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the content as the var1 tool argument and reference it as $var1 in the pipeline; assigning $var1 inside the pipeline does not count.";
         }
 
         // Update-LinesInFile: always requires var1 (for -Content)
         if (UpdateLinesInFileRegex().IsMatch(pipeline) && var1 == null)
         {
-            return "ERROR: Update-LinesInFile requires the var1 parameter for -Content to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the content via var1 and reference it as $var1 in the pipeline.";
+            return "ERROR: Update-LinesInFile requires the var1 argument of execute_command for -Content, to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the content as the var1 tool argument and reference it as $var1 in the pipeline; assigning $var1 inside the pipeline does not count.";
         }
 
         // Update-MatchInFile: requires var1 (-OldText) and var2 (-Replacement)
         if (UpdateMatchInFileRegex().IsMatch(pipeline))
         {
             if (var1 == null)
-                return "ERROR: Update-MatchInFile requires the var1 parameter for -OldText to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the old text via var1 and reference it as $var1 in the pipeline.";
+                return "ERROR: Update-MatchInFile requires the var1 argument of execute_command for -OldText, to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the old text as the var1 tool argument and reference it as $var1 in the pipeline; assigning $var1 inside the pipeline does not count.";
             if (var2 == null)
-                return "ERROR: Update-MatchInFile requires the var2 parameter for -Replacement to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the replacement text via var2 and reference it as $var2 in the pipeline.";
+                return "ERROR: Update-MatchInFile requires the var2 argument of execute_command for -Replacement, to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the replacement text as the var2 tool argument and reference it as $var2 in the pipeline; assigning $var2 inside the pipeline does not count.";
         }
 
         // Remove-LinesFromFile: requires var1 only when -Pattern or -Contains is used
@@ -267,7 +267,7 @@ public static partial class PipelineHelper
         {
             if (PatternOrContainsParamRegex().IsMatch(pipeline) && var1 == null)
             {
-                return "ERROR: Remove-LinesFromFile with -Pattern or -Contains requires the var1 parameter to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the pattern/text via var1 and reference it as $var1 in the pipeline.";
+                return "ERROR: Remove-LinesFromFile with -Pattern or -Contains requires the var1 argument of execute_command, to avoid PowerShell parser expansion of $, backtick, or double-quote characters. Pass the pattern/text as the var1 tool argument and reference it as $var1 in the pipeline; assigning $var1 inside the pipeline does not count.";
             }
         }
 

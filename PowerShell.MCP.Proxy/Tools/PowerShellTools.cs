@@ -1299,10 +1299,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         {
             var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
 
-            // If no completed output and no busy info, return "No commands to wait for completion."
+            // Nothing running, nothing cached, nothing closed.
             if (completedOutput.Length == 0 && busyStatusInfo.Length == 0 && closedConsoleMessages.Count == 0)
             {
-                return "No commands to wait for completion.";
+                return NothingToWaitForMessage;
             }
 
             return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
@@ -1361,6 +1361,15 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         return BuildWaitResponse(closedConsoleMessages, finalCompletedOutput, finalBusyStatusInfo);
     }
 
+    // wait_for_completion's answer when nothing is running and nothing is cached.
+    // The bare "No commands to wait for completion." read as if a command still
+    // in progress had been lost, typically right after the MCP client moved a long
+    // call to the background. That call is still in flight in this proxy and
+    // receives its own result, so there is genuinely nothing to collect here.
+    internal const string NothingToWaitForMessage =
+        "No commands to wait for completion. Nothing is running in this session's consoles and no results are waiting to be collected. " +
+        "If your MCP client moved an earlier call to the background, that call receives the result itself when the command finishes.";
+
     private static string BuildWaitResponse(List<string> closedConsoleMessages, string completedOutput, string busyStatusInfo)
     {
         var response = new StringBuilder();
@@ -1385,7 +1394,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
         if (response.Length == 0)
         {
-            return "No busy consoles or cached results.";
+            return NothingToWaitForMessage;
         }
 
         return response.ToString();
