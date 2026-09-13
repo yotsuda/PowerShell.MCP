@@ -266,6 +266,44 @@ public class PowerShellTools
         return Wrap($"✓ Interrupt sent to console {GetConsoleName(pipeName)} (Ctrl+C + pipeline stop). A running PowerShell pipeline or native CLI should now be stopped and the console back to ready; a command stuck in a non-cooperative blocking call may still be running (use close_console). Call execute_command (or get_current_location) to confirm and to drain any output the cancelled command produced.");
     }
 
+    /// <summary>
+    /// Refusal text for a close_console PID this session holds no pipe for.
+    /// "Not owned" used to be the only answer, and it reads as an ownership
+    /// fault even when the console is simply gone: typically an idle standby
+    /// console that closed itself minutes earlier. The three cases call for
+    /// different follow-ups, so each gets its own message.
+    /// </summary>
+    internal static string BuildCloseRefusal(int pid, string ownedList, bool processRunning, bool isMcpConsole)
+    {
+        if (!processRunning)
+        {
+            return $"PID {pid} is no longer running, so there is nothing to close: the console has already exited " +
+                   "(for example, an idle standby console that closed itself after a period without use). " +
+                   $"Consoles owned by this session: {ownedList}.";
+        }
+
+        if (isMcpConsole)
+        {
+            return $"PID {pid} is a PowerShell.MCP console, but it belongs to another session or agent, or was started by a user " +
+                   $"(owned by this session: {ownedList}). Refusing to close it.";
+        }
+
+        return $"PID {pid} is not a PowerShell.MCP console owned by this session (owned: {ownedList}). Refusing to close it.";
+    }
+
+    private static bool IsProcessRunning(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     [McpServerTool]
     [Description(@"Forcibly close (kill) a PowerShell console by its PID. Use to abandon a console paused at an interactive prompt (see the awaiting-input notice) or stuck on a runaway command. The PID is the number shown in tool output as '#<pid> <name>'. Only consoles owned by this session can be closed. Any undrained output the console still holds from an already-finished command — including on a busy console that is running a new command while an earlier result sits uncollected — is harvested and returned in this response before the console is killed. The next command auto-starts a fresh console.
 
@@ -298,7 +336,10 @@ If the target has unsubmitted text at its prompt, a human is typing in it: the f
         if (!ownedPids.Contains(pid))
         {
             var known = ownedPids.Count > 0 ? string.Join(", ", ownedPids.OrderBy(p => p)) : "none";
-            return Wrap($"PID {pid} is not a console owned by this session (owned: {known}). Refusing to close it.");
+            var isMcpConsole = sessionManager.EnumeratePipes()
+                .Select(ConsoleSessionManager.GetPidFromPipeName)
+                .Any(p => p == pid);
+            return Wrap(BuildCloseRefusal(pid, known, IsProcessRunning(pid), isMcpConsole));
         }
 
         var pipeName = ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, agentId, pid);
