@@ -1013,7 +1013,16 @@ Please provide how to update the MCP client configuration to the user.";
                     }
                     else if (isTimeout)
                     {
-                        // Timeout - send JSON response
+                        // Timeout - send JSON response.
+                        //
+                        // A timeout is the only moment this is worth checking, and
+                        // the only moment it can be told apart from ordinary
+                        // slowness: if a child of this console is sitting at zero
+                        // CPU waiting on console input, the command is not slow,
+                        // it is queued behind the prompt's read and will never
+                        // return. Naming it here is what stops that from being
+                        // mistaken for the child's own fault — see StalledChild.
+                        var stalledChild = StalledChild.Describe();
                         var statusLine = BuildStatusLine("⧗", "Pipeline is still running", "Busy", runningPipeline, roundedDuration);
                         var timeoutResponse = JsonSerializer.Serialize(new
                         {
@@ -1023,6 +1032,7 @@ Please provide how to update the MCP client configuration to the user.";
                             duration = roundedDuration,
                             statusLine,
                             warning = cmdletWarning,
+                            stalledChild,
                             cwd
                         });
                         try

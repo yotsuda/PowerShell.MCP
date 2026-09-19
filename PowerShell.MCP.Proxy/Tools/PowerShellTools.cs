@@ -543,6 +543,10 @@ Local variables are NOT preserved between execute_command calls. Use $script: or
 ⚠️ CRITICAL - String Interpolation:
 Double-quoted strings expand variables and subexpressions: ""$var"" becomes the value of $var, ""$(expr)"" evaluates expr. Use single quotes for literal strings: '$var' keeps the text $var as-is.
 
+⚠️ A native command that prints nothing and never returns, with its CPU idle, is not slow — it is queued behind this console's prompt input read and will not return on its own. Re-run it detached with its standard input from NUL:
+cmd /d /s /c ""<command> < NUL > out.log 2>&1""
+Rare: common CLIs (git, node, npm, python, dotnet, curl, ssh) are unaffected. It hits programs that probe the console while starting up; LilyPond is a known one.
+
 📝 Text File Operations:
 ALWAYS use the specialized cmdlets for text file editing: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
 NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via var1-var4 parameters.
@@ -957,6 +961,15 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     : $"⧗ Pipeline is still running | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 timeoutResponse.AppendLine(timeoutStatusLine);
                                 timeoutResponse.AppendLine();
+                                // A stalled child is a diagnosis, not a guess, so it
+                                // leads — it tells the AI both that waiting is futile
+                                // and exactly how to re-run. The generic "it might be
+                                // stuck" advice follows for every other case.
+                                if (!string.IsNullOrEmpty(jsonResponse.StalledChild))
+                                {
+                                    timeoutResponse.AppendLine(jsonResponse.StalledChild);
+                                    timeoutResponse.AppendLine();
+                                }
                                 timeoutResponse.AppendLine("Use wait_for_completion to wait for the result.");
                                 timeoutResponse.Append($"If it is instead STUCK — a native CLI (git/npm/ssh) waiting on stdin, or a runaway command — use cancel to interrupt it (Ctrl+C; works on native/running commands but not on PowerShell host prompts), or close_console {jsonResponse.Pid} to abandon the console.");
                                 // Scope warning at the end (after instruction for better readability)

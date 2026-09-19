@@ -512,6 +512,7 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
 - **User Command Privacy**: Commands you execute are not visible to AI assistants.
 - **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
 - **Command History**: On Windows, AI-executed commands of one or two lines are added to the console's PSReadLine history; longer multi-line commands are intentionally excluded to avoid history bloat. On Linux and macOS, AI-executed commands are not added to history.
+- **Programs that read the console at startup (Windows)**: Windows lets only one reader at a time take from a console's input buffer, and the prompt holds one for as long as an AI command runs. A program that probes console input while starting up therefore queues behind the prompt and does not return until a key is pressed. It is rare — common CLIs (git, node, npm, python, dotnet, curl, ssh) are unaffected; LilyPond is a known case. Run such a program detached with its standard input from `NUL`: `cmd /d /s /c "<command> < NUL > out.log 2>&1"`. On a timeout the console names the stalled process and repeats this form. See [docs/Console-Input-Starvation.md](docs/Console-Input-Starvation.md).
 
 ## Enterprise Deployment (WDAC / Device Guard)
 

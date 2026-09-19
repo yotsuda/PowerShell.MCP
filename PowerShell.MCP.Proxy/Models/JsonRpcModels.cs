@@ -122,6 +122,16 @@ public class GetStatusResponse
     /// </summary>
     [JsonPropertyName("cwd")]
     public string? Cwd { get; set; }
+
+    /// <summary>
+    /// Set on a timeout when a child of that console is stalled on console
+    /// input rather than working — it carries the sentence naming the process
+    /// and the detached re-run form. Null in every other case, including a
+    /// command that is genuinely still running. See the DLL's
+    /// <c>StalledChild</c> and docs/Console-Input-Starvation.md.
+    /// </summary>
+    [JsonPropertyName("stalledChild")]
+    public string? StalledChild { get; set; }
 }
 
 [JsonSerializable(typeof(GetStatusResponse))]
