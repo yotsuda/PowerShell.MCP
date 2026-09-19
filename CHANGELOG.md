@@ -17,6 +17,11 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.14.2
+
+## Improvements
+- **A command that hangs because a child process is queued behind the console's input read now says so, instead of looking like a slow command (Windows).** Windows lets only one reader at a time take from a console's input buffer, and the prompt's reader holds one for as long as an AI command runs — which is inherent to running that command on pwsh's main thread, in the console you share. A program that probes console input while starting up therefore queues behind the prompt and never returns; it is released only when a key finally arrives, which makes it look random and makes it look like the program's own fault. It is rare — of eleven common CLIs measured under this condition (git, node, npm, python, dotnet, curl, tar, ssh, …) none were affected, and only a program that genuinely waits for a key, or one that probes the console during startup such as LilyPond, hits it — but rare and invisible is a bad combination: one project spent three months blaming antivirus, Mark of the Web and DNS for it. On a timeout, the console now checks whether a process attached to it is sitting at zero CPU with threads parked on a console call, and if so names the process and gives the form that works: `cmd /d /s /c "<command> < NUL > out.log 2>&1"`. The check is deliberately quiet in every other case — a command that is merely slow is left alone, verified against a child burning CPU — because a false positive would send an AI to re-run something that only needed more time. `execute_command`'s description carries the same guidance, phrased by symptom so it can be matched at the moment a native command produces no output and does not return. Nothing about how commands run has changed; `docs/Console-Input-Starvation.md` records the four fixes that were tried for the underlying behaviour and why each was rejected.
+
 # Version: 1.14.1
 
 ## Bug Fixes
