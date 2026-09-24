@@ -35,6 +35,22 @@ Describe "Register-PwshToClaudeCode" {
         . ([scriptblock]::Create($functionAst.Extent.Text))
         function Get-MCPProxyPath { 'C:\NEW\PowerShell.MCP.Proxy.exe' }
 
+        # Stands in for the prompt about the built-in shell tools: answers with
+        # $global:ShimShellChoice and records that it was asked.
+        function Read-BuiltInShellToolsChoice {
+            param([string]$SettingsPath)
+            $global:ShellPromptCount++
+            $global:ShimShellChoice
+        }
+
+        # Claude Code's settings live under CLAUDE_CONFIG_DIR, pointed at a
+        # scratch directory so the developer's own settings.json is never read
+        # or written.
+        $script:savedConfigDir = $env:CLAUDE_CONFIG_DIR
+        function Get-SettingsPath { Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json' }
+        function Set-Settings([string]$Json) { Set-Content -LiteralPath (Get-SettingsPath) -Value $Json -NoNewline }
+        function Get-Settings { Get-Content -LiteralPath (Get-SettingsPath) -Raw | ConvertFrom-Json -AsHashtable }
+
         function Get-ShimKey {
             param([string]$Scope, [string]$Name, [string]$Directory)
             if ($Scope -eq 'User') { "User|$Name" } else { "$Scope|$Directory|$Name" }
@@ -127,7 +143,8 @@ Describe "Register-PwshToClaudeCode" {
     }
 
     AfterAll {
-        Remove-Variable -Name McpState, ClaudeCalls, ShimProjectDir, ShimFailAddCommand, ShimFailRemove -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name McpState, ClaudeCalls, ShimProjectDir, ShimFailAddCommand, ShimFailRemove, ShimShellChoice, ShellPromptCount -Scope Global -ErrorAction SilentlyContinue
+        $env:CLAUDE_CONFIG_DIR = $script:savedConfigDir
     }
 
     BeforeEach {
@@ -136,6 +153,10 @@ Describe "Register-PwshToClaudeCode" {
         $global:ShimProjectDir = (Get-Location).Path
         $global:ShimFailAddCommand = $null
         $global:ShimFailRemove = @()
+        $global:ShimShellChoice = 'CannotAsk'
+        $global:ShellPromptCount = 0
+        $env:CLAUDE_CONFIG_DIR = Join-Path $TestDrive "claude-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Path $env:CLAUDE_CONFIG_DIR | Out-Null
     }
 
     Context "when nothing is registered yet" {
@@ -277,6 +298,117 @@ Describe "Register-PwshToClaudeCode" {
             Register-PwshToClaudeCode -WarningAction SilentlyContinue 6>$null
 
             (Get-McpEntry User pwsh).Command | Should -BeExactly 'C:\NEW\PowerShell.MCP.Proxy.exe'
+        }
+    }
+
+    Context "built-in shell tools, when no one can be asked" {
+        It "changes no settings" {
+            Register-PwshToClaudeCode 6>$null
+
+            Test-Path (Get-SettingsPath) | Should -BeFalse
+        }
+
+        It "explains the parameters instead" {
+            $output = Register-PwshToClaudeCode 6>&1 | Out-String
+
+            $output | Should -Match '-DisableBuiltInShellTools'
+            $output | Should -Match '-KeepBuiltInShellTools'
+        }
+    }
+
+    Context "built-in shell tools, when the user is asked" {
+        It "adds Bash and PowerShell to permissions.deny on yes" {
+            $global:ShimShellChoice = 'Disable'
+
+            Register-PwshToClaudeCode 6>$null
+
+            (Get-Settings).permissions.deny | Should -Be @('Bash', 'PowerShell')
+        }
+
+        It "keeps every other setting and deny entry" {
+            Set-Settings '{ "permissions": { "allow": ["Read"], "deny": ["WebFetch"] }, "model": "opus", "env": { "A": "1" } }'
+            $global:ShimShellChoice = 'Disable'
+
+            Register-PwshToClaudeCode 6>$null
+
+            $settings = Get-Settings
+            $settings.permissions.deny | Should -Be @('WebFetch', 'Bash', 'PowerShell')
+            $settings.permissions.allow | Should -Be @('Read')
+            $settings.model | Should -BeExactly 'opus'
+            $settings.env.A | Should -BeExactly '1'
+            # Key order is kept, so the file does not reshuffle.
+            @($settings.Keys) | Should -Be @('permissions', 'model', 'env')
+        }
+
+        It "changes nothing on no, and says how to do it later" {
+            Set-Settings '{ "model": "opus" }'
+            $global:ShimShellChoice = 'Keep'
+
+            $output = Register-PwshToClaudeCode 6>&1 | Out-String
+
+            Get-Content -LiteralPath (Get-SettingsPath) -Raw | Should -BeExactly '{ "model": "opus" }'
+            $output | Should -Match '-DisableBuiltInShellTools'
+        }
+
+        It "does not ask when both are already denied, but says so" {
+            Set-Settings '{ "permissions": { "deny": ["PowerShell", "Bash"] } }'
+            $global:ShimShellChoice = 'Disable'
+
+            $output = Register-PwshToClaudeCode 6>&1 | Out-String
+
+            $global:ShellPromptCount | Should -Be 0
+            $output | Should -Match 'already disabled'
+        }
+
+        It "adds only the missing one" {
+            Set-Settings '{ "permissions": { "deny": ["Bash"] } }'
+            $global:ShimShellChoice = 'Disable'
+
+            Register-PwshToClaudeCode 6>$null
+
+            (Get-Settings).permissions.deny | Should -Be @('Bash', 'PowerShell')
+        }
+    }
+
+    Context "built-in shell tools, with an explicit parameter" {
+        It "-DisableBuiltInShellTools disables them without asking" {
+            Register-PwshToClaudeCode -DisableBuiltInShellTools 6>$null
+
+            $global:ShellPromptCount | Should -Be 0
+            (Get-Settings).permissions.deny | Should -Be @('Bash', 'PowerShell')
+        }
+
+        It "-KeepBuiltInShellTools neither asks nor changes anything" {
+            $output = Register-PwshToClaudeCode -KeepBuiltInShellTools 6>&1 | Out-String
+
+            $global:ShellPromptCount | Should -Be 0
+            Test-Path (Get-SettingsPath) | Should -BeFalse
+            $output | Should -Not -Match 'BuiltInShellTools'
+        }
+
+        It "cannot be given both" {
+            { Register-PwshToClaudeCode -DisableBuiltInShellTools -KeepBuiltInShellTools 6>$null } | Should -Throw
+        }
+    }
+
+    Context "built-in shell tools, when it is not safe to touch them" {
+        It "leaves an unreadable settings.json alone and warns" {
+            Set-Settings '{ "permissions": '
+
+            Register-PwshToClaudeCode -DisableBuiltInShellTools -WarningVariable warnings -WarningAction SilentlyContinue 6>$null
+
+            Get-Content -LiteralPath (Get-SettingsPath) -Raw | Should -BeExactly '{ "permissions": '
+            ($warnings | Out-String) | Should -Match 'permissions.deny'
+        }
+
+        It "does not deny them when registration failed, so Claude Code keeps a shell" {
+            $global:ShimFailAddCommand = 'C:\NEW\PowerShell.MCP.Proxy.exe'
+            $global:ShimShellChoice = 'Disable'
+
+            Register-PwshToClaudeCode -DisableBuiltInShellTools -ErrorAction SilentlyContinue 6>$null
+
+            $global:ShellPromptCount | Should -Be 0
+            Test-Path (Get-SettingsPath) | Should -BeFalse
         }
     }
 }

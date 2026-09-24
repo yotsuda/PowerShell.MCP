@@ -165,6 +165,47 @@ function Register-PwshToClaudeDesktop {
     Write-Host "Restart Claude Desktop to apply changes." -ForegroundColor Yellow
 }
 
+# Asks Register-PwshToClaudeCode's question about the built-in shell tools.
+# Returns 'Disable' or 'Keep', or 'CannotAsk' when no one can answer. A
+# module-private function rather than inline so tests can stand in for the
+# prompt.
+function Read-BuiltInShellToolsChoice {
+    param([string]$SettingsPath)
+
+    # Run by an AI through the pwsh MCP server: the prompt appears in the
+    # console the user shares, the AI is told the command is awaiting input,
+    # and the user answers. That keeps the decision with the user.
+    $viaMcp = try { [PowerShell.MCP.Services.ExecutionState]::Status -eq 'busy' } catch { $false }
+    $interactive = [Environment]::UserInteractive -and
+        -not [Console]::IsInputRedirected -and
+        -not ([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-noni' })
+    if (-not $viaMcp -and -not $interactive) { return 'CannotAsk' }
+
+    $caption = "Disable Claude Code's built-in Bash and PowerShell tools?"
+    $message = @"
+Claude Code can also run commands in hidden shells of its own (its built-in Bash
+and PowerShell tools), where you cannot see them. Disabling those makes it run
+every command in the pwsh console instead.
+
+This adds "Bash" and "PowerShell" to permissions.deny in
+  $SettingsPath
+If the pwsh MCP server ever fails to start, Claude Code will have no shell until
+you remove them again.
+"@
+    $choices = [System.Collections.ObjectModel.Collection[System.Management.Automation.Host.ChoiceDescription]]@(
+        [System.Management.Automation.Host.ChoiceDescription]::new('&Yes', 'Disable the built-in shell tools.')
+        [System.Management.Automation.Host.ChoiceDescription]::new('&No', 'Keep them enabled.')
+    )
+    try {
+        $answer = $Host.UI.PromptForChoice($caption, $message, $choices, 1)
+    }
+    catch {
+        # A host that cannot prompt after all.
+        return 'CannotAsk'
+    }
+    if ($answer -eq 0) { 'Disable' } else { 'Keep' }
+}
+
 <#
 .SYNOPSIS
     Registers PowerShell.MCP as an MCP server in Claude Code.
@@ -188,8 +229,35 @@ function Register-PwshToClaudeDesktop {
     A legacy "PowerShell" entry pointing at PowerShell.MCP.Proxy is removed
     first.
 
+    Claude Code can also run commands in hidden shells of its own: the built-in
+    Bash and PowerShell tools. The user cannot see what runs there, and the AI
+    tends to reach for them out of habit. Once registration succeeds, the
+    cmdlet offers to disable them by adding "Bash" and "PowerShell" to
+    permissions.deny in the user settings (~/.claude/settings.json, or
+    settings.json under CLAUDE_CONFIG_DIR). It asks when it runs in an
+    interactive console, including when an AI runs it through the pwsh MCP
+    server (the question appears in the shared console, for the user to
+    answer). Anywhere it cannot ask, it changes nothing and explains the
+    parameters below instead.
+
+.PARAMETER DisableBuiltInShellTools
+    Disables Claude Code's built-in Bash and PowerShell tools without asking,
+    so that every command runs in the pwsh console where the user can see it.
+    If the pwsh MCP server ever fails to start, Claude Code then has no shell
+    until "Bash" and "PowerShell" are removed from permissions.deny again.
+
+.PARAMETER KeepBuiltInShellTools
+    Leaves the built-in tools as they are, without asking.
+
 .EXAMPLE
     Register-PwshToClaudeCode
+
+    Registers the server, then asks whether to disable the built-in shell tools.
+
+.EXAMPLE
+    Register-PwshToClaudeCode -DisableBuiltInShellTools
+
+    Registers the server and disables the built-in shell tools without asking.
 
 .EXAMPLE
     Update-Module PowerShell.MCP
@@ -201,8 +269,14 @@ function Register-PwshToClaudeDesktop {
     None. Passes through output from the claude CLI.
 #>
 function Register-PwshToClaudeCode {
-    [CmdletBinding()]
-    param()
+    [CmdletBinding(DefaultParameterSetName = 'Ask')]
+    param(
+        [Parameter(ParameterSetName = 'Disable')]
+        [switch]$DisableBuiltInShellTools,
+
+        [Parameter(ParameterSetName = 'Keep')]
+        [switch]$KeepBuiltInShellTools
+    )
 
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
         Write-Error "Claude Code CLI ('claude') not found. Install it first: https://docs.anthropic.com/en/docs/claude-code"
@@ -323,6 +397,83 @@ function Register-PwshToClaudeCode {
             $scope = $winner.Scope.ToLowerInvariant()
             Write-Warning ("A '$serverName' MCP server is also configured at $scope scope for $((Get-Location).Path) and takes precedence over the user-scope entry there; it points at $($winner.Command). " +
                 "Remove it with: claude mcp remove $serverName -s $scope")
+        }
+    }
+
+    # Built-in shell tools. Only after a successful registration: denying them
+    # without a working pwsh server would leave Claude Code with no shell.
+    if (-not $KeepBuiltInShellTools) {
+        $configDirectory = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+        $settingsPath = Join-Path $configDirectory 'settings.json'
+        $shellTools = @('Bash', 'PowerShell')
+
+        $settings = [ordered]@{}
+        $settingsReadable = $true
+        if (Test-Path -LiteralPath $settingsPath) {
+            try {
+                $raw = Get-Content -LiteralPath $settingsPath -Raw
+                if (-not [string]::IsNullOrWhiteSpace($raw)) {
+                    $settings = $raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+                }
+                if ($settings -isnot [System.Collections.IDictionary] -or
+                    ($settings.Contains('permissions') -and $settings['permissions'] -isnot [System.Collections.IDictionary]) -or
+                    ($settings.Contains('permissions') -and $settings['permissions'].Contains('deny') -and $settings['permissions']['deny'] -isnot [System.Collections.IList])) {
+                    throw 'unexpected structure'
+                }
+            }
+            catch {
+                $settingsReadable = $false
+            }
+        }
+
+        $deny = if ($settingsReadable -and $settings.Contains('permissions') -and $settings['permissions'].Contains('deny')) { @($settings['permissions']['deny']) } else { @() }
+        $missing = @($shellTools | Where-Object { $_ -notin $deny })
+
+        if (-not $settingsReadable) {
+            Write-Warning ("Could not read $settingsPath as Claude Code settings, so the built-in shell tools were left alone. " +
+                "To disable them, add ""Bash"" and ""PowerShell"" to permissions.deny there.")
+        }
+        elseif ($missing.Count -eq 0) {
+            # Say so even when nothing was asked, or a user who expected the
+            # question cannot tell a skipped prompt from a missing feature.
+            Write-Host "Claude Code's built-in Bash and PowerShell tools are already disabled (permissions.deny in $settingsPath)." -ForegroundColor Gray
+        }
+        else {
+            $choice = if ($DisableBuiltInShellTools) { 'Disable' } else { Read-BuiltInShellToolsChoice -SettingsPath $settingsPath }
+            switch ($choice) {
+                'Disable' {
+                    if (-not $settings.Contains('permissions')) { $settings['permissions'] = [ordered]@{} }
+                    $settings['permissions']['deny'] = @($deny) + $missing
+                    $temporary = $null
+                    try {
+                        New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+                        # Write beside the target and move over it, so an
+                        # interrupted write cannot leave settings.json half-written.
+                        $temporary = "$settingsPath.$([System.IO.Path]::GetRandomFileName()).tmp"
+                        [System.IO.File]::WriteAllText($temporary, ($settings | ConvertTo-Json -Depth 100), [System.Text.UTF8Encoding]::new($false))
+                        [System.IO.File]::Move($temporary, $settingsPath, $true)
+                        Write-Host "Disabled Claude Code's built-in $($missing -join ' and ') tool(s): commands now run only in the pwsh console." -ForegroundColor Green
+                        Write-Host "  settings: $settingsPath (permissions.deny)" -ForegroundColor Gray
+                        Write-Host "  If the pwsh MCP server ever fails to start, remove them from permissions.deny to get a shell back." -ForegroundColor Gray
+                    }
+                    catch {
+                        if ($temporary -and (Test-Path -LiteralPath $temporary)) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
+                        Write-Error "Could not update ${settingsPath}: $($_.Exception.Message)"
+                    }
+                }
+                'Keep' {
+                    Write-Host "Left Claude Code's built-in shell tools enabled. To disable them later: Register-PwshToClaudeCode -DisableBuiltInShellTools" -ForegroundColor Gray
+                }
+                default {
+                    # No one to ask (script, CI, redirected input): change
+                    # nothing, but make the option discoverable.
+                    Write-Host ""
+                    Write-Host "Claude Code's built-in Bash and PowerShell tools are still enabled. They run commands in hidden shells the user cannot see." -ForegroundColor Yellow
+                    Write-Host "  Register-PwshToClaudeCode -DisableBuiltInShellTools   Disable them, so every command runs in the pwsh console." -ForegroundColor Gray
+                    Write-Host "  Register-PwshToClaudeCode -KeepBuiltInShellTools      Keep them, without this notice." -ForegroundColor Gray
+                    Write-Host ""
+                }
+            }
         }
     }
 

@@ -160,6 +160,7 @@ Install-PSResource PowerShell.MCP
 ```powershell
 Register-PwshToClaudeCode
 ```
+It then asks whether to disable Claude Code's built-in Bash and PowerShell tools, so that every command runs in the console you can see. `-DisableBuiltInShellTools` or `-KeepBuiltInShellTools` answers without asking.
 
 **For Claude Desktop:**
 ```powershell
@@ -199,6 +200,7 @@ chmod +x "$(Get-MCPProxyPath)"
 ```powershell
 Register-PwshToClaudeCode
 ```
+It then asks whether to disable Claude Code's built-in Bash and PowerShell tools, so that every command runs in the console you can see. `-DisableBuiltInShellTools` or `-KeepBuiltInShellTools` answers without asking.
 
 **For Claude Desktop:**
 ```powershell
@@ -237,6 +239,7 @@ chmod +x "$(Get-MCPProxyPath)"
 ```powershell
 Register-PwshToClaudeCode
 ```
+It then asks whether to disable Claude Code's built-in Bash and PowerShell tools, so that every command runs in the console you can see. `-DisableBuiltInShellTools` or `-KeepBuiltInShellTools` answers without asking.
 
 **For Claude Desktop:**
 ```powershell

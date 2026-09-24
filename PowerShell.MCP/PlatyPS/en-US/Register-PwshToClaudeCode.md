@@ -17,10 +17,22 @@ Registers PowerShell.MCP as an MCP server in Claude Code.
 
 ## SYNTAX
 
-### __AllParameterSets
+### Ask (Default)
 
 ```
 Register-PwshToClaudeCode [<CommonParameters>]
+```
+
+### Disable
+
+```
+Register-PwshToClaudeCode -DisableBuiltInShellTools [<CommonParameters>]
+```
+
+### Keep
+
+```
+Register-PwshToClaudeCode -KeepBuiltInShellTools [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -43,13 +55,30 @@ entry there. It is left alone, and a warning names it.
 
 A legacy "PowerShell" entry pointing at PowerShell.MCP.Proxy is removed first.
 
+Claude Code can also run commands in hidden shells of its own: the built-in Bash and PowerShell
+tools. The user cannot see what runs there, and the AI tends to reach for them out of habit.
+Once registration succeeds, the cmdlet offers to disable them by adding "Bash" and "PowerShell"
+to permissions.deny in the user settings (~/.claude/settings.json, or settings.json under
+CLAUDE_CONFIG_DIR).
+It asks when it runs in an interactive console, including when an AI runs it through the pwsh
+MCP server (the question appears in the shared console, for the user to answer).
+Anywhere it cannot ask, it changes nothing and explains the parameters below instead.
+
 ## EXAMPLES
 
 ### EXAMPLE 1
 
 Register-PwshToClaudeCode
 
+Registers the server, then asks whether to disable the built-in shell tools.
+
 ### EXAMPLE 2
+
+Register-PwshToClaudeCode -DisableBuiltInShellTools
+
+Registers the server and disables the built-in shell tools without asking.
+
+### EXAMPLE 3
 
 Update-Module PowerShell.MCP
 Register-PwshToClaudeCode
@@ -57,6 +86,51 @@ Register-PwshToClaudeCode
 Points Claude Code at the proxy of the version just installed.
 
 ## PARAMETERS
+
+### -DisableBuiltInShellTools
+
+Disables Claude Code's built-in Bash and PowerShell tools without asking, so that every command
+runs in the pwsh console where the user can see it.
+If the pwsh MCP server ever fails to start, Claude Code then has no shell until "Bash" and
+"PowerShell" are removed from permissions.deny again.
+
+```yaml
+Type: System.Management.Automation.SwitchParameter
+DefaultValue: False
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: Disable
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -KeepBuiltInShellTools
+
+Leaves the built-in tools as they are, without asking.
+
+```yaml
+Type: System.Management.Automation.SwitchParameter
+DefaultValue: False
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: Keep
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
 
 ### CommonParameters
 
