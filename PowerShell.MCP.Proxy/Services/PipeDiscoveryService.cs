@@ -26,8 +26,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var currentPipes = _sessionManager.EnumeratePipes(_sessionManager.ProxyPid, agentId).ToList();
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
-            .Where(p => p.HasValue)
-            .Select(p => p.Value)
+            .OfType<int>()
             .ToHashSet();
 
         foreach (var pid in previouslyBusyPids)
@@ -179,8 +178,13 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     /// <inheritdoc />
     public async Task<CachedOutputResult> CollectAllCachedOutputsAsync(string agentId, string? excludePipeName, CancellationToken cancellationToken)
     {
-        var completedOutput = new StringBuilder();
-        var busyStatusInfo = new StringBuilder();
+        var completedOutputs = new List<string>();
+        var busyStatusLines = new List<string>();
+        // With an excluded pipe, the caller's own console is left out and
+        // everything collected here belongs to other consoles, so mark it.
+        // wait_for_completion passes null: every console is one it is waiting
+        // on, none is "other".
+        string Mark(string block) => excludePipeName != null ? PipelineHelper.MarkOtherConsole(block) : block;
 
         foreach (var pipeName in _sessionManager.EnumeratePipes(_sessionManager.ProxyPid, agentId))
         {
@@ -219,8 +223,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     {
                         output = output.Remove(index, oldValue.Length).Insert(index, "| Status: Standby |");
                     }
-                    completedOutput.AppendLine(output);
-                    completedOutput.AppendLine();
+                    completedOutputs.Add(Mark(output));
                 }
             }
             else if (PipeStatus.IsBusy(status.Status))
@@ -230,7 +233,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 // that times out still tells the AI the console is occupied
                 // (its StatusLine carries the answer-or-close_console guidance).
                 if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
-                busyStatusInfo.AppendLine(PipelineHelper.FormatBusyStatus(status.StatusLine, status.Pid, status.Pipeline, status.Duration ?? 0));
+                busyStatusLines.Add(Mark(PipelineHelper.FormatBusyStatus(status.StatusLine, status.Pid, status.Pipeline, status.Duration ?? 0)));
             }
             else if (status.Status == PipeStatus.Standby)
             {
@@ -238,7 +241,10 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             }
         }
 
-        return new CachedOutputResult(completedOutput.ToString(), busyStatusInfo.ToString());
+        // One blank line between consoles, in both lists.
+        return new CachedOutputResult(
+            PipelineHelper.JoinBlocks([.. completedOutputs]),
+            PipelineHelper.JoinBlocks([.. busyStatusLines]));
     }
 
 }

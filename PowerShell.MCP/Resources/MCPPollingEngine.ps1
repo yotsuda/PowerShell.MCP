@@ -760,7 +760,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                 }
                 & $flushNormalBatch
-                $pipelineText = ($pipelineLines -join "`n").Trim()
+                # Strip only leading blank LINES, never leading spaces: the
+                # first line's indentation can be significant (e.g. the
+                # " M" vs "M " status columns of `git status --short`).
+                $pipelineText = ($pipelineLines -join "`n").TrimStart("`r", "`n").TrimEnd()
 
                 # Process exceptions (terminating throws caught inside
                 # Invoke-CommandWithAllStreams).
@@ -774,21 +777,48 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
                 $exceptionText = ($exceptionLines -join "`n").Trim()
 
-                # Process information / Write-Host. Skip empty/whitespace
-                # records (PowerShell sometimes emits a blank
-                # InformationRecord at pipeline boundaries).
-                $infoLines = @()
+                # Process information / Write-Host, rendered the way the
+                # visible console shows it so the AI sees what the user
+                # sees: Write-Host colors become the same escape codes
+                # other output carries (only when they differ from the
+                # console's defaults, which PowerShell fills in for
+                # uncolored calls), -NoNewline joins onto the next piece,
+                # and an explicit `Write-Host ''` stays a blank line.
+                # Other empty/whitespace records are skipped (PowerShell
+                # sometimes emits a blank InformationRecord at pipeline
+                # boundaries).
+                $infoBuilder = [System.Text.StringBuilder]::new()
+                $infoCount = 0
+                $defaultFg = try { $Host.UI.RawUI.ForegroundColor } catch { $null }
+                $defaultBg = try { $Host.UI.RawUI.BackgroundColor } catch { $null }
                 foreach ($info in $StreamResults.Information) {
-                    $messageData = if ($info -is [System.Management.Automation.InformationRecord]) {
-                        if ($null -ne $info.MessageData) { $info.MessageData.ToString() } else { $info.ToString() }
+                    $messageData = if ($info -is [System.Management.Automation.InformationRecord]) { $info.MessageData } else { $info }
+                    if ($messageData -is [System.Management.Automation.HostInformationMessage]) {
+                        $text = [string]$messageData.Message
+                        $style = ""
+                        try {
+                            if ($null -ne $messageData.ForegroundColor -and $messageData.ForegroundColor -ne $defaultFg) {
+                                $style += [System.Management.Automation.PSStyle]::MapForegroundColorToEscapeSequence($messageData.ForegroundColor)
+                            }
+                            if ($null -ne $messageData.BackgroundColor -and $messageData.BackgroundColor -ne $defaultBg) {
+                                $style += [System.Management.Automation.PSStyle]::MapBackgroundColorToEscapeSequence($messageData.BackgroundColor)
+                            }
+                        } catch { $style = "" }
+                        if ($style -and $text) { $text = "$style$text`e[0m" }
+                        [void]$infoBuilder.Append($text)
+                        if (-not $messageData.NoNewLine) { [void]$infoBuilder.Append("`n") }
+                        if (-not [string]::IsNullOrWhiteSpace($messageData.Message)) { $infoCount++ }
                     } else {
-                        $info.ToString()
-                    }
-                    if (-not [string]::IsNullOrWhiteSpace($messageData)) {
-                        $infoLines += $messageData
+                        $text = if ($null -ne $messageData) { $messageData.ToString() } else { $info.ToString() }
+                        if (-not [string]::IsNullOrWhiteSpace($text)) {
+                            [void]$infoBuilder.Append($text).Append("`n")
+                            $infoCount++
+                        }
                     }
                 }
-                $infoText = ($infoLines -join "`n").Trim()
+                # Leading blank lines only, never leading spaces (ASCII art,
+                # indented listings keep their shape).
+                $infoText = $infoBuilder.ToString().TrimStart("`r", "`n").TrimEnd()
 
                 # Direct console writes — only present when something
                 # bypassed the PowerShell stream system entirely
@@ -851,6 +881,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     if (-not $raw) { return "" }
                     $stripped = $raw -replace $progressOverlayPattern, ""
                     $stripped = $stripped -replace $vtPattern, ""
+                    # Apply carriage returns the way the terminal does: a
+                    # spinner / counter redrawing one line with `r leaves
+                    # only its last frame on screen, so keep only the text
+                    # after the last `r of each line instead of every frame
+                    # run together.
+                    $stripped = (($stripped -split "`n") | ForEach-Object {
+                        $line = $_.TrimEnd("`r")
+                        $line.Substring($line.LastIndexOf("`r") + 1)
+                    }) -join "`n"
                     $collapsed = $stripped -replace ' {8,}', '  '
                     $trimmed = $collapsed.TrimEnd("`r","`n", " ", "`t")
                     if ([string]::IsNullOrWhiteSpace($trimmed)) { return "" }
@@ -988,7 +1027,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # warningCount accumulates as we walked PipelineItems above
                 # — Warning records arrive on stream 3 and merge into
                 # pipelineStream via 3>&1, so they're counted there.
-                $infoCount = $infoLines.Count
                 $hasErrors = $errorCount -gt 0
                 # LastExitReport is 0 when the invocation did not
                 # surface a hidden native exit (see
@@ -1132,6 +1170,22 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     return $statusLine
                 }
                 return $statusLine + "`n`n" + (($sections -join "`n").TrimEnd())
+            }
+
+            # Result for a pipeline whose try-body never produced output:
+            # it was stopped (cancel / Ctrl+C) or ran `exit`. Shaped like a
+            # normal status line so it reads as that pipeline's result —
+            # the old bare "Command execution completed" claimed success
+            # and, when delivered alongside a later command's response,
+            # could not be tied to the pipeline it belonged to.
+            function Format-McpInterruptedOutput {
+                param([string]$Pipeline)
+                $firstLine = (($Pipeline.Trim() -split "[\r\n]")[0] -split "\|")[0].Trim()
+                $summary = if ($firstLine.Length -gt 30) { $firstLine.Substring(0, 27) + "..." }
+                           elseif ($firstLine.Length -lt $Pipeline.Trim().Length) { $firstLine + "..." }
+                           else { $firstLine }
+                $location = try { "Location [$((Get-Location).Provider.Name)]: $((Get-Location).Path)" } catch { "" }
+                "⚠ Pipeline interrupted before completion (cancel, Ctrl+C, or exit) | Window: $($Host.UI.RawUI.WindowTitle) | Pipeline: $summary | $location"
             }
 
             # ===== Main Event Processing =====
@@ -1279,7 +1333,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
                     if ($null -eq $mcpOutput) {
-                        $mcpOutput = "Command execution completed"
+                        $mcpOutput = try { Format-McpInterruptedOutput -Pipeline $cmd } catch { "⚠ Pipeline interrupted before completion (cancel, Ctrl+C, or exit)" }
                     }
                     [PowerShell.MCP.Services.PowerShellCommunication]::NotifyResultReady($mcpOutput)
                 }
@@ -1331,7 +1385,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
                     if ($null -eq $mcpOutput) {
-                        $mcpOutput = "Command execution completed"
+                        $mcpOutput = try { Format-McpInterruptedOutput -Pipeline $silentCmd } catch { "⚠ Pipeline interrupted before completion (cancel, Ctrl+C, or exit)" }
                     }
                     [PowerShell.MCP.Services.PowerShellCommunication]::NotifySilentResultReady($mcpOutput)
                 }

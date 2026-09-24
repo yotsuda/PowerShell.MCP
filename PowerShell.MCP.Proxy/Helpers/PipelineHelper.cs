@@ -24,6 +24,37 @@ public static partial class PipelineHelper
     }
 
     /// <summary>
+    /// Joins response blocks with exactly one blank line between them.
+    /// Null / whitespace-only blocks are dropped and each block's leading and
+    /// trailing line breaks are trimmed, so a block that already ends in a
+    /// newline (or doesn't) can't produce a missing or doubled separator.
+    /// Every tool response is assembled through this so separate consoles'
+    /// results and trailing notices never run together line-to-line.
+    /// </summary>
+    public static string JoinBlocks(params string?[] blocks)
+        => string.Join("\n\n", blocks
+            .Where(b => !string.IsNullOrWhiteSpace(b))
+            .Select(b => b!.Trim('\r', '\n')));
+
+    /// <summary>
+    /// Prefix that marks a status line as belonging to a console other than
+    /// the one this tool call ran on, so the AI can tell its own result apart
+    /// from other consoles' reports without inferring it from block order.
+    /// </summary>
+    public const string OtherConsoleMarker = "[other console] ";
+
+    /// <summary>
+    /// Prefixes every status line (✓ / ✗ / ⧗ Pipeline ...) in a block with
+    /// <see cref="OtherConsoleMarker"/>. A single console's drained output can
+    /// hold several joined results, hence every line rather than just the first.
+    /// </summary>
+    public static string MarkOtherConsole(string block)
+        => StatusLineStartRegex().Replace(block, OtherConsoleMarker);
+
+    [GeneratedRegex(@"^(?=[✓✗⧗] Pipeline )", RegexOptions.Multiline)]
+    private static partial Regex StatusLineStartRegex();
+
+    /// <summary>
     /// Get PID string from pipe name
     /// </summary>
     public static string GetPidString(string? pipeName)
@@ -135,6 +166,52 @@ public static partial class PipelineHelper
             _detailShownAgents.Clear();
         }
     }
+
+    /// <summary>
+    /// Detects a redundant leading <c>cd</c> / <c>Set-Location</c> and returns
+    /// a hint telling the AI the console's location already persists across
+    /// calls. Fires only when the pipeline starts with a location change whose
+    /// target equals the pre-execution cwd AND the pipeline left the console
+    /// at that same cwd — i.e. the prefix did nothing. Returns null otherwise
+    /// (including when either cwd is unknown or not a filesystem path).
+    /// </summary>
+    public static string? CheckRedundantLeadingCd(string pipeline, string? preCwd, string? postCwd)
+    {
+        if (string.IsNullOrEmpty(preCwd) || string.IsNullOrEmpty(postCwd)) return null;
+        var match = LeadingSetLocationRegex().Match(pipeline);
+        if (!match.Success) return null;
+
+        var arg = match.Groups["arg"].Value;
+        if (arg.StartsWith('\''))
+            arg = arg[1..^1].Replace("''", "'");
+        else if (arg.StartsWith('"'))
+            arg = arg[1..^1];
+        if (arg.Length == 0) return null;
+
+        try
+        {
+            if (!Path.IsPathFullyQualified(preCwd) || !Path.IsPathFullyQualified(postCwd)) return null;
+            if (arg == "~" || arg.StartsWith("~/") || arg.StartsWith("~\\"))
+                arg = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + arg[1..];
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var normPre = Path.TrimEndingDirectorySeparator(Path.GetFullPath(preCwd));
+            var normPost = Path.TrimEndingDirectorySeparator(Path.GetFullPath(postCwd));
+            var normTarget = Path.TrimEndingDirectorySeparator(Path.GetFullPath(arg, normPre));
+            if (!string.Equals(normPre, normTarget, comparison) || !string.Equals(normPre, normPost, comparison))
+                return null;
+            return $"💡 Unnecessary leading `{match.Groups["verb"].Value}`: the location persists across execute_command calls. Omit it next time.";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Leading cd / chdir / sl / Set-Location with one literal path argument
+    // (bare, single-quoted, or double-quoted without $ / backtick expansion),
+    // followed by a statement separator or end of pipeline.
+    [GeneratedRegex(@"^\s*(?<verb>cd|chdir|sl|Set-Location)\s+(?:-(?:LiteralPath|Path|LP|PSPath)(?::|\s)\s*)?(?<arg>'(?:[^']|'')*'|""[^""`$]*""|[^\s;|&'""`$(){}]+)\s*(?:;|&&|\r?\n|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex LeadingSetLocationRegex();
 
     // TODO: Uncomment when JsonDuo is published to PS Gallery
     // /// <summary>

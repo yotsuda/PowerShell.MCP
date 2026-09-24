@@ -70,6 +70,34 @@ public class OutputTruncationHelperTests : IDisposable
     }
 
     [Fact]
+    public void TruncateIfNeeded_OverThreshold_StatusLineStaysFirst()
+    {
+        const string status = "✓ Pipeline executed successfully | Window: #1 A | Status: Ready | Pipeline: 1..3000... | Duration: 0.53s";
+        var output = status + "\n\n" + string.Join("\n", Enumerable.Range(1, 3000).Select(i => $"row {i} xxxxxxxxxx"));
+
+        var result = OutputTruncationHelper.TruncateIfNeeded(output, _testDir);
+
+        Assert.StartsWith(status + Environment.NewLine + Environment.NewLine + "Output too large", result);
+        // Not repeated inside the head preview.
+        Assert.Equal(1, result.Split(status).Length - 1);
+        Assert.Contains("row 1 x", result);
+        Assert.Contains("row 3000 x", result);
+        // The saved file keeps the full, unmodified output.
+        Assert.Equal(output, File.ReadAllText(Directory.GetFiles(_testDir, "pwsh_output_*.txt").Single()));
+    }
+
+    [Theory]
+    [InlineData("row 1\nrow 2")]
+    [InlineData("✓ no pipe separator\nrest")]
+    [InlineData("✓x | not a status line\nrest")]
+    public void SplitStatusLine_NonStatusFirstLine_ReturnsWholeOutput(string output)
+    {
+        var (statusLine, body) = OutputTruncationHelper.SplitStatusLine(output);
+        Assert.Null(statusLine);
+        Assert.Equal(output, body);
+    }
+
+    [Fact]
     public void TruncateIfNeeded_OverThreshold_PreviewContainsHeadAndTail()
     {
         // Build output with identifiable head and tail regions

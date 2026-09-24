@@ -387,6 +387,128 @@ public class PipelineHelperTests
 
     #endregion
 
+    #region JoinBlocks Tests
+
+    [Fact]
+    public void JoinBlocks_SeparatesBlocksWithExactlyOneBlankLine()
+    {
+        var result = PipelineHelper.JoinBlocks(
+            "✓ Pipeline executed | A\n",
+            null,
+            "",
+            "  \n",
+            "✓ Pipeline executed | B\n\nout\n\n",
+            "💡 hint");
+        Assert.Equal("✓ Pipeline executed | A\n\n✓ Pipeline executed | B\n\nout\n\n💡 hint", result);
+    }
+
+    [Fact]
+    public void JoinBlocks_KeepsLeadingIndentation()
+    {
+        Assert.Equal("  - ⚠ closed\n\nx", PipelineHelper.JoinBlocks("  - ⚠ closed", "x"));
+    }
+
+    [Fact]
+    public void JoinBlocks_AllEmpty_ReturnsEmpty()
+    {
+        Assert.Equal("", PipelineHelper.JoinBlocks(null, "", "\n"));
+    }
+
+    #endregion
+
+    #region MarkOtherConsole Tests
+
+    [Fact]
+    public void MarkOtherConsole_PrefixesEveryStatusLine()
+    {
+        var block = "✓ Pipeline executed successfully | Window: #1 A\n\nA done\n\n"
+                  + "✗ Pipeline executed with errors | Window: #1 A\n\nboom";
+        Assert.Equal(
+            "[other console] ✓ Pipeline executed successfully | Window: #1 A\n\nA done\n\n"
+            + "[other console] ✗ Pipeline executed with errors | Window: #1 A\n\nboom",
+            PipelineHelper.MarkOtherConsole(block));
+    }
+
+    [Fact]
+    public void MarkOtherConsole_BusyLine_IsPrefixed()
+    {
+        Assert.Equal(
+            "[other console] ⧗ Pipeline is running | Window: #2 B",
+            PipelineHelper.MarkOtherConsole("⧗ Pipeline is running | Window: #2 B"));
+    }
+
+    [Fact]
+    public void MarkOtherConsole_LeavesOutputLinesAndMarkedLinesAlone()
+    {
+        const string block = "[other console] ✓ Pipeline executed | #1\n\nsome ✓ Pipeline text mid-line";
+        Assert.Equal(block, PipelineHelper.MarkOtherConsole(block));
+    }
+
+    #endregion
+
+    #region CheckRedundantLeadingCd Tests
+
+    private static readonly string CdDir = Path.Combine(Path.GetTempPath(), "cd test's dir");
+    private static readonly string OtherDir = Path.Combine(Path.GetTempPath(), "other");
+
+    [Theory]
+    [InlineData("cd '{0}'; Get-ChildItem", "cd")]
+    [InlineData("Set-Location -LiteralPath '{0}'; dotnet build", "Set-Location")]
+    [InlineData("  sl -Path \"{0}\"\nGet-Date", "sl")]
+    [InlineData("chdir '{0}' && git status", "chdir")]
+    [InlineData("cd '{0}'", "cd")]
+    public void CheckRedundantLeadingCd_SameDirBeforeAndAfter_ReturnsHint(string template, string verb)
+    {
+        var pipeline = string.Format(template, CdDir.Replace("'", "''"));
+        // Double-quoted arguments carry the raw apostrophe.
+        if (template.Contains('"')) pipeline = string.Format(template, CdDir);
+        var result = PipelineHelper.CheckRedundantLeadingCd(pipeline, CdDir, CdDir);
+        Assert.Equal($"💡 Unnecessary leading `{verb}`: the location persists across execute_command calls. Omit it next time.", result);
+    }
+
+    [Fact]
+    public void CheckRedundantLeadingCd_TrailingSeparatorAndDot_ReturnsHint()
+    {
+        var pipeline = $"cd '{CdDir.Replace("'", "''")}{Path.DirectorySeparatorChar}'; Get-Date";
+        Assert.NotNull(PipelineHelper.CheckRedundantLeadingCd(pipeline, CdDir, CdDir));
+        Assert.NotNull(PipelineHelper.CheckRedundantLeadingCd("cd .; Get-Date", CdDir, CdDir));
+    }
+
+    [Fact]
+    public void CheckRedundantLeadingCd_TargetDiffersFromPreCwd_ReturnsNull()
+    {
+        var pipeline = $"cd '{OtherDir}'; Get-Date";
+        Assert.Null(PipelineHelper.CheckRedundantLeadingCd(pipeline, CdDir, CdDir));
+    }
+
+    [Fact]
+    public void CheckRedundantLeadingCd_PipelineMovedAway_ReturnsNull()
+    {
+        var pipeline = $"cd '{CdDir.Replace("'", "''")}'; cd '{OtherDir}'";
+        Assert.Null(PipelineHelper.CheckRedundantLeadingCd(pipeline, CdDir, OtherDir));
+    }
+
+    [Theory]
+    [InlineData("Get-ChildItem; cd .")]
+    [InlineData("cd $env:TEMP; Get-Date")]
+    [InlineData("cd (Get-Location); Get-Date")]
+    [InlineData("cd . | Out-Null")]
+    [InlineData("cdx .; Get-Date")]
+    public void CheckRedundantLeadingCd_NotALiteralLeadingCd_ReturnsNull(string pipeline)
+    {
+        Assert.Null(PipelineHelper.CheckRedundantLeadingCd(pipeline, CdDir, CdDir));
+    }
+
+    [Fact]
+    public void CheckRedundantLeadingCd_UnknownCwd_ReturnsNull()
+    {
+        Assert.Null(PipelineHelper.CheckRedundantLeadingCd("cd .; Get-Date", null, CdDir));
+        Assert.Null(PipelineHelper.CheckRedundantLeadingCd("cd .; Get-Date", CdDir, null));
+        Assert.Null(PipelineHelper.CheckRedundantLeadingCd("cd .; Get-Date", @"HKLM:\Software", @"HKLM:\Software"));
+    }
+
+    #endregion
+
 
     // TODO: Uncomment when JsonDuo is published to PS Gallery
     // #region CheckJsonFileHint Tests

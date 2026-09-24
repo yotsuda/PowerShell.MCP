@@ -37,19 +37,30 @@ public static class OutputTruncationHelper
         if (output.Length <= TruncationThreshold)
             return output;
 
+        // Keep the pipeline's status line at the very top, ahead of the
+        // "Output too large" notice, so the response still opens with the
+        // outcome (success / errors / console / location) like any other.
+        var (statusLine, body) = SplitStatusLine(output);
+
         // Compute newline-aligned head boundary
-        var headEnd = FindHeadBoundary(output, PreviewHeadSize);
-        var head = output[..headEnd];
+        var headEnd = FindHeadBoundary(body, PreviewHeadSize);
+        var head = body[..headEnd];
 
         // Compute newline-aligned tail boundary
-        var tailStart = FindTailBoundary(output, PreviewTailSize);
-        var tail = output[tailStart..];
+        var tailStart = FindTailBoundary(body, PreviewTailSize);
+        var tail = body[tailStart..];
 
-        var omitted = output.Length - head.Length - tail.Length;
+        var omitted = body.Length - head.Length - tail.Length;
 
         var filePath = SaveOutputToFile(output, outputDirectory);
 
         var sb = new System.Text.StringBuilder();
+
+        if (statusLine != null)
+        {
+            sb.AppendLine(statusLine);
+            sb.AppendLine();
+        }
 
         if (filePath != null)
         {
@@ -70,6 +81,24 @@ public static class OutputTruncationHelper
         sb.Append(tail);
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Splits off a leading pipeline status line ("✓ / ✗ / ⚠ Pipeline ... | ...").
+    /// Returns (null, output) when the output doesn't start with one.
+    /// </summary>
+    internal static (string? StatusLine, string Body) SplitStatusLine(string output)
+    {
+        var newline = output.IndexOf('\n');
+        var firstLine = (newline >= 0 ? output[..newline] : output).TrimEnd('\r');
+        var isStatusLine = firstLine.Length > 2
+            && "✓✗⚠".Contains(firstLine[0])
+            && firstLine[1] == ' '
+            && firstLine.Contains(" | ");
+        if (!isStatusLine)
+            return (null, output);
+        var body = newline >= 0 ? output[(newline + 1)..].TrimStart('\r', '\n') : "";
+        return (firstLine, body);
     }
 
     /// <summary>

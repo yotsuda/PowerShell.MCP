@@ -1,4 +1,5 @@
 using Moq;
+using PowerShell.MCP.Proxy.Helpers;
 using PowerShell.MCP.Proxy.Models;
 using PowerShell.MCP.Proxy.Services;
 using PowerShell.MCP.Proxy.Tools;
@@ -377,7 +378,7 @@ public class PowerShellToolsTests
             status = "timeout",
             pipeline = "Start-Sleep 300",
             duration = 170.0,
-            statusLine = "⧗ Pipeline is still running | Window: #2000 Cat | Status: Busy | Pipeline: Start-Sleep 300 | Duration: 170.00s"
+            statusLine = "⧗ Pipeline is running | Window: #2000 Cat | Status: Busy | Pipeline: Start-Sleep 300 | Duration: 170.00s"
         });
         _mockPowerShellService
             .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Start-Sleep 300", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -402,7 +403,9 @@ public class PowerShellToolsTests
             agent_id: TestAgentId);
 
         // Assert
-        Assert.Contains("Pipeline is still running", result);
+        Assert.Contains("⧗ Pipeline is running | Window: #2000 Cat", result);
+        // The console this call ran on is never marked as "other".
+        Assert.DoesNotContain(PipelineHelper.OtherConsoleMarker, result);
         Assert.Contains("wait_for_completion", result);
     }
 
@@ -654,7 +657,7 @@ public class PowerShellToolsTests
     {
         // Arrange: console was switched (e.g. previous pipe was dead) — pre-1.9 this
         // returned early with "Pipeline NOT executed". 1.9+ falls through to execute
-        // the pipeline on the new console and surfaces a "Switched to console" notice.
+        // the pipeline on the new console and surfaces a "Switched to existing console" notice.
         _mockPipeDiscoveryService
             .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, true, new List<string>(), null));
@@ -683,7 +686,7 @@ public class PowerShellToolsTests
             agent_id: TestAgentId);
 
         // Assert: pipeline executed (no "NOT executed") + switched notice surfaced
-        Assert.Contains("Switched to console", result);
+        Assert.Contains("Switched to existing console", result);
         Assert.DoesNotContain("Pipeline NOT executed", result);
     }
 
@@ -831,7 +834,7 @@ public class PowerShellToolsTests
 
         // Assert
         Assert.Contains("Console PID #5000 was closed", result);
-        Assert.Contains("Switched to console", result);
+        Assert.Contains("Switched to existing console", result);
     }
 
     [Fact]
@@ -1076,7 +1079,7 @@ public class PowerShellToolsTests
             status = "timeout",
             pipeline = "Start-Sleep 300",
             duration = 170.0,
-            statusLine = "⧗ Pipeline is still running",
+            statusLine = "⧗ Pipeline is running",
             cwd = midExecCwd
         });
         _mockPowerShellService

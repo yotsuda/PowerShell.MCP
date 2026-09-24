@@ -1023,7 +1023,7 @@ Please provide how to update the MCP client configuration to the user.";
                         // return. Naming it here is what stops that from being
                         // mistaken for the child's own fault — see StalledChild.
                         var stalledChild = StalledChild.Describe();
-                        var statusLine = BuildStatusLine("⧗", "Pipeline is still running", "Busy", runningPipeline, roundedDuration);
+                        var statusLine = BuildStatusLine("⧗", "Pipeline is running", "Busy", runningPipeline, roundedDuration);
                         var timeoutResponse = JsonSerializer.Serialize(new
                         {
                             pid,
@@ -1312,17 +1312,30 @@ Please provide how to update the MCP client configuration to the user.";
     /// encouraging use of the optimized PowerShell.MCP text file cmdlets instead.
     /// Returns null if no discouraged cmdlets are found.
     /// </summary>
-    private static readonly Regex GetContentRegex = new(@"\b(Get-Content|gc|cat|type)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex SetContentRegex = new(@"\bSet-Content\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly HashSet<string> GetContentNames = new(StringComparer.OrdinalIgnoreCase) { "Get-Content", "gc", "cat", "type" };
 
-    private static string? BuildGetSetContentWarning(string pipeline)
+    internal static string? BuildGetSetContentWarning(string pipeline)
     {
+        // Only actual command invocations count. A word match flagged
+        // property keys (@{ Type = ... }), strings ("cat"), and Add-Type.
+        var commandNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ast = System.Management.Automation.Language.Parser.ParseInput(pipeline, out _, out _);
+        foreach (var node in ast.FindAll(a => a is System.Management.Automation.Language.CommandAst, true))
+        {
+            var name = ((System.Management.Automation.Language.CommandAst)node).GetCommandName();
+            if (name != null)
+            {
+                // Module-qualified form: Microsoft.PowerShell.Management\Get-Content
+                commandNames.Add(name[(name.LastIndexOf('\\') + 1)..]);
+            }
+        }
+
         var warnings = new List<string>();
 
-        if (GetContentRegex.IsMatch(pipeline))
+        if (commandNames.Overlaps(GetContentNames))
             warnings.Add("• Use Show-TextFiles instead of Get-Content (aliases: gc, cat, type)");
 
-        if (SetContentRegex.IsMatch(pipeline))
+        if (commandNames.Contains("Set-Content"))
             warnings.Add("• Use Update-MatchInFile, Update-LinesInFile, Add-LinesToFile, or Remove-LinesFromFile instead of Set-Content");
 
         if (warnings.Count == 0) return null;

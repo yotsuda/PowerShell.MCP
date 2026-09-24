@@ -210,28 +210,12 @@ public class PowerShellTools
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
             // Build response: closedConsoles + busyStatusInfo + completedOutputs + agentId info + result
-            var response = new StringBuilder();
-            if (closedConsoleMessages.Count > 0)
-            {
-                response.AppendLine(string.Join("\n", closedConsoleMessages));
-                response.AppendLine();
-            }
-            if (!string.IsNullOrEmpty(newSessionNotice))
-            {
-                response.AppendLine(newSessionNotice);
-                response.AppendLine();
-            }
-            if (busyStatusInfo.Length > 0)
-            {
-                response.Append(busyStatusInfo);
-                response.AppendLine();
-            }
-            if (completedOutputs.Length > 0)
-            {
-                response.Append(completedOutputs);
-            }
-            response.Append(result);
-            return Wrap(response.ToString());
+            return Wrap(PipelineHelper.JoinBlocks(
+                string.Join("\n", closedConsoleMessages),
+                newSessionNotice,
+                busyStatusInfo,
+                completedOutputs,
+                result));
         }
         catch (Exception ex)
         {
@@ -421,14 +405,9 @@ If the target has unsubmitted text at its prompt, a human is typing in it: the f
         sessionManager.ClearDeadPipe(agentId, pipeName);
         CloseConsoleGuard.Disarm(pipeName);
 
-        var closeResponse = new StringBuilder();
-        if (!string.IsNullOrEmpty(drainedOutput))
-        {
-            closeResponse.AppendLine(drainedOutput);
-            closeResponse.AppendLine();
-        }
-        closeResponse.Append($"✓ Closed console #{pid}. The next command will auto-start a fresh console.");
-        return Wrap(closeResponse.ToString());
+        return Wrap(PipelineHelper.JoinBlocks(
+            drainedOutput,
+            $"✓ Closed console #{pid}. The next command will auto-start a fresh console."));
     }
 
     /// <summary>
@@ -719,13 +698,18 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             // sibling has its own LastAiCwd from prior AI work.
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
             await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
-            startupNotice = $"ℹ️ Switched to console {GetConsoleName(readyPipeName)}. Pipeline running on the new console.";
+            startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}. Pipeline running there.";
         }
 
         // Check for local variable assignments without scope prefix.
         // Per-agent dedup: same var name never double-warns the same
         // conversation, so long sessions don't drown in reminders.
         var scopeWarning = CheckLocalVariableAssignments(pipeline, agentId);
+
+        // The AI's own pipeline, captured before the first-attach preamble
+        // below prepends a Set-Location of our own — the redundant-cd hint
+        // must judge only what the AI wrote.
+        var aiPipeline = pipeline;
 
         // Enforce var1/var2 usage for text editing cmdlets
         var var1Error = PipelineHelper.CheckVar1Enforcement(pipeline, var1, var2);
@@ -780,26 +764,22 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 sessionManager.SetLastAiCwd(agentId, driftPid.Value, drift.Value.LiveCwd);
 
             var driftConsoleName = GetConsoleName(readyPipeName);
-            var bailResponse = new StringBuilder();
-            if (closedConsoleMessages.Count > 0)
-            {
-                bailResponse.AppendLine(string.Join("\n", closedConsoleMessages));
-                bailResponse.AppendLine();
-            }
-            if (!string.IsNullOrEmpty(startupNotice))
-            {
-                bailResponse.AppendLine(startupNotice);
-                bailResponse.AppendLine();
-            }
-            bailResponse.AppendLine($"ℹ️ cwd in console {driftConsoleName} changed from '{drift.Value.AiCwd}' to '{drift.Value.LiveCwd}' outside the AI's commands (e.g. a `cd` typed in the console).");
-            bailResponse.AppendLine($"Pipeline NOT executed. Re-issue to run at '{drift.Value.LiveCwd}', or prepend `Set-Location -LiteralPath '{drift.Value.AiCwd.Replace("'", "''")}';` to revert.");
-            return Wrap(bailResponse.ToString());
+            return Wrap(PipelineHelper.JoinBlocks(
+                string.Join("\n", closedConsoleMessages),
+                startupNotice,
+                $"ℹ️ cwd in console {driftConsoleName} changed from '{drift.Value.AiCwd}' to '{drift.Value.LiveCwd}' outside the AI's commands (e.g. a `cd` typed in the console).\n"
+                    + $"Pipeline NOT executed. Re-issue to run at '{drift.Value.LiveCwd}', or prepend `Set-Location -LiteralPath '{drift.Value.AiCwd.Replace("'", "''")}';` to revert."));
         }
 
         // Running a command in a console contradicts the intent to abandon it,
         // so a pending close confirmation for it is dropped: the next
         // close_console starts over with a fresh human-presence check rather
         // than killing on a single call.
+        // Every path above either resolved a pipe or returned; this makes
+        // that invariant explicit for the rest of the method.
+        if (readyPipeName == null)
+            return Wrap("Failed to acquire a console pipe.");
+
         CloseConsoleGuard.Disarm(readyPipeName);
 
         // Execute the command
@@ -901,17 +881,12 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     // recursive call delivers the actual pipeline output and
                                     // the AI no longer needs the OS / drive-list block to
                                     // verify cwd because we already preserved it.
-                                    var busyResponse = new StringBuilder();
-                                    if (closedConsoleMessages.Count > 0)
-                                    {
-                                        busyResponse.AppendLine(string.Join("\n", closedConsoleMessages));
-                                        busyResponse.AppendLine();
-                                    }
-                                    busyResponse.AppendLine(FormatBusyStatus(jsonResponse));
-                                    busyResponse.AppendLine($"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.");
-                                    busyResponse.AppendLine();
-                                    busyResponse.Append(retryResult);
-                                    return Wrap(busyResponse.ToString());
+                                    return Wrap(PipelineHelper.JoinBlocks(
+                                        string.Join("\n", closedConsoleMessages),
+                                        // The source console the pipeline did NOT run on.
+                                        PipelineHelper.MarkOtherConsole(FormatBusyStatus(jsonResponse)),
+                                        $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.",
+                                        retryResult));
                                 }
                                 break;
 
@@ -931,54 +906,25 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
                                 // Build timeout response: busy status first + closedConsoleInfo + cachedOutput + completedOutput + scopeWarning + timeout message
-                                var timeoutResponse = new StringBuilder();
-                                if (timeoutBusyStatusInfo.Length > 0)
-                                {
-                                    timeoutResponse.Append(timeoutBusyStatusInfo);
-                                }
-                                if (!string.IsNullOrEmpty(allPipesStatusInfo))
-                                {
-                                    timeoutResponse.AppendLine(allPipesStatusInfo);
-                                    timeoutResponse.AppendLine();
-                                }
-                                if (!string.IsNullOrEmpty(startupNotice))
-                                {
-                                    timeoutResponse.AppendLine(startupNotice);
-                                    timeoutResponse.AppendLine();
-                                }
-                                if (!string.IsNullOrEmpty(currentPipeCachedOutput))
-                                {
-                                    timeoutResponse.AppendLine(currentPipeCachedOutput);
-                                    timeoutResponse.AppendLine();
-                                }
-                                if (timeoutCompletedOutput.Length > 0)
-                                {
-                                    timeoutResponse.Append(timeoutCompletedOutput);
-                                }
-                                // Status line first
                                 var timeoutStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
                                     ? jsonResponse.StatusLine
-                                    : $"⧗ Pipeline is still running | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
-                                timeoutResponse.AppendLine(timeoutStatusLine);
-                                timeoutResponse.AppendLine();
+                                    : $"⧗ Pipeline is running | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 // A stalled child is a diagnosis, not a guess, so it
                                 // leads — it tells the AI both that waiting is futile
                                 // and exactly how to re-run. The generic "it might be
-                                // stuck" advice follows for every other case.
-                                if (!string.IsNullOrEmpty(jsonResponse.StalledChild))
-                                {
-                                    timeoutResponse.AppendLine(jsonResponse.StalledChild);
-                                    timeoutResponse.AppendLine();
-                                }
-                                timeoutResponse.AppendLine("Use wait_for_completion to wait for the result.");
-                                timeoutResponse.Append($"If it is instead STUCK — a native CLI (git/npm/ssh) waiting on stdin, or a runaway command — use cancel to interrupt it (Ctrl+C; works on native/running commands but not on PowerShell host prompts), or close_console {jsonResponse.Pid} to abandon the console.");
-                                // Scope warning at the end (after instruction for better readability)
-                                if (!string.IsNullOrEmpty(scopeWarning))
-                                {
-                                    timeoutResponse.AppendLine();
-                                    timeoutResponse.AppendLine(scopeWarning);
-                                }
-                                return Wrap(timeoutResponse.ToString());
+                                // stuck" advice follows for every other case. Scope
+                                // warning at the end (after instruction for better
+                                // readability).
+                                return Wrap(PipelineHelper.JoinBlocks(
+                                    timeoutBusyStatusInfo,
+                                    startupNotice,
+                                    currentPipeCachedOutput,
+                                    timeoutCompletedOutput,
+                                    timeoutStatusLine,
+                                    jsonResponse.StalledChild,
+                                    "Use wait_for_completion to wait for the result.\n"
+                                        + $"If it is instead STUCK — a native CLI (git/npm/ssh) waiting on stdin, or a runaway command — use cancel to interrupt it (Ctrl+C; works on native/running commands but not on PowerShell host prompts), or close_console {jsonResponse.Pid} to abandon the console.",
+                                    scopeWarning));
 
                             case PipeStatus.AwaitingInput:
                                 // Command is parked at an interactive prompt. It will
@@ -994,31 +940,14 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 var awaitingConsole = ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid);
                                 var awaitingPromptInfo = string.IsNullOrEmpty(jsonResponse.Message) ? "" : $" — {jsonResponse.Message}";
 
-                                var awaitingResponse = new StringBuilder();
-                                if (closedConsoleMessages.Count > 0)
-                                {
-                                    awaitingResponse.AppendLine(string.Join("\n", closedConsoleMessages));
-                                    awaitingResponse.AppendLine();
-                                }
-                                if (!string.IsNullOrEmpty(startupNotice))
-                                {
-                                    awaitingResponse.AppendLine(startupNotice);
-                                    awaitingResponse.AppendLine();
-                                }
-                                if (!string.IsNullOrEmpty(jsonResponse.StatusLine))
-                                {
-                                    awaitingResponse.AppendLine(jsonResponse.StatusLine);
-                                    awaitingResponse.AppendLine();
-                                }
-                                awaitingResponse.AppendLine($"⌨ Console {awaitingConsole} is paused at a PowerShell HOST prompt{awaitingPromptInfo} — issued by a cmdlet/function (Read-Host, a missing mandatory parameter, Get-Credential, a confirmation). It will NOT finish on its own. NOTE: `cancel` does NOT work on a PowerShell host prompt (only on native CLIs / runaway commands), so do not call it here. Choose one:");
-                                awaitingResponse.AppendLine($"  • Ask the user to type the answer directly in console {awaitingConsole}.");
-                                awaitingResponse.AppendLine($"  • Abandon it with close_console {jsonResponse.Pid} (the next command auto-starts a fresh console).");
-                                if (!string.IsNullOrEmpty(scopeWarning))
-                                {
-                                    awaitingResponse.AppendLine();
-                                    awaitingResponse.AppendLine(scopeWarning);
-                                }
-                                return Wrap(awaitingResponse.ToString());
+                                return Wrap(PipelineHelper.JoinBlocks(
+                                    string.Join("\n", closedConsoleMessages),
+                                    startupNotice,
+                                    jsonResponse.StatusLine,
+                                    $"⌨ Console {awaitingConsole} is paused at a PowerShell HOST prompt{awaitingPromptInfo} — issued by a cmdlet/function (Read-Host, a missing mandatory parameter, Get-Credential, a confirmation). It will NOT finish on its own. NOTE: `cancel` does NOT work on a PowerShell host prompt (only on native CLIs / runaway commands), so do not call it here. Choose one:\n"
+                                        + $"  • Ask the user to type the answer directly in console {awaitingConsole}.\n"
+                                        + $"  • Abandon it with close_console {jsonResponse.Pid} (the next command auto-starts a fresh console).",
+                                    scopeWarning));
 
                             case PipeStatus.Completed:
                                 // Snapshot AI-intended cwd from the cached completion.
@@ -1047,45 +976,23 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // Collect busy status + other consoles' cached outputs
                                 var (cachedCompletedOutput, cachedBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-                                var cachedResponse = new StringBuilder();
-                                if (cachedBusyStatusInfo.Length > 0)
-                                {
-                                    cachedResponse.Append(cachedBusyStatusInfo);
-                                }
-                                if (!string.IsNullOrEmpty(allPipesStatusInfo))
-                                {
-                                    cachedResponse.AppendLine(allPipesStatusInfo);
-                                    cachedResponse.AppendLine();
-                                }
-                                if (!string.IsNullOrEmpty(startupNotice))
-                                {
-                                    cachedResponse.AppendLine(startupNotice);
-                                    cachedResponse.AppendLine();
-                                }
-                                if (cachedCompletedOutput.Length > 0)
-                                {
-                                    cachedResponse.Append(cachedCompletedOutput);
-                                }
                                 // Status line first (same shape as success / timeout cases).
                                 var cachedStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
                                     ? jsonResponse.StatusLine
                                     : $"✓ Pipeline executed successfully | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Completed | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
-                                cachedResponse.AppendLine(cachedStatusLine);
-                                cachedResponse.AppendLine();
                                 // Then the drained content. Defensive fallback for a race
                                 // where another drainer got there first (e.g. a concurrent
                                 // wait_for_completion call) — keep the old placeholder so
                                 // the AI still knows the result is being delivered
                                 // somewhere, rather than staring at an empty response.
-                                if (!string.IsNullOrEmpty(currentPipeCachedCompleted))
-                                {
-                                    cachedResponse.Append(currentPipeCachedCompleted);
-                                }
-                                else
-                                {
-                                    cachedResponse.Append("Result cached. Will be returned on next tool call.");
-                                }
-                                return Wrap(cachedResponse.ToString());
+                                return Wrap(PipelineHelper.JoinBlocks(
+                                    cachedBusyStatusInfo,
+                                    startupNotice,
+                                    cachedCompletedOutput,
+                                    cachedStatusLine,
+                                    !string.IsNullOrEmpty(currentPipeCachedCompleted)
+                                        ? currentPipeCachedCompleted
+                                        : "Result cached. Will be returned on next tool call."));
 
                             case "error":
                                 return Wrap(jsonResponse.Message ?? $"Error from PowerShell.MCP module: {jsonResponse.Error}");
@@ -1101,61 +1008,31 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // Normal completion - use body as result
                                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-                                // Split body into status line and output
-                                var statusLine = body;
-                                var output = "";
-                                var bodyNewlineIndex = body.IndexOf('\n');
-                                if (bodyNewlineIndex >= 0)
-                                {
-                                    statusLine = body[..bodyNewlineIndex];
-                                    output = body[(bodyNewlineIndex + 1)..];
-                                }
-
-                                var successResponse = new StringBuilder();
-                                if (closedConsoleMessages.Count > 0)
-                                {
-                                    successResponse.AppendLine(string.Join("\n", closedConsoleMessages));
-                                    successResponse.AppendLine();
-                                }
-                                if (busyStatusInfo.Length > 0)
-                                {
-                                    successResponse.Append(busyStatusInfo);
-                                }
-                                if (!string.IsNullOrEmpty(allPipesStatusInfo))
-                                {
-                                    successResponse.AppendLine(allPipesStatusInfo);
-                                }
-                                if (!string.IsNullOrEmpty(startupNotice))
-                                {
-                                    successResponse.AppendLine(startupNotice);
-                                    successResponse.AppendLine();
-                                }
-                                if (completedOutput.Length > 0)
-                                {
-                                    successResponse.Append(completedOutput);
-                                }
-                                // Status line first
-                                successResponse.AppendLine(statusLine);
-                                // Then output (already starts with \n from body split)
-                                if (output.Length > 0)
-                                {
-                                    successResponse.Append(output);
-                                }
-                                // Scope warning at the end (after output for better readability)
-                                if (!string.IsNullOrEmpty(scopeWarning))
-                                {
-                                    successResponse.AppendLine();
-                                    successResponse.AppendLine(scopeWarning);
-                                }
+                                // Redundant leading cd hint: liveCwd is the
+                                // pre-execution cwd (drift check guarantees it
+                                // matches the AI's last cwd), jsonResponse.Cwd
+                                // the post-execution one.
+                                var redundantCdHint = PipelineHelper.CheckRedundantLeadingCd(aiPipeline, liveCwd, jsonResponse.Cwd);
                                 // TODO: Uncomment when JsonDuo is published to PS Gallery
                                 // var jsonHint = PipelineHelper.CheckJsonFileHint(pipeline, agentId)
-                                //     ?? PipelineHelper.CheckJsonFileHint(output, agentId);
-                                // if (!string.IsNullOrEmpty(jsonHint))
-                                // {
-                                //     successResponse.AppendLine();
-                                //     successResponse.AppendLine(jsonHint);
-                                // }
-                                return Wrap(successResponse.ToString());
+                                //     ?? PipelineHelper.CheckJsonFileHint(body, agentId);
+                                // (then pass jsonHint as the last block below)
+
+                                // body is this console's status line + its output.
+                                // Scope warning and hints go at the end (after
+                                // output for better readability). allPipesStatusInfo
+                                // is deliberately left out of every response (only
+                                // logged to stderr at auto-start): it is the discovery-
+                                // time snapshot of the same consoles busyStatusInfo
+                                // reports fresh, under raw pipe names.
+                                return Wrap(PipelineHelper.JoinBlocks(
+                                    string.Join("\n", closedConsoleMessages),
+                                    busyStatusInfo,
+                                    startupNotice,
+                                    completedOutput,
+                                    body,
+                                    scopeWarning,
+                                    redundantCdHint));
                         }
                     }
                 }
@@ -1182,7 +1059,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
     }
 
     [McpServerTool]
-    [Description("Wait for busy console(s) to complete and retrieve cached results. Use this after receiving 'Pipeline is still running' response instead of executing Start-Sleep (which would open a new console).")]
+    [Description("Wait for busy console(s) to complete and retrieve cached results. Use this after receiving a 'Pipeline is running' response instead of executing Start-Sleep (which would open a new console).")]
     public static async Task<string> WaitForCompletion(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
@@ -1240,8 +1117,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         var currentPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid, agentId).ToList();
         var currentPids = currentPipes
             .Select(ConsoleSessionManager.GetPidFromPipeName)
-            .Where(p => p.HasValue)
-            .Select(p => p.Value)
+            .OfType<int>()
             .ToHashSet();
 
         foreach (var pid in previouslyBusyPids)
@@ -1385,32 +1261,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
 
     private static string BuildWaitResponse(List<string> closedConsoleMessages, string completedOutput, string busyStatusInfo)
     {
-        var response = new StringBuilder();
-        if (busyStatusInfo.Length > 0)
-        {
-            response.Append(busyStatusInfo);
-        }
-        if (closedConsoleMessages.Count > 0)
-        {
-            response.AppendLine(string.Join("\n", closedConsoleMessages));
-            response.AppendLine();
-        }
-        if (completedOutput.Length > 0)
-        {
-            response.Append(completedOutput);
-        }
-        if (busyStatusInfo.Length > 0)
-        {
-            response.AppendLine();
-            response.Append("Use wait_for_completion tool to wait and retrieve the result.");
-        }
+        var response = PipelineHelper.JoinBlocks(
+            busyStatusInfo,
+            string.Join("\n", closedConsoleMessages),
+            completedOutput,
+            busyStatusInfo.Length > 0 ? "Use wait_for_completion tool to wait and retrieve the result." : null);
 
-        if (response.Length == 0)
-        {
-            return NothingToWaitForMessage;
-        }
-
-        return response.ToString();
+        return response.Length == 0 ? NothingToWaitForMessage : response;
     }
 
     [McpServerTool]
@@ -1487,34 +1344,16 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                     reuseNewSessionNotice = BuildNewSessionNotice(GetConsoleName(discoveryResult.ReadyPipeName), discoveryResult.LiveCwd ?? "the console's current location", null);
                 }
 
-                var reuseResponse = new StringBuilder();
-                if (!string.IsNullOrEmpty(reuseNewSessionNotice))
-                {
-                    reuseResponse.AppendLine(reuseNewSessionNotice);
-                    reuseResponse.AppendLine();
-                }
-                // Report closed consoles detected during discovery
-                if (discoveryResult.ClosedConsoleMessages.Count > 0)
-                {
-                    foreach (var msg in discoveryResult.ClosedConsoleMessages)
-                        reuseResponse.AppendLine(msg);
-                    reuseResponse.AppendLine();
-                }
                 // Always collect cached outputs - any console may have completed work
                 var (reuseCompletedOutput, reuseBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, discoveryResult.ReadyPipeName, cancellationToken);
-                if (reuseBusyStatusInfo.Length > 0)
-                {
-                    reuseResponse.Append(reuseBusyStatusInfo);
-                    reuseResponse.AppendLine();
-                }
-                if (reuseCompletedOutput.Length > 0)
-                {
-                    reuseResponse.Append(reuseCompletedOutput);
-                }
-                reuseResponse.AppendLine("ℹ️ Did not launch a new console. An existing standby console is available and will be reused. To force a new console, provide the reason parameter.");
-                reuseResponse.AppendLine();
-                reuseResponse.Append(reuseLocationResult);
-                return Wrap(reuseResponse.ToString());
+                return Wrap(PipelineHelper.JoinBlocks(
+                    reuseNewSessionNotice,
+                    // Closed consoles detected during discovery
+                    string.Join("\n", discoveryResult.ClosedConsoleMessages),
+                    reuseBusyStatusInfo,
+                    reuseCompletedOutput,
+                    "ℹ️ Did not launch a new console. An existing standby console is available and will be reused. To force a new console, provide the reason parameter.",
+                    reuseLocationResult));
             }
             // No standby console found, fall through to create a new one
         }
@@ -1544,25 +1383,12 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
 
         // Build response: busy status first + completed output + start message + location
-        var response = new StringBuilder();
-        if (busyStatusInfo.Length > 0)
-        {
-            response.Append(busyStatusInfo);
-            response.AppendLine();
-        }
-        if (completedOutput.Length > 0)
-        {
-            response.Append(completedOutput);
-        }
-        if (!string.IsNullOrEmpty(warningMessage))
-        {
-            response.Append(warningMessage);
-            response.AppendLine();
-        }
-        response.AppendLine("PowerShell console started successfully with PowerShell.MCP module imported.");
-        response.AppendLine();
-        response.Append(startResult);
-        return Wrap(response.ToString());
+        return Wrap(PipelineHelper.JoinBlocks(
+            busyStatusInfo,
+            completedOutput,
+            warningMessage,
+            "PowerShell console started successfully with PowerShell.MCP module imported.",
+            startResult));
     }
 
     /// <summary>
