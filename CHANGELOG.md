@@ -17,6 +17,14 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.14.3
+
+## Bug Fixes
+- **A sub-agent's console now closes itself when idle, like any other.** The idle-close introduced in 1.13.0 keeps the most recently used console of a session alive as the survivor, and elects that survivor within each agent's own group of consoles. A sub-agent (`is_subagent=true`) gets its own `agent_id` and therefore its own group, which almost always holds exactly one console — and a group of one is always its own survivor. So a console a sub-agent had started never printed the warning and never closed, even hours after the sub-agent had finished: one abandoned window per sub-agent, which is precisely the pile-up the feature exists to prevent. A sub-agent's consoles are no longer exempted as survivors; idle for the configured time, they warn and close like a stale standby console, while every other guard (busy, holding uncollected output, text typed at the prompt, any activity during the grace period) still applies. The session's main consoles behave as before, and a sub-agent that is still alive and returns to a closed console simply gets a fresh one from the proxy.
+
+## Improvements
+- **`execute_command` now points out a needless `pwsh -Command` / `-File` wrapper.** An AI used to a bash-style shell tool tends to write `pwsh -NoProfile -Command "…"` or `pwsh -File .\script.ps1` out of habit — but the console it is talking to *is* pwsh, so the wrapper only starts a second PowerShell process: slower, with the quoting doubled, and with every variable, module and cwd change stranded in the child. When a pipeline **starts** with such an invocation (including `pwsh.exe`, a full path to it, or a bare `pwsh script.ps1`), the response now ends with a hint to run the command or script directly, in the same spirit as the existing note about a redundant leading `cd`. It is shown **once per agent**, because a nested pwsh is sometimes exactly what is wanted — a script tested without the profile, a run against another PowerShell version, a command that must exit the shell — and repeating the note on every call would punish those. A pwsh that is not the leading command (`Start-Process pwsh`, a `Start-Job` body, an assignment) is left alone as presumably deliberate, and `powershell.exe` never triggers it: Windows PowerShell 5.1 is a different engine, and running it from here is the only way to test against it.
+
 # Version: 1.14.2
 
 ## Improvements
