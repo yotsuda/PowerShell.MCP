@@ -9,7 +9,86 @@ public class PipelineHelperTests
     {
         // Reset static state before each test
         PipelineHelper.ResetScopeWarningState();
+        PipelineHelper.ResetNestedPwshHintState();
     }
+
+    #region CheckNestedPwsh Tests
+
+    [Theory]
+    [InlineData("pwsh -NoProfile -Command \"Get-Date\"")]
+    [InlineData("pwsh.exe -c 'Get-Date; Get-Location'")]
+    [InlineData("  & pwsh -File .\\build.ps1")]
+    [InlineData("pwsh -NoLogo -NoProfile -f script.ps1 -Verbose")]
+    [InlineData("pwsh -nop -Command:\"Get-Date\"")]
+    [InlineData("pwsh -NoProfile -Command { Get-Date }")]
+    [InlineData("pwsh -NoProfile -EncodedCommand RwBlAHQALQBEAGEAdABlAA==")]
+    [InlineData("pwsh -NoProfile -ec RwBlAHQALQBEAGEAdABlAA==")]
+    [InlineData("pwsh -cwa 'Write-Host $args' a b")]
+    [InlineData("pwsh .\\Tests\\Run-AllTests.ps1")]
+    [InlineData("pwsh -NoProfile \"C:\\my scripts\\build.ps1\"")]
+    [InlineData("& 'C:\\Program Files\\PowerShell\\7\\pwsh.exe' -NoProfile -Command \"Get-Date\"")]
+    [InlineData("\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -File x.ps1")]
+    [InlineData("C:\\PowerShell\\7\\pwsh.exe -File x.ps1")]
+    [InlineData("/usr/bin/pwsh -c 'Get-Date'")]
+    [InlineData("pwsh-preview -c 'Get-Date'")]
+    [InlineData("pwsh -NoProfile -Command \"Get-Date\" | Out-File log.txt")]
+    [InlineData("pwsh -NoProfile -Command \"Get-Date\"\nGet-Location")]
+    public void IsNestedPwshInvocation_LeadingPwshRunningCommandOrScript_ReturnsTrue(string pipeline)
+    {
+        Assert.True(PipelineHelper.IsNestedPwshInvocation(pipeline));
+    }
+
+    [Theory]
+    [InlineData("Get-Date")]
+    [InlineData("powershell -NoProfile -Command \"Get-Date\"")]        // Windows PowerShell 5.1: a different engine
+    [InlineData("powershell.exe -File .\\legacy.ps1")]
+    [InlineData("pwsh -Version")]
+    [InlineData("pwsh --version")]
+    [InlineData("pwsh -Help")]
+    [InlineData("pwsh")]
+    [InlineData("pwsh; Get-Date -f yyyy")]                                // -f belongs to the next statement
+    [InlineData("pwsh | Out-Null; pwsh -c x")]                            // args stop at the first separator
+    [InlineData("pwsh -NoProfile \"not -c a flag\"")]                     // flag-looking text inside a string
+    [InlineData("Start-Process pwsh -ArgumentList '-Command Get-Date'")]
+    [InlineData("Start-Job { pwsh -c 'Get-Date' }")]
+    [InlineData("Get-Process pwsh")]
+    [InlineData("$out = pwsh -c 'Get-Date'")]                             // not leading: usually deliberate
+    [InlineData("pwshx -c 'Get-Date'")]
+    [InlineData("mypwsh -c 'Get-Date'")]
+    [InlineData("Invoke-Pwsh -Command x")]
+    [InlineData("& .\\build.ps1")]
+    public void IsNestedPwshInvocation_NotALeadingNestedPwsh_ReturnsFalse(string pipeline)
+    {
+        Assert.False(PipelineHelper.IsNestedPwshInvocation(pipeline));
+    }
+
+    [Fact]
+    public void CheckNestedPwsh_ReturnsHintOnce_PerAgent()
+    {
+        const string pipeline = "pwsh -NoProfile -Command \"Get-Date\"";
+
+        var first = PipelineHelper.CheckNestedPwsh(pipeline, "default");
+        Assert.NotNull(first);
+        Assert.StartsWith("💡 This console is already pwsh", first);
+        Assert.Contains("`pwsh -Command` / `-File`", first);
+
+        // Same agent, any later nested pwsh: silent — the lesson was delivered.
+        Assert.Null(PipelineHelper.CheckNestedPwsh(pipeline, "default"));
+        Assert.Null(PipelineHelper.CheckNestedPwsh("pwsh -File .\\other.ps1", "default"));
+
+        // A different agent (a sub-agent) has not seen it yet.
+        Assert.NotNull(PipelineHelper.CheckNestedPwsh(pipeline, "sa-12345678"));
+        Assert.Null(PipelineHelper.CheckNestedPwsh(pipeline, "sa-12345678"));
+    }
+
+    [Fact]
+    public void CheckNestedPwsh_NonNestedPipeline_DoesNotConsumeTheOneShot()
+    {
+        Assert.Null(PipelineHelper.CheckNestedPwsh("Get-Date", "default"));
+        Assert.NotNull(PipelineHelper.CheckNestedPwsh("pwsh -c 'Get-Date'", "default"));
+    }
+
+    #endregion
 
     #region Truncate Tests
 

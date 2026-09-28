@@ -213,6 +213,79 @@ public static partial class PipelineHelper
     [GeneratedRegex(@"^\s*(?<verb>cd|chdir|sl|Set-Location)\s+(?:-(?:LiteralPath|Path|LP|PSPath)(?::|\s)\s*)?(?<arg>'(?:[^']|'')*'|""[^""`$]*""|[^\s;|&'""`$(){}]+)\s*(?:;|&&|\r?\n|$)", RegexOptions.IgnoreCase)]
     private static partial Regex LeadingSetLocationRegex();
 
+    /// <summary>
+    /// Detects a pipeline that runs its real work through a child
+    /// <c>pwsh -Command</c> / <c>-File</c> / <c>-EncodedCommand</c> (or
+    /// <c>pwsh script.ps1</c>) and returns a hint that this console is already
+    /// pwsh and can run it directly. An AI used to a bash-style tool wraps
+    /// commands this way by habit; here it costs a process start, doubles the
+    /// quoting, and strands variables, modules and cwd changes in the child.
+    ///
+    /// <para>Fires only for a LEADING invocation, so <c>Start-Process pwsh</c>,
+    /// <c>Start-Job</c>, or a pwsh buried mid-pipeline (usually deliberate) are
+    /// left alone, and never for <c>powershell(.exe)</c> — Windows PowerShell
+    /// 5.1 is a different engine, and running it from here is the only way to
+    /// test against it. A nested pwsh has legitimate uses too (a profile-free
+    /// test, another PowerShell version, a script that must exit the shell), so
+    /// the hint is shown AT MOST ONCE per agent: the lesson is one sentence,
+    /// and repeating it on every call would punish the deliberate cases.</para>
+    /// </summary>
+    private static readonly HashSet<string> _nestedPwshHintShownAgents = new(StringComparer.OrdinalIgnoreCase);
+
+    public static string? CheckNestedPwsh(string pipeline, string agentId = "default")
+    {
+        if (!IsNestedPwshInvocation(pipeline)) return null;
+        lock (_nestedPwshHintShownAgents)
+        {
+            if (!_nestedPwshHintShownAgents.Add(agentId)) return null;
+        }
+        return "💡 This console is already pwsh — run the command or script directly (e.g. `& .\\script.ps1`) instead of through `pwsh -Command` / `-File`. " +
+               "A nested pwsh is a second process: it starts slowly, doubles the quoting, and its variables, modules and cwd changes never reach this session. " +
+               "Keep it only when you need a fresh process on purpose (a script tested without the profile, another PowerShell version, or something that must exit the shell). Shown once per session.";
+    }
+
+    /// <summary>
+    /// True when the pipeline starts with a pwsh invocation that runs a command
+    /// or script in the child. Exposed for tests; <see cref="CheckNestedPwsh"/>
+    /// adds the per-agent dedup on top.
+    /// </summary>
+    internal static bool IsNestedPwshInvocation(string pipeline)
+    {
+        var match = LeadingPwshRegex().Match(pipeline);
+        if (!match.Success) return false;
+        var args = match.Groups["args"].Value;
+        // Flags are looked for outside quoted spans, so a `-c` inside a string
+        // argument doesn't count; a .ps1 anywhere in the arguments does, since
+        // pwsh 7 treats a bare script path as -File.
+        if (NestedPwshRunFlagRegex().IsMatch(QuotedSpanRegex().Replace(args, " "))) return true;
+        return Ps1ArgumentRegex().IsMatch(args);
+    }
+
+    /// <summary>Resets the nested-pwsh hint state. For testing only.</summary>
+    internal static void ResetNestedPwshHintState()
+    {
+        lock (_nestedPwshHintShownAgents) { _nestedPwshHintShownAgents.Clear(); }
+    }
+
+    // A leading pwsh / pwsh.exe / pwsh-preview — bare, with a path, quoted, or
+    // via the call operator — followed by its arguments up to an unquoted
+    // statement separator (; | newline). Only pwsh: `powershell` is Windows
+    // PowerShell 5.1, a different engine, and is deliberately not matched.
+    [GeneratedRegex(@"^\s*(?:&\s*)?(?:'[^']*[\\/]pwsh(?:-preview)?(?:\.exe)?'|""[^""]*[\\/]pwsh(?:-preview)?(?:\.exe)?""|(?:[^\s'"";|&]*[\\/])?pwsh(?:-preview)?(?:\.exe)?)(?![\w.-])(?<args>(?:""(?:[^""]|"""")*""|'(?:[^']|'')*'|[^;|\r\n""'])*)", RegexOptions.IgnoreCase)]
+    private static partial Regex LeadingPwshRegex();
+
+    // -Command / -c (and pwsh's accepted prefixes), -CommandWithArgs / -cwa,
+    // -File / -f, -EncodedCommand / -e / -ec, as a whole token (optionally with
+    // the `-Flag:value` form).
+    [GeneratedRegex(@"(?<!\S)-(?:c(?:o|om|omm|omma|omman|ommand|ommandwithargs|wa)?|f(?:i|il|ile)?|e(?:c|ncodedcommand)?)(?=\s|:|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex NestedPwshRunFlagRegex();
+
+    [GeneratedRegex(@"""(?:[^""]|"""")*""|'(?:[^']|'')*'")]
+    private static partial Regex QuotedSpanRegex();
+
+    [GeneratedRegex(@"\.ps1(?=[""'\s]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex Ps1ArgumentRegex();
+
     // TODO: Uncomment when JsonDuo is published to PS Gallery
     // /// <summary>
     // /// Check if input/output contains .json files and return a one-time hint about JsonDuo module (per agent).

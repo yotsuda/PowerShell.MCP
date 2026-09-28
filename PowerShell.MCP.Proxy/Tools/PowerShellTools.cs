@@ -1013,6 +1013,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // matches the AI's last cwd), jsonResponse.Cwd
                                 // the post-execution one.
                                 var redundantCdHint = PipelineHelper.CheckRedundantLeadingCd(aiPipeline, liveCwd, jsonResponse.Cwd);
+                                // Nested `pwsh -Command` / `-File` hint: judged on
+                                // the AI's own pipeline as well, deduped per agent.
+                                var nestedPwshHint = PipelineHelper.CheckNestedPwsh(aiPipeline, agentId);
                                 // TODO: Uncomment when JsonDuo is published to PS Gallery
                                 // var jsonHint = PipelineHelper.CheckJsonFileHint(pipeline, agentId)
                                 //     ?? PipelineHelper.CheckJsonFileHint(body, agentId);
@@ -1032,7 +1035,8 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     completedOutput,
                                     body,
                                     scopeWarning,
-                                    redundantCdHint));
+                                    redundantCdHint,
+                                    nestedPwshHint));
                         }
                     }
                 }
