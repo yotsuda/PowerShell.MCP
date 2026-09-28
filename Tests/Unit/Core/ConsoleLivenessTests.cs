@@ -56,23 +56,33 @@ public class ConsoleLivenessTests : IDisposable
     // Claims this console under a throwaway session and records the on-disk group
     // dir for sibling-planting and cleanup. A large random proxyPid guarantees we
     // never share a group dir with a real PowerShell.MCP console on this machine.
-    private void Own()
+    // The main agent is "default" — the id the proxy gives the session's own
+    // consoles — so these tests exercise the keeper election; OwnAsSubAgent below
+    // covers the sub-agent path, which has no keeper.
+    private void Own(string agentId = "default")
     {
         int proxyPid = 1_000_000_000 + Math.Abs(Guid.NewGuid().GetHashCode() % 100_000_000);
-        string agentId = "test-" + Guid.NewGuid().ToString("N");
         ConsoleLiveness.SetOwned(proxyPid, agentId);
         _groupDir = ConsoleLiveness.GroupDirForTests(proxyPid, agentId);
     }
+
+    // Same shape as the ids ConsoleSessionManager.AllocateSubAgentId hands out.
+    private void OwnAsSubAgent() => Own("sa-" + Guid.NewGuid().ToString("N")[..8]);
 
     // Plants a sibling marker that is strictly newer than our last activity and
     // owned by a genuinely-live process, so IsKeeper elects the sibling and this
     // console becomes reapable. We spawn our own sleeper for the live PID rather
     // than borrowing an arbitrary one, so the sibling can't vanish mid-test.
-    private void MakeReapableByNewerSibling()
+    private void MakeReapableByNewerSibling() => PlantLiveSibling(_now.Ticks + TimeSpan.TicksPerSecond);
+
+    // Plants a sibling marker that is strictly OLDER than our last activity, so
+    // under the keeper rule this console would win the election and survive.
+    private void PlantOlderSibling() => PlantLiveSibling(_now.Ticks - TimeSpan.TicksPerSecond);
+
+    private void PlantLiveSibling(long ticks)
     {
         Assert.NotNull(_groupDir);
         _sleeper = StartSleeper();
-        long ticks = _now.Ticks + TimeSpan.TicksPerSecond;
         File.WriteAllText(Path.Combine(_groupDir!, _sleeper.Id.ToString()), ticks.ToString());
     }
 
@@ -279,6 +289,93 @@ public class ConsoleLivenessTests : IDisposable
 
         Advance(Grace + 100); // even well past the old grace...
         Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true)); // ...it warns, not closes
+    }
+
+    // ── Sub-agent consoles: no keeper ────────────────────────────────────────
+
+    [Fact]
+    public void Reap_SubAgent_LoneConsoleIsNotKeeper()
+    {
+        // Regression: a sub-agent's console sits alone in its own per-agent
+        // group, so under the keeper rule it was always its own keeper and never
+        // closed — one leaked window per sub-agent, forever. It must warn and
+        // then close like any stale standby console.
+        OwnAsSubAgent();
+        Advance(Warn + 5);
+
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Assert.True(ConsoleLiveness.IsReapPending);
+
+        Advance(Grace - 1);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true)); // still in grace
+
+        Advance(2);
+        Assert.Equal(ReapAction.Close, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+    }
+
+    [Fact]
+    public void Reap_SubAgent_MostRecentlyActiveConsoleStillReaps()
+    {
+        // Even when this console WOULD win a keeper election (its only sibling is
+        // older), a sub-agent's console gets no exemption.
+        OwnAsSubAgent();
+        PlantOlderSibling();
+        Advance(Warn + 5);
+
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+    }
+
+    [Fact]
+    public void Reap_SubAgent_OtherGuardsStillApply()
+    {
+        // Dropping the keeper exemption must not weaken any other guard: a
+        // sub-agent console that is busy, not yet idle, or being typed in stays.
+        OwnAsSubAgent();
+
+        Advance(Warn - 1);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+
+        Advance(Grace + 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, runspaceAvailable: false, statusStandby: true));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, runspaceAvailable: true, statusStandby: false));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(0, Grace, true, true));
+    }
+
+    [Fact]
+    public void Reap_SubAgent_ActivityDuringGraceCancelsClose()
+    {
+        // A sub-agent that comes back mid-grace keeps its console.
+        OwnAsSubAgent();
+        Advance(Warn + 5);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+
+        ConsoleLiveness.RecordActivity();
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Assert.False(ConsoleLiveness.IsReapPending);
+
+        // And the idle clock restarted: it takes a full threshold to warn again.
+        Advance(Warn - 1);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Advance(2);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+    }
+
+    [Fact]
+    public void Reap_MainAgent_LoneConsoleIsKeeper_WhetherIdIsDefaultOrUnset()
+    {
+        // The proxy passes "default" for the main agent; a console that was
+        // claimed with no id at all must be treated the same, not as a sub-agent.
+        Own("default");
+        Advance(Warn + Grace + 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+
+        ConsoleLiveness.SetUnowned();
+        int proxyPid = 1_000_000_000 + Math.Abs(Guid.NewGuid().GetHashCode() % 100_000_000);
+        ConsoleLiveness.SetOwned(proxyPid, null);
+        _groupDir = ConsoleLiveness.GroupDirForTests(proxyPid, null);
+        Advance(Warn + Grace + 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
     }
 
     // ── Marker file lifecycle ────────────────────────────────────────────────

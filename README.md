@@ -311,7 +311,7 @@ From then on `Register-PwshToClaudeCode` keeps the flag, including when you re-r
 
 ### Idle consoles close themselves
 
-When consoles pile up, an owned console that neither the AI nor you have used for 10 minutes prints a warning and closes itself 60 seconds later. The most recently used console of each session is always kept, and a console that is busy, waiting at a prompt, still holding output that has not been collected, or has text typed at its prompt is never closed. Typing anything, or any AI command, cancels a pending close.
+When consoles pile up, an owned console that neither the AI nor you have used for 10 minutes prints a warning and closes itself 60 seconds later. The most recently used console of each session is always kept, and a console that is busy, waiting at a prompt, still holding output that has not been collected, or has text typed at its prompt is never closed. Typing anything, or any AI command, cancels a pending close. A console started by a sub-agent (`is_subagent=true`) is not kept: once idle it closes like any other, since a finished sub-agent never comes back for it.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|

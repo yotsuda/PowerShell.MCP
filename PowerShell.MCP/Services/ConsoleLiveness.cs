@@ -26,6 +26,15 @@ public enum ReapAction { None, Warn, Close }
 /// and always survives; the stale siblings reap. This guarantees exactly one
 /// survivor per session with no proxy involvement.</para>
 ///
+/// <para>The keeper rule applies to the session's main agent only. A
+/// sub-agent's consoles live in their own group (one per <c>agent_id</c>),
+/// and a sub-agent is transient: it finishes and is never heard from again,
+/// with nothing to tell its console so. Electing a keeper there would keep
+/// one console per sub-agent open forever — a group of one is always its own
+/// keeper. So a sub-agent-owned console gets no keeper exemption: idle past
+/// the threshold, it warns and closes like any stale sibling. A sub-agent
+/// that does come back simply gets a fresh console from the proxy.</para>
+///
 /// <para>The marker directory is resolved under the per-user
 /// <see cref="Environment.SpecialFolder.LocalApplicationData"/> (writable
 /// without admin on every OS), NOT the system temp dir or the current
@@ -208,6 +217,10 @@ public static class ConsoleLiveness
     /// text in — not exactly one. That is intentional: the keeper rule alone could
     /// not protect a console the human is mid-typing in without letting it steal
     /// keeper from the console the AI is actually using.</para>
+    ///
+    /// <para>A console owned by a sub-agent has no keeper: see the class remarks.
+    /// Every other guard (busy, not standby, typed text, idle below threshold,
+    /// the warn-then-grace sequence) applies to it unchanged.</para>
     /// </summary>
     /// <param name="warnSeconds">Idle seconds before warning (0 disables reaping).</param>
     /// <param name="graceSeconds">Seconds after the warning before closing.</param>
@@ -244,10 +257,12 @@ public static class ConsoleLiveness
             return ReapAction.None;
         }
 
-        // Idle past the threshold. The most-recently-active console (or the
-        // only one, or any console when the marker dir can't be read) is the
-        // keeper and never reaps.
-        if (IsKeeper())
+        // Idle past the threshold. For the main agent, the most-recently-active
+        // console (or the only one, or any console when the marker dir can't be
+        // read) is the keeper and never reaps. A sub-agent's console is exempt
+        // from nothing: its group would otherwise keep one window alive per
+        // sub-agent, long after the sub-agent itself is gone.
+        if (!IsSubAgentOwned() && IsKeeper())
         {
             lock (_lock) { _warned = false; }
             return ReapAction.None;
@@ -271,6 +286,19 @@ public static class ConsoleLiveness
             return ReapAction.Close;
 
         return ReapAction.None; // warned, still within grace
+    }
+
+    /// <summary>
+    /// True when the owning agent is a sub-agent rather than the session's main
+    /// agent. The proxy names the main agent "default" (a null / empty id is
+    /// normalized to it on the pipe name and in <see cref="GroupDir"/>) and
+    /// allocates every sub-agent a distinct id, so anything else is a sub-agent.
+    /// </summary>
+    private static bool IsSubAgentOwned()
+    {
+        string? agentId;
+        lock (_lock) { agentId = _agentId; }
+        return !string.IsNullOrEmpty(agentId) && !string.Equals(agentId, "default", StringComparison.Ordinal);
     }
 
     /// <summary>Deletes this console's own marker — called just before self-close.</summary>

@@ -69,6 +69,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     # $McpReapWarnSec seconds warns, then closes itself $McpReapGraceSec later
     # unless used in the meantime. The most-recently-active console of a session
     # is the "keeper" and never reaps, so exactly one survivor always remains.
+    # Only the main agent's consoles elect a keeper: a sub-agent's console (its
+    # own agent_id group) has none and closes once idle, otherwise each finished
+    # sub-agent would leave one window open forever.
     # Set POWERSHELL_MCP_STANDBY_REAP_MINUTES=0 to disable entirely.
     $reapMins = 10
     if ($env:POWERSHELL_MCP_STANDBY_REAP_MINUTES) {
