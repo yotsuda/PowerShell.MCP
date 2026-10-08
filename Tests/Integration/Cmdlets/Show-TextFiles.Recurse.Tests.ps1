@@ -99,6 +99,52 @@ Describe "Show-TextFiles -Recurse Tests" {
         }
     }
 
+    Context "Binary files, .git and no-match" {
+        BeforeAll {
+            # A tree of its own, so the counts in the contexts above are untouched.
+            $script:mixRoot = Join-Path $script:testRoot "mix"
+            New-Item -ItemType Directory -Path (Join-Path $script:mixRoot ".git") -Force | Out-Null
+            [IO.File]::WriteAllText((Join-Path $script:mixRoot "text.txt"), "needle in text`n")
+            [IO.File]::WriteAllText((Join-Path $script:mixRoot "utf16.txt"), "needle in utf16`n", [Text.Encoding]::Unicode)
+            [IO.File]::WriteAllBytes((Join-Path $script:mixRoot "blob.bin"), [byte[]](0x6E, 0x65, 0x65, 0x64, 0x6C, 0x65, 0, 1, 2))
+            [IO.File]::WriteAllText((Join-Path $script:mixRoot ".git\config"), "needle in git`n")
+        }
+
+        It "skips binary files and .git, but reads UTF-16 text" {
+            $result = Show-TextFiles $script:mixRoot -Recurse -Contains "needle" -WarningVariable warn
+            $headers = @($result | Where-Object { $_ -match "==> .+ <==" })
+            $headers.Count | Should -Be 2
+            ($headers -join "`n") | Should -Match "text\.txt"
+            ($headers -join "`n") | Should -Match "utf16\.txt"
+            ($result -join "`n") | Should -Not -Match "blob\.bin|config"
+            $warn | Should -BeNullOrEmpty
+        }
+
+        It "warns when nothing matches, counting the skipped binaries" {
+            $result = Show-TextFiles $script:mixRoot -Recurse -Contains "zzqx" -WarningVariable warn 3>$null
+            $result | Should -BeNullOrEmpty
+            "$warn" | Should -Be "No matches in 2 file(s). 1 binary file(s) skipped."
+        }
+
+        It "warns when a single file has no match" {
+            Show-TextFiles (Join-Path $script:mixRoot "text.txt") -Pattern "zzqx" -WarningVariable warn 3>$null | Should -BeNullOrEmpty
+            "$warn" | Should -Be "No matches in 1 file(s)."
+        }
+
+        It "does not warn on a path error alone" {
+            Show-TextFiles (Join-Path $script:mixRoot "missing.txt") -Pattern "x" -WarningVariable warn -ErrorAction SilentlyContinue 3>$null
+            $warn | Should -BeNullOrEmpty
+        }
+
+        It "stops quietly when a downstream Select-Object -First has enough" {
+            $Error.Clear()
+            $result = Show-TextFiles $script:mixRoot -Recurse -Contains "needle" -WarningVariable warn | Select-Object -First 1
+            @($result).Count | Should -Be 1
+            $Error.Count | Should -Be 0
+            $warn | Should -BeNullOrEmpty
+        }
+    }
+
     Context "Validation" {
         It "-Recurse requires -Pattern or -Contains" {
             { Show-TextFiles $script:testRoot -Recurse -ErrorAction Stop } | Should -Throw

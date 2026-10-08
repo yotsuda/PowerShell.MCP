@@ -289,6 +289,8 @@ HelpMessage: ''
 
 Search subdirectories.
 Requires -Pattern or -Contains.
+Binary files (a NUL byte in the first 8000 bytes, unless a UTF-16/32 BOM is present) and .git directories are skipped.
+A search that matches nothing writes a warning such as "No matches in 12 file(s). 3 binary file(s) skipped."
 
 ```yaml
 Type: System.Management.Automation.SwitchParameter

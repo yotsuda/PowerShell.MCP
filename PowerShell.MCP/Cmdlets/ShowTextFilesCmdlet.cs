@@ -57,6 +57,12 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
     private bool _lastFileHadOutput = false;
     private Regex? _compiledRegex = null;
     private bool _isMultilineContains = false;
+    // For the no-match warning at the end of a -Pattern / -Contains search.
+    private int _filesSearched = 0;
+    private int _binaryFilesSkipped = 0;
+    private bool _anyMatch = false;
+
+    private bool IsSearch => _isMultilineContains || !string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains);
 
 
     protected override void BeginProcessing()
@@ -148,6 +154,14 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
         {
             try
             {
+                // -Recurse walks a whole tree, build output included; a match
+                // inside a DLL is never wanted and prints as megabytes of noise.
+                if (Recurse && IsBinaryFile(fileInfo.ResolvedPath))
+                {
+                    _binaryFilesSkipped++;
+                    continue;
+                }
+
                 // Blank line between files (only if last file had output)
                 if (_lastFileHadOutput)
                 {
@@ -159,6 +173,9 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                 System.Text.Encoding? encoding = string.IsNullOrEmpty(Encoding)
                     ? null
                     : EncodingHelper.GetEncodingForReading(fileInfo.ResolvedPath, Encoding);
+
+                if (IsSearch)
+                    _filesSearched++;
 
                 // Handle empty file - skip silently when Pattern/Contains is specified
                 var fileInfoObj = new FileInfo(fileInfo.ResolvedPath);
@@ -177,11 +194,13 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                 if (_isMultilineContains)
                 {
                     _lastFileHadOutput = ShowWithContainsMultiline(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
+                    _anyMatch |= _lastFileHadOutput;
                 }
                 else if (!string.IsNullOrEmpty(Pattern) || !string.IsNullOrEmpty(Contains))
                 {
                     // Both Pattern and Contains use _compiledRegex (combined with OR if both specified)
                     _lastFileHadOutput = ShowWithPattern(fileInfo.InputPath, fileInfo.ResolvedPath, encoding);
+                    _anyMatch |= _lastFileHadOutput;
                 }
                 else
                 {
@@ -189,13 +208,32 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                     _lastFileHadOutput = true;
                 }
             }
-            catch (Exception ex)
+            // A downstream `Select-Object -First` stops the pipeline by throwing
+            // PipelineStoppedException out of WriteObject. It must propagate:
+            // caught here, it was reported as a read error and the loop went on
+            // to read every remaining file.
+            catch (Exception ex) when (ex is not PipelineStoppedException)
             {
                 WriteError(new ErrorRecord(ex, "ShowTextFileFailed", ErrorCategory.ReadError, fileInfo.ResolvedPath));
             }
         }
     }
 
+
+    protected override void EndProcessing()
+    {
+        // A search that finds nothing printed nothing, which reads the same
+        // as a wrong path. Said on the warning stream so a caller consuming
+        // the output is unaffected. Not said when no file was even read:
+        // the path errors already explain that.
+        if (IsSearch && !_anyMatch && (_filesSearched > 0 || _binaryFilesSkipped > 0))
+        {
+            var message = $"No matches in {_filesSearched} file(s).";
+            if (_binaryFilesSkipped > 0)
+                message += $" {_binaryFilesSkipped} binary file(s) skipped.";
+            WriteWarning(message);
+        }
+    }
 
     private void ShowWithLineRange(string inputPath, string filePath, System.Text.Encoding? encoding)
     {
@@ -658,18 +696,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             if (Directory.Exists(resolvedPath))
             {
                 // Directory: enumerate all files recursively
-                IEnumerable<string> files;
-                try
-                {
-                    files = Directory.EnumerateFiles(resolvedPath, "*", SearchOption.AllDirectories);
-                }
-                catch (Exception ex)
-                {
-                    WriteError(new ErrorRecord(ex, "DirectoryEnumerationFailed", ErrorCategory.ReadError, resolvedPath));
-                    continue;
-                }
-
-                foreach (var filePath in files)
+                foreach (var filePath in EnumerateFilesSkippingGit(resolvedPath, "*"))
                 {
                     yield return new ResolvedFileInfo
                     {
@@ -699,18 +726,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                     !string.IsNullOrEmpty(filePattern) && (filePattern.Contains('*') || filePattern.Contains('?')))
                 {
                     // Wildcard: enumerate matching files recursively
-                    IEnumerable<string> files;
-                    try
-                    {
-                        files = Directory.EnumerateFiles(directory, filePattern, SearchOption.AllDirectories);
-                    }
-                    catch (Exception ex)
-                    {
-                        WriteError(new ErrorRecord(ex, "DirectoryEnumerationFailed", ErrorCategory.ReadError, directory));
-                        continue;
-                    }
-
-                    foreach (var filePath in files)
+                    foreach (var filePath in EnumerateFilesSkippingGit(directory, filePattern))
                     {
                         yield return new ResolvedFileInfo
                         {
@@ -729,6 +745,68 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                         inputPath));
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Recursive file walk for -Recurse that does not descend into .git:
+    /// its object store is binary and its text files (refs, logs, index
+    /// state) are never what a search of a working tree is after.
+    /// A directory that cannot be read is reported and skipped; the walk
+    /// continues with the rest.
+    /// </summary>
+    private IEnumerable<string> EnumerateFilesSkippingGit(string root, string searchPattern)
+    {
+        var pending = new Queue<string>();
+        pending.Enqueue(root);
+        while (pending.Count > 0)
+        {
+            var dir = pending.Dequeue();
+            string[] files, subdirs;
+            try
+            {
+                files = Directory.GetFiles(dir, searchPattern);
+                subdirs = Directory.GetDirectories(dir);
+            }
+            catch (Exception ex)
+            {
+                WriteError(new ErrorRecord(ex, "DirectoryEnumerationFailed", ErrorCategory.ReadError, dir));
+                continue;
+            }
+
+            foreach (var file in files)
+                yield return file;
+
+            foreach (var subdir in subdirs)
+            {
+                if (!string.Equals(System.IO.Path.GetFileName(subdir), ".git", StringComparison.OrdinalIgnoreCase))
+                    pending.Enqueue(subdir);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Binary test for -Recurse, the one git and ripgrep use: a NUL byte in
+    /// the first 8000 bytes. A UTF-16/32 BOM means the NULs are text.
+    /// On a read failure the file is treated as text, so the normal read
+    /// reports the error.
+    /// </summary>
+    private static bool IsBinaryFile(string filePath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            var buffer = new byte[8000];
+            int read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+            if (read >= 2 && ((buffer[0] == 0xFF && buffer[1] == 0xFE) || (buffer[0] == 0xFE && buffer[1] == 0xFF)))
+                return false;
+            if (read >= 4 && buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0xFE && buffer[3] == 0xFF)
+                return false;
+            return Array.IndexOf(buffer, (byte)0, 0, read) >= 0;
+        }
+        catch
+        {
+            return false;
         }
     }
 }
