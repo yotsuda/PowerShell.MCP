@@ -174,4 +174,46 @@ public class PwshLauncherSharedTests
         Assert.Equal("-Command", arguments[2]);
         Assert.Equal("Import-Module PowerShell.MCP", arguments[3]);
     }
+
+    // A development server (registered through mcp-sitter) sets
+    // POWERSHELL_MCP_MODULE on the proxy; consoles do not inherit the proxy's
+    // environment, so the init command must name the dev psd1 itself.
+    private static string WithModuleVariable(string? value, Func<string> build)
+    {
+        var saved = Environment.GetEnvironmentVariable("POWERSHELL_MCP_MODULE");
+        try
+        {
+            Environment.SetEnvironmentVariable("POWERSHELL_MCP_MODULE", value);
+            return build();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("POWERSHELL_MCP_MODULE", saved);
+        }
+    }
+
+    [Fact]
+    public void BuildModuleImport_Unset_ImportsByName()
+    {
+        var import = WithModuleVariable(null, PwshLauncherShared.BuildModuleImport);
+        Assert.Equal("Import-Module PowerShell.MCP -Force", import);
+    }
+
+    [Fact]
+    public void BuildModuleImport_ModuleVariable_ImportsThatPsd1_Escaped()
+    {
+        var import = WithModuleVariable(@"C:\dev\o'brien\PowerShell.MCP.psd1", PwshLauncherShared.BuildModuleImport);
+        Assert.Equal(@"Import-Module 'C:\dev\o''brien\PowerShell.MCP.psd1' -Force", import);
+    }
+
+    [Fact]
+    public void BothInitCommands_UseTheModuleVariable()
+    {
+        const string psd1 = @"C:\dev\PowerShell.MCP\PowerShell.MCP.psd1";
+        var unix = WithModuleVariable(psd1, () => PwshLauncherShared.BuildInitCommand(DefaultPid, DefaultAgentId, null, null));
+        var windows = WithModuleVariable(psd1, () => PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, DefaultAgentId, null));
+        Assert.Contains($"Import-Module '{psd1}' -Force", unix);
+        Assert.Contains($"Import-Module '{psd1}' -Force", windows);
+        Assert.DoesNotContain("Import-Module PowerShell.MCP", windows);
+    }
 }

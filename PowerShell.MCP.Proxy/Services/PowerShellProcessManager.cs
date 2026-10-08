@@ -153,6 +153,24 @@ internal static class PwshLauncherShared
     // locate the PascalCase name. No-op on case-insensitive file systems.
     internal const string ModuleCaseFix = "foreach ($p in ($env:PSModulePath -split [IO.Path]::PathSeparator)) { if ([string]::IsNullOrWhiteSpace($p)) { continue }; $lc = Join-Path $p 'powershell.mcp'; $uc = Join-Path $p 'PowerShell.MCP'; if ((Test-Path $lc) -and -not (Test-Path $uc)) { Rename-Item $lc $uc; break } }; ";
 
+    // The module import at the end of every init command. A development server
+    // sets POWERSHELL_MCP_PIPE_NAME (its own pipe namespace) and/or
+    // POWERSHELL_MCP_MODULE (the psd1 of a dev build) on the proxy, in the MCP
+    // client's config. Consoles do not inherit the proxy's environment — the
+    // Windows launcher builds them a fresh user environment block on purpose,
+    // and the Unix ones go through a terminal — so both are handed over here:
+    // the variable is set before the import, which is when the module reads it,
+    // and the import names the dev psd1 instead of resolving by name. Unset, the
+    // result is the plain `Import-Module PowerShell.MCP -Force` as before.
+    internal static string BuildModuleImport()
+    {
+        var pipeName = ConsoleSessionManager.DefaultPipeName;   // validated: letters, digits, '_', '-'
+        var pipePrelude = pipeName == "PSMCP" ? "" : $"$env:POWERSHELL_MCP_PIPE_NAME = '{pipeName}'; ";
+        var modulePath = Environment.GetEnvironmentVariable("POWERSHELL_MCP_MODULE");
+        var module = string.IsNullOrEmpty(modulePath) ? "PowerShell.MCP" : $"'{modulePath.Replace("'", "''")}'";
+        return $"{pipePrelude}Import-Module {module} -Force";
+    }
+
     // Builds the PowerShell initialization command shared by every non-Windows launcher.
     // The actual delivery to pwsh differs per platform — macOS writes this to /tmp and
     // launches with `-File`, Linux Base64-encodes it for `-EncodedCommand` because of
@@ -167,7 +185,7 @@ internal static class PwshLauncherShared
             : $"Set-Location -LiteralPath '{startLocation.Replace("'", "''")}'; ";
 
         var escapedAgentId = agentId.Replace("'", "''");
-        var core = $"{EncodingPrelude}{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {ModuleCaseFix}Import-Module PowerShell.MCP -Force; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
+        var core = $"{EncodingPrelude}{setLocation}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {ModuleCaseFix}{BuildModuleImport()}; Remove-Module PSReadLine -ErrorAction SilentlyContinue";
         return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
     }
 
@@ -184,7 +202,7 @@ internal static class PwshLauncherShared
     internal static string BuildWindowsInitCommand(int proxyPid, string agentId, string? startupCommands)
     {
         var escapedAgentId = agentId.Replace("'", "''");
-        var core = $"{EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; Import-Module PowerShell.MCP -Force; Import-Module PSReadLine";
+        var core = $"{EncodingPrelude}$global:PowerShellMCPProxyPid = {proxyPid}; $global:PowerShellMCPAgentId = '{escapedAgentId}'; {BuildModuleImport()}; Import-Module PSReadLine";
         return string.IsNullOrEmpty(startupCommands) ? core : $"{core}; {startupCommands}";
     }
 

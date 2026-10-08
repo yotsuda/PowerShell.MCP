@@ -15,9 +15,27 @@ public class ConsoleSessionManager
     private readonly object _lock = new();
 
     /// <summary>
-    /// Base pipe name prefix for PowerShell.MCP
+    /// Base pipe name prefix for PowerShell.MCP: "PSMCP", or the value of
+    /// POWERSHELL_MCP_PIPE_NAME. The consoles this proxy starts inherit the
+    /// variable, so a development server registered with a different value
+    /// (e.g. PSMCPDEV) and the production one never see, claim or run on
+    /// each other's consoles. Must match the module's NamedPipeServer.BasePipeName.
     /// </summary>
-    public const string DefaultPipeName = "PSMCP";
+    public static readonly string DefaultPipeName = ResolvePipeBaseName();
+
+    internal static string ResolvePipeBaseName()
+    {
+        var value = Environment.GetEnvironmentVariable("POWERSHELL_MCP_PIPE_NAME");
+        if (string.IsNullOrEmpty(value))
+            return "PSMCP";
+        // Pipe names are split on '.' to find the owner and the pwsh PID.
+        if (!value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-'))
+        {
+            Console.Error.WriteLine($"[WARN] POWERSHELL_MCP_PIPE_NAME '{value}' ignored: use letters, digits, '_' or '-' only. Using PSMCP.");
+            return "PSMCP";
+        }
+        return value;
+    }
 
     /// <summary>
     /// Error message when module is not imported
@@ -356,7 +374,9 @@ public class ConsoleSessionManager
         else if (proxyPid.HasValue)
             filterPattern = $"{DefaultPipeName}.{proxyPid.Value}.*";
         else
-            filterPattern = $"{DefaultPipeName}*";
+            // "PSMCP.*", not "PSMCP*": the latter also matches another base
+            // name that starts the same way (PSMCPDEV.*).
+            filterPattern = $"{DefaultPipeName}.*";
 
         try
         {

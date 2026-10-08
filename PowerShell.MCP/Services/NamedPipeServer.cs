@@ -437,7 +437,21 @@ public static class ExecutionState
 /// </summary>
 public class NamedPipeServer : IDisposable
 {
-    public const string BasePipeName = "PSMCP";
+    /// <summary>
+    /// "PSMCP", or the value of POWERSHELL_MCP_PIPE_NAME, which a console
+    /// started by the proxy inherits from it. Must match the proxy's
+    /// ConsoleSessionManager.DefaultPipeName; see there for why it varies.
+    /// </summary>
+    public static readonly string BasePipeName = ResolveBasePipeName();
+
+    private static string ResolveBasePipeName()
+    {
+        var value = Environment.GetEnvironmentVariable("POWERSHELL_MCP_PIPE_NAME");
+        // An invalid value falls back to the default, as the proxy does.
+        if (string.IsNullOrEmpty(value) || !value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-'))
+            return "PSMCP";
+        return value;
+    }
     private const int MaxConcurrentConnections = 2; // Two pipe instances
 
     /// <summary>
