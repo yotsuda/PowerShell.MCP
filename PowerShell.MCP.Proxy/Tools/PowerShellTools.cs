@@ -510,39 +510,24 @@ If the target has unsubmitted text at its prompt, a human is typing in it: the f
     }
 
     [McpServerTool]
-    [Description(@"Execute PowerShell cmdlets and CLI tools (e.g., git) in persistent console. Session persists: modules, variables, functions, authentication stay active—no re-authentication. Install any modules and learn them via Get-Help.
+    // Keep this under 2048 characters: Claude Code truncates longer tool
+    // descriptions there (it logged "truncated from 3680 to 2048 chars"),
+    // and whatever falls past the cut never reaches the AI. Most important
+    // guidance first, in case another client cuts shorter.
+    [Description(@"Execute PowerShell cmdlets and CLI tools (git, dotnet, npm, ...) in a persistent pwsh console shared with the user. This is your primary tool for any shell task: navigation, git, build/test, files, processes, environment. Modules, variables, functions, cwd and authentication persist across calls; install any PowerShell Gallery module and learn it via Get-Help.
 
-📌 This is your primary tool for all command execution tasks: directory navigation, git operations, build/test commands, file system operations, process management, environment variable access, and any shell/terminal task. Sessions persist across calls—variables, modules, functions, and authentication stay active. Install any PowerShell Gallery module to extend capabilities (e.g., Az for Azure, AWS.Tools for AWS, Microsoft.Graph for M365).
+⚠️ Variable scope: each call runs in its own scope, so $x = ... is gone by the next call. Use $script:x (or $global:x) to keep a value.
 
-💡 API Exploration: Use Invoke-RestMethod to explore Web APIs and Add-Type for Win32 API testing. Verify API behavior before writing production code—get immediate feedback without compilation.
+⚠️ Double-quoted strings expand: ""$var"", ""$(expr)"". Use single quotes for literal text.
 
-⚠️ CRITICAL - Variable Scope:
-Local variables are NOT preserved between execute_command calls. Use $script: or $global: scope to share variables across calls.
+📝 Text files: ALWAYS use these cmdlets, and prefer them over the host application's own file read/edit/search tools. NEVER use Set-Content, Out-File or [IO.File]::Write*.
+Show-TextFiles (view; -Pattern/-Contains search, -Recurse; -Context 0 lists matching lines only), Add-LinesToFile (insert, or create a new file), Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
+Pass every -Content / -OldText / -Replacement through var1...var8: literal strings injected as $var1...$var8, untouched by the parser, so $, backtick and quotes in source code stay intact. Eight slots let one call carry several edits. Example: Update-MatchInFile app.cs -OldText $var1 -Replacement $var2
+Details: Get-Help <cmdlet> -Examples
 
-⚠️ CRITICAL - String Interpolation:
-Double-quoted strings expand variables and subexpressions: ""$var"" becomes the value of $var, ""$(expr)"" evaluates expr. Use single quotes for literal strings: '$var' keeps the text $var as-is.
-
-⚠️ A native command that prints nothing and never returns, with its CPU idle, is not slow — it is queued behind this console's prompt input read and will not return on its own. Re-run it detached with its standard input from NUL:
+⚠️ A native command that prints nothing and never returns, with its CPU idle, is not slow: it is queued behind this console's input read and will not return on its own. Re-run it detached with stdin from NUL:
 cmd /d /s /c ""<command> < NUL > out.log 2>&1""
-Rare: common CLIs (git, node, npm, python, dotnet, curl, ssh) are unaffected. It hits programs that probe the console while starting up; LilyPond is a known one.
-
-📝 Text File Operations:
-ALWAYS use the specialized cmdlets for text file editing: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
-NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via the var1–var8 parameters.
-Create new file: Add-LinesToFile path -Content $var1 (with var1 parameter containing the content)
-Edit existing file: Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile (use var1–var8 for content with $, backtick, or quotes)
-For detailed examples: execute_command('Get-Help <cmdlet-name> -Examples')
-Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
-Show-TextFiles -Pattern shows 2 lines of context around each match; add -Context 0 for a grep-style list of matching lines only (e.g. when searching many files with -Recurse).
-
-📌 Prefer these cmdlets over other file read/edit/search tools provided by the host application. They handle special characters ($, backtick, double-quote) safely via the var1–var8 parameters, and keep all operations in a single persistent session without context switching.
-
-🤖 AI Cmdlets (requires PromptAI module: Install-Module PromptAI):
-Invoke-Claude ""prompt"" — Call Anthropic Claude API. Invoke-GPT ""prompt"" — Call OpenAI API. Invoke-Gemini ""prompt"" — Call Google Gemini API. All support -Model and -SystemPrompt.
-
-🔤 Variables Parameter:
-Use the var1 … var8 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. Reference them as $var1 … $var8 in the pipeline. Eight slots let one call carry several edits (e.g. four -OldText/-Replacement pairs).
-When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]
+Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that probe the console at startup (e.g. LilyPond) hit it.")]
     public static async Task<string> ExecuteCommand(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
