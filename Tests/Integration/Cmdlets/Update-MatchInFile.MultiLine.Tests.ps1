@@ -248,5 +248,39 @@ Also Not Found
             $output | Should -Contain '  2: A'
             $output | Should -Contain '  4: C'
         }
+
+        It "Shows every occurrence of a multi-line OldText, each with its context" {
+            Set-Content $script:testFile -Value @('h1', 'h2', 'A', 'B', 'm1', 'm2', 'm3', 'm4', 'm5', 'A', 'B', 't1')
+            $output = Update-MatchInFile -Path $script:testFile -OldText "A`nB" -Replacement "X`nY`nZ" |
+                ForEach-Object { $_ -replace "`e\[[\d;]*m", '' }
+
+            # First occurrence: lines 3-4 become 3-5, later lines shift by one
+            $output | Should -Contain '  1- h1'
+            $output | Should -Contain '  2- h2'
+            $output | Should -Contain '  5: Z'
+            $output | Should -Contain '  6- m1'
+            $output | Should -Contain '  7- m2'
+            # Second occurrence: lines 10-11 become 11-13
+            $output | Should -Contain '  9- m4'
+            $output | Should -Contain ' 10- m5'
+            $output | Should -Contain ' 11: X'
+            $output | Should -Contain ' 13: Z'
+            $output | Should -Contain ' 14- t1'
+            ($output | Where-Object { $_ -eq '   : A' }).Count | Should -Be 2
+            # The untouched middle (m3) is not shown; a blank line marks the gap
+            $output | Should -Not -Contain '  8- m3'
+            $output | Should -Contain ''
+        }
+
+        It "Shows whole lines when the multi-line OldText starts and ends mid-line" {
+            Set-Content $script:testFile -Value @('one', 'keep A', 'B keep', 'two')
+            $output = Update-MatchInFile -Path $script:testFile -OldText "A`nB" -Replacement 'AB' |
+                ForEach-Object { $_ -replace "`e\[[\d;]*m", '' }
+
+            $output | Should -Contain '   : keep A'
+            $output | Should -Contain '   : B keep'
+            $output | Should -Contain '  2: keep AB keep'
+            $output | Should -Contain '  3- two'
+        }
     }
 }

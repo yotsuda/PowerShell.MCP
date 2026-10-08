@@ -519,6 +519,78 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
     }
 
     /// <summary>
+    /// Shows every occurrence of a multi-line replacement the way
+    /// Update-LinesInFile shows an edit: up to two context lines on each side
+    /// (<c>N-</c>), the original lines the match touched in red with no number,
+    /// and the lines that replace them in green with their number in the
+    /// result. A match that starts or ends mid-line shows those whole lines.
+    /// </summary>
+    private void WriteMultilineDiff(string content, string newContent, string oldText, string replacement, string newline)
+    {
+        const int contextLines = 2;
+        var oldLines = content.Split(newline);
+        var newLines = newContent.Split(newline);
+        // A trailing newline ends the last line; it does not start another
+        int newLineCount = newContent.EndsWith(newline, StringComparison.Ordinal) ? newLines.Length - 1 : newLines.Length;
+        int oldTextBreaks = CountOccurrences(oldText, newline);
+        int replacementBreaks = CountOccurrences(replacement, newline);
+
+        // Occurrences in the order string.Replace takes them: left to right,
+        // not overlapping. Two that share a line become one hunk.
+        var hunks = new List<(int oldStart, int oldEnd, int newStart, int newEnd)>();
+        int searchFrom = 0, scanned = 0, oldLine = 1, lineShift = 0, idx;
+        while ((idx = content.IndexOf(oldText, searchFrom, StringComparison.Ordinal)) >= 0)
+        {
+            oldLine += CountOccurrences(content.AsSpan(scanned, idx - scanned), newline);
+            scanned = idx;
+            var hunk = (oldStart: oldLine, oldEnd: oldLine + oldTextBreaks, newStart: oldLine + lineShift, newEnd: oldLine + lineShift + replacementBreaks);
+            if (hunks.Count > 0 && hunk.oldStart <= hunks[^1].oldEnd)
+                hunks[^1] = (hunks[^1].oldStart, hunk.oldEnd, hunks[^1].newStart, hunk.newEnd);
+            else
+                hunks.Add(hunk);
+            lineShift += replacementBreaks - oldTextBreaks;
+            searchFrom = idx + oldText.Length;
+        }
+
+        int lastShown = 0; // last line of the result printed
+        for (int h = 0; h < hunks.Count; h++)
+        {
+            var (oldStart, oldEnd, newStart, newEnd) = hunks[h];
+
+            int preFrom = Math.Max(Math.Max(1, lastShown + 1), newStart - contextLines);
+            if (lastShown > 0 && preFrom > lastShown + 1) WriteObject("");
+            for (int n = preFrom; n < newStart; n++)
+                WriteObject($"{n,3}- {TextFileUtility.ClipContextLine(newLines[n - 1])}");
+
+            for (int o = oldStart; o <= oldEnd && o <= oldLines.Length; o++)
+                WriteObject($"   : {AnsiColors.Deleted(oldLines[o - 1])}");
+            for (int n = newStart; n <= newEnd && n <= newLineCount; n++)
+                WriteObject($"{n,3}: {AnsiColors.Inserted(newLines[n - 1])}");
+            lastShown = newEnd;
+
+            // Trailing context stops short of the next hunk's own lines
+            int postTo = Math.Min(newLineCount, newEnd + contextLines);
+            if (h + 1 < hunks.Count) postTo = Math.Min(postTo, hunks[h + 1].newStart - 1);
+            for (int n = newEnd + 1; n <= postTo; n++)
+            {
+                WriteObject($"{n,3}- {TextFileUtility.ClipContextLine(newLines[n - 1])}");
+                lastShown = n;
+            }
+        }
+    }
+
+    private static int CountOccurrences(ReadOnlySpan<char> text, string value)
+    {
+        int count = 0, i;
+        while ((i = text.IndexOf(value, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            text = text[(i + value.Length)..];
+        }
+        return count;
+    }
+
+    /// <summary>
     /// Process multiline literal string replacement (whole-file mode)
     /// Used when OldText contains newline characters
     /// </summary>
@@ -593,27 +665,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         // Display header and diff context
         WriteObject(AnsiColors.Header(displayPath));
 
-        // Find affected line numbers for context display
-        var oldLines = content.Split(metadata.NewlineSequence).ToArray();
-
-        // Show simple before/after for first occurrence. Numbered like
-        // Update-LinesInFile: removed lines carry no number, inserted lines
-        // their number in the result (unchanged up to here by construction).
-        var firstIdx = content.IndexOf(normalizedOldText, StringComparison.Ordinal);
-        if (firstIdx >= 0)
-        {
-            int startLineNum = content[..firstIdx].Split(metadata.NewlineSequence).Length;
-            var oldTextLines = normalizedOldText.Split(metadata.NewlineSequence);
-            for (int i = 0; i < oldTextLines.Length && startLineNum + i <= oldLines.Length; i++)
-            {
-                WriteObject($"   : {AnsiColors.Red}{oldLines[startLineNum + i - 1]}{AnsiColors.Reset}");
-            }
-            var replacementLines = normalizedReplacement.Split(metadata.NewlineSequence);
-            for (int i = 0; i < replacementLines.Length; i++)
-            {
-                WriteObject($"{startLineNum + i,3}: {AnsiColors.Green}{replacementLines[i]}{AnsiColors.Reset}");
-            }
-        }
+        WriteMultilineDiff(content, newContent, normalizedOldText, normalizedReplacement, metadata.NewlineSequence);
 
         WriteObject("");
 
