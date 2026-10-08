@@ -381,7 +381,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # flattened exception message.
                 $parseTokens = $null
                 $parseErrors = $null
-                [void][System.Management.Automation.Language.Parser]::ParseInput(
+                $parseAst = [System.Management.Automation.Language.Parser]::ParseInput(
                     $Command, [ref]$parseTokens, [ref]$parseErrors)
                 if ($parseErrors -and $parseErrors.Count -gt 0) {
                     return @{
@@ -389,6 +389,34 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         Information = @()
                         Exception = @()
                         ParseErrors = $parseErrors
+                        ConsoleOut = ''
+                        ConsoleErr = ''
+                        HostWrite = ''
+                        LastExitReport = 0
+                    }
+                }
+
+                # `exit` gate. An `exit` statement anywhere in the command
+                # text (top level or inside a script block) raises an
+                # ExitException that unwinds through this timer action and
+                # ends the event job: the console stays open, but no action
+                # runs again, the heartbeat stops, the console is reported as
+                # "user command running" for good, and neither cancel nor
+                # Restart-MCPServer brings it back. Refusing up front is also
+                # the right meaning: the console is shared with the user, and
+                # a command never closes it. A script file the command
+                # invokes may still call exit — that ends only the script.
+                $exitStatement = $parseAst.Find({ param($a) $a -is [System.Management.Automation.Language.ExitStatementAst] }, $true)
+                if ($exitStatement) {
+                    $exitError = [System.Management.Automation.Language.ParseError]::new(
+                        $exitStatement.Extent, 'ExitInCommand',
+                        "exit is not run from a command: it would stop this console's command engine, and the console is shared with the user. Use return to leave early (a script file you invoke may still call exit; that ends only the script).")
+                    return @{
+                        PipelineItems = @()
+                        Information = @()
+                        Exception = @()
+                        ParseErrors = @($exitError)
+                        ExitRefused = $true
                         ConsoleOut = ''
                         ConsoleErr = ''
                         HostWrite = ''
@@ -1108,7 +1136,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # with errors" would leave the AI unsure whether some
                 # statements ran before the failure. NOT executed is
                 # the whole point of the pre-parse gate — say it.
-                $statusText = if ($parseErrorCount -gt 0) {
+                $statusText = if ($StreamResults.ContainsKey('ExitRefused')) {
+                    "NOT executed (exit refused)"
+                } elseif ($parseErrorCount -gt 0) {
                     "NOT executed (syntax error)"
                 } elseif ($hasErrors) {
                     "executed with errors"
@@ -1153,7 +1183,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # AI's first read is the reason plus the exact
                 # line/column of each error.
                 if ($parseErrorCount -gt 0) {
-                    $sections += "=== SYNTAX ERRORS (command was NOT executed) ==="
+                    $sections += if ($StreamResults.ContainsKey('ExitRefused')) { "=== EXIT REFUSED (command was NOT executed) ===" } else { "=== SYNTAX ERRORS (command was NOT executed) ===" }
                     foreach ($pe in $StreamResults.ParseErrors) {
                         $sections += "Line $($pe.Extent.StartLineNumber), Col $($pe.Extent.StartColumnNumber): $($pe.Message) [$($pe.ErrorId)]"
                     }
@@ -1354,8 +1384,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # deliberately — the console must show what the AI
                     # attempted, including its failures.
                     if ($streamResults.ContainsKey('ParseErrors') -and $streamResults.ParseErrors.Count -gt 0) {
+                        $peLabel = if ($streamResults.ContainsKey('ExitRefused')) { 'Refused' } else { 'ParserError' }
                         foreach ($pe in $streamResults.ParseErrors) {
-                            Write-Host "ParserError (Line $($pe.Extent.StartLineNumber), Col $($pe.Extent.StartColumnNumber)): $($pe.Message)" -ForegroundColor Red
+                            Write-Host "$peLabel (Line $($pe.Extent.StartLineNumber), Col $($pe.Extent.StartColumnNumber)): $($pe.Message)" -ForegroundColor Red
                         }
                     }
 
