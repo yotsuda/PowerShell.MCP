@@ -31,6 +31,7 @@ sections at the TOP of the file; keep older sections for history.
 
 ## Internal
 - **`Build-AllPlatforms.ps1 -DllOnly` works while MCP consoles are open.** The move-then-copy swap that lets `PowerShell.MCP.dll` be replaced under a running console was never applied to `Ude.NetStandard.dll`, which the same consoles hold, so the deploy died with "being used by another process" at exactly the moment the `-DllOnly` loop is meant for. The file is now left alone when identical (it almost never changes) and swapped the same way otherwise.
+- **`Build-AllPlatforms.ps1` no longer stops running MCP servers.** To overwrite the image-locked `bin\<rid>\PowerShell.MCP.Proxy.exe`, a proxy build killed every `PowerShell.MCP.Proxy` process on the assumption that the client respawns its server on next use. Claude Code does not: a session lives on in its daemon and never restarts a proxy it lost, so a build run from inside a conversation cut that conversation off from pwsh for good. The proxy is now published to a temp folder and swapped in with the same move-then-copy used for the DLLs (now one helper for all three files); running servers keep the old exe and each new session starts the new one. Old files still held are listed in the summary as such instead of as unexpected files, and are deleted by a later run once released.
 - **`PlatyPS\Build-Help.ps1` copies the help into the installed module** wherever `Get-Module -ListAvailable` finds it, instead of a fixed Program Files path.
 
 ## Bug Fixes

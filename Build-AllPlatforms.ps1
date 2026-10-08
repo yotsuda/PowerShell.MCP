@@ -33,15 +33,39 @@ if ($DllOnly) {
 
 $ErrorActionPreference = 'Stop'
 
-# File locks are released surgically, NOT by killing Claude / Claude Code:
-#  - PowerShell.MCP.dll (in the installed module path) is loaded by the
-#    MCP-spawned pwsh consoles. Those consoles SURVIVE the proxy's death
-#    (they detach and keep running — see MCPPollingEngine's liveness
-#    check), so nothing we kill releases this lock. It is swapped via the
-#    move-then-copy below, which tolerates the still-loaded old DLL.
-#  - bin\<rid>\PowerShell.MCP.Proxy.exe is image-locked by the running
-#    MCP server; that single process is stopped just before the proxy
-#    publish below. We never touch Claude, Claude Code, or other pwsh.
+# No process is stopped. Every locked file is replaced by a move-then-copy
+# swap (Install-FileWithStash below), which Windows allows on a file that
+# is loaded or running: the lock follows the renamed file, and the new one
+# lands at the original name.
+#  - PowerShell.MCP.dll / Ude.NetStandard.dll are loaded by the
+#    MCP-spawned pwsh consoles, which outlive the proxy (they detach and
+#    keep running — see MCPPollingEngine's liveness check).
+#  - bin\<rid>\PowerShell.MCP.Proxy.exe is image-locked by every running
+#    MCP server. Stopping those is not an option: a client may never
+#    respawn a server it lost — Claude Code keeps each session process
+#    alive in its daemon and does not restart a dead proxy, so a build run
+#    from inside a conversation would cut that conversation off for good.
+#    Running servers keep the old exe; each new session starts the new one.
+
+# Replaces $Destination with $Source even while $Destination is loaded or
+# running: the old file is renamed to <name>.stash-<n> first. Stashes left
+# by earlier runs are deleted on the way in once nothing holds them, and
+# this run's stash right away when the old file turned out not to be held.
+function Install-FileWithStash([string]$Source, [string]$Destination) {
+    $dir = Split-Path $Destination -Parent
+    $name = Split-Path $Destination -Leaf
+    Get-ChildItem -LiteralPath $dir -Filter "$name.stash-*" -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+    $stash = $null
+    if (Test-Path -LiteralPath $Destination) {
+        $stash = "$Destination.stash-$(Get-Random)"
+        Move-Item -LiteralPath $Destination -Destination $stash -Force
+    }
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+    if ($stash -and (Test-Path -LiteralPath $stash)) {
+        Remove-Item -LiteralPath $stash -Force -ErrorAction SilentlyContinue
+    }
+}
 
 # If no target specified, build all
 $allTargets = @('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')
@@ -108,58 +132,21 @@ if ('Dll' -in $Target) {
     # Source paths (deploy net8.0 — forward compatible with .NET 9)
     $buildOutputPath = Join-Path $moduleProjectPath "bin\$Configuration\net8.0"
 
-    # Copy DLLs from build output. We ALWAYS use a move-then-copy swap
-    # (previously gated on -DllOnly) so a pwsh that still has the old DLL
-    # loaded never blocks the deploy. The DLL is held by the MCP-spawned
-    # pwsh consoles, which detach and keep running after the proxy dies —
-    # so stopping the MCP server alone never frees it. Windows lets us
-    # rename the locked file out of the way (the open handle keeps
-    # tracking the renamed inode) and drop the new file in at the original
-    # name; the orphaned pwsh keeps the old DLL until it exits. Stash
-    # files are best-effort cleaned at the start of each run and again
-    # right after the swap when the old DLL turned out not to be locked.
-    $dllSrc = Join-Path $buildOutputPath 'PowerShell.MCP.dll'
-    $dllDst = Join-Path $OutputBase 'PowerShell.MCP.dll'
-    Get-ChildItem -LiteralPath $OutputBase -Filter 'PowerShell.MCP.dll.stash-*' -ErrorAction SilentlyContinue |
-        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
-    $stashPath = $null
-    if (Test-Path $dllDst) {
-        $stashPath = Join-Path $OutputBase "PowerShell.MCP.dll.stash-$(Get-Random)"
-        Move-Item -LiteralPath $dllDst -Destination $stashPath -Force
-    }
-    Copy-Item $dllSrc -Destination $OutputBase -Force
-    # If the old DLL wasn't actually locked, drop its stash now so the
-    # output dir stays clean and the unexpected-files check stays quiet;
-    # if a live pwsh still holds it, this fails silently and it lingers.
-    if ($stashPath -and (Test-Path $stashPath)) {
-        Remove-Item -LiteralPath $stashPath -Force -ErrorAction SilentlyContinue
-    }
+    # Both DLLs are held by any open MCP console, so they go through the
+    # move-then-copy swap rather than a plain overwrite.
+    Install-FileWithStash (Join-Path $buildOutputPath 'PowerShell.MCP.dll') (Join-Path $OutputBase 'PowerShell.MCP.dll')
     # Ude.NetStandard.dll: try build output first, fallback to NuGet cache.
-    # It is loaded by the same consoles that hold PowerShell.MCP.dll, so a
-    # plain Copy-Item over it fails with "being used by another process"
-    # whenever an MCP console is open — which stopped the -DllOnly loop this
-    # script exists for. The file almost never changes, so it is left alone
-    # when identical; otherwise it gets the same move-then-copy swap.
+    # The file almost never changes, so it is left alone when identical.
     $udeDll = Join-Path $env:USERPROFILE '.nuget\packages\ude.netstandard\1.2.0\lib\netstandard2.0\Ude.NetStandard.dll'
     $udeBuildPath = Join-Path $buildOutputPath 'Ude.NetStandard.dll'
     $udeSrc = if (Test-Path $udeBuildPath) { $udeBuildPath } elseif (Test-Path $udeDll) { $udeDll } else { $null }
     $udeDst = Join-Path $OutputBase 'Ude.NetStandard.dll'
-    Get-ChildItem -LiteralPath $OutputBase -Filter 'Ude.NetStandard.dll.stash-*' -ErrorAction SilentlyContinue |
-        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
     if (-not $udeSrc) {
         Write-Warning "  Ude.NetStandard.dll not found!"
     } elseif ((Test-Path $udeDst) -and (Get-FileHash $udeSrc).Hash -eq (Get-FileHash $udeDst).Hash) {
         # Identical: nothing to deploy, and nothing to fight a lock over.
     } else {
-        $udeStash = $null
-        if (Test-Path $udeDst) {
-            $udeStash = Join-Path $OutputBase "Ude.NetStandard.dll.stash-$(Get-Random)"
-            Move-Item -LiteralPath $udeDst -Destination $udeStash -Force
-        }
-        Copy-Item $udeSrc -Destination $udeDst -Force
-        if ($udeStash -and (Test-Path $udeStash)) {
-            Remove-Item -LiteralPath $udeStash -Force -ErrorAction SilentlyContinue
-        }
+        Install-FileWithStash $udeSrc $udeDst
     }
     Write-Host "  Copied: PowerShell.MCP.dll" -ForegroundColor Green
     Write-Host "  Copied: Ude.NetStandard.dll" -ForegroundColor Green
@@ -190,20 +177,9 @@ $proxyTargets = $Target | Where-Object { $_ -ne 'Dll' }
 if ($proxyTargets) {
     Write-Host "[Proxy] Building PowerShell.MCP.Proxy..." -ForegroundColor Yellow
 
-    # Stop ONLY the MCP server (proxy) processes — never Claude, Claude
-    # Code, or unrelated pwsh. A running PowerShell.MCP.Proxy image-locks
-    # its own bin\<rid>\PowerShell.MCP.Proxy.exe, which `dotnet publish`
-    # must overwrite. Stopping just these frees that lock and drops only
-    # the MCP "pwsh" server connection; the client app keeps running and
-    # respawns the server on next use. (The DLL lock is handled by the
-    # move-then-copy swap above, so no pwsh needs stopping here.)
-    $proxyProcs = @(Get-Process -Name 'PowerShell.MCP.Proxy' -ErrorAction SilentlyContinue)
-    if ($proxyProcs.Count -gt 0) {
-        Write-Host "  Stopping $($proxyProcs.Count) running MCP server process(es) to release proxy.exe lock..." -ForegroundColor Gray
-        $proxyProcs | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 500  # let the OS release the image lock before publish
-    }
-
+    # Running proxies are NOT stopped (see the note at the top): publish
+    # goes to a temp folder, and the result is swapped in next to the
+    # image-locked exe.
     $binBase = Join-Path $OutputBase 'bin'
 
     foreach ($t in $proxyTargets) {
@@ -216,12 +192,14 @@ if ($proxyTargets) {
             New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
         }
 
+        $publishDir = Join-Path ([IO.Path]::GetTempPath()) "PowerShell.MCP.Proxy-publish-$rid-$(Get-Random)"
+
         $publishArgs = @(
             'publish'
             $proxyProjectPath
             '-c', $Configuration
             '-r', $rid
-            '-o', $outputDir
+            '-o', $publishDir
             '--self-contained'
             '--source', 'https://api.nuget.org/v3/index.json'
         )
@@ -229,9 +207,16 @@ if ($proxyTargets) {
         & dotnet @publishArgs
 
         if ($LASTEXITCODE -ne 0) {
+            Remove-Item -LiteralPath $publishDir -Recurse -Force -ErrorAction SilentlyContinue
             Write-Error "[$rid] Build failed!"
             exit 1
         }
+
+        # Single-file publish: normally just the exe.
+        Get-ChildItem -LiteralPath $publishDir -File | ForEach-Object {
+            Install-FileWithStash $_.FullName (Join-Path $outputDir $_.Name)
+        }
+        Remove-Item -LiteralPath $publishDir -Recurse -Force -ErrorAction SilentlyContinue
 
         $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
         $exePath = Join-Path $outputDir $exeName
@@ -359,10 +344,16 @@ $allowedDirs = @(
 )
 
 $unexpectedItems = @()
+# Old files a running process still holds after Install-FileWithStash.
+# Expected while MCP sessions are open; a later run deletes them, and
+# RELEASE.md's staging step leaves them out of the package.
+$heldStashes = @()
 
 # Check root level files
 Get-ChildItem $OutputBase -File | ForEach-Object {
-    if ($_.Name -notin $allowedFiles) {
+    if ($_.Name -like '*.stash-*') {
+        $heldStashes += $_.Name
+    } elseif ($_.Name -notin $allowedFiles) {
         $unexpectedItems += $_.Name
     }
 }
@@ -391,7 +382,9 @@ if (Test-Path $binPath) {
         if (Test-Path $platformPath) {
             $expectedExe = if ($platform -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
             Get-ChildItem $platformPath -File | ForEach-Object {
-                if ($_.Name -ne $expectedExe) {
+                if ($_.Name -like '*.stash-*') {
+                    $heldStashes += "bin\$platform\$($_.Name)"
+                } elseif ($_.Name -ne $expectedExe) {
                     $unexpectedItems += "bin\$platform\$($_.Name)"
                 }
             }
@@ -418,6 +411,12 @@ if ($unexpectedItems.Count -gt 0) {
     Write-Host "  Consider removing these before publishing." -ForegroundColor Yellow
 } else {
     Write-Host "  No unexpected files found" -ForegroundColor Green
+}
+if ($heldStashes.Count -gt 0) {
+    Write-Host "  Previous versions still in use by running processes (removed on a later run):" -ForegroundColor Gray
+    foreach ($item in $heldStashes) {
+        Write-Host "    - $item" -ForegroundColor Gray
+    }
 }
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
