@@ -313,7 +313,23 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # no longer reads the previous call's.
             function Get-McpSandbox {
                 if (-not $script:McpSandbox) {
-                    $script:McpSandbox = New-Module -Name 'PowerShell.MCP.Sandbox' -ScriptBlock { }
+                    $script:McpSandbox = New-Module -Name 'PowerShell.MCP.Sandbox' -ScriptBlock {
+                        # Import-Module called from inside a module imports into
+                        # THAT module (nested) unless told -Global; from here that
+                        # would leave the user at the prompt without the module
+                        # the AI just imported, which the shared console is for.
+                        # So the sandbox carries a proxy of Import-Module that
+                        # defaults to -Global when neither -Global nor -Scope is
+                        # given. Built from the real cmdlet so every parameter
+                        # set is kept. Done in a child scope so nothing but the
+                        # function is left in the sandbox for commands to see.
+                        & {
+                            $mcpText = [System.Management.Automation.ProxyCommand]::Create((Get-Command Import-Module -CommandType Cmdlet))
+                            $mcpGuard = 'if (-not $PSBoundParameters.ContainsKey(''Global'') -and -not $PSBoundParameters.ContainsKey(''Scope'')) { $PSBoundParameters[''Global''] = $true }'
+                            $mcpText = $mcpText -replace '(?m)^(\s*)(\$scriptCmd = \{)', ('$1' + $mcpGuard + "`n" + '$1$2')
+                            Set-Item -Path function:script:Import-Module -Value ([scriptblock]::Create($mcpText))
+                        }
+                    }
                 }
                 $script:McpSandbox
             }
