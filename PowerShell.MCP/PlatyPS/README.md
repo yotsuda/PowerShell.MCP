@@ -18,31 +18,31 @@ PlatyPS/
 
 ## Building Help
 
-To build the MAML help files from markdown (requires Administrator privileges):
+To build the MAML help files from markdown:
 
 ```powershell
-# Run as Administrator
 .\Build-Help.ps1
 ```
 
 This will:
-1. Generate `PowerShell.MCP.dll-Help.xml` from markdown files
-2. Copy the help file to all target framework directories:
+1. Generate `PowerShell.MCP-Help.xml` and `PowerShell.MCP.dll-Help.xml` from the markdown files
+2. Copy the help files to all target framework directories:
    - `bin/Debug/net8.0/en-US/`
    - `bin/Debug/net9.0/en-US/`
    - `bin/Release/net8.0/en-US/`
    - `bin/Release/net9.0/en-US/`
-3. Copy to PowerShell modules directory:
-   - `C:\Program Files\PowerShell\7\Modules\PowerShell.MCP\en-US\`
-   - `bin/Release/net9.0/en-US/`
+3. Copy them into the installed module's `en-US\` folder — wherever
+   `Get-Module PowerShell.MCP -ListAvailable` finds it (the same resolution
+   `Build-AllPlatforms.ps1` uses). Administrator privileges are needed only
+   when that is under Program Files.
 
 ## Requirements
 
-- [platyPS](https://github.com/PowerShell/platyPS) module
+- [Microsoft.PowerShell.PlatyPS](https://github.com/PowerShell/platyPS) (v2; the legacy `platyPS` module is not enough)
 
 Install with:
 ```powershell
-Install-Module -Name platyPS -Scope CurrentUser
+Install-Module -Name Microsoft.PowerShell.PlatyPS -Scope CurrentUser
 ```
 
 ## Editing Help
@@ -53,6 +53,5 @@ Install-Module -Name platyPS -Scope CurrentUser
 
 ## Notes
 
-- `Build-Help.ps1` is excluded from git (local-only build script)
-- Help files are automatically built and copied to all target frameworks
+- Help files are automatically built and copied to all target frameworks and to the installed module
 - The markdown files follow PlatyPS format requirements

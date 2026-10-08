@@ -134,22 +134,30 @@ foreach ($tfm in $targetFrameworks) {
     }
 }
 
-# Copy to PowerShell modules directory
-$psModulePath = "C:\Program Files\PowerShell\7\Modules\PowerShell.MCP\en-US"
-try {
-    if (-not (Test-Path $psModulePath)) {
-        New-Item -Path $psModulePath -ItemType Directory -Force | Out-Null
-    }
+# Copy to the installed module (wherever Get-Module finds it — e.g.
+# C:\PSModules\PowerShell.MCP or a Program Files path), the same
+# resolution Build-AllPlatforms.ps1 uses for its default -OutputBase.
+# Skipped with a note when the module is not installed.
+$installed = Get-Module PowerShell.MCP -ListAvailable | Select-Object -First 1
+if ($installed) {
+    $psModulePath = Join-Path $installed.ModuleBase "en-US"
+    try {
+        if (-not (Test-Path $psModulePath)) {
+            New-Item -Path $psModulePath -ItemType Directory -Force | Out-Null
+        }
 
-    foreach ($hf in $helpFiles) {
-        Copy-Item -Path $hf.FullName -Destination (Join-Path $psModulePath $hf.Name) -Force
-    }
-    $copiedCount++
+        foreach ($hf in $helpFiles) {
+            Copy-Item -Path $hf.FullName -Destination (Join-Path $psModulePath $hf.Name) -Force
+        }
+        $copiedCount++
 
-    Write-Host "  [COPY] PowerShell\7\Modules\PowerShell.MCP\en-US\" -ForegroundColor Gray
-} catch {
-    Write-Warning "Could not copy to PowerShell modules directory: $_"
-    Write-Warning "You may need to run as Administrator"
+        Write-Host "  [COPY] $psModulePath\" -ForegroundColor Gray
+    } catch {
+        Write-Warning "Could not copy to the installed module at ${psModulePath}: $_"
+        Write-Warning "If the module lives under Program Files, run as Administrator"
+    }
+} else {
+    Write-Warning "PowerShell.MCP is not installed (Get-Module -ListAvailable found nothing); help was built into bin\ only."
 }
 
 Write-Host ""
