@@ -728,7 +728,28 @@ public class NamedPipeServer : IDisposable
                 else
                 {
                     // standby - but check if runspace is actually available (via heartbeat)
-                    if (ExecutionState.IsRunspaceAvailable)
+                    // An unowned console that cannot serve this proxy as it
+                    // should is not offered for claiming: its module build is
+                    // no longer the one on disk (a deploy since it started), or
+                    // its version differs from the proxy's (a release installed
+                    // side by side). Claimed, the first would silently run old
+                    // code and the second would fail every command with a
+                    // version error. Reported as not ready, it is passed over
+                    // and the proxy starts a fresh console. Owned consoles are
+                    // never refused: their session already depends on them.
+                    var requestProxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement statusVersionElement)
+                        ? statusVersionElement.GetString() : null;
+                    var outdatedReason = ConsoleLiveness.IsOwned ? null
+                        : requestProxyVersion != null && requestProxyVersion != MCPModuleInitializer.ServerVersion
+                            ? $"PowerShell.MCP {MCPModuleInitializer.ServerVersion} does not match proxy {requestProxyVersion}"
+                        : ModuleFreshness.IsOutdated ? "PowerShell.MCP.dll was rebuilt after this console loaded it"
+                        : null;
+                    if (outdatedReason != null && ExecutionState.IsRunspaceAvailable)
+                    {
+                        var statusLine = BuildStatusLine("⊘", $"Console not claimable: {outdatedReason}", "Outdated");
+                        statusResponse = JsonSerializer.Serialize(new { pid, status = "outdated", reason = outdatedReason, statusLine, cwd, typedText, typedTextAgeSeconds = typedTextAge });
+                    }
+                    else if (ExecutionState.IsRunspaceAvailable)
                     {
                         var statusLine = BuildStatusLine("●", "Console ready", "Standby");
                         statusResponse = JsonSerializer.Serialize(new { pid, status = "standby", statusLine, cwd, typedText, typedTextAgeSeconds = typedTextAge });

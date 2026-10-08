@@ -106,6 +106,9 @@ public static class ConsoleLiveness
         }
     }
 
+    /// <summary>True while a proxy session owns this console.</summary>
+    public static bool IsOwned { get { lock (_lock) { return _proxyPid.HasValue; } } }
+
     /// <summary>True once the close warning has been shown (i.e. in the grace
     /// window); the engine uses this to arm keypress-cancel only then.</summary>
     public static bool IsReapPending { get { lock (_lock) { return _warned; } } }
