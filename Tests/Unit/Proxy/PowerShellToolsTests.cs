@@ -1690,8 +1690,9 @@ public class PowerShellToolsTests
     {
         // A fresh (never-attached) agent reclaiming an existing console at a prior
         // session's cwd is the resume / cold-start boundary. execute_command runs
-        // (no suppression) but normalizes to $HOME by prefixing the pipeline, and
-        // announces the new server session with a restore hint for the old cwd.
+        // (no suppression) but first moves to $HOME with a silent command of its
+        // own, and announces the new server session with a restore hint for the
+        // old cwd.
         var freshAgent = ConsoleSessionManager.Instance.AllocateSubAgentId(); // unmarked
         var pipeName = $"PSMCP.{ConsoleSessionManager.Instance.ProxyPid}.{freshAgent}.94001";
         var reclaimedCwd = Path.Combine(Path.GetTempPath(), "prior-session-cwd");
@@ -1704,6 +1705,12 @@ public class PowerShellToolsTests
             .Returns(Task.CompletedTask);
 
         string? sentPipeline = null;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string? silentPipeline = null;
+        _mockPowerShellService
+            .Setup(s => s.ExecuteSilentAsync(pipeName, It.Is<string>(p => p.StartsWith("Set-Location")), It.IsAny<CancellationToken>()))
+            .Callback<string, string, CancellationToken>((_, p, _) => silentPipeline = p)
+            .Returns(Task.CompletedTask);
         var headerJson = JsonSerializer.Serialize(new { pid = 94001, status = "success", pipeline = "x", duration = 0.01, cwd = "C:\\Users\\test" });
         _mockPowerShellService
             .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -1716,10 +1723,10 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: freshAgent);
 
-        // Ran (not suppressed), prefixed with a Set-Location to $HOME.
-        Assert.NotNull(sentPipeline);
-        Assert.StartsWith("Set-Location -LiteralPath '", sentPipeline);
-        Assert.EndsWith("; Get-ChildItem", sentPipeline);
+        // Ran (not suppressed) verbatim; the move to $HOME went separately, as
+        // a silent command, so it is neither echoed nor named in the status line.
+        Assert.Equal("Get-ChildItem", sentPipeline);
+        Assert.Equal($"Set-Location -LiteralPath '{home.Replace("'", "''")}'", silentPipeline);
         Assert.DoesNotContain("Pipeline NOT executed", result);
         // New-session notice with the prior-cwd restore hint.
         Assert.Contains("New server session", result);
@@ -1765,8 +1772,8 @@ public class PowerShellToolsTests
     public async Task ExecuteCommand_FirstAttachAlreadyAtHome_AnnouncesNewSessionWithoutRestoreHint()
     {
         // The spawn case (and any reclaim that happens to land at $HOME): on the
-        // first attach the console is already at $HOME, so the pipeline is still
-        // normalized to $HOME and the new-session notice fires, but there is NO
+        // first attach the console is already at $HOME, so the console is still
+        // moved to $HOME and the new-session notice fires, but there is NO
         // prior cwd to restore (priorCwd is null when liveCwd == home). Complements
         // the reclaim-at-a-different-cwd test, which DOES carry a restore hint.
         var freshAgent = ConsoleSessionManager.Instance.AllocateSubAgentId(); // unmarked
@@ -1781,6 +1788,11 @@ public class PowerShellToolsTests
             .Returns(Task.CompletedTask);
 
         string? sentPipeline = null;
+        string? silentPipeline = null;
+        _mockPowerShellService
+            .Setup(s => s.ExecuteSilentAsync(pipeName, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, CancellationToken>((_, p, _) => silentPipeline = p)
+            .Returns(Task.CompletedTask);
         var headerJson = JsonSerializer.Serialize(new { pid = 94005, status = "success", pipeline = "x", duration = 0.01, cwd = home });
         _mockPowerShellService
             .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -1793,9 +1805,8 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: freshAgent);
 
-        Assert.NotNull(sentPipeline);
-        Assert.StartsWith("Set-Location -LiteralPath '", sentPipeline);     // still normalized to $HOME
-        Assert.EndsWith("; Get-ChildItem", sentPipeline);
+        Assert.Equal("Get-ChildItem", sentPipeline);
+        Assert.StartsWith("Set-Location -LiteralPath '", silentPipeline);   // still moved to $HOME
         Assert.DoesNotContain("Pipeline NOT executed", result);
         Assert.Contains("New server session", result);
         Assert.DoesNotContain("to resume there", result);                   // no restore hint: already at $HOME

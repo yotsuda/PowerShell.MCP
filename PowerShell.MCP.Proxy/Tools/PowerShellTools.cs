@@ -707,16 +707,11 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}. Pipeline running there.";
         }
 
-        // The AI's own pipeline, captured before the first-attach preamble
-        // below prepends a Set-Location of our own — the redundant-cd hint
-        // must judge only what the AI wrote.
-        var aiPipeline = pipeline;
-
         // A Start-Process that redirects output into a new console writes
         // that file in the OEM code page, not UTF-8. Judged on the AI's own
         // pipeline; shown on every call it applies to, because it is a
         // correctness problem each time and the pattern is rare.
-        var startProcessHint = PipelineHelper.CheckStartProcessNewConsole(aiPipeline);
+        var startProcessHint = PipelineHelper.CheckStartProcessNewConsole(pipeline);
 
         // First console attach for this agent in the proxy's lifetime — the
         // resume / cold-start boundary. The proxy is fresh but the AI may carry
@@ -724,10 +719,12 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // console we just spawned/reclaimed could be sitting anywhere. Normalize
         // to $HOME so this first command runs at a predictable baseline (not an
         // inherited or arbitrary cwd), and replace the plain spawn/switch notice
-        // with the "new server session" notice. We do NOT suppress: the move is
-        // prepended to the pipeline (one pipe call, no extra AI round-trip), and
-        // a reclaim's prior cwd is surfaced as a restore hint. Mid-session
-        // re-attaches (TryMarkFirstAttach == false) keep the existing notices.
+        // with the "new server session" notice. The move is a silent command of
+        // its own, run just before the pipeline — not prepended to it, which
+        // made it the command the console echoed and the one the status line's
+        // `Pipeline:` summary named. A reclaim's prior cwd is surfaced as a
+        // restore hint. Mid-session re-attaches (TryMarkFirstAttach == false)
+        // keep the existing notices.
         if (readyPipeName != null && sessionManager.TryMarkFirstAttach(agentId))
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -739,7 +736,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 var normHome = Path.TrimEndingDirectorySeparator(Path.GetFullPath(home));
                 if (!string.Equals(normLive, normHome, comparison)) priorCwd = liveCwd;
             }
-            pipeline = $"Set-Location -LiteralPath '{home.Replace("'", "''")}'; {pipeline}";
+            await powerShellService.ExecuteSilentAsync(readyPipeName, $"Set-Location -LiteralPath '{home.Replace("'", "''")}'", cancellationToken);
             liveCwd = home;
             startupNotice = BuildNewSessionNotice(GetConsoleName(readyPipeName), home, priorCwd);
         }
@@ -1011,10 +1008,10 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                 // pre-execution cwd (drift check guarantees it
                                 // matches the AI's last cwd), jsonResponse.Cwd
                                 // the post-execution one.
-                                var redundantCdHint = PipelineHelper.CheckRedundantLeadingCd(aiPipeline, liveCwd, jsonResponse.Cwd);
+                                var redundantCdHint = PipelineHelper.CheckRedundantLeadingCd(pipeline, liveCwd, jsonResponse.Cwd);
                                 // Nested `pwsh -Command` / `-File` hint: judged on
                                 // the AI's own pipeline as well, deduped per agent.
-                                var nestedPwshHint = PipelineHelper.CheckNestedPwsh(aiPipeline, agentId);
+                                var nestedPwshHint = PipelineHelper.CheckNestedPwsh(pipeline, agentId);
                                 // TODO: Uncomment when JsonDuo is published to PS Gallery
                                 // var jsonHint = PipelineHelper.CheckJsonFileHint(pipeline, agentId)
                                 //     ?? PipelineHelper.CheckJsonFileHint(body, agentId);
