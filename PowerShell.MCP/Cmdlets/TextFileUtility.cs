@@ -40,6 +40,50 @@ public static class TextFileUtility
     }
 
     /// <summary>
+    /// Longest context line (the <c>N-</c> lines around a match or an edit),
+    /// in characters, before it is clipped.
+    /// </summary>
+    public const int ContextLineMaxChars = 200;
+
+    /// <summary>
+    /// Clips a context line to <paramref name="maxChars"/> visible characters and
+    /// says how much was cut: <c>… (+N chars)</c>. Context lines only locate the
+    /// match or edit; in a file whose lines are paragraphs (Markdown, a
+    /// CHANGELOG) they would otherwise bury it in kilobytes of neighbouring
+    /// text. Match and edited lines are never clipped. ANSI escape sequences
+    /// don't count as characters and are never cut in half; a line clipped
+    /// inside colored text gets a reset before the marker.
+    /// </summary>
+    public static string ClipContextLine(string line, int maxChars = ContextLineMaxChars)
+    {
+        // Visible characters never exceed the string length
+        if (line.Length <= maxChars) return line;
+
+        int visible = 0;
+        int cut = -1;
+        bool styledBeforeCut = false;
+        int i = 0;
+        while (i < line.Length)
+        {
+            if (line[i] == '\x1b' && i + 1 < line.Length && line[i + 1] == '[')
+            {
+                int j = i + 2;
+                while (j < line.Length && !char.IsAsciiLetter(line[j])) j++;
+                i = Math.Min(j + 1, line.Length);
+                if (cut < 0) styledBeforeCut = true;
+                continue;
+            }
+            if (visible == maxChars && cut < 0) cut = i;
+            visible++;
+            // A surrogate pair is one character and is never split
+            i += char.IsHighSurrogate(line[i]) && i + 1 < line.Length && char.IsLowSurrogate(line[i + 1]) ? 2 : 1;
+        }
+
+        if (cut < 0) return line;
+        return line[..cut] + (styledBeforeCut ? AnsiColors.Reset : "") + $"… (+{visible - maxChars} chars)";
+    }
+
+    /// <summary>
     /// Detects file metadata (with explicit encoding support)
     /// </summary>
     public static FileMetadata DetectFileMetadata(string filePath, string? encodingName)

@@ -281,7 +281,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 if (ctx.lineNum > lastOutputLine)
                                 {
                                     var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex);
-                                    WriteObject($"{ctx.lineNum + lineOffset,3}- {ctxDisplayLine}");
+                                    WriteObject($"{ctx.lineNum + lineOffset,3}- {TextFileUtility.ClipContextLine(ctxDisplayLine)}");
                                     lastOutputLine = ctx.lineNum;
                                 }
                             }
@@ -352,7 +352,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             if (afterMatchCounter > 0)
                             {
                                 var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex);
-                                WriteObject($"{lineNumber + lineOffset,3}- {displayContextLine}");
+                                WriteObject($"{lineNumber + lineOffset,3}- {TextFileUtility.ClipContextLine(displayContextLine)}");
                                 lastOutputLine = lineNumber;
                                 afterMatchCounter--;
                             }

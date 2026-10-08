@@ -366,7 +366,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                         }
                         foreach (var ctx in preContextBuffer)
                         {
-                            WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
+                            WriteObject($"{ctx.outputLineNum,3}- {TextFileUtility.ClipContextLine(ctx.line)}");
                         }
                     }
 
@@ -420,7 +420,7 @@ public class UpdateLinesInFileCmdlet : ContentAccumulatingCmdletBase
                 // Post-context
                 if (afterContextCounter > 0)
                 {
-                    WriteObject($"{outputLine,3}- {line}");
+                    WriteObject($"{outputLine,3}- {TextFileUtility.ClipContextLine(line)}");
                     afterContextCounter--;
                     if (afterContextCounter == 0)
                     {

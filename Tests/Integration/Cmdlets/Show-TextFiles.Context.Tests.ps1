@@ -54,3 +54,33 @@ Describe "Show-TextFiles -Context" {
         { Show-TextFiles $script:testFile -Pattern 'MATCH' -Context -1 } | Should -Throw
     }
 }
+
+Describe "Context lines of a long-line file" {
+    BeforeAll {
+        $script:longFile = [System.IO.Path]::GetTempFileName()
+        $paragraph = 'x' * 500
+        Set-Content -Path $script:longFile -Value @($paragraph, "$paragraph MATCH", $paragraph) -Encoding UTF8
+        function script:Plain([string[]]$Output) { $Output -replace "`e\[[\d;]*m", '' }
+    }
+
+    AfterAll {
+        if (Test-Path $script:longFile) { Remove-Item $script:longFile -Force }
+    }
+
+    It "clips context lines and says how much was cut" {
+        $out = Plain (Show-TextFiles $script:longFile -Pattern 'MATCH')
+        $out | Should -Contain ('  1- ' + ('x' * 200) + '… (+300 chars)')
+        $out | Should -Contain ('  3- ' + ('x' * 200) + '… (+300 chars)')
+    }
+
+    It "never clips the matching line" {
+        $out = Plain (Show-TextFiles $script:longFile -Pattern 'MATCH')
+        $out | Should -Contain ('  2: ' + ('x' * 500) + ' MATCH')
+    }
+
+    It "clips the context lines an edit cmdlet shows" {
+        $out = Plain (Update-MatchInFile $script:longFile -OldText 'MATCH' -Replacement 'DONE')
+        $out | Should -Contain ('  1- ' + ('x' * 200) + '… (+300 chars)')
+        $out | Should -Contain ('  2: ' + ('x' * 500) + ' DONE')
+    }
+}

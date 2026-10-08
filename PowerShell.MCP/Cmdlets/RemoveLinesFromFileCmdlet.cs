@@ -269,7 +269,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                         int ctxDisplayNum = dryRun ? ctx.lineNum : ctx.lineNum - linesRemoved;
                                         if (ctxDisplayNum > lastOutputLine)
                                         {
-                                            WriteObject($"{ctxDisplayNum,3}- {ctx.line}");
+                                            WriteObject($"{ctxDisplayNum,3}- {TextFileUtility.ClipContextLine(ctx.line)}");
                                             lastOutputLine = ctxDisplayNum;
                                         }
                                     }
@@ -344,7 +344,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                                     if (afterRemovalCounter > 0)
                                     {
                                         int displayNum = dryRun ? lineNumber : outputLineNumber;
-                                        WriteObject($"{displayNum,3}- {currentLine}");
+                                        WriteObject($"{displayNum,3}- {TextFileUtility.ClipContextLine(currentLine)}");
                                         lastOutputLine = displayNum;
                                         afterRemovalCounter--;
                                     }
@@ -535,7 +535,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             {
                 if (ln > lastOutputLine)
                 {
-                    WriteObject($"{ln,3}- {allLines[ln - 1]}");
+                    WriteObject($"{ln,3}- {TextFileUtility.ClipContextLine(allLines[ln - 1])}");
                     lastOutputLine = ln;
                 }
             }
@@ -570,7 +570,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
             {
                 if (ln > lastOutputLine)
                 {
-                    WriteObject($"{ln,3}- {allLines[ln - 1]}");
+                    WriteObject($"{ln,3}- {TextFileUtility.ClipContextLine(allLines[ln - 1])}");
                     lastOutputLine = ln;
                 }
             }
@@ -727,7 +727,7 @@ public class RemoveLinesFromFileCmdlet : TextFileCmdletBase
                 // Re-read to get pre-context
                 foreach (var line in File.ReadLines(resolvedPath, metadata.Encoding).Skip(contextLineNum - 1).Take(contextCount))
                 {
-                    WriteObject($"{contextLineNum,3}- {line}");
+                    WriteObject($"{contextLineNum,3}- {TextFileUtility.ClipContextLine(line)}");
                     contextLineNum++;
                 }
             }

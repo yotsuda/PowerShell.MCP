@@ -376,7 +376,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             {
                 if (ln > lastOutputLine)
                 {
-                    outputBuffer.Add($"{ln,3}- {allLines[ln - 1]}");
+                    outputBuffer.Add($"{ln,3}- {TextFileUtility.ClipContextLine(allLines[ln - 1])}");
                     lastOutputLine = ln;
                 }
             }
@@ -397,7 +397,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             {
                 if (ln > lastOutputLine)
                 {
-                    outputBuffer.Add($"{ln,3}- {allLines[ln - 1]}");
+                    outputBuffer.Add($"{ln,3}- {TextFileUtility.ClipContextLine(allLines[ln - 1])}");
                     lastOutputLine = ln;
                 }
             }
@@ -508,7 +508,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                         if (Context > 0 && gapInfo.lineNumber + 1 == preContextStart)
                         {
                             string gapDisplay = ApplyHighlighting(gapInfo.line, regex, regex == null ? matchValue : null);
-                            outputBuffer.Add($"{gapInfo.lineNumber,3}- {gapDisplay}");
+                            outputBuffer.Add($"{gapInfo.lineNumber,3}- {TextFileUtility.ClipContextLine(gapDisplay)}");
                             lastOutputLine = gapInfo.lineNumber;
                         }
                         else if (gapInfo.lineNumber >= preContextStart)
@@ -538,7 +538,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                         if (ctx.lineNumber > lastOutputLine)
                         {
                             string ctxDisplay = ApplyHighlighting(ctx.line, regex, regex == null ? matchValue : null);
-                            outputBuffer.Add($"{ctx.lineNumber,3}- {ctxDisplay}");
+                            outputBuffer.Add($"{ctx.lineNumber,3}- {TextFileUtility.ClipContextLine(ctxDisplay)}");
                         }
                     }
 
@@ -559,7 +559,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                     if (afterMatchCounter > 0)
                     {
                         string display = ApplyHighlighting(currentLine, regex, regex == null ? matchValue : null);
-                        outputBuffer.Add($"{lineNumber,3}- {display}");
+                        outputBuffer.Add($"{lineNumber,3}- {TextFileUtility.ClipContextLine(display)}");
                         afterMatchCounter--;
                         lastOutputLine = lineNumber;
                     }

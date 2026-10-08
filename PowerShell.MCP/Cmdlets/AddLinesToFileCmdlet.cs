@@ -263,7 +263,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                     // Output previous 2 lines (from rotate buffer)
                     foreach (var ctx in preContextBuffer)
                     {
-                        WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
+                        WriteObject($"{ctx.outputLineNum,3}- {TextFileUtility.ClipContextLine(ctx.line)}");
                     }
 
                     // Output inserted lines
@@ -291,7 +291,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                 // Output trailing context
                 if (afterContextCounter > 0)
                 {
-                    WriteObject($"{outputLineNumber,3}- {currentLine}");
+                    WriteObject($"{outputLineNumber,3}- {TextFileUtility.ClipContextLine(currentLine)}");
                     afterContextCounter--;
                     if (afterContextCounter == 0)
                     {
@@ -331,7 +331,7 @@ public class AddLinesToFileCmdlet : ContentAccumulatingCmdletBase
                         // Output previous 2 lines (from rotate buffer)
                         foreach (var ctx in preContextBuffer)
                         {
-                            WriteObject($"{ctx.outputLineNum,3}- {ctx.line}");
+                            WriteObject($"{ctx.outputLineNum,3}- {TextFileUtility.ClipContextLine(ctx.line)}");
                         }
 
                         // Output inserted lines

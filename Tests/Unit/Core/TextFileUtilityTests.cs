@@ -1020,4 +1020,40 @@ public class TextFileUtilityTests
             TextFileUtility.ParseLineRange(new[] { "1", "2", "3" }));
         Assert.Contains("LineRange accepts 1 or 2 values", exception.Message);
     }
+
+    [Fact]
+    public void ClipContextLine_ShortLine_Unchanged()
+    {
+        Assert.Equal("short", TextFileUtility.ClipContextLine("short", 10));
+        Assert.Equal("exactly10!", TextFileUtility.ClipContextLine("exactly10!", 10));
+    }
+
+    [Fact]
+    public void ClipContextLine_LongLine_ClipsAndCountsTheRest()
+    {
+        Assert.Equal("abcde… (+3 chars)", TextFileUtility.ClipContextLine("abcdefgh", 5));
+    }
+
+    [Fact]
+    public void ClipContextLine_EscapeSequencesDoNotCount()
+    {
+        // 5 visible characters inside color codes: not clipped at 5
+        var colored = "\x1b[33mabcde\x1b[0m";
+        Assert.Equal(colored, TextFileUtility.ClipContextLine(colored, 5));
+    }
+
+    [Fact]
+    public void ClipContextLine_CutInsideColor_ResetsBeforeMarker()
+    {
+        var clipped = TextFileUtility.ClipContextLine("ab\x1b[33mcdefgh\x1b[0m", 4);
+        Assert.Equal("ab\x1b[33mcd\x1b[0m… (+4 chars)", clipped);
+    }
+
+    [Fact]
+    public void ClipContextLine_NeverSplitsASurrogatePair()
+    {
+        // "😀" is one character made of two UTF-16 units
+        var clipped = TextFileUtility.ClipContextLine("a😀b😀c", 2);
+        Assert.Equal("a😀… (+3 chars)", clipped);
+    }
 }
