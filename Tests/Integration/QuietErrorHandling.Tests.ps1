@@ -25,7 +25,7 @@ Describe "File operation error validation" {
         }
         
         It "Errors on a negative LineNumber" {
-            { Add-LinesToFile -Path "test.txt" -LineNumber -5 -Content "test" } | Should -Throw -ExpectedMessage "*less than the minimum*"
+            { Add-LinesToFile -Path "test.txt" -LineNumber -5 -Content "test" } | Should -Throw -ErrorId 'ParameterArgumentValidationError,PowerShell.MCP.Cmdlets.AddLinesToFileCmdlet'
         }
     }
 }
