@@ -164,7 +164,13 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 }
             }
 
-            if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
+            // Not ours: an unowned console that is not ready (or whose claim
+            // did not come back in time) is left alone and NOT entered in
+            // this agent's busy list. That list is what wait_for_completion
+            // and the closed-console notices are built from, and a console
+            // this session never owned has no business there — it made
+            // wait_for_completion report "Console #… was closed" for a
+            // stranger's console and return early.
             allPipesStatus.Add($"  - {pipeName} (unowned): {status.Status}");
         }
 
