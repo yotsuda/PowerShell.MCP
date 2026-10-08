@@ -29,8 +29,8 @@ Describe "Show-TextFiles -Context" {
         $out | Should -Contain '  4: line 4 MATCH'
         $out | Should -Contain '  9: line 9 MATCH'
         ($out | Where-Object { $_ -match '^\s*\d+- ' }) | Should -BeNullOrEmpty
-        # A gap between the two matches is still marked by a blank line.
-        ($out | Where-Object { $_ -eq '' }).Count | Should -Be 1
+        # grep-style: no blank separator lines either, the numbers show the gap.
+        ($out | Where-Object { $_ -eq '' }).Count | Should -Be 0
     }
 
     It "-Context 1 shows one line each side" {

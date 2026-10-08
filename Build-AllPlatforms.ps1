@@ -134,15 +134,32 @@ if ('Dll' -in $Target) {
     if ($stashPath -and (Test-Path $stashPath)) {
         Remove-Item -LiteralPath $stashPath -Force -ErrorAction SilentlyContinue
     }
-    # Ude.NetStandard.dll: try build output first, fallback to NuGet cache
+    # Ude.NetStandard.dll: try build output first, fallback to NuGet cache.
+    # It is loaded by the same consoles that hold PowerShell.MCP.dll, so a
+    # plain Copy-Item over it fails with "being used by another process"
+    # whenever an MCP console is open — which stopped the -DllOnly loop this
+    # script exists for. The file almost never changes, so it is left alone
+    # when identical; otherwise it gets the same move-then-copy swap.
     $udeDll = Join-Path $env:USERPROFILE '.nuget\packages\ude.netstandard\1.2.0\lib\netstandard2.0\Ude.NetStandard.dll'
     $udeBuildPath = Join-Path $buildOutputPath 'Ude.NetStandard.dll'
-    if (Test-Path $udeBuildPath) {
-        Copy-Item $udeBuildPath -Destination $OutputBase -Force
-    } elseif (Test-Path $udeDll) {
-        Copy-Item $udeDll -Destination $OutputBase -Force
-    } else {
+    $udeSrc = if (Test-Path $udeBuildPath) { $udeBuildPath } elseif (Test-Path $udeDll) { $udeDll } else { $null }
+    $udeDst = Join-Path $OutputBase 'Ude.NetStandard.dll'
+    Get-ChildItem -LiteralPath $OutputBase -Filter 'Ude.NetStandard.dll.stash-*' -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+    if (-not $udeSrc) {
         Write-Warning "  Ude.NetStandard.dll not found!"
+    } elseif ((Test-Path $udeDst) -and (Get-FileHash $udeSrc).Hash -eq (Get-FileHash $udeDst).Hash) {
+        # Identical: nothing to deploy, and nothing to fight a lock over.
+    } else {
+        $udeStash = $null
+        if (Test-Path $udeDst) {
+            $udeStash = Join-Path $OutputBase "Ude.NetStandard.dll.stash-$(Get-Random)"
+            Move-Item -LiteralPath $udeDst -Destination $udeStash -Force
+        }
+        Copy-Item $udeSrc -Destination $udeDst -Force
+        if ($udeStash -and (Test-Path $udeStash)) {
+            Remove-Item -LiteralPath $udeStash -Force -ErrorAction SilentlyContinue
+        }
     }
     Write-Host "  Copied: PowerShell.MCP.dll" -ForegroundColor Green
     Write-Host "  Copied: Ude.NetStandard.dll" -ForegroundColor Green

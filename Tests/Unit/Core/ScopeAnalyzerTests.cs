@@ -36,7 +36,7 @@ public class ScopeAnalyzerTests
     [InlineData("Get-Item x -ov out; $out")]                         // alias, too
     [InlineData("New-Variable -Name nv -Value 1; $nv")]              // New-Variable
     [InlineData("Set-Variable sv 1; $sv")]                           // positional name
-    [InlineData("[int]::TryParse('1', [ref]$n); $n")]                // [ref] out slot
+    [InlineData("$n = $null; [int]::TryParse('1', [ref]$n); $n")]    // [ref] slot declared first
     [InlineData("1..3 | ForEach-Object { $_ * 2 }; $PSItem; $args; $input")] // automatics
     [InlineData("$script:x = 1; $x")]                                // scoped assignment binds the bare read
     [InlineData("$LASTEXITCODE; $Matches; $foreach; $null; $true")]
@@ -44,6 +44,14 @@ public class ScopeAnalyzerTests
     public void DefinedOrAutomatic_IsNotReported(string pipeline)
     {
         Assert.Empty(ScopeAnalyzer.Analyze(pipeline).UnboundReads);
+    }
+
+    [Fact]
+    public void RefOfAnUndeclaredVariable_IsARead()
+    {
+        // PowerShell throws "[ref] cannot be applied to a variable that does
+        // not exist", so this is a read to report, not a definition.
+        Assert.Equal(new[] { "n" }, ScopeAnalyzer.Analyze("[int]::TryParse('1', [ref]$n)").UnboundReads);
     }
 
     [Fact]

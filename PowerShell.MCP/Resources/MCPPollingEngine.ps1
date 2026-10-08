@@ -1218,22 +1218,27 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # assignments land, and the global scope the user types into —
                 # so a variable that exists by any route is never reported.
                 # The analysis itself is C# (ScopeAnalyzer, on the AST).
-                $scopeWarning = $null
-                try {
+                # Done inside a function so its working variables die with it:
+                # the AI command runs in a child of THIS scope and would
+                # otherwise see them (a loop variable named $n here turned the
+                # AI's own `$n += 1` into "n1" and hid the warning for it).
+                function Get-McpScopeWarning {
+                    param([string]$McpCommand)
                     if (-not $script:McpLocalAssigned) {
                         $script:McpLocalAssigned = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                     }
-                    $scopeInfo = [PowerShell.MCP.Services.ScopeAnalyzer]::Analyze($cmd)
-                    $staleReads = [System.Collections.Generic.List[string]]::new()
-                    $undefinedReads = [System.Collections.Generic.List[string]]::new()
-                    foreach ($readName in $scopeInfo.UnboundReads) {
-                        if (Get-Variable -Name ([WildcardPattern]::Escape($readName)) -ErrorAction SilentlyContinue) { continue }
-                        if ($script:McpLocalAssigned.Contains($readName)) { $staleReads.Add($readName) } else { $undefinedReads.Add($readName) }
+                    $mcpScope = [PowerShell.MCP.Services.ScopeAnalyzer]::Analyze($McpCommand)
+                    $mcpStale = [System.Collections.Generic.List[string]]::new()
+                    $mcpUndefined = [System.Collections.Generic.List[string]]::new()
+                    foreach ($mcpName in $mcpScope.UnboundReads) {
+                        if (Get-Variable -Name ([WildcardPattern]::Escape($mcpName)) -ErrorAction SilentlyContinue) { continue }
+                        if ($script:McpLocalAssigned.Contains($mcpName)) { $mcpStale.Add($mcpName) } else { $mcpUndefined.Add($mcpName) }
                     }
-                    foreach ($n in $scopeInfo.ScopeAssigned) { [void]$script:McpLocalAssigned.Remove($n) }
-                    foreach ($n in $scopeInfo.LocalAssigned) { [void]$script:McpLocalAssigned.Add($n) }
-                    $scopeWarning = [PowerShell.MCP.Services.ScopeAnalyzer]::FormatWarning($staleReads, $undefinedReads)
-                } catch { $scopeWarning = $null }
+                    foreach ($mcpName in $mcpScope.ScopeAssigned) { [void]$script:McpLocalAssigned.Remove($mcpName) }
+                    foreach ($mcpName in $mcpScope.LocalAssigned) { [void]$script:McpLocalAssigned.Add($mcpName) }
+                    [PowerShell.MCP.Services.ScopeAnalyzer]::FormatWarning($mcpStale, $mcpUndefined)
+                }
+                $mcpScopeWarning = try { Get-McpScopeWarning -McpCommand $cmd } catch { $null }
 
                 $mcpOutput = $null
                 try {
@@ -1318,7 +1323,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration -Pipeline $cmd
                     # Scope warning last, after the output it explains.
-                    if ($scopeWarning) { $mcpOutput = $mcpOutput + "`n`n" + $scopeWarning }
+                    if ($mcpScopeWarning) { $mcpOutput = $mcpOutput + "`n`n" + $mcpScopeWarning }
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"

@@ -326,8 +326,9 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             int contextStart = Math.Max(1, matchStartLine - Context);
             int contextEnd = Math.Min(allLines.Length, matchEndLine + Context);
 
-            // Gap detection
-            if (lastOutputLine > 0 && contextStart > lastOutputLine + 1)
+            // Gap detection. With -Context 0 the listing is grep-style and the
+            // line numbers already show the gaps, so no separator lines.
+            if (Context > 0 && lastOutputLine > 0 && contextStart > lastOutputLine + 1)
             {
                 outputBuffer.Add("");
             }
@@ -476,9 +477,11 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                         {
                             // gapLine is included in leading context -> will be output as leading context, do nothing
                         }
-                        else
+                        else if (Context > 0)
                         {
-                            // Gap is 2+ lines -> separate with empty line
+                            // Gap is 2+ lines -> separate with empty line.
+                            // Not with -Context 0: grep-style, the line
+                            // numbers already show the gap.
                             outputBuffer.Add("");
                         }
                         gapLineInfo = null;
@@ -487,7 +490,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                     else if (needsGapSeparator)
                     {
                         // Empty line output when no gapLine
-                        outputBuffer.Add("");
+                        if (Context > 0) outputBuffer.Add("");
                         needsGapSeparator = false;
                     }
 

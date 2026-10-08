@@ -121,14 +121,10 @@ public static class ScopeAnalyzer
             bound.Add(variable.VariablePath.UserPath);
         }
 
-        // [ref]$x — an out-parameter slot; the callee fills it.
-        foreach (var node in ast.FindAll(a => a is ConvertExpressionAst, true))
-        {
-            var convert = (ConvertExpressionAst)node;
-            if (string.Equals(convert.Type.TypeName.Name, "ref", StringComparison.OrdinalIgnoreCase)
-                && convert.Child is VariableExpressionAst refVariable)
-                bound.Add(refVariable.VariablePath.UserPath);
-        }
+        // [ref]$x is NOT a definition: PowerShell refuses "[ref] cannot be
+        // applied to a variable that does not exist", so an unbound $x there
+        // is exactly a read worth reporting (the usual idiom assigns $x = $null
+        // first, which binds it).
 
         foreach (var node in ast.FindAll(a => a is CommandAst, true))
         {
