@@ -194,6 +194,10 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         var preContextBuffer = new RotateBuffer<(string line, int lineNum)>(2);
         int afterMatchCounter = 0;
         int lastOutputLine = 0;
+        // Lines added by earlier replacements whose text contains newlines.
+        // lineNumber/lastOutputLine count lines of the original file (gap
+        // detection); displayed numbers add this so they match the result.
+        int lineOffset = 0;
 
         try
         {
@@ -277,7 +281,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 if (ctx.lineNum > lastOutputLine)
                                 {
                                     var ctxDisplayLine = BuildContextDisplayLine(ctx.line, isLiteral, regex);
-                                    WriteObject($"{ctx.lineNum,3}- {ctxDisplayLine}");
+                                    WriteObject($"{ctx.lineNum + lineOffset,3}- {ctxDisplayLine}");
                                     lastOutputLine = ctx.lineNum;
                                 }
                             }
@@ -331,7 +335,14 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                                 }
                             }
 
-                            WriteObject($"{lineNumber,3}: {displayLine}");
+                            // A replacement containing newlines turns one line into
+                            // several: number each one, as Update-LinesInFile does.
+                            var displayLines = SplitColoredLines(displayLine, metadata.NewlineSequence);
+                            for (int i = 0; i < displayLines.Count; i++)
+                            {
+                                WriteObject($"{lineNumber + lineOffset + i,3}: {displayLines[i]}");
+                            }
+                            lineOffset += displayLines.Count - 1;
                             lastOutputLine = lineNumber;
                             afterMatchCounter = 2;
                         }
@@ -341,7 +352,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
                             if (afterMatchCounter > 0)
                             {
                                 var displayContextLine = BuildContextDisplayLine(currentLine, isLiteral, regex);
-                                WriteObject($"{lineNumber,3}- {displayContextLine}");
+                                WriteObject($"{lineNumber + lineOffset,3}- {displayContextLine}");
                                 lastOutputLine = lineNumber;
                                 afterMatchCounter--;
                             }
@@ -436,6 +447,37 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             return $"{AnsiColors.Red}{match.Value}{AnsiColors.Reset}{AnsiColors.Green}{replacedText}{AnsiColors.Reset}";
         });
 
+        return result;
+    }
+
+    /// <summary>
+    /// Split a display line at the file's newline sequence, closing a color
+    /// span at the end of each piece and reopening it on the next, so every
+    /// piece renders on its own with the colors it had in the whole line.
+    /// </summary>
+    internal static List<string> SplitColoredLines(string text, string newline)
+    {
+        var pieces = text.Split(newline);
+        var result = new List<string>(pieces.Length);
+        if (pieces.Length == 1)
+        {
+            result.Add(text);
+            return result;
+        }
+
+        string open = "";
+        foreach (var piece in pieces)
+        {
+            var line = open + piece;
+            int resetAt = piece.LastIndexOf(AnsiColors.Reset, StringComparison.Ordinal);
+            int redAt = piece.LastIndexOf(AnsiColors.Red, StringComparison.Ordinal);
+            int greenAt = piece.LastIndexOf(AnsiColors.Green, StringComparison.Ordinal);
+            if (redAt > resetAt && redAt > greenAt) open = AnsiColors.Red;
+            else if (greenAt > resetAt && greenAt > redAt) open = AnsiColors.Green;
+            else if (resetAt >= 0) open = "";
+            if (open.Length > 0) line += AnsiColors.Reset;
+            result.Add(line);
+        }
         return result;
     }
 
@@ -554,7 +596,9 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         // Find affected line numbers for context display
         var oldLines = content.Split(metadata.NewlineSequence).ToArray();
 
-        // Show simple before/after for first occurrence
+        // Show simple before/after for first occurrence. Numbered like
+        // Update-LinesInFile: removed lines carry no number, inserted lines
+        // their number in the result (unchanged up to here by construction).
         var firstIdx = content.IndexOf(normalizedOldText, StringComparison.Ordinal);
         if (firstIdx >= 0)
         {
@@ -562,12 +606,12 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
             var oldTextLines = normalizedOldText.Split(metadata.NewlineSequence);
             for (int i = 0; i < oldTextLines.Length && startLineNum + i <= oldLines.Length; i++)
             {
-                WriteObject($"{startLineNum + i,3}: {AnsiColors.Red}{oldLines[startLineNum + i - 1]}{AnsiColors.Reset}");
+                WriteObject($"   : {AnsiColors.Red}{oldLines[startLineNum + i - 1]}{AnsiColors.Reset}");
             }
             var replacementLines = normalizedReplacement.Split(metadata.NewlineSequence);
             for (int i = 0; i < replacementLines.Length; i++)
             {
-                WriteObject($"   : {AnsiColors.Green}{replacementLines[i]}{AnsiColors.Reset}");
+                WriteObject($"{startLineNum + i,3}: {AnsiColors.Green}{replacementLines[i]}{AnsiColors.Reset}");
             }
         }
 

@@ -201,4 +201,52 @@ Also Not Found
             }
         }
     }
+
+    Context "Display line numbers when the line count changes" {
+        BeforeEach {
+            $script:testFile = [System.IO.Path]::GetTempFileName()
+            Set-Content $script:testFile -Value @('line1', 'line2', 'line3', 'target', 'line5', 'line6', 'line7')
+        }
+        AfterEach {
+            if (Test-Path $script:testFile) { Remove-Item $script:testFile -Force }
+        }
+
+        It "Numbers each line of a multi-line replacement and shifts later lines" {
+            $output = Update-MatchInFile -Path $script:testFile -OldText 'target' -Replacement "new1`nnew2`nnew3" |
+                ForEach-Object { $_ -replace "`e\[[\d;]*m", '' }
+
+            $output | Should -Contain '  4: new1'
+            $output | Should -Contain '  5: new2'
+            $output | Should -Contain '  6: new3'
+            $output | Should -Contain '  7- line5'
+            $output | Should -Contain '  8- line6'
+            (Get-Content $script:testFile)[7] | Should -Be 'line6'
+        }
+
+        It "Keeps the replacement's color on every line it spans" {
+            $output = Update-MatchInFile -Path $script:testFile -OldText 'target' -Replacement "new1`nnew2"
+
+            $output | Should -Contain "  4: `e[32mnew1`e[0m"
+            $output | Should -Contain "  5: `e[32mnew2`e[0m"
+        }
+
+        It "Numbers -Pattern replacements the same way" {
+            $output = Update-MatchInFile -Path $script:testFile -Pattern '^(t)arget$' -Replacement "`$1-a`n`$1-b" |
+                ForEach-Object { $_ -replace "`e\[[\d;]*m", '' }
+
+            $output | Should -Contain '  4: t-a'
+            $output | Should -Contain '  5: t-b'
+            $output | Should -Contain '  6- line5'
+        }
+
+        It "Numbers the inserted lines of a multi-line OldText replacement, not the removed ones" {
+            $output = Update-MatchInFile -Path $script:testFile -OldText "line2`nline3" -Replacement "A`nB`nC" |
+                ForEach-Object { $_ -replace "`e\[[\d;]*m", '' }
+
+            $output | Should -Contain '   : line2'
+            $output | Should -Contain '   : line3'
+            $output | Should -Contain '  2: A'
+            $output | Should -Contain '  4: C'
+        }
+    }
 }
