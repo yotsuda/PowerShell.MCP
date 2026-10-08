@@ -297,6 +297,27 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # wrapper exists solely to attach them. & $Block invokes the
             # body in the wrapper's scope; PowerShell's CmdletBinding
             # plumbing forwards the variable bindings through.
+            # The scope AI commands run in. A dynamic module whose scope
+            # hangs directly off the global scope, so a command sees the
+            # global session (what the user typed at the prompt, the
+            # preferences, the drives) and nothing of this engine: its
+            # timer scope holds $cmd, $duration, $ok, $sb, $lec and the
+            # like, and before this sandbox a command that READ one of
+            # those names without assigning it got the engine's value —
+            # silently, since the variable existed. `$script:` inside a
+            # command resolves to the sandbox's own scope, which lives as
+            # long as the console, so values kept that way still carry
+            # across calls exactly as before; `function script:` does too.
+            # The var1…varN slots are placed in that scope for each call
+            # and removed before the next, so a call that passes no var1
+            # no longer reads the previous call's.
+            function Get-McpSandbox {
+                if (-not $script:McpSandbox) {
+                    $script:McpSandbox = New-Module -Name 'PowerShell.MCP.Sandbox' -ScriptBlock { }
+                }
+                $script:McpSandbox
+            }
+
             function Invoke-Captured {
                 [CmdletBinding()]
                 param([scriptblock]$Block)
@@ -312,7 +333,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # buffer before surfacing to the AI, so the response
                 # stays clean while the visible terminal keeps the
                 # animated bar.
-                & $Block
+                # Run in the sandbox (see Get-McpSandbox), not as a child
+                # of this engine's scopes.
+                & (Get-McpSandbox) $Block
             }
 
             function Invoke-CommandWithAllStreams {
@@ -1197,13 +1220,19 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             $cmdSlot = [PowerShell.MCP.Services.McpServerHost]::ConsumeCommand()
             $cmd = $cmdSlot.Command
             if ($cmd) {
-                # Inject variables if provided (set before pipeline execution to bypass parser)
+                # Inject variables if provided (set before pipeline execution
+                # to bypass the parser) — into the sandbox's script scope, where
+                # the command runs, after clearing the previous call's slots.
                 $cmdVariables = $cmdSlot.Variables
-                if ($cmdVariables) {
-                    foreach ($kvp in $cmdVariables.GetEnumerator()) {
-                        Set-Variable -Name $kvp.Key -Value $kvp.Value
+                & (Get-McpSandbox) {
+                    param($McpVars)
+                    Remove-Variable -Name var1, var2, var3, var4, var5, var6, var7, var8 -Scope Script -ErrorAction SilentlyContinue
+                    if ($McpVars) {
+                        foreach ($McpKvp in $McpVars.GetEnumerator()) {
+                            Set-Variable -Name $McpKvp.Key -Value $McpKvp.Value -Scope Script
+                        }
                     }
-                }
+                } $cmdVariables
 
                 # Scope warning, decided here where the live session is
                 # visible. The command runs in a child scope, so a plain
@@ -1213,25 +1242,28 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # assigned locally, and warn when a later command READS a name
                 # that does not exist now: "assigned without $script: earlier"
                 # if it is remembered, "not defined in this console" otherwise.
-                # Get-Variable sees this scope and its parents — the injected
-                # var1…varN above, the engine's script scope where `$script:`
-                # assignments land, and the global scope the user types into —
-                # so a variable that exists by any route is never reported.
+                # The existence check runs inside the sandbox (see
+                # Get-McpSandbox), where the command will run: it sees the
+                # injected var1…varN, the sandbox's script scope where
+                # `$script:` assignments land, and the global scope the user
+                # types into — so a variable that exists by any route is never
+                # reported, and nothing of this engine's own is visible.
                 # The analysis itself is C# (ScopeAnalyzer, on the AST).
-                # Done inside a function so its working variables die with it:
-                # the AI command runs in a child of THIS scope and would
-                # otherwise see them (a loop variable named $n here turned the
-                # AI's own `$n += 1` into "n1" and hid the warning for it).
                 function Get-McpScopeWarning {
                     param([string]$McpCommand)
                     if (-not $script:McpLocalAssigned) {
                         $script:McpLocalAssigned = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                     }
                     $mcpScope = [PowerShell.MCP.Services.ScopeAnalyzer]::Analyze($McpCommand)
+                    # No named variables in this block: a parameter or loop
+                    # variable here would exist at the moment of the check and
+                    # vouch for an AI read of the same name.
+                    $mcpMissing = @(& (Get-McpSandbox) {
+                        $args[0] | Where-Object { -not (Get-Variable -Name ([WildcardPattern]::Escape($_)) -ErrorAction SilentlyContinue) }
+                    } $mcpScope.UnboundReads)
                     $mcpStale = [System.Collections.Generic.List[string]]::new()
                     $mcpUndefined = [System.Collections.Generic.List[string]]::new()
-                    foreach ($mcpName in $mcpScope.UnboundReads) {
-                        if (Get-Variable -Name ([WildcardPattern]::Escape($mcpName)) -ErrorAction SilentlyContinue) { continue }
+                    foreach ($mcpName in $mcpMissing) {
                         if ($script:McpLocalAssigned.Contains($mcpName)) { $mcpStale.Add($mcpName) } else { $mcpUndefined.Add($mcpName) }
                     }
                     foreach ($mcpName in $mcpScope.ScopeAssigned) { [void]$script:McpLocalAssigned.Remove($mcpName) }
