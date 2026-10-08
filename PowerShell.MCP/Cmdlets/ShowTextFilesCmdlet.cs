@@ -7,7 +7,7 @@ namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
 /// Displays text file content with line numbers
-/// LLM-optimized: 3-digit line numbers, : for matches, - for context (grep standard), shows relative path
+/// LLM-optimized: 3-digit line numbers, : for matches, - for context (grep standard; -Context sets how many lines, 0 for none), shows relative path
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextFiles")]
 public class ShowTextFilesCmdlet : TextFileCmdletBase
@@ -32,6 +32,15 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
     [Parameter(ParameterSetName = "LiteralPath")]
     public string? Contains { get; set; }
 
+    /// <summary>
+    /// Lines of context shown before and after each -Pattern / -Contains
+    /// match (the `N-` lines). 2 by default, like grep -C2. 0 lists only the
+    /// matching lines — the grep-style form for locating lines across many
+    /// files, where context would multiply the output.
+    /// </summary>
+    [Parameter]
+    [ValidateRange(0, 1000)]
+    public int Context { get; set; } = 2;
 
     [Parameter]
     public int? Skip { get; set; }
@@ -313,10 +322,9 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             // LineRange filter: match start line must be within range
             if (matchStartLine < startLine || matchStartLine > endLine) continue;
 
-            // Context: 2 lines before
-            int contextStart = Math.Max(1, matchStartLine - 2);
-            // Context: 2 lines after
-            int contextEnd = Math.Min(allLines.Length, matchEndLine + 2);
+            // Context lines before and after (-Context, default 2)
+            int contextStart = Math.Max(1, matchStartLine - Context);
+            int contextEnd = Math.Min(allLines.Length, matchEndLine + Context);
 
             // Gap detection
             if (lastOutputLine > 0 && contextStart > lastOutputLine + 1)
@@ -395,8 +403,10 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             string currentLine = enumerator.Current;
             bool hasNext = enumerator.MoveNext();
 
-            // Rotate buffer: holds previous 2 lines (line content and line number pairs)
-            var preContextBuffer = new RotateBuffer<(string line, int lineNumber)>(2);
+            // Rotate buffer: holds the previous -Context lines (line content and
+            // line number pairs). With -Context 0 nothing is ever added, so the
+            // buffer stays empty and the leading-context loops are no-ops.
+            var preContextBuffer = new RotateBuffer<(string line, int lineNumber)>(Math.Max(1, Context));
 
             // Gap candidate (1 line after trailing context)
             (string line, int lineNumber)? gapLineInfo = null;
@@ -454,8 +464,9 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
 
                         var gapInfo = gapLineInfo.Value;
 
-                        // If gapLine next line is start of leading context, output gapLine (continuous)
-                        if (gapInfo.lineNumber + 1 == preContextStart)
+                        // If gapLine next line is start of leading context, output gapLine (continuous).
+                        // Not with -Context 0: the caller asked for matching lines only.
+                        if (Context > 0 && gapInfo.lineNumber + 1 == preContextStart)
                         {
                             string gapDisplay = ApplyHighlighting(gapInfo.line, regex, regex == null ? matchValue : null);
                             outputBuffer.Add($"{gapInfo.lineNumber,3}- {gapDisplay}");
@@ -496,7 +507,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                         : ApplyHighlighting(currentLine, regex, matchValue);
                     outputBuffer.Add($"{lineNumber,3}: {displayLine}");
 
-                    afterMatchCounter = 2;
+                    afterMatchCounter = Context;
                     lastOutputLine = lineNumber;
                     gapLineInfo = null; // Reset gap
                     needsGapSeparator = false; // Reset flag
@@ -529,7 +540,7 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
                 }
 
                 // Update rotate buffer (save with line number)
-                preContextBuffer.Add((currentLine, lineNumber));
+                if (Context > 0) preContextBuffer.Add((currentLine, lineNumber));
 
                 // Continue to next
                 if (hasNext)

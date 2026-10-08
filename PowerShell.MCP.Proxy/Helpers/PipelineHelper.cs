@@ -64,108 +64,49 @@ public static partial class PipelineHelper
         return pid?.ToString() ?? "unknown";
     }
 
-    /// <summary>
-    /// Check for local variable assignments without scope prefix and
-    /// return a warning message.
-    ///
-    /// Noise-control contract: each distinct variable name is reported
-    /// to a given agent AT MOST ONCE. Re-assigning the same name on
-    /// later pipelines is silent (the AI already got the lesson for
-    /// that name). If a caller introduces a NEW local variable name,
-    /// it produces a compact warning covering only the new names.
-    /// The very first warning shown to an agent is the detailed
-    /// "Consider using $script:..." form so the AI learns the concept;
-    /// subsequent new-name warnings are the short one-liner.
-    ///
-    /// Pre-refactor behaviour was to emit a compact warning on EVERY
-    /// call that contained any local assignment — which in practice
-    /// produced 20+ duplicate warnings per session for the same
-    /// already-warned-about name, dominating response volume without
-    /// adding information.
-    /// </summary>
-    private static readonly object _scopeWarningLock = new();
-    // Per-agent record of every local variable name we've already
-    // warned that agent about. Separate dictionary (not just a set of
-    // "agents that saw the detail") so a NEW name still triggers a
-    // compact reminder even after the detail was shown.
-    private static readonly Dictionary<string, HashSet<string>> _warnedVarsPerAgent
-        = new(StringComparer.OrdinalIgnoreCase);
-    // Agents that have seen the detailed warning at least once. Any
-    // subsequent warning to the same agent uses the compact form.
-    private static readonly HashSet<string> _detailShownAgents
-        = new(StringComparer.OrdinalIgnoreCase);
-
-    public static string? CheckLocalVariableAssignments(string pipeline, string agentId = "default")
-    {
-        // Pattern: $varname = (but not $script:, $global:, $env:, $using:, $null, $true, $false)
-        // Also exclude common automatic variables like $_, $?, $^, $$, $args, $input, $foreach, $switch
-        var matches = LocalVariableRegex().Matches(pipeline);
-
-        if (matches.Count == 0) return null;
-
-        // Exclude variables that are for-loop initializers (e.g., for ($i = 0; ...))
-        var forLoopVars = ForLoopInitializerRegex().Matches(pipeline)
-            .Select(m => m.Groups[1].Value)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var varNames = matches
-            .Select(m => m.Groups[1].Value)
-            .Where(v => !forLoopVars.Contains(v))
-            .Distinct()
-            .ToList();
-
-        if (varNames.Count == 0) return null;
-
-        lock (_scopeWarningLock)
-        {
-            if (!_warnedVarsPerAgent.TryGetValue(agentId, out var warnedVars))
-            {
-                warnedVars = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                _warnedVarsPerAgent[agentId] = warnedVars;
-            }
-
-            // Only warn about variable names this agent has not seen
-            // before. If every name in this pipeline was already warned
-            // about, stay silent — the AI has no lesson left to learn
-            // for those names and re-printing the warning is pure noise.
-            var newVars = varNames.Where(v => !warnedVars.Contains(v)).ToList();
-            if (newVars.Count == 0) return null;
-
-            foreach (var v in newVars) warnedVars.Add(v);
-
-            if (_detailShownAgents.Add(agentId))
-            {
-                // First warning ever for this agent — spell out the fix so
-                // the AI learns the $script: convention.
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("⚠️ SCOPE WARNING: Local variable assignment(s) detected:");
-                foreach (var name in newVars)
-                {
-                    sb.AppendLine($"  ${name} → Consider using $script:{name} to preserve across calls");
-                }
-                return sb.ToString().TrimEnd();
-            }
-            else
-            {
-                // Agent already knows the rule; just list the newly
-                // introduced names as a compact reminder.
-                var varList = string.Join(", ", newVars.Select(n => "$" + n));
-                return $"⚠️ SCOPE: Use $script: prefix for: {varList}";
-            }
-        }
-    }
+    // The scope warning ("$x was assigned without $script: …") used to be
+    // produced here by regex, at every new local assignment. It now comes
+    // from the console itself (ScopeAnalyzer + MCPPollingEngine.ps1 in the
+    // module), which sees the live session and warns only when a command
+    // READS a variable that does not exist — the moment the mistake bites —
+    // instead of at every harmless temporary.
 
     /// <summary>
-    /// Resets the scope warning state. For testing only.
+    /// Detects a <c>Start-Process</c> that redirects the child's output but
+    /// does not pass <c>-NoNewWindow</c>, and returns a hint. On Windows
+    /// such a child runs in a NEW console, and a new console starts with the
+    /// system OEM code page (932 on Japanese Windows, 437 on US English),
+    /// not the UTF-8 this console was switched to — so the redirected log is
+    /// written in that legacy code page and every non-ASCII character in it
+    /// is garbled when read back as UTF-8. Measured here: the same command
+    /// with <c>-NoNewWindow</c>, or run through <c>cmd /c … &gt; log</c>,
+    /// produces UTF-8. A console's code page cannot be inherited by a new
+    /// console, so the only sound fix is on the command, hence a hint rather
+    /// than a setting. Windows only; elsewhere Start-Process has no console
+    /// code page to lose.
     /// </summary>
-    internal static void ResetScopeWarningState()
+    public static string? CheckStartProcessNewConsole(string pipeline)
     {
-        lock (_scopeWarningLock)
-        {
-            _warnedVarsPerAgent.Clear();
-            _detailShownAgents.Clear();
-        }
+        if (!OperatingSystem.IsWindows()) return null;
+        var stripped = QuotedSpanRegex().Replace(pipeline, " ");
+        if (!StartProcessRegex().IsMatch(stripped)) return null;
+        if (!StartProcessRedirectRegex().IsMatch(stripped)) return null;
+        if (NoNewWindowRegex().IsMatch(stripped)) return null;
+        return "💡 `Start-Process` without `-NoNewWindow` runs the child in a NEW console, which starts with the system OEM code page (e.g. 932 or 437) rather than this console's UTF-8 — so the redirected output file is not UTF-8 and any non-ASCII text in it comes back garbled. " +
+               "Add `-NoNewWindow` (the child then shares this console's UTF-8 code page; with its output redirected, nothing extra is shown here), or run it as `cmd /d /s /c \"<command> < NUL > out.log 2>&1\"`.";
     }
+
+    [GeneratedRegex(@"(?<![\w\\/.-])Start-Process\b", RegexOptions.IgnoreCase)]
+    private static partial Regex StartProcessRegex();
+
+    // -RedirectStandardOutput / -RedirectStandardError / -RedirectStandardInput
+    // and their aliases -RSO / -RSE / -RSI, as whole tokens (prefix forms such
+    // as -RedirectStandardO are accepted by PowerShell and matched here too).
+    [GeneratedRegex(@"(?<!\S)-(?:RedirectStandard\w*|RSO|RSE|RSI)(?=\s|:|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex StartProcessRedirectRegex();
+
+    [GeneratedRegex(@"(?<!\S)-(?:NoNewWindow|nnw)(?=\s|:|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex NoNewWindowRegex();
 
     /// <summary>
     /// Detects a redundant leading <c>cd</c> / <c>Set-Location</c> and returns
@@ -360,12 +301,6 @@ public static partial class PipelineHelper
         }
         return false;
     }
-
-    [GeneratedRegex(@"\$(?!script:|global:|env:|using:|null\b|true\b|false\b|_\b|\?\b|\^\b|\$\b|args\b|input\b|foreach\b|switch\b|Matches\b|PSItem\b)([a-zA-Z_]\w*)\s*=")]
-    private static partial Regex LocalVariableRegex();
-
-    [GeneratedRegex(@"for\s*\(\s*\$([a-zA-Z_]\w*)\s*=", RegexOptions.IgnoreCase)]
-    private static partial Regex ForLoopInitializerRegex();
 
     /// <summary>
     /// Format busy status line

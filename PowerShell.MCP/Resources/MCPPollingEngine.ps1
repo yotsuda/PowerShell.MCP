@@ -1205,6 +1205,36 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                 }
 
+                # Scope warning, decided here where the live session is
+                # visible. The command runs in a child scope, so a plain
+                # `$x = …` dies with the call and only `$script:x` survives.
+                # Rather than warn at every local assignment (almost always a
+                # harmless temporary), remember per console which names were
+                # assigned locally, and warn when a later command READS a name
+                # that does not exist now: "assigned without $script: earlier"
+                # if it is remembered, "not defined in this console" otherwise.
+                # Get-Variable sees this scope and its parents — the injected
+                # var1…varN above, the engine's script scope where `$script:`
+                # assignments land, and the global scope the user types into —
+                # so a variable that exists by any route is never reported.
+                # The analysis itself is C# (ScopeAnalyzer, on the AST).
+                $scopeWarning = $null
+                try {
+                    if (-not $script:McpLocalAssigned) {
+                        $script:McpLocalAssigned = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                    }
+                    $scopeInfo = [PowerShell.MCP.Services.ScopeAnalyzer]::Analyze($cmd)
+                    $staleReads = [System.Collections.Generic.List[string]]::new()
+                    $undefinedReads = [System.Collections.Generic.List[string]]::new()
+                    foreach ($readName in $scopeInfo.UnboundReads) {
+                        if (Get-Variable -Name ([WildcardPattern]::Escape($readName)) -ErrorAction SilentlyContinue) { continue }
+                        if ($script:McpLocalAssigned.Contains($readName)) { $staleReads.Add($readName) } else { $undefinedReads.Add($readName) }
+                    }
+                    foreach ($n in $scopeInfo.ScopeAssigned) { [void]$script:McpLocalAssigned.Remove($n) }
+                    foreach ($n in $scopeInfo.LocalAssigned) { [void]$script:McpLocalAssigned.Add($n) }
+                    $scopeWarning = [PowerShell.MCP.Services.ScopeAnalyzer]::FormatWarning($staleReads, $undefinedReads)
+                } catch { $scopeWarning = $null }
+
                 $mcpOutput = $null
                 try {
                     # Add to PSReadLine history (best-effort, before command display)
@@ -1287,6 +1317,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration -Pipeline $cmd
+                    # Scope warning last, after the output it explains.
+                    if ($scopeWarning) { $mcpOutput = $mcpOutput + "`n`n" + $scopeWarning }
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"

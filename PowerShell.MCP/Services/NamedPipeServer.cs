@@ -1314,26 +1314,82 @@ Please provide how to update the MCP client configuration to the user.";
     /// </summary>
     private static readonly HashSet<string> GetContentNames = new(StringComparer.OrdinalIgnoreCase) { "Get-Content", "gc", "cat", "type" };
 
+    // Downstream commands that still put the lines in front of the AI, so the
+    // hint remains apt: Show-TextFiles does the same job with line numbers
+    // (and -Pattern / -LineRange replace Select-String / Select-Object -First).
+    // Anything else downstream — ConvertFrom-Json, Set-Content, ForEach-Object,
+    // Measure-Object, a native command — is consuming the text, not viewing it.
+    private static readonly HashSet<string> DisplayConsumerNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Out-Host", "oh", "Out-Default", "Out-String", "more",
+        "Format-Table", "ft", "Format-List", "fl", "Format-Wide", "fw", "Format-Custom", "fc",
+        "Select-Object", "select", "Select-String", "sls", "Where-Object", "where",
+    };
+
+    private static string UnqualifiedCommandName(System.Management.Automation.Language.CommandAst command)
+    {
+        // Module-qualified form: Microsoft.PowerShell.Management\Get-Content
+        var name = command.GetCommandName() ?? "";
+        return name[(name.LastIndexOf('\\') + 1)..];
+    }
+
+    /// <summary>
+    /// True when the lines a Get-Content invocation produces end up displayed
+    /// to the AI — the case Show-TextFiles improves on. False when the value
+    /// is consumed inside the pipeline: assigned, parenthesised, spliced into a
+    /// string or argument, iterated, piped into a transforming command. There
+    /// the AI wants the text as data, Show-TextFiles' line numbers would get
+    /// in the way, and the hint was only noise.
+    /// </summary>
+    internal static bool GetContentOutputIsDisplayed(System.Management.Automation.Language.CommandAst command)
+    {
+        if (command.Parent is not System.Management.Automation.Language.PipelineAst pipeline)
+            return false;
+
+        var elements = pipeline.PipelineElements;
+        var index = elements.IndexOf(command);
+        for (var i = index + 1; i < elements.Count; i++)
+        {
+            if (elements[i] is not System.Management.Automation.Language.CommandAst next
+                || !DisplayConsumerNames.Contains(UnqualifiedCommandName(next)))
+                return false;
+        }
+
+        // A pipeline that is itself a statement — at the top level or inside a
+        // block (if / foreach / try) — streams to the display. One that sits
+        // inside an assignment, a parenthesis, a $(...) / @(...), a condition
+        // or an argument is being consumed.
+        return pipeline.Parent switch
+        {
+            System.Management.Automation.Language.NamedBlockAst => true,
+            System.Management.Automation.Language.StatementBlockAst block =>
+                block.Parent is not (System.Management.Automation.Language.SubExpressionAst
+                                     or System.Management.Automation.Language.ArrayExpressionAst),
+            _ => false,
+        };
+    }
+
     internal static string? BuildGetSetContentWarning(string pipeline)
     {
         // Only actual command invocations count. A word match flagged
         // property keys (@{ Type = ... }), strings ("cat"), and Add-Type.
         var commandNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var displayedGetContent = false;
         var ast = System.Management.Automation.Language.Parser.ParseInput(pipeline, out _, out _);
         foreach (var node in ast.FindAll(a => a is System.Management.Automation.Language.CommandAst, true))
         {
-            var name = ((System.Management.Automation.Language.CommandAst)node).GetCommandName();
-            if (name != null)
-            {
-                // Module-qualified form: Microsoft.PowerShell.Management\Get-Content
-                commandNames.Add(name[(name.LastIndexOf('\\') + 1)..]);
-            }
+            var command = (System.Management.Automation.Language.CommandAst)node;
+            var name = UnqualifiedCommandName(command);
+            if (name.Length == 0) continue;
+            commandNames.Add(name);
+            if (GetContentNames.Contains(name) && GetContentOutputIsDisplayed(command))
+                displayedGetContent = true;
         }
 
         var warnings = new List<string>();
 
-        if (commandNames.Overlaps(GetContentNames))
-            warnings.Add("• Use Show-TextFiles instead of Get-Content (aliases: gc, cat, type)");
+        if (displayedGetContent)
+            warnings.Add("• Use Show-TextFiles instead of Get-Content (aliases: gc, cat, type) to view a file — it numbers the lines, and -Pattern / -LineRange / -Context replace Select-String and Select-Object -First");
 
         if (commandNames.Contains("Set-Content"))
             warnings.Add("• Use Update-MatchInFile, Update-LinesInFile, Add-LinesToFile, or Remove-LinesFromFile instead of Set-Content");

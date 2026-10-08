@@ -690,39 +690,6 @@ public class PowerShellToolsTests
         Assert.DoesNotContain("Pipeline NOT executed", result);
     }
 
-    [Fact]
-    public async Task ExecuteCommand_ScopeWarning_IncludedInOutput()
-    {
-        // Arrange: command with local variable assignment
-        _mockPipeDiscoveryService
-            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
-            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
-
-        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "$x = 1", duration = 0.01 });
-        var statusLine = "✓ Pipeline executed successfully | Window: #2000 Cat | Status: Ready | Pipeline: $x = 1 | Duration: 0.01s";
-        _mockPowerShellService
-            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "$x = 1", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(headerJson + "\n\n" + statusLine);
-
-        _mockPipeDiscoveryService
-            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CachedOutputResult("", ""));
-
-        // Act
-        var result = await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object,
-            _mockPipeDiscoveryService.Object,
-            // No live MCP server in unit tests: the client is unidentified,
-            // so the conservative ceiling applies (see TimeoutCeiling).
-            null!,
-            "$x = 1",
-            agent_id: TestAgentId);
-
-        // Assert
-        Assert.Contains("SCOPE WARNING", result);
-        Assert.Contains("$script:x", result);
-    }
-
     // ExecuteCommand_TimeoutClamped_To170 lived here. It pinned the dispatched
     // timeout to the old fixed 170 and, once the ceiling became client-derived,
     // could only be kept by loosening its Verify to It.IsAny<int>() — which
@@ -1008,6 +975,52 @@ public class PowerShellToolsTests
         // Assert: console display name (not raw pipe name) in closed message
         Assert.Contains(expectedDisplayName, result);
         Assert.Contains("was closed", result);
+    }
+
+    #endregion
+
+    #region var1…var8 slots
+
+    [Fact]
+    public void BuildVariables_NumbersTheSlotsAndSkipsEmptyOnes()
+    {
+        Assert.Null(PowerShellTools.BuildVariables(null, null, null, null, null, null, null, null));
+
+        var vars = PowerShellTools.BuildVariables("a", null, "c", null, null, null, null, "h");
+        Assert.NotNull(vars);
+        Assert.Equal(new Dictionary<string, string> { ["var1"] = "a", ["var3"] = "c", ["var8"] = "h" }, vars);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_PassesAllEightSlotsToTheConsole()
+    {
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null));
+
+        Dictionary<string, string>? seen = null;
+        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "$var8", duration = 0.01 });
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "$var8", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, _, v, _, _) => seen = v)
+            .ReturnsAsync(headerJson + "\n\nok");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            null!,
+            "$var8",
+            var5: "five", var6: "six", var7: "seven", var8: "eight",
+            agent_id: TestAgentId);
+
+        Assert.NotNull(seen);
+        Assert.Equal("five", seen!["var5"]);
+        Assert.Equal("eight", seen["var8"]);
+        Assert.False(seen.ContainsKey("var1"));
     }
 
     #endregion

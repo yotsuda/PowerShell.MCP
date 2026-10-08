@@ -122,7 +122,7 @@ Six tools provide maximum flexibility with minimum complexity:
 |------|---------|
 | `start_console` | Launch a persistent console for the MCP client |
 | `get_current_location` | Get current directory and available drives |
-| `execute_command` | Execute any PowerShell command or CLI tool |
+| `execute_command` | Execute any PowerShell command or CLI tool (literal text via `var1`–`var8`) |
 | `wait_for_completion` | Wait for long-running commands to complete |
 | `cancel` | Interrupt the command currently running in the console |
 | `close_console` | Close a console by PID (e.g. one paused at an interactive prompt) |

@@ -528,19 +528,20 @@ Rare: common CLIs (git, node, npm, python, dotnet, curl, ssh) are unaffected. It
 
 📝 Text File Operations:
 ALWAYS use the specialized cmdlets for text file editing: Show-TextFiles, Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile.
-NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via var1-var4 parameters.
+NEVER use Set-Content, [IO.File]::WriteAllText, or other alternatives—even when source code contains $ or backtick characters. Instead, pass content via the var1–var8 parameters.
 Create new file: Add-LinesToFile path -Content $var1 (with var1 parameter containing the content)
-Edit existing file: Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile (use var1-var4 for content with $, backtick, or quotes)
+Edit existing file: Add-LinesToFile, Update-LinesInFile, Update-MatchInFile, Remove-LinesFromFile (use var1–var8 for content with $, backtick, or quotes)
 For detailed examples: execute_command('Get-Help <cmdlet-name> -Examples')
 Edit cmdlets show changed lines with 2 lines of context. Use Show-TextFiles after editing if you need the full file view.
+Show-TextFiles -Pattern shows 2 lines of context around each match; add -Context 0 for a grep-style list of matching lines only (e.g. when searching many files with -Recurse).
 
-📌 Prefer these cmdlets over other file read/edit/search tools provided by the host application. They handle special characters ($, backtick, double-quote) safely via var1-var4 parameters, and keep all operations in a single persistent session without context switching.
+📌 Prefer these cmdlets over other file read/edit/search tools provided by the host application. They handle special characters ($, backtick, double-quote) safely via the var1–var8 parameters, and keep all operations in a single persistent session without context switching.
 
 🤖 AI Cmdlets (requires PromptAI module: Install-Module PromptAI):
 Invoke-Claude ""prompt"" — Call Anthropic Claude API. Invoke-GPT ""prompt"" — Call OpenAI API. Invoke-Gemini ""prompt"" — Call Google Gemini API. All support -Model and -SystemPrompt.
 
 🔤 Variables Parameter:
-Use var1/var2/var3/var4 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. Reference them as $var1/$var2/$var3/$var4 in the pipeline.
+Use the var1 … var8 parameters to inject literal string values into the pipeline, bypassing the PowerShell parser. Reference them as $var1 … $var8 in the pipeline. Eight slots let one call carry several edits (e.g. four -OldText/-Replacement pairs).
 When editing source code files, ALWAYS use variables for -OldText, -Replacement, -Content parameters to avoid unintended expansion of $, backtick, or double-quote characters.")]
     public static async Task<string> ExecuteCommand(
         IPowerShellService powerShellService,
@@ -558,6 +559,14 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         string? var3 = null,
         [Description("Literal string value injected as $var4 in the pipeline, bypassing the PowerShell parser.")]
         string? var4 = null,
+        [Description("Literal string value injected as $var5 in the pipeline, bypassing the PowerShell parser.")]
+        string? var5 = null,
+        [Description("Literal string value injected as $var6 in the pipeline, bypassing the PowerShell parser.")]
+        string? var6 = null,
+        [Description("Literal string value injected as $var7 in the pipeline, bypassing the PowerShell parser.")]
+        string? var7 = null,
+        [Description("Literal string value injected as $var8 in the pipeline, bypassing the PowerShell parser.")]
+        string? var8 = null,
         [Description("Agent ID for sub-agent console isolation. Obtain this by calling start_console with is_subagent=true. Do not pass arbitrary strings.")]
         string? agent_id = null,
         [Description("Set to true if you are a sub-agent. A unique agent_id will be allocated and returned in the response. Use that agent_id for all subsequent tool calls.")]
@@ -568,6 +577,13 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // depends on how long THIS client is willing to wait, which we can
         // only infer from the identity it gave in the MCP handshake.
         TimeoutCeiling.ObserveClient(mcpServer?.ClientInfo?.Name);
+
+        // Build the variables dictionary from the var1…var8 slots. Numbered
+        // slots rather than an array: $var3 reads unambiguously in a pipeline
+        // and in a conversation, the var1/var2 requirement of the editing
+        // cmdlets stays checkable by name, and plain string parameters are
+        // what every MCP client handles reliably.
+        var variables = BuildVariables(var1, var2, var3, var4, var5, var6, var7, var8);
 
         // Thin delivery-guard shell around the real handler. The busy
         // auto-route recursion inside re-enters ExecuteCommandCore directly,
@@ -581,8 +597,24 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         var callClock = System.Diagnostics.Stopwatch.StartNew();
         var response = await ExecuteCommandCore(
             powerShellService, pipeDiscoveryService, pipeline, timeout_seconds,
-            var1, var2, var3, var4, agent_id, is_subagent, agentIdBox, callClock, cancellationToken);
+            variables, agent_id, is_subagent, agentIdBox, callClock, cancellationToken);
         return await StashIfCancelledAsync(powerShellService, agentIdBox.Value, response, cancellationToken);
+    }
+
+    /// <summary>
+    /// The var1…varN slots as the dictionary the console injects; null when
+    /// no slot was given. Exposed for tests.
+    /// </summary>
+    internal static Dictionary<string, string>? BuildVariables(params string?[] slots)
+    {
+        Dictionary<string, string>? variables = null;
+        for (var i = 0; i < slots.Length; i++)
+        {
+            if (slots[i] == null) continue;
+            variables ??= new Dictionary<string, string>();
+            variables[$"var{i + 1}"] = slots[i]!;
+        }
+        return variables;
     }
 
     /// <summary>
@@ -595,10 +627,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         IPipeDiscoveryService pipeDiscoveryService,
         string pipeline,
         int timeout_seconds,
-        string? var1,
-        string? var2,
-        string? var3,
-        string? var4,
+        Dictionary<string, string>? parsedVariables,
         string? agent_id,
         bool is_subagent,
         AgentIdBox? agentIdBox,
@@ -611,16 +640,8 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         // notification can rescue.
         timeout_seconds = TimeoutCeiling.Clamp(timeout_seconds, 0);
 
-        // Build variables dictionary from var1/var2/var3/var4 parameters
-        Dictionary<string, string>? parsedVariables = null;
-        if (var1 != null || var2 != null || var3 != null || var4 != null)
-        {
-            parsedVariables = new Dictionary<string, string>();
-            if (var1 != null) parsedVariables["var1"] = var1;
-            if (var2 != null) parsedVariables["var2"] = var2;
-            if (var3 != null) parsedVariables["var3"] = var3;
-            if (var4 != null) parsedVariables["var4"] = var4;
-        }
+        var var1 = parsedVariables?.GetValueOrDefault("var1");
+        var var2 = parsedVariables?.GetValueOrDefault("var2");
 
         var (agentId, isNewlyAllocated, resolveError) = ResolveAgentId(is_subagent, agent_id);
         // Hand the resolved id to the [McpServerTool] shell: for a sub-agent's
@@ -701,15 +722,16 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
             startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}. Pipeline running there.";
         }
 
-        // Check for local variable assignments without scope prefix.
-        // Per-agent dedup: same var name never double-warns the same
-        // conversation, so long sessions don't drown in reminders.
-        var scopeWarning = CheckLocalVariableAssignments(pipeline, agentId);
-
         // The AI's own pipeline, captured before the first-attach preamble
         // below prepends a Set-Location of our own — the redundant-cd hint
         // must judge only what the AI wrote.
         var aiPipeline = pipeline;
+
+        // A Start-Process that redirects output into a new console writes
+        // that file in the OEM code page, not UTF-8. Judged on the AI's own
+        // pipeline; shown on every call it applies to, because it is a
+        // correctness problem each time and the pattern is rare.
+        var startProcessHint = PipelineHelper.CheckStartProcessNewConsole(aiPipeline);
 
         // Enforce var1/var2 usage for text editing cmdlets
         var var1Error = PipelineHelper.CheckVar1Enforcement(pipeline, var1, var2);
@@ -867,7 +889,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     // comes out of the caller's budget too.
                                     var retryResult = await ExecuteCommandCore(
                                         powerShellService, pipeDiscoveryService, pipeline,
-                                        timeout_seconds, var1, var2, var3, var4,
+                                        timeout_seconds, parsedVariables,
                                         agentId, is_subagent: false,
                                         agentIdBox: null,
                                         callClock: callClock,
@@ -905,16 +927,16 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 // Collect completed outputs and busy status from other pipes
                                 var (timeoutCompletedOutput, timeoutBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-                                // Build timeout response: busy status first + closedConsoleInfo + cachedOutput + completedOutput + scopeWarning + timeout message
+                                // Build timeout response: busy status first + closedConsoleInfo + cachedOutput + completedOutput + timeout message + hints
                                 var timeoutStatusLine = !string.IsNullOrEmpty(jsonResponse.StatusLine)
                                     ? jsonResponse.StatusLine
                                     : $"⧗ Pipeline is running | {ConsoleSessionManager.Instance.GetConsoleDisplayName(jsonResponse.Pid)} | Status: Busy | Pipeline: {jsonResponse.Pipeline} | Duration: {jsonResponse.Duration:F2}s";
                                 // A stalled child is a diagnosis, not a guess, so it
                                 // leads — it tells the AI both that waiting is futile
                                 // and exactly how to re-run. The generic "it might be
-                                // stuck" advice follows for every other case. Scope
-                                // warning at the end (after instruction for better
-                                // readability).
+                                // stuck" advice follows for every other case. The
+                                // Start-Process hint at the end: the log the AI is
+                                // about to wait for is the one being garbled.
                                 return Wrap(PipelineHelper.JoinBlocks(
                                     timeoutBusyStatusInfo,
                                     startupNotice,
@@ -924,7 +946,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     jsonResponse.StalledChild,
                                     "Use wait_for_completion to wait for the result.\n"
                                         + $"If it is instead STUCK — a native CLI (git/npm/ssh) waiting on stdin, or a runaway command — use cancel to interrupt it (Ctrl+C; works on native/running commands but not on PowerShell host prompts), or close_console {jsonResponse.Pid} to abandon the console.",
-                                    scopeWarning));
+                                    startProcessHint));
 
                             case PipeStatus.AwaitingInput:
                                 // Command is parked at an interactive prompt. It will
@@ -946,8 +968,7 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     jsonResponse.StatusLine,
                                     $"⌨ Console {awaitingConsole} is paused at a PowerShell HOST prompt{awaitingPromptInfo} — issued by a cmdlet/function (Read-Host, a missing mandatory parameter, Get-Credential, a confirmation). It will NOT finish on its own. NOTE: `cancel` does NOT work on a PowerShell host prompt (only on native CLIs / runaway commands), so do not call it here. Choose one:\n"
                                         + $"  • Ask the user to type the answer directly in console {awaitingConsole}.\n"
-                                        + $"  • Abandon it with close_console {jsonResponse.Pid} (the next command auto-starts a fresh console).",
-                                    scopeWarning));
+                                        + $"  • Abandon it with close_console {jsonResponse.Pid} (the next command auto-starts a fresh console)."));
 
                             case PipeStatus.Completed:
                                 // Snapshot AI-intended cwd from the cached completion.
@@ -1021,9 +1042,10 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                 //     ?? PipelineHelper.CheckJsonFileHint(body, agentId);
                                 // (then pass jsonHint as the last block below)
 
-                                // body is this console's status line + its output.
-                                // Scope warning and hints go at the end (after
-                                // output for better readability). allPipesStatusInfo
+                                // body is this console's status line + its output
+                                // (the console appends its own scope warning to it).
+                                // Hints go at the end (after output for better
+                                // readability). allPipesStatusInfo
                                 // is deliberately left out of every response (only
                                 // logged to stderr at auto-start): it is the discovery-
                                 // time snapshot of the same consoles busyStatusInfo
@@ -1034,9 +1056,9 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                                     startupNotice,
                                     completedOutput,
                                     body,
-                                    scopeWarning,
                                     redundantCdHint,
-                                    nestedPwshHint));
+                                    nestedPwshHint,
+                                    startProcessHint));
                         }
                     }
                 }
@@ -1237,12 +1259,16 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
                 if (status.Status == PipeStatus.Standby)
                 {
                     if (status.Pid > 0) sessionManager.UnmarkPipeBusy(agentId, status.Pid);
-                    // Console returned to standby without caching (unexpected)
+                    // Back to standby without caching: the command finished and
+                    // its result went to the execute_command call that was still
+                    // waiting on this pipe (a call the client moved to the
+                    // background, typically). That call delivers it; repeating
+                    // it here would only spend the tokens twice.
                     busyPipes.Remove(pipeName);
                 }
             }
 
-            // All busy pipes became standby or dead (unexpected)
+            // All busy pipes became standby or dead
             if (busyPipes.Count == 0)
             {
                 break;
@@ -1524,14 +1550,4 @@ When editing source code files, ALWAYS use variables for -OldText, -Replacement,
         return (resolvedPath, null);
     }
 
-
-    /// <summary>
-    /// Checks for local variable assignments without scope prefix and
-    /// returns a warning message. The warning is deduped per-agent and
-    /// per-variable-name (see <see cref="PipelineHelper.CheckLocalVariableAssignments"/>);
-    /// threading the current agentId through is what makes the dedup
-    /// work across calls in the same conversation.
-    /// </summary>
-    private static string? CheckLocalVariableAssignments(string pipeline, string agentId)
-        => PipelineHelper.CheckLocalVariableAssignments(pipeline, agentId);
 }

@@ -8,9 +8,43 @@ public class PipelineHelperTests
     public PipelineHelperTests()
     {
         // Reset static state before each test
-        PipelineHelper.ResetScopeWarningState();
         PipelineHelper.ResetNestedPwshHintState();
     }
+
+    #region CheckStartProcessNewConsole Tests
+
+    // Windows only: elsewhere Start-Process has no console code page to lose,
+    // and the helper answers null by design.
+    private static bool OnWindows => OperatingSystem.IsWindows();
+
+    [Theory]
+    [InlineData("Start-Process pwsh -ArgumentList '-File','x.ps1' -RedirectStandardOutput out.log -WindowStyle Hidden -Wait")]
+    [InlineData("Start-Process dotnet 'test' -RedirectStandardError err.log")]
+    [InlineData("$p = Start-Process cmd -RSO out.txt -PassThru")]
+    [InlineData("Start-Process -FilePath node -RedirectStandardInput in.txt")]
+    public void StartProcessRedirectingIntoANewConsole_Hints(string pipeline)
+    {
+        var hint = PipelineHelper.CheckStartProcessNewConsole(pipeline);
+        if (!OnWindows) { Assert.Null(hint); return; }
+        Assert.NotNull(hint);
+        Assert.Contains("-NoNewWindow", hint);
+        Assert.Contains("OEM code page", hint);
+    }
+
+    [Theory]
+    [InlineData("Start-Process pwsh -ArgumentList '-File','x.ps1' -RedirectStandardOutput out.log -NoNewWindow -Wait")]
+    [InlineData("Start-Process cmd -RSO out.txt -nnw")]
+    [InlineData("Start-Process notepad")]                                   // no redirection: the window is the point
+    [InlineData("Start-Process pwsh -Wait -WindowStyle Hidden")]            // no redirected file to garble
+    [InlineData("Write-Host 'Start-Process -RedirectStandardOutput'")]      // inside a string
+    [InlineData("Get-Help Start-Process -Parameter RedirectStandardOutput")] // not a Start-Process invocation's flags
+    [InlineData("cmd /d /s /c \"lilypond x.ly < NUL > out.log 2>&1\"")]
+    public void OtherForms_DoNotHint(string pipeline)
+    {
+        Assert.Null(PipelineHelper.CheckStartProcessNewConsole(pipeline));
+    }
+
+    #endregion
 
     #region CheckNestedPwsh Tests
 
@@ -166,175 +200,6 @@ public class PipelineHelperTests
         var pipeName = "InvalidPipeName";
         var result = PipelineHelper.GetPidString(pipeName);
         Assert.Equal("unknown", result);
-    }
-
-    #endregion
-
-    #region CheckLocalVariableAssignments Tests
-
-    [Fact]
-    public void CheckLocalVariableAssignments_NoAssignments_ReturnsNull()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("Get-Date");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_ScriptScope_ReturnsNull()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$script:foo = 123");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_GlobalScope_ReturnsNull()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$global:bar = 456");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_EnvVariable_ReturnsNull()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$env:PATH = '/usr/bin'");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_NullTrueFalse_ReturnsNull()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$null = $true = $false");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_AutomaticVariables_ReturnsNull()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$_ = 1; $Matches = @{}");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_LocalVariable_ReturnsWarning()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$foo = 123");
-        Assert.NotNull(result);
-        Assert.Contains("SCOPE WARNING", result);
-        Assert.Contains("$foo", result);
-        Assert.Contains("$script:foo", result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_MultipleVariables_ReturnsAllWarnings()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$foo = 1; $bar = 2; $baz = 3");
-        Assert.NotNull(result);
-        Assert.Contains("$foo", result);
-        Assert.Contains("$bar", result);
-        Assert.Contains("$baz", result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_DuplicateVariables_ListsOnce()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$foo = 1; $foo = 2");
-        Assert.NotNull(result);
-        // Count occurrences of "$foo →"
-        var count = result.Split("$foo →").Length - 1;
-        Assert.Equal(1, count);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_FirstCall_ReturnsDetailedWarning()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("$foo = 123");
-        Assert.NotNull(result);
-        Assert.Contains("SCOPE WARNING", result);
-        Assert.Contains("Consider using", result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_SecondCall_ReturnsCompactWarning()
-    {
-        // First call — detailed
-        PipelineHelper.CheckLocalVariableAssignments("$foo = 1");
-        // Second call — compact
-        var result = PipelineHelper.CheckLocalVariableAssignments("$bar = 2");
-        Assert.NotNull(result);
-        Assert.StartsWith("⚠️ SCOPE:", result);
-        Assert.Contains("$bar", result);
-        Assert.DoesNotContain("Consider using", result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_ForLoopInitializer_ReturnsNull()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("for ($i = 0; $i -lt 10; $i++) { Write-Host $i }");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_ForLoopInitializer_MixedWithOtherVars_WarnsOnlyNonLoop()
-    {
-        var result = PipelineHelper.CheckLocalVariableAssignments("for ($i = 0; $i -lt 10; $i++) { $result = $i * 2 }");
-        Assert.NotNull(result);
-        Assert.Contains("$result", result);
-        Assert.DoesNotContain("$i →", result);
-    }
-
-    // --- per-agent / per-variable dedup behaviour ---
-
-    [Fact]
-    public void CheckLocalVariableAssignments_RepeatedSameVariable_SecondCallIsSilent()
-    {
-        // First pipeline with $foo → detail warning for agent A.
-        var first = PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-A");
-        Assert.NotNull(first);
-
-        // Same agent re-assigns $foo. The AI already learned the lesson
-        // for $foo; repeating the warning is noise, so return null.
-        var second = PipelineHelper.CheckLocalVariableAssignments("$foo = 2", "agent-A");
-        Assert.Null(second);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_NewVariableAfterSeen_ReturnsCompactForNewOnly()
-    {
-        // Prime: $foo becomes "already-warned" for agent A via detail.
-        PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-A");
-
-        // Pipeline introduces $foo (already warned) + $bar (new). Only
-        // $bar should surface, and it should use the compact form —
-        // the detail was already consumed by the priming call.
-        var result = PipelineHelper.CheckLocalVariableAssignments("$foo = 10; $bar = 20", "agent-A");
-        Assert.NotNull(result);
-        Assert.StartsWith("⚠️ SCOPE:", result);
-        Assert.Contains("$bar", result);
-        Assert.DoesNotContain("$foo", result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_AllVariablesAlreadySeen_ReturnsNull()
-    {
-        PipelineHelper.CheckLocalVariableAssignments("$a = 1; $b = 2", "agent-A");
-        // Same agent, every name already warned → silent.
-        var result = PipelineHelper.CheckLocalVariableAssignments("$a = 3; $b = 4", "agent-A");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void CheckLocalVariableAssignments_DifferentAgents_HaveIndependentState()
-    {
-        // Agent A learns $foo with detail.
-        var aFirst = PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-A");
-        Assert.NotNull(aFirst);
-        Assert.Contains("Consider using", aFirst);
-
-        // Agent B is fresh — the same $foo assignment should also
-        // produce a detail warning, not silence.
-        var bFirst = PipelineHelper.CheckLocalVariableAssignments("$foo = 1", "agent-B");
-        Assert.NotNull(bFirst);
-        Assert.Contains("Consider using", bFirst);
     }
 
     #endregion

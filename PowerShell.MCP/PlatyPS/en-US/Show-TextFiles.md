@@ -21,14 +21,14 @@ Display file contents with line numbers, or search across files with regex or li
 
 ```
 Show-TextFiles [-Path] <string[]> [-LineRange <string[]>] [-Skip <int>] [-First <int>]
- [-Pattern <string>] [-Contains <string>] [-Recurse] [-Encoding <string>] [<CommonParameters>]
+ [-Pattern <string>] [-Contains <string>] [-Context <int>] [-Recurse] [-Encoding <string>] [<CommonParameters>]
 ```
 
 ### LiteralPath
 
 ```
 Show-TextFiles -LiteralPath <string[]> [-LineRange <string[]>] [-Skip <int>] [-First <int>]
- [-Pattern <string>] [-Contains <string>] [-Recurse] [-Encoding <string>] [<CommonParameters>]
+ [-Pattern <string>] [-Contains <string>] [-Context <int>] [-Recurse] [-Encoding <string>] [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -45,7 +45,9 @@ Show-TextFiles file.txt -LineRange 10,20         # lines 10-20     Show-TextFile
 
 Show-TextFiles file.txt -LineRange -10           # last 10 lines
 
-Show-TextFiles file.txt -Pattern "error"         # regex search with context
+Show-TextFiles file.txt -Pattern "error"         # regex search with 2 lines of context
+
+Show-TextFiles *.cs -Recurse -Pattern "TODO" -Context 0   # matching lines only (grep-style)
 
 Show-TextFiles file.txt -Contains "[Error]"      # literal search (no escaping needed)
 
@@ -232,10 +234,33 @@ AcceptedValues: []
 HelpMessage: ''
 ```
 
+### -Context
+
+Number of lines shown before and after each `-Pattern` / `-Contains` match (the `N-` lines).
+Default 2, like `grep -C2`.
+`0` lists only the matching lines — the grep-style form for locating lines across many files.
+
+```yaml
+Type: System.Int32
+DefaultValue: 2
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: (All)
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
 ### -Pattern
 
 Regex pattern.
-Matches shown with context.
+Matches shown with context (`-Context` lines each side, default 2).
 
 ```yaml
 Type: System.String
@@ -302,6 +327,8 @@ File path(s) to process.
 - `-LineRange -10` = last 10 lines (single negative value = tail)
 
 - `-Contains` and `-Pattern` can be combined (OR condition)
+
+- `-Context 0` shows matching lines only; `-Context N` shows N lines each side (default 2)
 
 - `-Contains` supports multiline strings for whole-file search mode (like `Update-MatchInFile -OldText`)
 
