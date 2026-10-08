@@ -718,13 +718,6 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // correctness problem each time and the pattern is rare.
         var startProcessHint = PipelineHelper.CheckStartProcessNewConsole(aiPipeline);
 
-        // Enforce var1/var2 usage for text editing cmdlets
-        var var1Error = PipelineHelper.CheckVar1Enforcement(pipeline, var1, var2);
-        if (var1Error != null)
-        {
-            return Wrap(var1Error);
-        }
-
         // First console attach for this agent in the proxy's lifetime — the
         // resume / cold-start boundary. The proxy is fresh but the AI may carry
         // a stale cwd/state assumption from earlier in the conversation, and the

@@ -424,6 +424,87 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     }
                 }
 
+                # Edit-text gate. The text a file-editing cmdlet writes must
+                # reach it exactly as the AI wrote it, and a double-quoted or
+                # bareword literal does not: the parser expands $name and
+                # $(...), and consumes backticks and doubled quotes, so source
+                # code passed that way lands in the file altered, silently.
+                # Such literals are refused with the argument named. Anything
+                # else passes: var1-var8 and other variables, single-quoted
+                # strings, plain text with none of those characters, computed
+                # values. A variable this same command assigns is judged by
+                # the value assigned to it. StaticParameterBinder binds the
+                # way the real call will (positional, abbreviated, aliased).
+                # Literals inside a nested script block are not judged: a
+                # computed value (`% { "$_ ..." }`) is deliberate.
+                $editTextParams = @{
+                    'Add-LinesToFile'      = @('Content')
+                    'Update-LinesInFile'   = @('Content')
+                    'Update-MatchInFile'   = @('OldText', 'Replacement')
+                    'Remove-LinesFromFile' = @('Pattern', 'Contains')
+                    'Set-Content'          = @('Value')
+                    'Add-Content'          = @('Value')
+                }
+                $isAlteredLiteral = {
+                    param($a)
+                    if ($a -is [System.Management.Automation.Language.ExpandableStringExpressionAst]) { return $true }
+                    if ($a -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { return $false }
+                    $text = $a.Extent.Text
+                    switch ($a.StringConstantType) {
+                        'BareWord'               { return $a.Value -cne $text }
+                        'DoubleQuoted'           { return $a.Value -cne $text.Substring(1, $text.Length - 2) }
+                        'DoubleQuotedHereString' { return $text.Contains('`') }
+                        default                  { return $false }
+                    }
+                }
+                $editTextErrors = @()
+                $editAssignments = @($parseAst.FindAll({ param($a)
+                    $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                    $a.Left -is [System.Management.Automation.Language.VariableExpressionAst] }, $true))
+                foreach ($editCommand in $parseAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] }, $true)) {
+                    $editCommandName = $editCommand.GetCommandName()
+                    if (-not $editCommandName) { continue }
+                    $editCommandName = ($editCommandName -split '\\')[-1]
+                    $editParamNames = $editTextParams[$editCommandName]
+                    if (-not $editParamNames) { continue }
+                    # The gate only ever refuses; if binding fails, it lets the
+                    # command run as it would have without the gate.
+                    try { $editBinding = [System.Management.Automation.Language.StaticParameterBinder]::BindCommand($editCommand, $true) }
+                    catch { continue }
+                    foreach ($editParamName in $editParamNames) {
+                        $editBound = $editBinding.BoundParameters[$editParamName]
+                        if (-not $editBound -or -not $editBound.Value) { continue }
+                        $editSources = @($editBound.Value)
+                        if ($editBound.Value -is [System.Management.Automation.Language.VariableExpressionAst]) {
+                            $editVarName = $editBound.Value.VariablePath.UnqualifiedPath
+                            $editSources = @($editAssignments |
+                                Where-Object { $_.Left.VariablePath.UnqualifiedPath -eq $editVarName } |
+                                ForEach-Object { $_.Right })
+                        }
+                        foreach ($editSource in $editSources) {
+                            $altered = $editSource.Find($isAlteredLiteral, $false)
+                            if ($altered) {
+                                $editTextErrors += [System.Management.Automation.Language.ParseError]::new(
+                                    $altered.Extent, 'UnsafeEditText',
+                                    "-$editParamName of $editCommandName is a double-quoted or bareword literal, which the parser changes before the cmdlet sees it (`$ expands, backticks and doubled quotes are consumed), so the file would not get the text as written. Pass the text in a var1-var8 tool argument and reference it as `$var1 ... `$var8, or use single quotes.")
+                            }
+                        }
+                    }
+                }
+                if ($editTextErrors.Count -gt 0) {
+                    return @{
+                        PipelineItems = @()
+                        Information = @()
+                        Exception = @()
+                        ParseErrors = $editTextErrors
+                        EditTextRefused = $true
+                        ConsoleOut = ''
+                        ConsoleErr = ''
+                        HostWrite = ''
+                        LastExitReport = 0
+                    }
+                }
+
                 # Snapshot $LASTEXITCODE BEFORE the pipeline so we can
                 # tell whether this invocation TOUCHED it (a native exe
                 # ran and updated the variable) vs inherited a stale
@@ -1138,6 +1219,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # the whole point of the pre-parse gate — say it.
                 $statusText = if ($StreamResults.ContainsKey('ExitRefused')) {
                     "NOT executed (exit refused)"
+                } elseif ($StreamResults.ContainsKey('EditTextRefused')) {
+                    "NOT executed (edit text refused)"
                 } elseif ($parseErrorCount -gt 0) {
                     "NOT executed (syntax error)"
                 } elseif ($hasErrors) {
@@ -1183,7 +1266,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # AI's first read is the reason plus the exact
                 # line/column of each error.
                 if ($parseErrorCount -gt 0) {
-                    $sections += if ($StreamResults.ContainsKey('ExitRefused')) { "=== EXIT REFUSED (command was NOT executed) ===" } else { "=== SYNTAX ERRORS (command was NOT executed) ===" }
+                    $sections += if ($StreamResults.ContainsKey('ExitRefused')) { "=== EXIT REFUSED (command was NOT executed) ===" }
+                        elseif ($StreamResults.ContainsKey('EditTextRefused')) { "=== EDIT TEXT REFUSED (command was NOT executed) ===" }
+                        else { "=== SYNTAX ERRORS (command was NOT executed) ===" }
                     foreach ($pe in $StreamResults.ParseErrors) {
                         $sections += "Line $($pe.Extent.StartLineNumber), Col $($pe.Extent.StartColumnNumber): $($pe.Message) [$($pe.ErrorId)]"
                     }
@@ -1384,7 +1469,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # deliberately — the console must show what the AI
                     # attempted, including its failures.
                     if ($streamResults.ContainsKey('ParseErrors') -and $streamResults.ParseErrors.Count -gt 0) {
-                        $peLabel = if ($streamResults.ContainsKey('ExitRefused')) { 'Refused' } else { 'ParserError' }
+                        $peLabel = if ($streamResults.ContainsKey('ExitRefused') -or $streamResults.ContainsKey('EditTextRefused')) { 'Refused' } else { 'ParserError' }
                         foreach ($pe in $streamResults.ParseErrors) {
                             Write-Host "$peLabel (Line $($pe.Extent.StartLineNumber), Col $($pe.Extent.StartColumnNumber)): $($pe.Message)" -ForegroundColor Red
                         }
@@ -1401,8 +1486,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
 
                     # Generate MCP formatted output with duration
                     $mcpOutput = Format-McpOutput -StreamResults $streamResults -LocationInfo $locationInfo -Duration $duration -Pipeline $cmd
-                    # Scope warning last, after the output it explains.
-                    if ($mcpScopeWarning) { $mcpOutput = $mcpOutput + "`n`n" + $mcpScopeWarning }
+                    # Scope warning last, after the output it explains. Not for
+                    # a command refused before running (syntax error, exit,
+                    # edit text): nothing was read, so "reads as $null" is false.
+                    $mcpNotExecuted = $streamResults.ContainsKey('ParseErrors') -and $streamResults.ParseErrors.Count -gt 0
+                    if ($mcpScopeWarning -and -not $mcpNotExecuted) { $mcpOutput = $mcpOutput + "`n`n" + $mcpScopeWarning }
                 }
                 catch {
                     $errorMessage = "Command execution failed: $($_.Exception.Message)"
