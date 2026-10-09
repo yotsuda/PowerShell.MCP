@@ -156,7 +156,9 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
             {
                 // -Recurse walks a whole tree, build output included; a match
                 // inside a DLL is never wanted and prints as megabytes of noise.
-                if (Recurse && IsBinaryFile(fileInfo.ResolvedPath))
+                // A caller who names a UTF-16/32 encoding has said what the
+                // NULs are; the sniff would call every such file binary.
+                if (Recurse && !IsWideEncodingName(Encoding) && IsBinaryFile(fileInfo.ResolvedPath))
                 {
                     _binaryFilesSkipped++;
                     continue;
@@ -791,6 +793,10 @@ public class ShowTextFilesCmdlet : TextFileCmdletBase
     /// On a read failure the file is treated as text, so the normal read
     /// reports the error.
     /// </summary>
+    private static bool IsWideEncodingName(string? name) =>
+        !string.IsNullOrEmpty(name) &&
+        Regex.IsMatch(name, @"^(unicode|bigendianunicode|bigendianutf32|utf-?16(le|be)?|utf-?32(le|be)?|1200|1201|12000|12001)$", RegexOptions.IgnoreCase);
+
     private static bool IsBinaryFile(string filePath)
     {
         try

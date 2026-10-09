@@ -44,6 +44,19 @@ public class PipelineHelperTests
         Assert.Null(PipelineHelper.CheckStartProcessNewConsole(pipeline));
     }
 
+    [Fact]
+    public void StartProcessWithWindowStyle_IsToldToReplaceIt_NotAddToIt()
+    {
+        // -NoNewWindow and -WindowStyle cannot be combined, so the hint must
+        // not say "add" when -WindowStyle is already there.
+        var withStyle = PipelineHelper.CheckStartProcessNewConsole("Start-Process cmd -RedirectStandardOutput o.log -WindowStyle Hidden");
+        var plain = PipelineHelper.CheckStartProcessNewConsole("Start-Process cmd -RedirectStandardOutput o.log");
+        if (!OnWindows) { Assert.Null(withStyle); Assert.Null(plain); return; }
+        Assert.Contains("Replace `-WindowStyle", withStyle);
+        Assert.DoesNotContain("Add `-NoNewWindow`", withStyle);
+        Assert.Contains("Add `-NoNewWindow`", plain);
+    }
+
     #endregion
 
     #region CheckNestedPwsh Tests

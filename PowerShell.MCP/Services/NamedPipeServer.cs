@@ -33,6 +33,28 @@ public static class ExecutionState
     private static bool _firstHeartbeatReceived = false;
     private const int HeartbeatTimeoutMs = 10000; // If no heartbeat for 10s, runspace is likely busy
 
+    // Set by the status path when an unowned console answers "outdated"; the
+    // engine prints it once in the console, which would otherwise just sit
+    // there, passed over by every proxy, with nothing to say why.
+    private static string? _outdatedNotice;
+    private static bool _outdatedNoticeShown;
+
+    public static void NoteOutdated(string reason)
+    {
+        lock (_lock) { if (!_outdatedNoticeShown) _outdatedNotice = reason; }
+    }
+
+    public static string? TakeOutdatedNotice()
+    {
+        lock (_lock)
+        {
+            var notice = _outdatedNotice;
+            _outdatedNotice = null;
+            if (notice != null) _outdatedNoticeShown = true;
+            return notice;
+        }
+    }
+
     // Startup window of a proxy-launched console (see BeginStartup). The grace
     // matches how long the proxy itself waits for a new console's pipe.
     private static bool _startupPending = false;
@@ -747,6 +769,7 @@ public class NamedPipeServer : IDisposable
                     if (outdatedReason != null && ExecutionState.IsRunspaceAvailable)
                     {
                         var statusLine = BuildStatusLine("⊘", $"Console not claimable: {outdatedReason}", "Outdated");
+                        ExecutionState.NoteOutdated(outdatedReason);
                         statusResponse = JsonSerializer.Serialize(new { pid, status = "outdated", reason = outdatedReason, statusLine, cwd, typedText, typedTextAgeSeconds = typedTextAge });
                     }
                     else if (ExecutionState.IsRunspaceAvailable)
@@ -1228,6 +1251,8 @@ Please provide how to update the MCP client configuration to the user.";
         {
             var title = parameters.GetProperty("title").GetString() ?? "";
             var escapedTitle = title.Replace("'", "''");
+            if (!ExecutionState.WaitForHeartbeat())
+                return "{\"success\":false,\"error\":\"busy\"}";
             McpServerHost.ExecuteSilentCommand($"$Host.UI.RawUI.WindowTitle = '{escapedTitle}'");
             return "{\"success\":true}";
         }
@@ -1245,6 +1270,13 @@ Please provide how to update the MCP client configuration to the user.";
         try
         {
             var pipeline = parameters.GetProperty("pipeline").GetString() ?? "";
+            // A user command is running: the engine would not pick this up
+            // until it ends, so the request would block for the full wait and
+            // the pipeline would then run in the user's own session. The proxy
+            // treats a silent command as best-effort, and the execute_command
+            // that follows gets the usual busy answer from its own gate.
+            if (!ExecutionState.WaitForHeartbeat())
+                return "{\"success\":false,\"error\":\"busy\"}";
             McpServerHost.ExecuteSilentCommand(pipeline);
             return "{\"success\":true}";
         }

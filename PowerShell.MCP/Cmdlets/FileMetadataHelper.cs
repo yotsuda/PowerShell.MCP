@@ -86,6 +86,23 @@ internal static class FileMetadataHelper
         return (newlineSequence, hasTrailingNewline);
     }
 
+    private static bool HasNonAscii(byte[] bytes, int length)
+    {
+        for (int i = 0; i < length; i++)
+            if (bytes[i] >= 0x80) return true;
+        return false;
+    }
+
+    // The sample is a prefix of the file and may end inside a multi-byte
+    // sequence, so up to three trailing bytes are dropped before the sample
+    // is called invalid.
+    private static bool IsValidUtf8Prefix(byte[] bytes, int length)
+    {
+        for (int trim = 0; trim <= 3 && trim < length; trim++)
+            if (System.Text.Unicode.Utf8.IsValid(bytes.AsSpan(0, length - trim))) return true;
+        return false;
+    }
+
     /// <summary>
     /// Detect encoding from bytes (without reading entire file)
     /// </summary>
@@ -106,6 +123,17 @@ internal static class FileMetadataHelper
         }
         if (length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
             return Encoding.BigEndianUnicode;
+
+        // Valid UTF-8 holding a multi-byte sequence is UTF-8, decided before
+        // the charset guesser gets a say. Given 17 KB of source whose only
+        // non-ASCII characters were a dash and an emoji, the guesser said
+        // windows-1252; the edit cmdlets then wrote the file back in that code
+        // page, and the characters the edit added became bytes that are not
+        // UTF-8. A multi-byte sequence that validates is next to impossible
+        // to meet by chance in legacy-encoded text. Pure ASCII and invalid
+        // UTF-8 go on to the guesser as before.
+        if (HasNonAscii(bytes, length) && IsValidUtf8Prefix(bytes, length))
+            return new UTF8Encoding(false);
 
         // Use Ude library for detection (already optimized to use only header)
         try

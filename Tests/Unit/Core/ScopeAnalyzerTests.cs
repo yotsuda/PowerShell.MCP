@@ -41,6 +41,13 @@ public class ScopeAnalyzerTests
     [InlineData("$script:x = 1; $x")]                                // scoped assignment binds the bare read
     [InlineData("$LASTEXITCODE; $Matches; $foreach; $null; $true")]
     [InlineData("'$notAVariable'")]                                  // single-quoted: no variable at all
+    [InlineData("Get-Date | Tee-Object -Variable t | Out-Null; $t")]  // Tee-Object -Variable creates it
+    [InlineData("Import-LocalizedData -BindingVariable msgs; $msgs.Hello")]
+    [InlineData("Invoke-WebRequest x -SessionVariable s; $s.Cookies")]
+    [InlineData("Invoke-RestMethod x -SV s; $s")]
+    [InlineData(". .\\settings.ps1; $cfg")]                            // a dot-sourced file may define anything
+    [InlineData("Invoke-Expression '$v = 1'; $v")]                     // so may an expression string
+    [InlineData("$OFS; $PSModuleAutoLoadingPreference")]               // preference variables that exist only once set
     public void DefinedOrAutomatic_IsNotReported(string pipeline)
     {
         Assert.Empty(ScopeAnalyzer.Analyze(pipeline).UnboundReads);

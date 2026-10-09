@@ -249,6 +249,31 @@ Also Not Found
             $output | Should -Contain '  4: C'
         }
 
+        It "Does not show the line after a whole-line OldText as both removed and inserted" {
+            Set-Content $script:testFile -Value @('a', 'b', 'c', 'd')
+            $output = Update-MatchInFile -Path $script:testFile -OldText "b`n" -Replacement "X`nY`n" |
+                ForEach-Object { $_ -replace "`e\[[\d;]*m", '' }
+
+            $output | Should -Contain '   : b'
+            $output | Should -Not -Contain '   : c'
+            $output | Should -Contain '  2: X'
+            $output | Should -Contain '  3: Y'
+            $output | Should -Contain '  4- c'
+            $output | Should -Not -Contain '  4: c'
+            (Get-Content $script:testFile) | Should -Be @('a', 'X', 'Y', 'c', 'd')
+        }
+
+        It "Shows no phantom removed line when whole lines are deleted at the end of the file" {
+            Set-Content $script:testFile -Value @('a', 'b')
+            $output = Update-MatchInFile -Path $script:testFile -OldText "b`n" -Replacement '' |
+                ForEach-Object { $_ -replace "`e\[[\d;]*m", '' }
+
+            $output | Should -Contain '   : b'
+            ($output | Where-Object { $_ -eq '   : ' }).Count | Should -Be 0
+            $output | Should -Not -Contain '  2: '
+            (Get-Content $script:testFile) | Should -Be @('a')
+        }
+
         It "Shows every occurrence of a multi-line OldText, each with its context" {
             Set-Content $script:testFile -Value @('h1', 'h2', 'A', 'B', 'm1', 'm2', 'm3', 'm4', 'm5', 'A', 'B', 't1')
             $output = Update-MatchInFile -Path $script:testFile -OldText "A`nB" -Replacement "X`nY`nZ" |

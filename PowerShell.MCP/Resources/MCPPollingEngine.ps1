@@ -240,6 +240,19 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # marker directory, so the disk stays untouched. Returning here
                     # instead would skip the helper-function definitions that the
                     # rest of this action block relies on.
+                    # An unowned console whose build or version no longer matches
+                    # is passed over by every proxy (see get_status): say so once,
+                    # since otherwise the window just sits there.
+                    $mcpOutdated = try { [PowerShell.MCP.Services.ExecutionState]::TakeOutdatedNotice() } catch { $null }
+                    if ($mcpOutdated) {
+                        [Console]::WriteLine()
+                        Write-Host "⊘ MCP servers will not use this console: $mcpOutdated. Start a new console for the current build; this one keeps the DLL it loaded." -ForegroundColor Yellow
+                        try {
+                            $p = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $((Get-Location).Path)> " }
+                            [Console]::Write(($p -join ''))
+                        } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
+                    }
+
                     $reapAct =[PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby, $typedText)
                     if ($reapAct -eq [PowerShell.MCP.Services.ReapAction]::Warn) {
                         [Console]::WriteLine()
@@ -350,8 +363,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # stays clean while the visible terminal keeps the
                 # animated bar.
                 # Run in the sandbox (see Get-McpSandbox), not as a child
-                # of this engine's scopes.
-                & (Get-McpSandbox) $Block
+                # of this engine's scopes. The one-pass foreach is a
+                # backstop: a `break` or `continue` with no enclosing loop
+                # in the command — at top level, or inside a ForEach-Object
+                # body, which is not a loop — unwinds through every caller
+                # until a loop catches it, and without this one it reached
+                # the timer action and ended the engine's event job, exactly
+                # as `exit` did (see the exit gate). Here it ends the
+                # command instead, and the output emitted before it is kept.
+                foreach ($mcpOnce in 1) { & (Get-McpSandbox) $Block }
             }
 
             function Invoke-CommandWithAllStreams {
@@ -435,8 +455,15 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 # values. A variable this same command assigns is judged by
                 # the value assigned to it. StaticParameterBinder binds the
                 # way the real call will (positional, abbreviated, aliased).
-                # Literals inside a nested script block are not judged: a
-                # computed value (`% { "$_ ..." }`) is deliberate.
+                # Only the argument itself is judged — the expression once
+                # parentheses are looked through — never a literal somewhere
+                # inside a computed value: `($var1 -replace "`r`n", "`n")`
+                # is a computation whose regex happens to hold backticks,
+                # and `"a $x" + 'b'` is a deliberate interpolation. Commands
+                # inside a nested script block (`% { Add-Content f "$_" }`,
+                # a function body) are not judged either: there the text is
+                # computed per item, and a literal at the call site is the
+                # only thing this gate exists to catch.
                 $editTextParams = @{
                     'Add-LinesToFile'      = @('Content')
                     'Update-LinesInFile'   = @('Content')
@@ -457,14 +484,34 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         default                  { return $false }
                     }
                 }
+                # The expression an argument or an assigned value amounts to:
+                # a one-element pipeline is its expression, and parentheses
+                # are looked through. That node is judged as a whole.
+                $unwrapEditSource = {
+                    param($node)
+                    while ($true) {
+                        if ($node -is [System.Management.Automation.Language.PipelineAst] -and $node.PipelineElements.Count -eq 1 -and
+                            $node.PipelineElements[0] -is [System.Management.Automation.Language.CommandExpressionAst]) {
+                            $node = $node.PipelineElements[0].Expression; continue
+                        }
+                        if ($node -is [System.Management.Automation.Language.CommandExpressionAst]) { $node = $node.Expression; continue }
+                        if ($node -is [System.Management.Automation.Language.ParenExpressionAst]) { $node = $node.Pipeline; continue }
+                        return $node
+                    }
+                }
                 $editTextErrors = @()
                 $editAssignments = @($parseAst.FindAll({ param($a)
                     $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-                    $a.Left -is [System.Management.Automation.Language.VariableExpressionAst] }, $true))
-                foreach ($editCommand in $parseAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] }, $true)) {
+                    $a.Left -is [System.Management.Automation.Language.VariableExpressionAst] }, $false))
+                foreach ($editCommand in $parseAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] }, $false)) {
                     $editCommandName = $editCommand.GetCommandName()
                     if (-not $editCommandName) { continue }
                     $editCommandName = ($editCommandName -split '\\')[-1]
+                    # `ac`, `sc` and any user alias bind to the real cmdlet.
+                    $editAlias = Get-Alias -Name ([WildcardPattern]::Escape($editCommandName)) -ErrorAction SilentlyContinue
+                    if ($editAlias) {
+                        $editCommandName = if ($editAlias.ResolvedCommandName) { $editAlias.ResolvedCommandName } else { $editAlias.Definition }
+                    }
                     $editParamNames = $editTextParams[$editCommandName]
                     if (-not $editParamNames) { continue }
                     # The gate only ever refuses; if binding fails, it lets the
@@ -476,13 +523,18 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         if (-not $editBound -or -not $editBound.Value) { continue }
                         $editSources = @($editBound.Value)
                         if ($editBound.Value -is [System.Management.Automation.Language.VariableExpressionAst]) {
-                            $editVarName = $editBound.Value.VariablePath.UnqualifiedPath
+                            # UserPath, not UnqualifiedPath: the latter is empty
+                            # for a plain $name, and empty -eq empty made every
+                            # assignment in the command count as this variable's.
+                            $editVarName = $editBound.Value.VariablePath.UserPath
                             $editSources = @($editAssignments |
-                                Where-Object { $_.Left.VariablePath.UnqualifiedPath -eq $editVarName } |
+                                Where-Object { $_.Left.VariablePath.UserPath -eq $editVarName } |
                                 ForEach-Object { $_.Right })
                         }
                         foreach ($editSource in $editSources) {
-                            $altered = $editSource.Find($isAlteredLiteral, $false)
+                            $editExpr = & $unwrapEditSource $editSource
+                            $editParts = if ($editExpr -is [System.Management.Automation.Language.ArrayLiteralAst]) { $editExpr.Elements } else { @($editExpr) }
+                            $altered = $editParts | Where-Object { & $isAlteredLiteral (& $unwrapEditSource $_) } | Select-Object -First 1
                             if ($altered) {
                                 $editTextErrors += [System.Management.Automation.Language.ParseError]::new(
                                     $altered.Extent, 'UnsafeEditText',

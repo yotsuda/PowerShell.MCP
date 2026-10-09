@@ -534,6 +534,16 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         int newLineCount = newContent.EndsWith(newline, StringComparison.Ordinal) ? newLines.Length - 1 : newLines.Length;
         int oldTextBreaks = CountOccurrences(oldText, newline);
         int replacementBreaks = CountOccurrences(replacement, newline);
+        // Whole lines swapped for whole lines: an -OldText that ends with a
+        // newline stops at the start of the next line, which is untouched
+        // when the replacement also ends with one (or is empty, removing the
+        // lines). Counted as a break, that next line showed as both removed
+        // and inserted, and at the end of the file a phantom empty line
+        // showed as removed.
+        bool wholeLines = oldText.EndsWith(newline, StringComparison.Ordinal) &&
+                          (replacement.Length == 0 || replacement.EndsWith(newline, StringComparison.Ordinal));
+        int oldSpan = wholeLines ? oldTextBreaks - 1 : oldTextBreaks;
+        int newSpan = wholeLines ? replacementBreaks - 1 : replacementBreaks;
 
         // Occurrences in the order string.Replace takes them: left to right,
         // not overlapping. Two that share a line become one hunk.
@@ -543,7 +553,7 @@ public class UpdateMatchInFileCmdlet : TextFileCmdletBase
         {
             oldLine += CountOccurrences(content.AsSpan(scanned, idx - scanned), newline);
             scanned = idx;
-            var hunk = (oldStart: oldLine, oldEnd: oldLine + oldTextBreaks, newStart: oldLine + lineShift, newEnd: oldLine + lineShift + replacementBreaks);
+            var hunk = (oldStart: oldLine, oldEnd: oldLine + oldSpan, newStart: oldLine + lineShift, newEnd: oldLine + lineShift + newSpan);
             if (hunks.Count > 0 && hunk.oldStart <= hunks[^1].oldEnd)
                 hunks[^1] = (hunks[^1].oldStart, hunk.oldEnd, hunks[^1].newStart, hunk.newEnd);
             else

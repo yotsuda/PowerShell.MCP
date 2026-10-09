@@ -43,6 +43,9 @@ public static class ScopeAnalyzer
         "Error", "Event", "EventArgs", "EventSubscriber", "Sender", "SourceEventArgs", "SourceArgs",
         "PSCmdlet", "PSBoundParameters", "MyInvocation", "PSScriptRoot", "PSCommandPath",
         "StackTrace", "PSSenderInfo", "PSDebugContext",
+        // Preference variables that do not exist until someone sets them;
+        // reading one is how they are consulted.
+        "OFS", "PSModuleAutoLoadingPreference",
     };
 
     // Common parameters whose argument NAMES a variable the command creates.
@@ -50,6 +53,10 @@ public static class ScopeAnalyzer
     {
         "ov", "OutVariable", "ev", "ErrorVariable", "wv", "WarningVariable",
         "iv", "InformationVariable", "pv", "PipelineVariable",
+        // Cmdlet-specific ones: Tee-Object -Variable, Import-LocalizedData
+        // -BindingVariable, Invoke-WebRequest / Invoke-RestMethod
+        // -SessionVariable (-SV).
+        "Variable", "BindingVariable", "SessionVariable", "sv",
     };
 
     private static readonly HashSet<string> VariableCreatingCommands = new(StringComparer.OrdinalIgnoreCase)
@@ -126,10 +133,15 @@ public static class ScopeAnalyzer
         // is exactly a read worth reporting (the usual idiom assigns $x = $null
         // first, which binds it).
 
+        // A dot-sourced file or an Invoke-Expression string can define any
+        // name, so what the pipeline then reads cannot be judged from its text.
+        var definesUnknownNames = false;
+
         foreach (var node in ast.FindAll(a => a is CommandAst, true))
         {
             var command = (CommandAst)node;
             var elements = command.CommandElements;
+            if (command.InvocationOperator == TokenKind.Dot) definesUnknownNames = true;
             for (var i = 0; i < elements.Count; i++)
             {
                 if (elements[i] is not CommandParameterAst parameter) continue;
@@ -142,6 +154,8 @@ public static class ScopeAnalyzer
             var name = command.GetCommandName();
             if (name == null) continue;
             name = name[(name.LastIndexOf('\\') + 1)..];
+            if (name.Equals("Invoke-Expression", StringComparison.OrdinalIgnoreCase) || name.Equals("iex", StringComparison.OrdinalIgnoreCase))
+                definesUnknownNames = true;
             if (!VariableCreatingCommands.Contains(name)) continue;
             // -Name x, -Name:x, or the first positional argument.
             string? created = null;
@@ -166,6 +180,7 @@ public static class ScopeAnalyzer
         }
 
         var unboundReads = new List<string>();
+        if (definesUnknownNames) return new Analysis(localAssigned, scopeAssigned, unboundReads);
         foreach (var node in ast.FindAll(a => a is VariableExpressionAst, true))
         {
             var variable = (VariableExpressionAst)node;

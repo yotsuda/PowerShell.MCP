@@ -92,8 +92,13 @@ public static partial class PipelineHelper
         if (!StartProcessRegex().IsMatch(stripped)) return null;
         if (!StartProcessRedirectRegex().IsMatch(stripped)) return null;
         if (NoNewWindowRegex().IsMatch(stripped)) return null;
+        // -NoNewWindow and -WindowStyle are mutually exclusive, so a command
+        // that has -WindowStyle must swap it out, not add to it.
+        var fix = WindowStyleRegex().IsMatch(stripped)
+            ? "Replace `-WindowStyle …` with `-NoNewWindow` — Start-Process refuses the two together — "
+            : "Add `-NoNewWindow` ";
         return "💡 `Start-Process` without `-NoNewWindow` runs the child in a NEW console, which starts with the system OEM code page (e.g. 932 or 437) rather than this console's UTF-8 — so the redirected output file is not UTF-8 and any non-ASCII text in it comes back garbled. " +
-               "Add `-NoNewWindow` (the child then shares this console's UTF-8 code page; with its output redirected, nothing extra is shown here), or run it as `cmd /d /s /c \"<command> < NUL > out.log 2>&1\"`.";
+               fix + "(the child then shares this console's UTF-8 code page; with its output redirected, nothing extra is shown here), or run it as `cmd /d /s /c \"<command> < NUL > out.log 2>&1\"`.";
     }
 
     [GeneratedRegex(@"(?<![\w\\/.-])Start-Process\b", RegexOptions.IgnoreCase)]
@@ -107,6 +112,10 @@ public static partial class PipelineHelper
 
     [GeneratedRegex(@"(?<!\S)-(?:NoNewWindow|nnw)(?=\s|:|$)", RegexOptions.IgnoreCase)]
     private static partial Regex NoNewWindowRegex();
+
+    // -WindowStyle and the prefix forms PowerShell accepts (-WindowSt, -WindowSty …).
+    [GeneratedRegex(@"(?<!\S)-WindowSt\w*(?=\s|:|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex WindowStyleRegex();
 
     /// <summary>
     /// Detects a redundant leading <c>cd</c> / <c>Set-Location</c> and returns
