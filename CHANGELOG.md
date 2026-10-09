@@ -17,6 +17,16 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.16.0
+
+## New Features
+- **A console on another machine can be driven by the AI: `Start-MCPRemoteListener` and five remote tools.** On the remote machine the user opens PowerShell 7, runs `Import-Module PowerShell.MCP` and `Start-MCPRemoteListener`; the console binds TCP port 42777 (`-Port` to change; a second console on the same port is refused) and prints a pairing code together with the host name and its IP addresses. The user gives host and code to the AI, which calls `connect_remote_console` and then `execute_remote_command` — the semantics of `execute_command` (a persistent session, `var1`–`var8`, the text-file cmdlets, a timeout followed by `wait_for_remote_completion`, `cancel_remote_command` for Ctrl+C), on the other machine, in a window the user there is watching; a `Read-Host` is answered by that user. The local `execute_command` and its consoles are untouched. The remote tools are separate on purpose: none of the local machinery — discovery, claiming, agent isolation, starting a second console when one is busy — applies, so a busy remote console is simply reported as busy. One remote console at a time; `disconnect_remote_console` releases it, the listener keeps waiting, and the same code reconnects.
+- **How the connection is secured.** TLS under a certificate the listener generates when it starts; the proxy accepts it blind and binds the pairing handshake to its SHA-256 thumbprint, so an interceptor cannot complete the handshake. The code is 8 characters from a 32-letter alphabet (no 0/O, 1/I), the key PBKDF2-SHA256 with 300,000 iterations. The console proves first, so a proxy that reaches a wrong address learns nothing and sends nothing; every handshake that does not end in a valid proof counts as a failure, and after five the listener stops. The proxy keeps the derived key for its lifetime and reconnects by itself after a drop — a command that was running continues there, and `wait_for_remote_completion` collects its output; a listener restarted with a new code asks for that code. The connection is pinged while idle, and a session silent for two minutes is dropped so a dead peer cannot hold the console. Meant for a LAN or VPN; do not expose the port to the Internet. Both machines must run the same PowerShell.MCP version.
+- **A listening console is spoken for.** A local MCP server probing it over the pipe is told `remote` and passes it over, as it does an outdated console; it is never registered with the idle reaper, so it is not closed for being idle; `Stop-MCPRemoteListener` and `Remove-Module` stop it. The window title shows the state: `PowerShell.MCP [listening :42777]`, then `[connected from <address>]`.
+
+## Internal
+- **`NamedPipeServer` serves requests from any `Stream`.** The per-connection handler is split into receiving a frame and serving it (`HandleRequestAsync`), and the framing helpers take a `Stream`, so the remote listener runs the same request code over TLS, one frame at a time, for the life of a connection. A `ping` request answers `pong` from the pipe thread. `IsRemoteRequest` (an `AsyncLocal`) tells the handler which side of the console it is serving.
+
 # Version: 1.15.0
 
 ## New Features

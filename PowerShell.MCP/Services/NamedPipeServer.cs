@@ -619,20 +619,56 @@ public class NamedPipeServer : IDisposable
     }
 
     /// <summary>
-    /// Handles client communication
+    /// True while a request is being served for a remote proxy, over the
+    /// TLS session RemoteConsoleListener holds, rather than for a local one
+    /// over a pipe. Flows with the async call chain. A remote proxy is the
+    /// console's owner for the duration of the session, so it is never shown
+    /// the "outdated" refusal; a local proxy probing a listening console is
+    /// told "remote" so it does not claim it.
     /// </summary>
-    private static async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    internal static readonly AsyncLocal<bool> IsRemoteRequest = new();
+
+    /// <summary>
+    /// Handles one connection: one request in, one response out. The pipe
+    /// and the remote listener share HandleRequestAsync; only the framing
+    /// stream differs, so everything takes a Stream.
+    /// </summary>
+    internal static async Task HandleClientAsync(Stream pipeServer, CancellationToken cancellationToken)
+    {
+        string requestJson;
+        try
+        {
+            requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await TrySendErrorAsync(pipeServer, ex, cancellationToken);
+            return;
+        }
+        await HandleRequestAsync(pipeServer, requestJson, cancellationToken);
+    }
+
+    /// <summary>
+    /// Serves one already-received request and writes its response.
+    /// </summary>
+    internal static async Task HandleRequestAsync(Stream pipeServer, string requestJson, CancellationToken cancellationToken)
     {
         try
         {
-            // Receive request
-            var requestJson = await ReceiveMessageAsync(pipeServer, cancellationToken);
-
             // Parse JSON-RPC request
             using var requestDoc = JsonDocument.Parse(requestJson);
             var requestRoot = requestDoc.RootElement;
 
             var name = requestRoot.GetProperty("name").GetString();
+
+            // Liveness probe of a remote session: answered before anything
+            // else, from the pipe thread, with no runspace involved.
+            if (name == "ping")
+            {
+                var pongPid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                await SendMessageAsync(pipeServer, JsonSerializer.Serialize(new { pid = pongPid, status = "pong" }), cancellationToken);
+                return;
+            }
 
             // Record liveness activity for requests that deliberately target
             // THIS console (run a command, read its location, cancel it). NOT
@@ -683,6 +719,20 @@ public class NamedPipeServer : IDisposable
                 catch { }
 
                 string statusResponse;
+                // A console that listens for a remote proxy belongs to that
+                // proxy (connected or not): a local proxy probing it over the
+                // pipe is told so and passes it over, as it does an outdated
+                // one, instead of claiming it under the remote user's feet.
+                if (!IsRemoteRequest.Value && RemoteConsoleListener.IsListening)
+                {
+                    var remoteReason = RemoteConsoleListener.IsConnected
+                        ? $"console is driven by a remote MCP server ({RemoteConsoleListener.ConnectedFrom})"
+                        : $"console is listening for a remote MCP server on port {RemoteConsoleListener.Port}";
+                    var remoteLine = BuildStatusLine("⊘", $"Console not claimable: {remoteReason}", "Remote");
+                    statusResponse = JsonSerializer.Serialize(new { pid, status = "remote", reason = remoteReason, statusLine = remoteLine, cwd, typedText, typedTextAgeSeconds = typedTextAge });
+                    await SendMessageAsync(pipeServer, statusResponse + "\n\n", cancellationToken);
+                    return;
+                }
                 if (status == "busy")
                 {
                     // Mark for caching - Proxy will use another pipe, so result won't be received
@@ -761,7 +811,7 @@ public class NamedPipeServer : IDisposable
                     // never refused: their session already depends on them.
                     var requestProxyVersion = requestRoot.TryGetProperty("proxy_version", out JsonElement statusVersionElement)
                         ? statusVersionElement.GetString() : null;
-                    var outdatedReason = ConsoleLiveness.IsOwned ? null
+                    var outdatedReason = (ConsoleLiveness.IsOwned || IsRemoteRequest.Value) ? null
                         : requestProxyVersion != null && requestProxyVersion != MCPModuleInitializer.ServerVersion
                             ? $"PowerShell.MCP {MCPModuleInitializer.ServerVersion} does not match proxy {requestProxyVersion}"
                         : ModuleFreshness.IsOutdated ? "PowerShell.MCP.dll was rebuilt after this console loaded it"
@@ -1182,32 +1232,36 @@ Please provide how to update the MCP client configuration to the user.";
         }
         catch (Exception ex)
         {
-            // Send error response
-            var errorResponse = new
-            {
-                jsonrpc = "2.0",
-                id = (string?)null,
-                error = new
-                {
-                    code = -32603,
-                    message = "Internal error",
-                    data = ex.Message
-                }
-            };
+            await TrySendErrorAsync(pipeServer, ex, cancellationToken);
+        }
+    }
 
-            var errorJson = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
+    private static async Task TrySendErrorAsync(Stream pipeServer, Exception ex, CancellationToken cancellationToken)
+    {
+        var errorResponse = new
+        {
+            jsonrpc = "2.0",
+            id = (string?)null,
+            error = new
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+                code = -32603,
+                message = "Internal error",
+                data = ex.Message
+            }
+        };
 
-            try
-            {
-                await SendMessageAsync(pipeServer, errorJson, cancellationToken);
-            }
-            catch
-            {
-                // Give up if error response fails to send
-            }
+        var errorJson = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        try
+        {
+            await SendMessageAsync(pipeServer, errorJson, cancellationToken);
+        }
+        catch
+        {
+            // Give up if error response fails to send
         }
     }
 
@@ -1233,6 +1287,10 @@ Please provide how to update the MCP client configuration to the user.";
         var proxyPid = parameters.GetProperty("proxy_pid").GetInt32();
         string? agentId = parameters.TryGetProperty("agent_id", out var agentIdElement)
             ? agentIdElement.GetString() : null;
+        // See the "remote" status in get_status: a listening console is spoken
+        // for. A claim that races the status probe is refused here as well.
+        if (RemoteConsoleListener.IsListening)
+            return "{\"success\":false,\"error\":\"Console is listening for a remote MCP server\"}";
         var newPipeName = MCPModuleInitializer.ClaimConsole(proxyPid, agentId);
 
         if (newPipeName != null)
@@ -1322,7 +1380,7 @@ Please provide how to update the MCP client configuration to the user.";
     /// </summary>
     private const int MaxMessageLength = 10 * 1024 * 1024; // 10 MB
 
-    private static async Task<string> ReceiveMessageAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
+    internal static async Task<string> ReceiveMessageAsync(Stream pipeServer, CancellationToken cancellationToken)
     {
         // Receive message length (4 bytes)
         var lengthBytes = new byte[4];
@@ -1344,7 +1402,7 @@ Please provide how to update the MCP client configuration to the user.";
     /// <summary>
     /// Sends a message to Named Pipe
     /// </summary>
-    public static async Task SendMessageAsync(NamedPipeServerStream pipeServer, string message, CancellationToken cancellationToken)
+    public static async Task SendMessageAsync(Stream pipeServer, string message, CancellationToken cancellationToken)
     {
         var messageBytes = Encoding.UTF8.GetBytes(message);
         var lengthBytes = BitConverter.GetBytes(messageBytes.Length);
@@ -1360,7 +1418,7 @@ Please provide how to update the MCP client configuration to the user.";
     /// <summary>
     /// Reads exactly the specified number of bytes
     /// </summary>
-    private static async Task ReadExactAsync(NamedPipeServerStream stream, byte[] buffer, CancellationToken cancellationToken)
+    private static async Task ReadExactAsync(Stream stream, byte[] buffer, CancellationToken cancellationToken)
     {
         var totalBytesRead = 0;
         while (totalBytesRead < buffer.Length)

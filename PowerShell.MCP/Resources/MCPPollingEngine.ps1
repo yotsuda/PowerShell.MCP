@@ -253,6 +253,20 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
                     }
 
+                    # The remote listener's threads cannot write to the host;
+                    # they queue, and this tick — the prompt is idle — applies.
+                    $mcpRemoteTitle = try { [PowerShell.MCP.Services.RemoteConsoleListener]::TakePendingTitle() } catch { $null }
+                    if ($mcpRemoteTitle) { try { $Host.UI.RawUI.WindowTitle = $mcpRemoteTitle } catch {} }
+                    $mcpRemoteNotices = @(try { [PowerShell.MCP.Services.RemoteConsoleListener]::TakeNotices() } catch { @() })
+                    if ($mcpRemoteNotices.Count -gt 0) {
+                        [Console]::WriteLine()
+                        foreach ($mcpNotice in $mcpRemoteNotices) { Write-Host $mcpNotice.Item1 -ForegroundColor $mcpNotice.Item2 }
+                        try {
+                            $p = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $((Get-Location).Path)> " }
+                            [Console]::Write(($p -join ''))
+                        } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
+                    }
+
                     $reapAct =[PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby, $typedText)
                     if ($reapAct -eq [PowerShell.MCP.Services.ReapAction]::Warn) {
                         [Console]::WriteLine()

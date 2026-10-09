@@ -1,4 +1,8 @@
 try {
+    # A remote listener, if any, goes with the module: it would otherwise keep
+    # serving a proxy on another machine from a runspace with no engine.
+    try { [void][PowerShell.MCP.Services.RemoteConsoleListener]::Stop('module removed', $true) } catch {}
+
     $eventSubscriber = Get-EventSubscriber -SourceIdentifier MCP_Poll -ErrorAction SilentlyContinue
     if ($eventSubscriber) {
         Unregister-Event -SourceIdentifier MCP_Poll -ErrorAction SilentlyContinue

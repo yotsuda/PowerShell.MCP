@@ -36,12 +36,14 @@ namespace PowerShell.MCP.Proxy
             builder.Services
                 .AddSingleton<NamedPipeClient>()
                 .AddSingleton<IPowerShellService, PowerShellService>()
-                .AddSingleton<IPipeDiscoveryService, PipeDiscoveryService>();
+                .AddSingleton<IPipeDiscoveryService, PipeDiscoveryService>()
+                .AddSingleton<RemoteConsoleClient>();
 
             builder.Services
                 .AddMcpServer()
                 .WithStdioServerTransport()
                 .WithTools<PowerShellTools>()
+                .WithTools<RemoteConsoleTools>()
                 .WithLocalizedPrompts<PowerShellPrompts>()
                 .WithRequestFilters(filters =>
                 {

@@ -77,7 +77,9 @@ CmdletsToExport = @(
 'Add-LinesToFile',
 'Update-LinesInFile',
 'Update-MatchInFile',
-'Remove-LinesFromFile'
+'Remove-LinesFromFile',
+'Start-MCPRemoteListener',
+'Stop-MCPRemoteListener'
 )
 
 # Variables to export from this module

@@ -1,0 +1,224 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text.Json;
+using ModelContextProtocol.Server;
+using PowerShell.MCP.Proxy.Helpers;
+using PowerShell.MCP.Proxy.Models;
+using PowerShell.MCP.Proxy.Services;
+
+namespace PowerShell.MCP.Proxy.Tools;
+
+/// <summary>
+/// Tools for a console on another machine, via RemoteConsoleClient. Kept
+/// apart from PowerShellTools on purpose: there is exactly one remote console,
+/// so none of the local machinery applies — no discovery, no claiming, no
+/// agent_id isolation, no auto-routing to a fresh console when it is busy.
+/// </summary>
+[McpServerToolType]
+public class RemoteConsoleTools
+{
+    private const string ResponseSeparator = "\n\n";
+
+    [McpServerTool(Name = "connect_remote_console"), Description(
+        "Connect to a PowerShell console on ANOTHER machine, where the user ran Import-Module PowerShell.MCP and Start-MCPRemoteListener. " +
+        "The user gives you the host (name or IP, optionally host:port; the default port is 42777) and the pairing code shown in that console. " +
+        "One remote console at a time; the connection persists until disconnect_remote_console. " +
+        "After connecting, run commands there with execute_remote_command. The local execute_command is unaffected.")]
+    public static Task<string> ConnectRemoteConsole(
+        RemoteConsoleClient client,
+        [Description("Host name or IP address of the remote machine, optionally with :port (default 42777).")]
+        string host,
+        [Description("The pairing code shown by Start-MCPRemoteListener on the remote console, e.g. 7Q4K-M2XP (case and dashes do not matter).")]
+        string code,
+        CancellationToken cancellationToken = default)
+        => client.ConnectAsync(host, code, cancellationToken);
+
+    [McpServerTool(Name = "disconnect_remote_console"), Description(
+        "Disconnect from the remote console. It keeps listening there; connect_remote_console with the same code resumes.")]
+    public static Task<string> DisconnectRemoteConsole(RemoteConsoleClient client, CancellationToken cancellationToken = default)
+        => client.DisconnectAsync(cancellationToken);
+
+    [McpServerTool(Name = "execute_remote_command"), Description(
+        "Execute a PowerShell pipeline in the connected REMOTE console (connect_remote_console first). " +
+        "Same semantics as execute_command — a persistent session, the var1…var8 literal slots, Show-TextFiles and the edit cmdlets, a timeout followed by wait_for_remote_completion — but on the other machine: file paths are that machine's, and the user there sees every command in their window. " +
+        "A busy remote console is reported as busy; no second console is started there. cancel_remote_command sends Ctrl+C.")]
+    public static async Task<string> ExecuteRemoteCommand(
+        RemoteConsoleClient client,
+        McpServer mcpServer,
+        [Description("The PowerShell command or pipeline to execute on the remote console.")]
+        string pipeline,
+        [Description("Timeout in seconds (default 170; capped to what the client waits for). On timeout the command keeps running there; collect its output with wait_for_remote_completion.")]
+        int timeout_seconds = 170,
+        [Description("Literal string value injected as $var1 in the pipeline, bypassing the PowerShell parser.")]
+        string? var1 = null,
+        [Description("Literal string value injected as $var2 in the pipeline, bypassing the PowerShell parser.")]
+        string? var2 = null,
+        [Description("Literal string value injected as $var3 in the pipeline, bypassing the PowerShell parser.")]
+        string? var3 = null,
+        [Description("Literal string value injected as $var4 in the pipeline, bypassing the PowerShell parser.")]
+        string? var4 = null,
+        [Description("Literal string value injected as $var5 in the pipeline, bypassing the PowerShell parser.")]
+        string? var5 = null,
+        [Description("Literal string value injected as $var6 in the pipeline, bypassing the PowerShell parser.")]
+        string? var6 = null,
+        [Description("Literal string value injected as $var7 in the pipeline, bypassing the PowerShell parser.")]
+        string? var7 = null,
+        [Description("Literal string value injected as $var8 in the pipeline, bypassing the PowerShell parser.")]
+        string? var8 = null,
+        CancellationToken cancellationToken = default)
+    {
+        TimeoutCeiling.ObserveClient(mcpServer?.ClientInfo?.Name);
+        var request = new ExecuteCommandParams
+        {
+            Pipeline = pipeline,
+            TimeoutSeconds = TimeoutCeiling.RemainingFor(timeout_seconds, TimeSpan.Zero),
+            Variables = PowerShellTools.BuildVariables(var1, var2, var3, var4, var5, var6, var7, var8),
+        };
+
+        var raw = await client.SendRequestAsync(JsonSerializer.Serialize(request, PowerShellJsonRpcContext.Default.ExecuteCommandParams), cancellationToken);
+        var response = await FormatExecuteResponseAsync(client, pipeline, raw, cancellationToken);
+
+        // The client gave up while the console was working: the result would
+        // otherwise vanish. Park it in the console's cache, as execute_command
+        // does, so the next remote tool call delivers it.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var stash = new CacheOutputParams { Output = response };
+                await client.SendRequestAsync(JsonSerializer.Serialize(stash, PowerShellJsonRpcContext.Default.CacheOutputParams), CancellationToken.None);
+            }
+            catch { }
+        }
+        return response;
+    }
+
+    [McpServerTool(Name = "wait_for_remote_completion"), Description(
+        "Wait for the remote console to finish the command it is running (after a timeout or busy answer) and return the output it has cached. " +
+        "Polls once a second for up to timeout_seconds (default 30, capped to what the client waits for) and returns as soon as the console is free.")]
+    public static async Task<string> WaitForRemoteCompletion(
+        RemoteConsoleClient client,
+        McpServer mcpServer,
+        [Description("Maximum seconds to wait (default 30).")]
+        int timeout_seconds = 30,
+        CancellationToken cancellationToken = default)
+    {
+        TimeoutCeiling.ObserveClient(mcpServer?.ClientInfo?.Name);
+        var budget = TimeoutCeiling.RemainingFor(timeout_seconds, TimeSpan.Zero);
+        var clock = Stopwatch.StartNew();
+        var tag = Tag(client);
+
+        GetStatusResponse? status;
+        while (true)
+        {
+            status = await GetStatusAsync(client, cancellationToken);
+            if (status == null || status.Status != "busy" || clock.Elapsed.TotalSeconds >= budget) break;
+            await Task.Delay(1000, cancellationToken);
+        }
+
+        var output = await ConsumeOutputAsync(client, cancellationToken);
+        if (status == null)
+            return PipelineHelper.JoinBlocks(tag, "The remote console sent no status.", output);
+        if (status.Status == "busy")
+            return PipelineHelper.JoinBlocks(tag, output, status.StatusLine,
+                status.Reason == "user_command"
+                    ? "The user at the remote console is still running a command. Call wait_for_remote_completion again."
+                    : "Still running. Call wait_for_remote_completion again, or cancel_remote_command to interrupt it.");
+        if (status.Status == PipeStatus.AwaitingInput)
+            return PipelineHelper.JoinBlocks(tag, output, status.StatusLine, AwaitingInputAdvice(status));
+        return PipelineHelper.JoinBlocks(tag, status.StatusLine, string.IsNullOrEmpty(output) ? "(no pending output)" : output);
+    }
+
+    [McpServerTool(Name = "cancel_remote_command"), Description(
+        "Send Ctrl+C to the remote console to interrupt the command it is running (a native CLI waiting on stdin, a runaway loop). " +
+        "Does not work on a PowerShell host prompt such as Read-Host: the user at that machine must answer it.")]
+    public static async Task<string> CancelRemoteCommand(RemoteConsoleClient client, CancellationToken cancellationToken = default)
+    {
+        var raw = await client.SendRequestAsync(JsonSerializer.Serialize(new CancelParams(), PowerShellJsonRpcContext.Default.CancelParams), cancellationToken);
+        var header = Split(raw).header;
+        string? ackStatus = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(header);
+            ackStatus = doc.RootElement.TryGetProperty("status", out var s) ? s.GetString() : null;
+        }
+        catch { }
+        return PipelineHelper.JoinBlocks(Tag(client),
+            ackStatus == "success"
+                ? $"Cancel (Ctrl+C) sent to the remote console (PID {client.RemotePid}). Use wait_for_remote_completion to see where it stopped."
+                : $"The remote console did not acknowledge the cancel (status: {ackStatus ?? "none"}). It may already be idle.");
+    }
+
+    // ----- helpers -----
+
+    private static string Tag(RemoteConsoleClient client) => $"[remote console: {client.Target}]";
+
+    private static async Task<string> FormatExecuteResponseAsync(RemoteConsoleClient client, string pipeline, string raw, CancellationToken ct)
+    {
+        var tag = Tag(client);
+        var (header, body) = Split(raw);
+        GetStatusResponse? status = null;
+        try { status = JsonSerializer.Deserialize(header, GetStatusResponseContext.Default.GetStatusResponse); } catch { }
+        if (status == null) return PipelineHelper.JoinBlocks(tag, raw);
+
+        switch (status.Status)
+        {
+            case "busy":
+                return PipelineHelper.JoinBlocks(tag,
+                    status.StatusLine ?? $"⧗ Remote console busy | Pipeline: {status.Pipeline} | Duration: {status.Duration:F2}s",
+                    status.Reason == "user_command"
+                        ? "The user at the remote console is running a command there. wait_for_remote_completion polls until the console is free; or ask them."
+                        : "A previous remote command is still running. Use wait_for_remote_completion for its result, or cancel_remote_command to interrupt it.");
+
+            case "timeout":
+            {
+                var cached = await ConsumeOutputAsync(client, ct);
+                return PipelineHelper.JoinBlocks(tag, cached, status.StatusLine, status.StalledChild,
+                    "Use wait_for_remote_completion to wait for the result. If it is instead STUCK — a native CLI waiting on stdin, or a runaway command — use cancel_remote_command (Ctrl+C; not for PowerShell host prompts).");
+            }
+
+            case PipeStatus.AwaitingInput:
+                return PipelineHelper.JoinBlocks(tag, status.StatusLine, AwaitingInputAdvice(status));
+
+            case PipeStatus.Completed:
+            {
+                var done = await ConsumeOutputAsync(client, ct);
+                return PipelineHelper.JoinBlocks(tag, status.StatusLine,
+                    string.IsNullOrEmpty(done) ? "Result cached. Will be returned on the next remote tool call." : done);
+            }
+
+            case "error":
+                return PipelineHelper.JoinBlocks(tag, status.Message ?? $"Error from PowerShell.MCP module: {status.Error}");
+
+            default:
+                // success: the body is the console's own status line and output.
+                return PipelineHelper.JoinBlocks(tag, body, PipelineHelper.CheckNestedPwsh(pipeline, "remote:" + client.Target));
+        }
+    }
+
+    private static string AwaitingInputAdvice(GetStatusResponse status)
+    {
+        var prompt = string.IsNullOrEmpty(status.Message) ? "" : $" — {status.Message}";
+        return $"⌨ The remote console is paused at a PowerShell HOST prompt{prompt} (Read-Host, a missing mandatory parameter, Get-Credential, a confirmation). " +
+               "It will not finish on its own, and cancel_remote_command does not work on a host prompt: ask the user at that machine to answer it in the console window.";
+    }
+
+    private static async Task<GetStatusResponse?> GetStatusAsync(RemoteConsoleClient client, CancellationToken ct)
+    {
+        var raw = await client.SendRequestAsync(JsonSerializer.Serialize(new GetStatusParams(), PowerShellJsonRpcContext.Default.GetStatusParams), ct);
+        try { return JsonSerializer.Deserialize(Split(raw).header, GetStatusResponseContext.Default.GetStatusResponse); }
+        catch { return null; }
+    }
+
+    private static async Task<string> ConsumeOutputAsync(RemoteConsoleClient client, CancellationToken ct)
+    {
+        var raw = await client.SendRequestAsync(JsonSerializer.Serialize(new ConsumeOutputParams(), PowerShellJsonRpcContext.Default.ConsumeOutputParams), ct);
+        return Split(raw).body;
+    }
+
+    private static (string header, string body) Split(string response)
+    {
+        var i = response.IndexOf(ResponseSeparator, StringComparison.Ordinal);
+        return i >= 0 ? (response[..i], response[(i + ResponseSeparator.Length)..]) : (response, "");
+    }
+}
