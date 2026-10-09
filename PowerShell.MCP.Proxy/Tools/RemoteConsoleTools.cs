@@ -20,7 +20,7 @@ public class RemoteConsoleTools
     private const string ResponseSeparator = "\n\n";
 
     [McpServerTool(Name = "connect_remote_console"), Description(
-        "Connect to a PowerShell console on ANOTHER machine, where the user ran Import-Module PowerShell.MCP and Start-MCPRemoteListener. " +
+        "Connect to a PowerShell console on ANOTHER machine, where the user ran Import-Module PowerShell.MCP and Enable-MCPRemoteControl. " +
         "The user gives you the host (name or IP, optionally host:port; the default port is 42777) and the pairing code shown in that console. " +
         "One remote console at a time; the connection persists until disconnect_remote_console. " +
         "After connecting, run commands there with execute_remote_command. The local execute_command is unaffected.")]
@@ -28,7 +28,7 @@ public class RemoteConsoleTools
         RemoteConsoleClient client,
         [Description("Host name or IP address of the remote machine, optionally with :port (default 42777).")]
         string host,
-        [Description("The pairing code shown by Start-MCPRemoteListener on the remote console, e.g. 7Q4K-M2XP (case and dashes do not matter).")]
+        [Description("The pairing code shown by Enable-MCPRemoteControl on the remote console, e.g. 7Q4K-M2XP (case and dashes do not matter).")]
         string code,
         CancellationToken cancellationToken = default)
         => client.ConnectAsync(host, code, cancellationToken);

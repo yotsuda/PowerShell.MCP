@@ -345,14 +345,14 @@ On the remote machine, in PowerShell 7 with PowerShell.MCP installed:
 
 ```powershell
 Import-Module PowerShell.MCP
-Start-MCPRemoteListener          # TCP port 42777 by default; -Port to change
+Enable-MCPRemoteControl          # TCP port 42777 by default; -Port to change
 ```
 
 The console prints a pairing code (`XXXX-XXXX`), its host name and IP addresses. Give those to the AI on your machine — *"connect to the remote console at 192.168.0.10 with code 7Q4K-M2XP"*. It calls `connect_remote_console`, then runs commands there with `execute_remote_command`: the same semantics as `execute_command` (a persistent session, `var1`–`var8`, the text-file cmdlets, `wait_for_remote_completion`, `cancel_remote_command`), with that machine's paths, in a window the person there can see. A `Read-Host` is answered by that person.
 
 - Inbound TCP 42777 must be allowed through the remote machine's firewall; the cmdlet prints the `New-NetFirewallRule` line.
-- One proxy at a time per console, one remote console at a time per proxy. `disconnect_remote_console` releases it; the listener keeps waiting and the same code reconnects. `Stop-MCPRemoteListener` (or `Remove-Module`) ends it.
-- The listener stops after five failed pairing attempts.
+- One proxy at a time per console, one remote console at a time per proxy. `disconnect_remote_console` releases it; the listener keeps waiting and the same code reconnects. `Disable-MCPRemoteControl` (or `Remove-Module`) ends it.
+- Remote control ends after five failed pairing attempts.
 - Security: TLS with a certificate generated per listener, a handshake bound to that certificate and to the pairing code (PBKDF2-SHA256, 300,000 iterations), console-proves-first so a proxy that reaches a wrong address sends nothing. Meant for a LAN or VPN — do not expose the port to the Internet.
 - Both machines must run the same PowerShell.MCP version.
 

@@ -220,7 +220,7 @@ public sealed class RemoteConsoleClient : IDisposable
         {
             tcp.Dispose();
             throw new InvalidOperationException(
-                $"Could not reach {Target}: {ex.Message.TrimEnd('.')}. Is Start-MCPRemoteListener running there, and is inbound TCP {_port} allowed through its firewall?");
+                $"Could not reach {Target}: {ex.Message.TrimEnd('.')}. Is Enable-MCPRemoteControl running there, and is inbound TCP {_port} allowed through its firewall?");
         }
 
         byte[]? thumbprint = null;

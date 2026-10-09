@@ -7,12 +7,12 @@ using PowerShell.MCP.Services;
 namespace PowerShell.MCP.Cmdlets;
 
 /// <summary>
-/// Start-MCPRemoteListener: let an MCP proxy on another machine drive this
+/// Enable-MCPRemoteControl: let an MCP proxy on another machine drive this
 /// console. Prints the pairing code the AI must be given. See
 /// RemoteConsoleListener for the protocol and the security model.
 /// </summary>
-[Cmdlet(VerbsLifecycle.Start, "MCPRemoteListener")]
-public class StartMCPRemoteListenerCmdlet : PSCmdlet
+[Cmdlet(VerbsLifecycle.Enable, "MCPRemoteControl")]
+public class EnableMCPRemoteControlCmdlet : PSCmdlet
 {
     [Parameter(Position = 0)]
     [ValidateRange(1, 65535)]
@@ -52,7 +52,7 @@ public class StartMCPRemoteListenerCmdlet : PSCmdlet
             return;
         }
 
-        try { Host.UI.RawUI.WindowTitle = $"PowerShell.MCP [listening :{Port}]"; } catch { }
+        try { Host.UI.RawUI.WindowTitle = $"PowerShell.MCP [remote control: listening :{Port}]"; } catch { }
 
         var ui = Host.UI;
         var bg = ui.RawUI.BackgroundColor;
@@ -70,7 +70,7 @@ public class StartMCPRemoteListenerCmdlet : PSCmdlet
             : Dns.GetHostName();
         ui.WriteLine($"  Give the AI on the other machine the host and the code. Host: {hostInfo}");
         ui.WriteLine("  It connects with connect_remote_console and then runs commands here with execute_remote_command.");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, $"  The listener stops after {RemoteConsoleListener.MaxFailures} failed attempts, or with Stop-MCPRemoteListener.");
+        ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Remote control ends after {RemoteConsoleListener.MaxFailures} failed attempts, or with Disable-MCPRemoteControl.");
         ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Inbound TCP {Port} must be allowed through the firewall. On Windows, as administrator:");
         ui.WriteLine(ConsoleColor.DarkGray, bg, $"    New-NetFirewallRule -DisplayName 'PowerShell.MCP remote console' -Direction Inbound -Protocol TCP -LocalPort {Port} -Action Allow");
         ui.WriteLine();
@@ -106,14 +106,14 @@ public class StartMCPRemoteListenerCmdlet : PSCmdlet
 }
 
 /// <summary>
-/// Stop-MCPRemoteListener: stop listening and drop the remote session, if any.
+/// Disable-MCPRemoteControl: stop listening and drop the remote session, if any.
 /// </summary>
-[Cmdlet(VerbsLifecycle.Stop, "MCPRemoteListener")]
-public class StopMCPRemoteListenerCmdlet : PSCmdlet
+[Cmdlet(VerbsLifecycle.Disable, "MCPRemoteControl")]
+public class DisableMCPRemoteControlCmdlet : PSCmdlet
 {
     protected override void ProcessRecord()
     {
-        if (!RemoteConsoleListener.Stop("Stop-MCPRemoteListener", fromConsoleThread: true))
+        if (!RemoteConsoleListener.Stop("Disable-MCPRemoteControl", fromConsoleThread: true))
         {
             WriteWarning("This console is not listening for a remote MCP server.");
             return;

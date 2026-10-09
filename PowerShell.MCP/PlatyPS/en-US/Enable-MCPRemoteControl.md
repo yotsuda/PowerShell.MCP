@@ -6,10 +6,10 @@ Locale: ja-JP
 Module Name: PowerShell.MCP
 ms.date: 10/09/2026
 PlatyPS schema version: 2024-05-01
-title: Start-MCPRemoteListener
+title: Enable-MCPRemoteControl
 ---
 
-# Start-MCPRemoteListener
+# Enable-MCPRemoteControl
 
 ## SYNOPSIS
 
@@ -20,7 +20,7 @@ Let an MCP server on another machine drive this console
 ### __AllParameterSets
 
 ```
-Start-MCPRemoteListener [[-Port] <int>] [-ListenAddress <string>] [<CommonParameters>]
+Enable-MCPRemoteControl [[-Port] <int>] [-ListenAddress <string>] [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -38,7 +38,7 @@ and sees every command the AI runs, in this window; a Read-Host is answered here
 The console must be one the user opened (Import-Module PowerShell.MCP), not one a
 local MCP server started. A second console on the same port is refused. One proxy
 at a time; the listener keeps waiting after a disconnect, and the same code reconnects.
-It stops after five failed pairing attempts, with Stop-MCPRemoteListener, or when the
+It stops after five failed pairing attempts, with Disable-MCPRemoteControl, or when the
 module is removed.
 
 Security: TLS under a certificate generated for this listener; the pairing handshake
@@ -56,11 +56,11 @@ New-NetFirewallRule -DisplayName 'PowerShell.MCP remote console' -Direction Inbo
 
 ### Default port
 
-Start-MCPRemoteListener
+Enable-MCPRemoteControl
 
 ### Another port, one address only
 
-Start-MCPRemoteListener -Port 5000 -ListenAddress 192.168.0.10
+Enable-MCPRemoteControl -Port 5000 -ListenAddress 192.168.0.10
 
 ## PARAMETERS
 
@@ -121,11 +121,11 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 - The pairing code is shown once, in this window. It is not written anywhere else.
 
-- The window title shows the state: `PowerShell.MCP [listening :42777]`, then `[connected from <address>]`.
+- The window title shows the state: `PowerShell.MCP [remote control: listening :42777]`, then `[remote control: connected from <address>]`.
 
 - A local MCP server on this machine does not claim a listening console.
 
 
 ## RELATED LINKS
 
-- [Stop-MCPRemoteListener]()
+- [Disable-MCPRemoteControl]()

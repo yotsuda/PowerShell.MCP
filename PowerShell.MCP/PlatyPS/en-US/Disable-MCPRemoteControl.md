@@ -6,10 +6,10 @@ Locale: ja-JP
 Module Name: PowerShell.MCP
 ms.date: 10/09/2026
 PlatyPS schema version: 2024-05-01
-title: Stop-MCPRemoteListener
+title: Disable-MCPRemoteControl
 ---
 
-# Stop-MCPRemoteListener
+# Disable-MCPRemoteControl
 
 ## SYNOPSIS
 
@@ -20,7 +20,7 @@ Stop listening for a remote MCP server
 ### __AllParameterSets
 
 ```
-Stop-MCPRemoteListener [<CommonParameters>]
+Disable-MCPRemoteControl [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -29,7 +29,7 @@ This cmdlet has no aliases.
 
 ## DESCRIPTION
 
-Stops the listener started by Start-MCPRemoteListener and drops the remote session,
+Stops the listener started by Enable-MCPRemoteControl and drops the remote session,
 if one is connected. The console becomes a plain MCP console again, which a local MCP
 server may claim. Warns when the console is not listening.
 
@@ -37,7 +37,7 @@ server may claim. Warns when the console is not listening.
 
 ### Stop
 
-Stop-MCPRemoteListener
+Disable-MCPRemoteControl
 
 ## PARAMETERS
 
@@ -59,4 +59,4 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## RELATED LINKS
 
-- [Start-MCPRemoteListener]()
+- [Enable-MCPRemoteControl]()

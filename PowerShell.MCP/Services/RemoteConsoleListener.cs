@@ -14,7 +14,7 @@ namespace PowerShell.MCP.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The console is the server, as it is for the local pipe: Start-MCPRemoteListener
+/// The console is the server, as it is for the local pipe: Enable-MCPRemoteControl
 /// binds a TCP port, prints a pairing code, and waits. The proxy connects,
 /// the two sides prove to each other that they hold the same code, and from
 /// then on the connection carries the same length-prefixed JSON requests the
@@ -298,7 +298,7 @@ public static class RemoteConsoleListener
             }
 
             Notify($"Remote MCP server connected from {remote}.", "Green");
-            SetTitle($"PowerShell.MCP [connected from {remote}]");
+            SetTitle($"PowerShell.MCP [remote control: connected from {remote}]");
 
             NamedPipeServer.IsRemoteRequest.Value = true;
             try
@@ -329,7 +329,7 @@ public static class RemoteConsoleListener
                 if (stillListening)
                 {
                     Notify($"Remote MCP server at {remote} disconnected. Listening again on port {Port}.", "DarkGray");
-                    SetTitle($"PowerShell.MCP [listening :{Port}]");
+                    SetTitle($"PowerShell.MCP [remote control: listening :{Port}]");
                 }
             }
         }
