@@ -199,6 +199,86 @@ public class RemoteConsoleTests
         Assert.Equal("7Q4K-M2XP", RemoteConsoleListener.FormatCode("7Q4KM2XP"));
     }
 
+    private static async Task WaitUntilAsync(Func<bool> condition, int seconds = 15)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(seconds);
+        while (!condition() && DateTime.UtcNow < deadline) await Task.Delay(50);
+    }
+
+    [Fact]
+    public async Task DialOut_RightCode_ConsoleDialsIn_AndPings()
+    {
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            var instructions = await client.AcceptAsync(0, CancellationToken.None);
+            Assert.Contains("Enable-MCPRemoteControl -ConnectTo", instructions);
+            Assert.True(client.IsAccepting);
+
+            RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, RemoteConsoleClient.FormatCode(client.AcceptCode!).ToLowerInvariant());
+            await WaitUntilAsync(() => client.IsConnected);
+            Assert.True(client.IsConnected);
+            Assert.True(RemoteConsoleDialer.IsConnected);
+            Assert.Equal(Environment.ProcessId, client.RemotePid);
+            Assert.Equal("pong", StatusOf(await client.SendRequestAsync(Ping(), CancellationToken.None)));
+            Assert.NotEqual("remote", StatusOf(await client.SendRequestAsync(GetStatus(), CancellationToken.None)));
+
+            // Over the pipe, a dialing console is spoken for as a listening one is.
+            using var pipe = new MemoryStream();
+            await NamedPipeServer.HandleRequestAsync(pipe, GetStatus(), CancellationToken.None);
+            pipe.Position = 0;
+            Assert.Equal("remote", StatusOf(await NamedPipeServer.ReceiveMessageAsync(pipe, CancellationToken.None)));
+        }
+        finally
+        {
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task DialOut_WrongCode_EndsTheConsolesAttempt_AndFiveOfThemStopAccepting()
+    {
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            await client.AcceptAsync(0, CancellationToken.None);
+            var wrong = client.AcceptCode![0] == 'A' ? "B" + client.AcceptCode[1..] : "A" + client.AcceptCode[1..];
+            for (var i = 0; i < 5; i++)
+            {
+                RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, wrong);
+                // The console verifies the proxy's proof, fails, and stops for good:
+                // redialing with a wrong code would only burn the proxy's attempts.
+                await WaitUntilAsync(() => !RemoteConsoleDialer.IsActive);
+                Assert.False(RemoteConsoleDialer.IsActive);
+                Assert.False(client.IsConnected);
+            }
+            await WaitUntilAsync(() => !client.IsAccepting);
+            Assert.False(client.IsAccepting);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => client.SendRequestAsync(Ping(), CancellationToken.None));
+            Assert.Contains("accepting stopped", ex.Message);
+        }
+        finally
+        {
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public void DialOut_WhileListening_IsRefused()
+    {
+        var port = FreePort();
+        RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => RemoteConsoleDialer.Start("127.0.0.1", 1, "AAAAAAAA"));
+            Assert.Contains("already listening", ex.Message);
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
     [Theory]
     [InlineData("::ffff:192.168.0.10", "192.168.0.10")]  // IPv4 peer on the dual-stack socket
     [InlineData("192.168.0.10", "192.168.0.10")]

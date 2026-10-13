@@ -33,8 +33,19 @@ public class RemoteConsoleTools
         CancellationToken cancellationToken = default)
         => client.ConnectAsync(host, code, cancellationToken);
 
+    [McpServerTool(Name = "accept_remote_console"), Description(
+        "Let a console on ANOTHER machine dial in to this MCP server — for a machine behind NAT, a cloud NSG or a firewall that cannot be opened; only an outbound connection is needed there. " +
+        "Binds a port on this machine, makes a pairing code, and returns the exact `Enable-MCPRemoteControl -ConnectTo <host:port> -Code <code>` line for the user to run on the remote console. " +
+        "Once that console has dialed in, execute_remote_command works as after connect_remote_console. One remote console at a time; disconnect_remote_console stops accepting.")]
+    public static Task<string> AcceptRemoteConsole(
+        RemoteConsoleClient client,
+        [Description("TCP port to accept on. Default 0 picks a free port, reported in the result. Inbound on this machine's firewall must allow it.")]
+        int port = 0,
+        CancellationToken cancellationToken = default)
+        => client.AcceptAsync(port, cancellationToken);
+
     [McpServerTool(Name = "disconnect_remote_console"), Description(
-        "Disconnect from the remote console. It keeps listening there; connect_remote_console with the same code resumes.")]
+        "Disconnect from the remote console (and stop accepting one). A listening console keeps listening, so connect_remote_console with the same code resumes; a dialing console gives up.")]
     public static Task<string> DisconnectRemoteConsole(RemoteConsoleClient client, CancellationToken cancellationToken = default)
         => client.DisconnectAsync(cancellationToken);
 

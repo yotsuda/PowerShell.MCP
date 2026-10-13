@@ -84,6 +84,8 @@ public static class RemoteConsoleListener
         {
             if (_listener != null)
                 throw new InvalidOperationException($"This console is already listening on port {_port}.");
+            if (RemoteConsoleDialer.IsActive)
+                throw new InvalidOperationException($"This console is already dialing {RemoteConsoleDialer.Target}. Disable-MCPRemoteControl first.");
 
             var code = NewPairingCode();
             var salt = RandomNumberGenerator.GetBytes(16);
@@ -195,8 +197,10 @@ public static class RemoteConsoleListener
 
     // The proxy has copies of DeriveKey and Proof (RemoteConsoleClient); the
     // two must stay identical.
-    internal static byte[] DeriveKey(string code, byte[] salt) =>
-        Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(NormalizeCode(code)), salt, KeyIterations, HashAlgorithmName.SHA256, 32);
+    internal static byte[] DeriveKey(string code, byte[] salt) => DeriveKey(code, salt, KeyIterations);
+
+    internal static byte[] DeriveKey(string code, byte[] salt, int iterations) =>
+        Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(NormalizeCode(code)), salt, iterations, HashAlgorithmName.SHA256, 32);
 
     internal static byte[] Proof(byte[] key, string label, byte[] clientNonce, byte[] serverNonce, byte[] thumbprint)
     {
@@ -435,12 +439,12 @@ public static class RemoteConsoleListener
     private static readonly Queue<(string Message, string Color)> _notices = new();
     private static string? _pendingTitle;
 
-    private static void Notify(string message, string color)
+    internal static void Notify(string message, string color)
     {
         lock (_lock) _notices.Enqueue((message, color));
     }
 
-    private static void SetTitle(string title)
+    internal static void SetTitle(string title)
     {
         lock (_lock) _pendingTitle = title;
     }

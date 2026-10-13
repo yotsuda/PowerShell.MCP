@@ -36,11 +36,48 @@ public class RemoteProof
     public required string ClientProof { get; set; }
 }
 
+/// <summary>Accept mode: the proxy's challenge to a console that dialed in (the proxy proves first).</summary>
+public class RemoteChallenge
+{
+    [JsonPropertyName("salt")]
+    public required string Salt { get; set; }
+
+    [JsonPropertyName("iterations")]
+    public int Iterations { get; set; }
+
+    [JsonPropertyName("server_nonce")]
+    public required string ServerNonce { get; set; }
+
+    [JsonPropertyName("server_proof")]
+    public required string ServerProof { get; set; }
+}
+
+/// <summary>Accept mode: the proxy's final answer, or a refusal at any step.</summary>
+public class RemoteAck
+{
+    [JsonPropertyName("ok")]
+    public bool Ok { get; set; }
+
+    [JsonPropertyName("error")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("message")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Message { get; set; }
+
+    [JsonPropertyName("version")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Version { get; set; }
+}
+
 // The proxy is published trimmed, so every type that is serialized needs a
 // source-generated context. Responses are read with JsonDocument.
 [JsonSerializable(typeof(PingParams))]
 [JsonSerializable(typeof(RemoteHello))]
 [JsonSerializable(typeof(RemoteProof))]
+[JsonSerializable(typeof(RemoteChallenge))]
+[JsonSerializable(typeof(RemoteAck))]
 [JsonSourceGenerationOptions(WriteIndented = false)]
 public partial class RemoteConsoleJsonContext : JsonSerializerContext
 {

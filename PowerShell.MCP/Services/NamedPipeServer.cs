@@ -723,11 +723,9 @@ public class NamedPipeServer : IDisposable
                 // proxy (connected or not): a local proxy probing it over the
                 // pipe is told so and passes it over, as it does an outdated
                 // one, instead of claiming it under the remote user's feet.
-                if (!IsRemoteRequest.Value && RemoteConsoleListener.IsListening)
+                if (!IsRemoteRequest.Value && RemoteControl.IsActive)
                 {
-                    var remoteReason = RemoteConsoleListener.IsConnected
-                        ? $"console is driven by a remote MCP server ({RemoteConsoleListener.ConnectedFrom})"
-                        : $"console is listening for a remote MCP server on port {RemoteConsoleListener.Port}";
+                    var remoteReason = RemoteControl.Describe();
                     var remoteLine = BuildStatusLine("⊘", $"Console not claimable: {remoteReason}", "Remote");
                     statusResponse = JsonSerializer.Serialize(new { pid, status = "remote", reason = remoteReason, statusLine = remoteLine, cwd, typedText, typedTextAgeSeconds = typedTextAge });
                     await SendMessageAsync(pipeServer, statusResponse + "\n\n", cancellationToken);
@@ -1289,8 +1287,8 @@ Please provide how to update the MCP client configuration to the user.";
             ? agentIdElement.GetString() : null;
         // See the "remote" status in get_status: a listening console is spoken
         // for. A claim that races the status probe is refused here as well.
-        if (RemoteConsoleListener.IsListening)
-            return "{\"success\":false,\"error\":\"Console is listening for a remote MCP server\"}";
+        if (RemoteControl.IsActive)
+            return "{\"success\":false,\"error\":\"Console is under remote control\"}";
         var newPipeName = MCPModuleInitializer.ClaimConsole(proxyPid, agentId);
 
         if (newPipeName != null)

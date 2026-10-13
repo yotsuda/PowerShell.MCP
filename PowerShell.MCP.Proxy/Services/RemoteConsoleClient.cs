@@ -1,7 +1,10 @@
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using PowerShell.MCP.Proxy.Models;
@@ -34,6 +37,11 @@ public sealed class RemoteConsoleClient : IDisposable
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(200);
     private static readonly TimeSpan PingInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan SessionWait = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan AcceptHandshakeTimeout = TimeSpan.FromSeconds(20);
+    private const int MaxAcceptFailures = 5;
+    private const int KeyIterations = 300_000;
+    private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private TcpClient? _tcp;
@@ -44,13 +52,37 @@ public sealed class RemoteConsoleClient : IDisposable
     private byte[]? _key;
     private byte[]? _salt;
 
+    // ----- accept mode: the console dials us (Enable-MCPRemoteControl -ConnectTo) -----
+    // The roles of the listening mode, swapped: we hold the code, the salt
+    // and the certificate, we prove first, and the console redials on a
+    // drop. _ssl/_tcp are then set from the accept loop, under _sessionLock,
+    // and _sessionReady lets a waiting request pick the session up.
+    private readonly object _sessionLock = new();
+    private TcpListener? _acceptListener;
+    private CancellationTokenSource? _acceptCts;
+    private X509Certificate2? _acceptCertificate;
+    private byte[] _acceptSalt = [];
+    private byte[] _acceptKey = [];
+    private string? _acceptCode;
+    private int _acceptPort;
+    private int _acceptFailures;
+    private string? _acceptStopped;
+    private string? _peer;
+    private TaskCompletionSource<bool> _sessionReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public bool IsConnected => _ssl != null;
+    public bool IsAccepting => _acceptListener != null;
+    public int AcceptPort => _acceptPort;
+    internal string? AcceptCode => _acceptCode;
     public string? Host => _host;
     public int RemotePid { get; private set; }
     public string? RemoteVersion { get; private set; }
 
-    /// <summary>"host" or "host:port" as the user gave it, for messages.</summary>
-    public string Target => _host == null ? "(not connected)" : _port == DefaultPort ? _host : $"{_host}:{_port}";
+    /// <summary>"host" or "host:port" as the user gave it, or the console that dialed in, for messages.</summary>
+    public string Target =>
+        _acceptListener != null || _peer != null
+            ? (_peer != null ? $"{_peer} (dialed in)" : $"(waiting on port {_acceptPort})")
+            : _host == null ? "(not connected)" : _port == DefaultPort ? _host : $"{_host}:{_port}";
 
     /// <summary>host, host:port, [v6], [v6]:port.</summary>
     public static (string host, int port) ParseTarget(string target)
@@ -86,6 +118,8 @@ public sealed class RemoteConsoleClient : IDisposable
         {
             if (_ssl != null)
                 throw new InvalidOperationException($"Already connected to {Target}. Call disconnect_remote_console first.");
+            if (_acceptListener != null)
+                throw new InvalidOperationException($"Already waiting for a console to dial in on port {_acceptPort}. Call disconnect_remote_console first.");
             _host = host;
             _port = port;
             _key = null;
@@ -115,15 +149,19 @@ public sealed class RemoteConsoleClient : IDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            if (_host == null) return "Not connected to a remote console.";
+            if (_host == null && _acceptListener == null && _peer == null) return "Not connected to a remote console.";
             var target = Target;
+            var wasAccepting = _acceptListener != null || _peer != null;
             _pingTimer?.Dispose();
             _pingTimer = null;
             CloseLocked();
+            StopAcceptingLocked();
             _host = null;
             _key = null;
             _salt = null;
-            return $"Disconnected from {target}. The remote console keeps listening; connect_remote_console with the same code resumes.";
+            return wasAccepting
+                ? $"Disconnected from {target} and no longer accepting. The console there will give up redialing; the user ends it with Disable-MCPRemoteControl, or accept_remote_console again starts over with a new code."
+                : $"Disconnected from {target}. The remote console keeps listening; connect_remote_console with the same code resumes.";
         }
         finally
         {
@@ -142,10 +180,32 @@ public sealed class RemoteConsoleClient : IDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            if (_host == null)
-                throw new InvalidOperationException("Not connected to a remote console. Call connect_remote_console first.");
+            if (_host == null && _acceptListener == null)
+                throw new InvalidOperationException(_acceptStopped != null
+                    ? $"Not connected: accepting stopped ({_acceptStopped}). Call accept_remote_console again for a new code."
+                    : "Not connected to a remote console. Call connect_remote_console (to reach a listening console) or accept_remote_console (to let a console dial in) first.");
             if (_ssl == null)
-                await OpenAsync(null, ct);
+            {
+                if (_acceptListener != null)
+                {
+                    // The console redials by itself; give it a moment.
+                    Task ready;
+                    lock (_sessionLock) ready = _sessionReady.Task;
+                    using var waiting = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    waiting.CancelAfter(SessionWait);
+                    try { await ready.WaitAsync(waiting.Token); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        throw new InvalidOperationException(
+                            $"The remote console has not dialed in on port {_acceptPort}" + (_peer != null ? " since the connection dropped" : "") +
+                            ". It redials by itself once Enable-MCPRemoteControl -ConnectTo is running there; " + AcceptInstructions());
+                    }
+                }
+                else
+                {
+                    await OpenAsync(null, ct);
+                }
+            }
 
             try
             {
@@ -157,11 +217,16 @@ public sealed class RemoteConsoleClient : IDisposable
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or AuthenticationException or InvalidDataException
                                        || (ex is OperationCanceledException && !ct.IsCancellationRequested))
             {
+                var target = Target;
                 CloseLocked();
+                if (_acceptListener != null)
+                    throw new InvalidOperationException(
+                        $"The connection to {target} dropped while the request was in flight ({ex.Message}). The console redials by itself; " +
+                        "a command that was running continues there — try again in a moment, then wait_for_remote_completion to collect its output.");
                 var reconnected = false;
                 try { await OpenAsync(null, ct); reconnected = true; } catch { }
                 throw new InvalidOperationException(
-                    $"The connection to {Target} dropped while the request was in flight ({ex.Message}). " +
+                    $"The connection to {target} dropped while the request was in flight ({ex.Message}). " +
                     (reconnected
                         ? "Reconnected. A command that was running continues there; use wait_for_remote_completion to collect its output."
                         : "Reconnecting failed: the console may have stopped listening. Check it, then connect_remote_console again."));
@@ -189,7 +254,9 @@ public sealed class RemoteConsoleClient : IDisposable
             catch
             {
                 CloseLocked();
-                try { await OpenAsync(null, CancellationToken.None); } catch { }
+                // Dial mode reconnects here; in accept mode the console redials.
+                if (_acceptListener == null)
+                    try { await OpenAsync(null, CancellationToken.None); } catch { }
             }
         }
         finally
@@ -299,17 +366,329 @@ public sealed class RemoteConsoleClient : IDisposable
 
     private void CloseLocked()
     {
-        try { _ssl?.Dispose(); } catch { }
-        try { _tcp?.Dispose(); } catch { }
-        _ssl = null;
-        _tcp = null;
+        lock (_sessionLock)
+        {
+            try { _ssl?.Dispose(); } catch { }
+            try { _tcp?.Dispose(); } catch { }
+            _ssl = null;
+            _tcp = null;
+            if (_sessionReady.Task.IsCompleted)
+                _sessionReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    private void StopAcceptingLocked()
+    {
+        TcpListener? listener;
+        CancellationTokenSource? cts;
+        X509Certificate2? certificate;
+        lock (_sessionLock)
+        {
+            listener = _acceptListener;
+            cts = _acceptCts;
+            certificate = _acceptCertificate;
+            _acceptListener = null;
+            _acceptCts = null;
+            _acceptCertificate = null;
+            _acceptKey = [];
+            _acceptSalt = [];
+            _acceptCode = null;
+            _peer = null;
+        }
+        try { cts?.Cancel(); } catch { }
+        try { listener?.Stop(); } catch { }
+        certificate?.Dispose();
+        cts?.Dispose();
     }
 
     public void Dispose()
     {
         _pingTimer?.Dispose();
         CloseLocked();
+        StopAcceptingLocked();
         _gate.Dispose();
+    }
+
+    // ----- accept mode -----
+
+    /// <summary>
+    /// Waits for a console to dial in: binds a port (0 = any free one), makes
+    /// the pairing code, and returns what the user must run on the remote
+    /// machine. Called again while waiting, it repeats the instructions.
+    /// </summary>
+    public async Task<string> AcceptAsync(int port, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            if (_ssl != null || _host != null)
+                throw new InvalidOperationException($"Already connected to {Target}. Call disconnect_remote_console first.");
+            if (_acceptListener != null) return AcceptInstructions();
+
+            var code = NewPairingCode();
+            var salt = RandomNumberGenerator.GetBytes(16);
+            var key = DeriveKey(code, salt, KeyIterations);
+            var certificate = CreateCertificate();
+            var listener = new TcpListener(IPAddress.IPv6Any, port);
+            listener.Server.DualMode = true;
+            try
+            {
+                listener.Start();
+            }
+            catch (SocketException ex)
+            {
+                certificate.Dispose();
+                throw new InvalidOperationException($"Could not listen on port {port}: {ex.Message.TrimEnd('.')}.", ex);
+            }
+
+            CancellationToken token;
+            lock (_sessionLock)
+            {
+                _acceptListener = listener;
+                _acceptCts = new CancellationTokenSource();
+                _acceptCertificate = certificate;
+                _acceptSalt = salt;
+                _acceptKey = key;
+                _acceptCode = code;
+                _acceptPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+                _acceptFailures = 0;
+                _acceptStopped = null;
+                _peer = null;
+                if (_sessionReady.Task.IsCompleted)
+                    _sessionReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                token = _acceptCts.Token;
+            }
+            _ = Task.Run(() => AcceptLoopAsync(listener, token), CancellationToken.None);
+            _pingTimer?.Dispose();
+            _pingTimer = new Timer(_ => _ = PingAsync(), null, PingInterval, PingInterval);
+            return AcceptInstructions();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private string AcceptInstructions()
+    {
+        var addresses = LocalAddresses();
+        var where = addresses.Count > 0 ? $" (if that name does not resolve there, use an IP address of this machine: {string.Join(", ", addresses)})" : "";
+        return $"Waiting for a remote console to dial in on TCP port {_acceptPort} of this machine. " +
+               "On the remote machine, in PowerShell 7 with PowerShell.MCP imported, the user runs:\n" +
+               $"  Enable-MCPRemoteControl -ConnectTo {Dns.GetHostName()}:{_acceptPort} -Code {FormatCode(_acceptCode ?? "")}\n" +
+               $"{where}. Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall. " +
+               $"Accepting stops after {MaxAcceptFailures} failed pairing attempts. Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.";
+    }
+
+    private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            TcpClient client;
+            try
+            {
+                client = await listener.AcceptTcpClientAsync(ct);
+            }
+            catch (OperationCanceledException) { return; }
+            catch (ObjectDisposedException) { return; }
+            catch (SocketException)
+            {
+                if (ct.IsCancellationRequested) return;
+                continue;
+            }
+            _ = Task.Run(() => ServeDialedConsoleAsync(client, ct), CancellationToken.None);
+        }
+    }
+
+    private async Task ServeDialedConsoleAsync(TcpClient client, CancellationToken ct)
+    {
+        X509Certificate2? certificate;
+        byte[] key, salt;
+        lock (_sessionLock)
+        {
+            certificate = _acceptCertificate;
+            key = _acceptKey;
+            salt = _acceptSalt;
+        }
+        if (certificate == null) { client.Dispose(); return; }
+
+        var peer = DescribePeer((client.Client.RemoteEndPoint as IPEndPoint)?.Address);
+        client.NoDelay = true;
+        var ssl = new SslStream(client.GetStream(), leaveInnerStreamOpen: false);
+        (bool ok, bool countsAsFailure, int pid, string? version) result;
+        try
+        {
+            using var handshake = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            handshake.CancelAfter(AcceptHandshakeTimeout);
+            await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+            {
+                ServerCertificate = certificate,
+                ClientCertificateRequired = false,
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            }, handshake.Token);
+            result = await HandshakeAsAcceptorAsync(ssl, certificate, key, salt, handshake.Token);
+        }
+        catch
+        {
+            // A console given the wrong code verifies our proof, fails, and
+            // closes without sending its own: that is a failed attempt too.
+            ssl.Dispose();
+            client.Dispose();
+            CountAcceptFailure();
+            return;
+        }
+        if (!result.ok)
+        {
+            ssl.Dispose();
+            client.Dispose();
+            if (result.countsAsFailure) CountAcceptFailure();
+            return;
+        }
+
+        bool busy;
+        lock (_sessionLock)
+        {
+            busy = _acceptListener == null || _ssl != null;
+            if (!busy)
+            {
+                _tcp = client;
+                _ssl = ssl;
+                _peer = peer;
+                RemotePid = result.pid;
+                RemoteVersion = result.version;
+            }
+        }
+        if (busy)
+        {
+            try { await WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteAck { Ok = false, Error = "busy", Message = "Another console is already connected to this MCP server." }, RemoteConsoleJsonContext.Default.RemoteAck), ct); } catch { }
+            ssl.Dispose();
+            client.Dispose();
+            return;
+        }
+        try
+        {
+            await WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteAck { Ok = true, Version = Program.ProxyVersion }, RemoteConsoleJsonContext.Default.RemoteAck), ct);
+        }
+        catch
+        {
+            CloseLocked();
+            return;
+        }
+        lock (_sessionLock) _sessionReady.TrySetResult(true);
+    }
+
+    /// <summary>
+    /// The acceptor's half of the pairing, mirroring the module's listener:
+    /// check the hello and the version, prove the code first, then verify the
+    /// console's proof. A refusal is answered before returning.
+    /// </summary>
+    private async Task<(bool ok, bool countsAsFailure, int pid, string? version)> HandshakeAsAcceptorAsync(
+        SslStream ssl, X509Certificate2 certificate, byte[] key, byte[] salt, CancellationToken ct)
+    {
+        using var hello = JsonDocument.Parse(await ReadFrameAsync(ssl, ct));
+        var root = hello.RootElement;
+        if ((root.TryGetProperty("hello", out var h) ? h.GetString() : null) != Hello ||
+            (root.TryGetProperty("v", out var v) ? v.GetInt32() : -1) != ProtocolVersion ||
+            (root.TryGetProperty("role", out var r) ? r.GetString() : null) != "console")
+        {
+            await RefuseAsync(ssl, "protocol", "Not a PowerShell.MCP console.", ct);
+            return (false, true, 0, null);
+        }
+        var moduleVersion = root.TryGetProperty("module_version", out var mv) ? mv.GetString() : null;
+        if (moduleVersion != Program.ProxyVersion)
+        {
+            await RefuseAsync(ssl, "version_mismatch",
+                $"PowerShell.MCP {moduleVersion} on the remote console does not match this proxy ({Program.ProxyVersion}). Install the same version on both machines.", ct);
+            return (false, false, 0, null);
+        }
+        var pid = root.TryGetProperty("pid", out var p) ? p.GetInt32() : 0;
+        var clientNonce = Convert.FromBase64String(root.GetProperty("client_nonce").GetString() ?? "");
+        if (clientNonce.Length < 16) throw new InvalidDataException("client nonce too short");
+        var serverNonce = RandomNumberGenerator.GetBytes(32);
+        var thumbprint = certificate.GetCertHash(HashAlgorithmName.SHA256);
+
+        await WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteChallenge
+        {
+            Salt = Convert.ToBase64String(salt),
+            Iterations = KeyIterations,
+            ServerNonce = Convert.ToBase64String(serverNonce),
+            ServerProof = Convert.ToBase64String(Proof(key, "srv", clientNonce, serverNonce, thumbprint)),
+        }, RemoteConsoleJsonContext.Default.RemoteChallenge), ct);
+
+        using var proof = JsonDocument.Parse(await ReadFrameAsync(ssl, ct));
+        var clientProof = Convert.FromBase64String(proof.RootElement.GetProperty("client_proof").GetString() ?? "");
+        if (!CryptographicOperations.FixedTimeEquals(Proof(key, "cli", clientNonce, serverNonce, thumbprint), clientProof))
+        {
+            await RefuseAsync(ssl, "bad_code", "The pairing code did not match.", ct);
+            return (false, true, 0, null);
+        }
+        lock (_sessionLock) _acceptFailures = 0;
+        return (true, false, pid, moduleVersion);
+    }
+
+    private static Task RefuseAsync(SslStream ssl, string error, string message, CancellationToken ct) =>
+        WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteAck { Ok = false, Error = error, Message = message }, RemoteConsoleJsonContext.Default.RemoteAck), ct);
+
+    private void CountAcceptFailure()
+    {
+        bool stop;
+        lock (_sessionLock)
+        {
+            if (_acceptListener == null) return;
+            stop = ++_acceptFailures >= MaxAcceptFailures;
+            if (stop) _acceptStopped = $"{MaxAcceptFailures} failed pairing attempts";
+        }
+        if (stop) StopAcceptingLocked();
+    }
+
+    private static X509Certificate2 CreateCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=PowerShell.MCP proxy", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, false));
+        using var created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30));
+        // SChannel wants the private key in a key container: PKCS#12 round trip.
+        return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pkcs12), null);
+    }
+
+    internal static string NewPairingCode()
+    {
+        var chars = new char[8];
+        for (var i = 0; i < chars.Length; i++)
+            chars[i] = CodeAlphabet[RandomNumberGenerator.GetInt32(CodeAlphabet.Length)];
+        return new string(chars);
+    }
+
+    public static string FormatCode(string code) => code.Length == 8 ? $"{code[..4]}-{code[4..]}" : code;
+
+    /// <summary>The peer as a person reads it: IPv4 unmapped, loopback as "localhost".</summary>
+    internal static string DescribePeer(IPAddress? address)
+    {
+        if (address == null) return "unknown";
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        return IPAddress.IsLoopback(address) ? "localhost" : address.ToString();
+    }
+
+    /// <summary>IPv4 addresses of this machine's interfaces that are up, for the instructions.</summary>
+    private static List<string> LocalAddresses()
+    {
+        var result = new List<string>();
+        try
+        {
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != OperationalStatus.Up) continue;
+                if (nic.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel) continue;
+                foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (unicast.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                    if (IPAddress.IsLoopback(unicast.Address)) continue;
+                    result.Add(unicast.Address.ToString());
+                }
+            }
+        }
+        catch { }
+        return result;
     }
 
     // ----- shared with the module's RemoteConsoleListener; keep identical -----

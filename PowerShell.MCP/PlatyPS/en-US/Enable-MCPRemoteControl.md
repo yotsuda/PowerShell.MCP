@@ -17,10 +17,16 @@ Let an MCP server on another machine drive this console
 
 ## SYNTAX
 
-### __AllParameterSets
+### Listen (Default)
 
 ```
 Enable-MCPRemoteControl [[-Port] <int>] [-ListenAddress <string>] [<CommonParameters>]
+```
+
+### Dial
+
+```
+Enable-MCPRemoteControl -ConnectTo <string> -Code <string> [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -62,6 +68,13 @@ Enable-MCPRemoteControl
 
 Enable-MCPRemoteControl -Port 5000 -ListenAddress 192.168.0.10
 
+### Dial the AI's machine instead (this machine behind NAT or a firewall)
+
+Enable-MCPRemoteControl -ConnectTo yt-laptop4:51234 -Code 7Q4K-M2XP
+
+The AI ran accept_remote_console on its machine and gave the user this line; only an
+outbound connection is needed here.
+
 ## PARAMETERS
 
 ### -Port
@@ -98,6 +111,51 @@ ParameterSets:
 - Name: (All)
   Position: Named
   IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -ConnectTo
+
+Dial the proxy instead of listening: host:port of the machine where the AI called
+accept_remote_console (the port is in its answer). For a console behind NAT or a
+firewall that cannot be opened. The connection is redialed by itself if it drops.
+
+```yaml
+Type: System.String
+DefaultValue: None
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: Dial
+  Position: Named
+  IsRequired: true
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -Code
+
+The pairing code accept_remote_console gave the AI, which the AI passes on. Case and
+dashes do not matter.
+
+```yaml
+Type: System.String
+DefaultValue: None
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: Dial
+  Position: Named
+  IsRequired: true
   ValueFromPipeline: false
   ValueFromPipelineByPropertyName: false
   ValueFromRemainingArguments: false
