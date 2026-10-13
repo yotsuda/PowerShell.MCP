@@ -36,8 +36,9 @@ public class RemoteConsoleTools
 
     [McpServerTool(Name = "accept_remote_console"), Description(
         "Let a console on ANOTHER machine dial in to this MCP server — for a machine behind NAT, a cloud NSG or a firewall that cannot be opened; only an outbound connection is needed there. " +
-        "Binds a port on this machine, makes a pairing code, and returns the exact `Enable-MCPRemoteControl -ConnectTo <host:port> -Code <code>` line for the user to run on the remote console, " +
-        "in PowerShell 7 after Install-Module PowerShell.MCP (the same version as here) and Import-Module PowerShell.MCP. Relay that line to the user. " +
+        "Binds a port on this machine, makes a pairing code, and returns ONE line for the user to paste into Windows PowerShell on the remote machine: it needs nothing installed there, " +
+        "fetches PowerShell.MCP (this build) and, if PowerShell 7.4+ is missing, a portable PowerShell 7 from this machine, checks their hashes, and opens a PowerShell 7 window that dials in. " +
+        "Relay that line to the user exactly (they may swap the host for an IP the answer lists). The answer also gives the shorter Enable-MCPRemoteControl line for machines that already have both. " +
         "Once that console has dialed in, execute_remote_command works as after connect_remote_console. One remote console at a time; disconnect_remote_console stops accepting.")]
     public static Task<string> AcceptRemoteConsole(
         RemoteConsoleClient client,

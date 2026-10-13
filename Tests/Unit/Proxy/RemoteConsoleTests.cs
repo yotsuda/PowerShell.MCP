@@ -216,7 +216,9 @@ public class RemoteConsoleTests
             Assert.True(client.IsAccepting);
 
             RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, RemoteConsoleClient.FormatCode(client.AcceptCode!).ToLowerInvariant());
-            await WaitUntilAsync(() => client.IsConnected);
+            // The proxy counts the session from sending its ack, the console
+            // from reading it: wait for both.
+            await WaitUntilAsync(() => client.IsConnected && RemoteConsoleDialer.IsConnected);
             Assert.True(client.IsConnected);
             Assert.True(RemoteConsoleDialer.IsConnected);
             Assert.Equal(Environment.ProcessId, client.RemotePid);
@@ -277,6 +279,32 @@ public class RemoteConsoleTests
         {
             RemoteConsoleListener.Stop("test", fromConsoleThread: true);
         }
+    }
+
+    [Fact]
+    public void Bootstrap_IsAsciiPowerShellThatParses_AndCarriesNoPairingCode()
+    {
+        var script = RemoteBootstrap.BootstrapTemplate;
+        // Windows PowerShell 5.1 reads a BOM-less file in the ANSI code page.
+        Assert.All(script, c => Assert.True(c < 128, $"non-ASCII character U+{(int)c:X4}"));
+        System.Management.Automation.Language.Parser.ParseInput(script, out _, out var errors);
+        Assert.Empty(errors);
+        // The file is served over plain HTTP: the code travels on the pasted line.
+        Assert.Contains("[Parameter(Mandatory = $true)][string]$Code", script);
+        foreach (var placeholder in new[] { "__MODULE_VERSION__", "__MODULE_HASH__", "__MODULE_DLL_HASH__", "__PWSH_VERSION__", "__PWSH_HASH__" })
+            Assert.Contains(placeholder, script);
+    }
+
+    [Fact]
+    public async Task PrefixedStream_ReplaysThePeekedByte_ThenReadsOn()
+    {
+        using var inner = new MemoryStream("ET /x"u8.ToArray());
+        using var stream = new PrefixedStream("G"u8.ToArray(), inner);
+        var buffer = new byte[16];
+        var total = 0;
+        int n;
+        while ((n = await stream.ReadAsync(buffer.AsMemory(total))) > 0) total += n;
+        Assert.Equal("GET /x", System.Text.Encoding.ASCII.GetString(buffer, 0, total));
     }
 
     [Theory]

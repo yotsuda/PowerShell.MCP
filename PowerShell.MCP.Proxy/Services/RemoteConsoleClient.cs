@@ -68,6 +68,9 @@ public sealed class RemoteConsoleClient : IDisposable
     private int _acceptFailures;
     private string? _acceptStopped;
     private string? _peer;
+    // What a bare machine fetches over HTTP on the accept port; null when
+    // this proxy cannot find its module folder.
+    private volatile RemoteBootstrap? _bootstrap;
     private TaskCompletionSource<bool> _sessionReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public bool IsConnected => _ssl != null;
@@ -425,6 +428,12 @@ public sealed class RemoteConsoleClient : IDisposable
                 throw new InvalidOperationException($"Already connected to {Target}. Call disconnect_remote_console first.");
             if (_acceptListener != null) return AcceptInstructions();
 
+            // What a bare machine needs, served on the same port. Prepared
+            // before binding: it may ask GitHub for the latest PowerShell.
+            RemoteBootstrap? bootstrap = null;
+            try { bootstrap = await RemoteBootstrap.PrepareAsync(ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { Console.Error.WriteLine($"[WARN] Bootstrap not prepared: {ex.Message}"); }
+
             var code = NewPairingCode();
             var salt = RandomNumberGenerator.GetBytes(16);
             var key = DeriveKey(code, salt, KeyIterations);
@@ -454,6 +463,7 @@ public sealed class RemoteConsoleClient : IDisposable
                 _acceptFailures = 0;
                 _acceptStopped = null;
                 _peer = null;
+                _bootstrap = bootstrap;
                 if (_sessionReady.Task.IsCompleted)
                     _sessionReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 token = _acceptCts.Token;
@@ -471,13 +481,30 @@ public sealed class RemoteConsoleClient : IDisposable
 
     private string AcceptInstructions()
     {
+        var host = Dns.GetHostName();
+        var code = FormatCode(_acceptCode ?? "");
         var addresses = LocalAddresses();
-        var where = addresses.Count > 0 ? $" (if that name does not resolve there, use an IP address of this machine: {string.Join(", ", addresses)})" : "";
-        return $"Waiting for a remote console to dial in on TCP port {_acceptPort} of this machine. " +
-               "On the remote machine, in PowerShell 7 with PowerShell.MCP imported, the user runs:\n" +
-               $"  Enable-MCPRemoteControl -ConnectTo {Dns.GetHostName()}:{_acceptPort} -Code {FormatCode(_acceptCode ?? "")}\n" +
-               $"{where}. Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall: on Windows a dialog asks once whether to allow PowerShell.MCP.Proxy.exe (private networks is enough); if it was dismissed, tell the user to allow it or add a rule. " +
-               $"Accepting stops after {MaxAcceptFailures} failed pairing attempts. Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.";
+        var where = addresses.Count > 0 ? $"If the name {host} does not resolve on the remote machine, replace it with an IP address of this machine: {string.Join(", ", addresses)}.\n" : "";
+        var text = new StringBuilder();
+        text.Append($"Waiting for a remote console to dial in on TCP port {_acceptPort} of this machine.\n\n");
+        if (_bootstrap != null)
+        {
+            text.Append("Give the user this ONE line to paste into Windows PowerShell on the remote machine (open it as Administrator if admin work is needed there). " +
+                        "Nothing needs to be installed beforehand: it fetches PowerShell.MCP " + _bootstrap.ModuleVersion +
+                        (_bootstrap.PwshVersion != null ? $" and, unless PowerShell 7.4+ is already there, a portable PowerShell {_bootstrap.PwshVersion}" : " (PowerShell 7.4+ must already be installed there: this server could not get a portable one)") +
+                        " from this machine, checks their hashes, and opens a PowerShell 7 window that dials in:\n\n");
+            text.Append(_bootstrap.OneLiner(host, _acceptPort, code)).Append("\n\n");
+            text.Append("Or, where PowerShell 7 and PowerShell.MCP " + _bootstrap.ModuleVersion + " are already installed, in PowerShell 7:\n");
+        }
+        else
+        {
+            text.Append("On the remote machine, in PowerShell 7 with PowerShell.MCP (the same version as here) imported, the user runs:\n");
+        }
+        text.Append($"  Enable-MCPRemoteControl -ConnectTo {host}:{_acceptPort} -Code {code}\n\n");
+        text.Append(where);
+        text.Append($"Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall: on Windows a dialog asks once whether to allow PowerShell.MCP.Proxy.exe (private networks is enough); if it was dismissed, tell the user to allow it or add a rule. ");
+        text.Append($"Accepting stops after {MaxAcceptFailures} failed pairing attempts. Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.");
+        return text.ToString();
     }
 
     private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)
@@ -496,11 +523,44 @@ public sealed class RemoteConsoleClient : IDisposable
                 if (ct.IsCancellationRequested) return;
                 continue;
             }
-            _ = Task.Run(() => ServeDialedConsoleAsync(client, ct), CancellationToken.None);
+            _ = Task.Run(() => ServeIncomingAsync(client, ct), CancellationToken.None);
         }
     }
 
-    private async Task ServeDialedConsoleAsync(TcpClient client, CancellationToken ct)
+    /// <summary>
+    /// One port, two protocols: a TLS ClientHello starts with 0x16, an HTTP
+    /// request with a method name. The first byte decides, and is handed on.
+    /// </summary>
+    private async Task ServeIncomingAsync(TcpClient client, CancellationToken ct)
+    {
+        var first = new byte[1];
+        int n;
+        try
+        {
+            using var waiting = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            waiting.CancelAfter(AcceptHandshakeTimeout);
+            n = await client.GetStream().ReadAsync(first, waiting.Token);
+        }
+        catch
+        {
+            client.Dispose();
+            return;
+        }
+        if (n == 0) { client.Dispose(); return; }
+        var stream = new PrefixedStream(first, client.GetStream());
+        if (first[0] is (byte)'G' or (byte)'H')
+        {
+            var bootstrap = _bootstrap;
+            using (client)
+            {
+                if (bootstrap != null) await bootstrap.ServeHttpAsync(stream, ct);
+            }
+            return;
+        }
+        await ServeDialedConsoleAsync(client, stream, ct);
+    }
+
+    private async Task ServeDialedConsoleAsync(TcpClient client, Stream stream, CancellationToken ct)
     {
         X509Certificate2? certificate;
         byte[] key, salt;
@@ -514,7 +574,7 @@ public sealed class RemoteConsoleClient : IDisposable
 
         var peer = DescribePeer((client.Client.RemoteEndPoint as IPEndPoint)?.Address);
         client.NoDelay = true;
-        var ssl = new SslStream(client.GetStream(), leaveInnerStreamOpen: false);
+        var ssl = new SslStream(stream, leaveInnerStreamOpen: false);
         (bool ok, bool countsAsFailure, int pid, string? version) result;
         try
         {

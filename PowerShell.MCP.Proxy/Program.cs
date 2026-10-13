@@ -25,9 +25,9 @@ namespace PowerShell.MCP.Proxy
         internal const string ServerInstructions =
 @"PowerShell.MCP: persistent PowerShell 7 consoles the user can see and share. Use execute_command for shell work here.
 
-It can also drive a console on ANOTHER machine (a VM, a server, a colleague's PC; elevated if that console is), with the user there watching. When the user wants something done on another machine, offer this. Setup on that machine, in PowerShell 7: Install-Module PowerShell.MCP (same version as here), Import-Module PowerShell.MCP, then either
-- Enable-MCPRemoteControl: it listens on TCP 42777 and prints a pairing code with its host/IPs. The user gives you host and code; call connect_remote_console. Needs inbound 42777 open there.
-- or, if that machine cannot accept inbound connections (NAT, cloud NSG, locked firewall): call accept_remote_console here first; it returns an `Enable-MCPRemoteControl -ConnectTo ... -Code ...` line for the user to run there.
+It can also drive a console on ANOTHER machine (a VM, a server, a colleague's PC; elevated if that console is), with the user there watching. When the user wants something done on another machine, offer this. Two ways:
+- Usually simplest, and the only way when that machine has nothing installed or cannot accept inbound connections (NAT, cloud NSG): call accept_remote_console here. It returns ONE line for the user to paste into Windows PowerShell on that machine (as Administrator for admin work); it fetches PowerShell 7 and PowerShell.MCP from this machine as needed and dials in. Inbound on this machine must be allowed (Windows asks once).
+- If PowerShell 7 and PowerShell.MCP (same version as here) are installed there: the user runs Enable-MCPRemoteControl in PowerShell 7, which prints a pairing code and host/IPs; call connect_remote_console with them. Needs inbound TCP 42777 open there.
 Then use execute_remote_command / wait_for_remote_completion / cancel_remote_command; disconnect_remote_console ends it. Intended for a LAN or VPN, not the open Internet.";
 
         public static async Task Main(string[] args)
