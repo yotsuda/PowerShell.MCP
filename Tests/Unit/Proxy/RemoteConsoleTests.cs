@@ -200,6 +200,17 @@ public class RemoteConsoleTests
     }
 
     [Theory]
+    [InlineData("::ffff:192.168.0.10", "192.168.0.10")]  // IPv4 peer on the dual-stack socket
+    [InlineData("192.168.0.10", "192.168.0.10")]
+    [InlineData("::1", "localhost")]                      // an SSH tunnel or a proxy on the same machine
+    [InlineData("127.0.0.1", "localhost")]
+    [InlineData("fe80::1", "fe80::1")]
+    public void DescribeRemote_ReadsAsAPersonWould(string address, string expected)
+    {
+        Assert.Equal(expected, RemoteConsoleListener.DescribeRemote(IPAddress.Parse(address)));
+    }
+
+    [Theory]
     [InlineData("build-pc", "build-pc", RemoteConsoleClient.DefaultPort)]
     [InlineData("10.0.0.5:5000", "10.0.0.5", 5000)]
     [InlineData("[fe80::1]", "fe80::1", RemoteConsoleClient.DefaultPort)]

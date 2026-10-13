@@ -165,6 +165,19 @@ public static class RemoteConsoleListener
         return true;
     }
 
+    /// <summary>
+    /// The peer address as a person reads it. The listener's socket is
+    /// dual-stack, so an IPv4 peer arrives as an IPv4-mapped IPv6 address
+    /// (::ffff:192.168.0.10) and is unmapped; a loopback peer — an SSH
+    /// tunnel or a proxy on this machine — is "localhost" rather than ::1.
+    /// </summary>
+    internal static string DescribeRemote(IPAddress? address)
+    {
+        if (address == null) return "unknown";
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        return IPAddress.IsLoopback(address) ? "localhost" : address.ToString();
+    }
+
     public static string FormatCode(string code) =>
         code.Length == CodeLength ? $"{code[..4]}-{code[4..]}" : code;
 
@@ -234,7 +247,7 @@ public static class RemoteConsoleListener
 
     private static async Task ServeClientAsync(TcpClient client, CancellationToken ct)
     {
-        var remote = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
+        var remote = DescribeRemote((client.Client.RemoteEndPoint as IPEndPoint)?.Address);
         X509Certificate2? certificate;
         byte[] key, salt;
         lock (_lock)
@@ -297,7 +310,7 @@ public static class RemoteConsoleListener
                 return;
             }
 
-            Notify($"Remote MCP server connected from {remote}.", "Green");
+            Notify($"Remote MCP server connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green");
             SetTitle($"PowerShell.MCP [remote control: connected from {remote}]");
 
             NamedPipeServer.IsRemoteRequest.Value = true;
