@@ -476,7 +476,7 @@ public sealed class RemoteConsoleClient : IDisposable
         return $"Waiting for a remote console to dial in on TCP port {_acceptPort} of this machine. " +
                "On the remote machine, in PowerShell 7 with PowerShell.MCP imported, the user runs:\n" +
                $"  Enable-MCPRemoteControl -ConnectTo {Dns.GetHostName()}:{_acceptPort} -Code {FormatCode(_acceptCode ?? "")}\n" +
-               $"{where}. Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall. " +
+               $"{where}. Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall: on Windows a dialog asks once whether to allow PowerShell.MCP.Proxy.exe (private networks is enough); if it was dismissed, tell the user to allow it or add a rule. " +
                $"Accepting stops after {MaxAcceptFailures} failed pairing attempts. Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.";
     }
 
