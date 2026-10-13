@@ -419,7 +419,7 @@ public sealed class RemoteConsoleClient : IDisposable
     /// the pairing code, and returns what the user must run on the remote
     /// machine. Called again while waiting, it repeats the instructions.
     /// </summary>
-    public async Task<string> AcceptAsync(int port, CancellationToken ct)
+    public async Task<string> AcceptAsync(int port, string install, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
@@ -431,8 +431,8 @@ public sealed class RemoteConsoleClient : IDisposable
             // What a bare machine needs, served on the same port. Prepared
             // before binding: it may ask GitHub for the latest PowerShell.
             RemoteBootstrap? bootstrap = null;
-            try { bootstrap = await RemoteBootstrap.PrepareAsync(ct); }
-            catch (Exception ex) when (ex is not OperationCanceledException) { Console.Error.WriteLine($"[WARN] Bootstrap not prepared: {ex.Message}"); }
+            try { bootstrap = await RemoteBootstrap.PrepareAsync(install, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException and not ArgumentException) { Console.Error.WriteLine($"[WARN] Bootstrap not prepared: {ex.Message}"); }
 
             var code = NewPairingCode();
             var salt = RandomNumberGenerator.GetBytes(16);
@@ -494,13 +494,18 @@ public sealed class RemoteConsoleClient : IDisposable
                         (_bootstrap.PwshVersion != null ? $" and, unless PowerShell 7.4+ is already there, a portable PowerShell {_bootstrap.PwshVersion}" : " (PowerShell 7.4+ must already be installed there: this server could not get a portable one)") +
                         " from this machine, checks their hashes, and opens a PowerShell 7 window that dials in:\n\n");
             text.Append(_bootstrap.OneLiner(host, _acceptPort, code)).Append("\n\n");
+            text.Append(_bootstrap.DescribeInstall()).Append(" PowerShell 7.4+ and PowerShell.MCP " + _bootstrap.ModuleVersion +
+                        " already there (the same build) are used as they are; another PowerShell.MCP version is left untouched and not loaded.\n\n");
             text.Append("Or, where PowerShell 7 and PowerShell.MCP " + _bootstrap.ModuleVersion + " are already installed, in PowerShell 7:\n");
         }
         else
         {
             text.Append("On the remote machine, in PowerShell 7 with PowerShell.MCP (the same version as here) imported, the user runs:\n");
         }
-        text.Append($"  Enable-MCPRemoteControl -ConnectTo {host}:{_acceptPort} -Code {code}\n\n");
+        // -RequiredVersion: with another version installed beside it, loading
+        // by name alone may pick that one, which this proxy would refuse.
+        var version = _bootstrap?.ModuleVersion ?? Program.ProxyVersion.TrimEnd('0').TrimEnd('.');
+        text.Append($"  Import-Module PowerShell.MCP -RequiredVersion {version}; Enable-MCPRemoteControl -ConnectTo {host}:{_acceptPort} -Code {code}\n\n");
         text.Append(where);
         text.Append($"Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall: on Windows a dialog asks once whether to allow PowerShell.MCP.Proxy.exe (private networks is enough); if it was dismissed, tell the user to allow it or add a rule. ");
         text.Append($"Accepting stops after {MaxAcceptFailures} failed pairing attempts. Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.");

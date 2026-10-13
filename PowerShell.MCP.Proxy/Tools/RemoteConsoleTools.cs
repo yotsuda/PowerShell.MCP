@@ -44,8 +44,14 @@ public class RemoteConsoleTools
         RemoteConsoleClient client,
         [Description("TCP port to accept on. Default 0 picks a free port, reported in the result. Inbound on this machine's firewall must allow it.")]
         int port = 0,
+        [Description("What may be installed on the remote machine if PowerShell 7 or PowerShell.MCP is missing there. ASK THE USER before choosing anything but 'none', and say where it goes: " +
+                     "'none' (default) installs nothing: missing pieces are unpacked into %LOCALAPPDATA%\\PowerShell.MCP-remote, reused next time, removed by deleting that folder. " +
+                     "'user' (no admin): PowerShell 7 into %LOCALAPPDATA%\\Programs\\PowerShell\\7 and onto the user's PATH; PowerShell.MCP into the user's modules folder. " +
+                     "'machine' (Windows PowerShell must be opened as Administrator): PowerShell 7 by its MSI into Program Files; PowerShell.MCP for all users. " +
+                     "Already-installed pieces of the same build are always reused; another PowerShell.MCP version there is never touched.")]
+        string install = "none",
         CancellationToken cancellationToken = default)
-        => client.AcceptAsync(port, cancellationToken);
+        => client.AcceptAsync(port, install, cancellationToken);
 
     [McpServerTool(Name = "disconnect_remote_console"), Description(
         "Disconnect from the remote console (and stop accepting one). A listening console keeps listening, so connect_remote_console with the same code resumes; a dialing console gives up.")]

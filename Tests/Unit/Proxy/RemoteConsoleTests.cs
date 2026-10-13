@@ -211,7 +211,7 @@ public class RemoteConsoleTests
         using var client = new RemoteConsoleClient();
         try
         {
-            var instructions = await client.AcceptAsync(0, CancellationToken.None);
+            var instructions = await client.AcceptAsync(0, "none", CancellationToken.None);
             Assert.Contains("Enable-MCPRemoteControl -ConnectTo", instructions);
             Assert.True(client.IsAccepting);
 
@@ -243,7 +243,7 @@ public class RemoteConsoleTests
         using var client = new RemoteConsoleClient();
         try
         {
-            await client.AcceptAsync(0, CancellationToken.None);
+            await client.AcceptAsync(0, "none", CancellationToken.None);
             var wrong = client.AcceptCode![0] == 'A' ? "B" + client.AcceptCode[1..] : "A" + client.AcceptCode[1..];
             for (var i = 0; i < 5; i++)
             {
@@ -291,7 +291,7 @@ public class RemoteConsoleTests
         Assert.Empty(errors);
         // The file is served over plain HTTP: the code travels on the pasted line.
         Assert.Contains("[Parameter(Mandatory = $true)][string]$Code", script);
-        foreach (var placeholder in new[] { "__MODULE_VERSION__", "__MODULE_HASH__", "__MODULE_DLL_HASH__", "__PWSH_VERSION__", "__PWSH_HASH__" })
+        foreach (var placeholder in new[] { "__INSTALL__", "__MODULE_VERSION__", "__MODULE_DLL_HASH__", "__MODULE_ZIP_HASH__", "__MODULE_NUPKG_HASH__", "__PWSH_VERSION__", "__PWSH_ZIP_HASH__", "__PWSH_MSI_HASH__" })
             Assert.Contains(placeholder, script);
     }
 
