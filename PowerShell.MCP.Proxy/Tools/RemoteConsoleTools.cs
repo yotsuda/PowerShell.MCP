@@ -20,10 +20,11 @@ public class RemoteConsoleTools
     private const string ResponseSeparator = "\n\n";
 
     [McpServerTool(Name = "connect_remote_console"), Description(
-        "Connect to a PowerShell console on ANOTHER machine, where the user ran Import-Module PowerShell.MCP and Enable-MCPRemoteControl. " +
-        "The user gives you the host (name or IP, optionally host:port; the default port is 42777) and the pairing code shown in that console. " +
-        "One remote console at a time; the connection persists until disconnect_remote_console. " +
-        "After connecting, run commands there with execute_remote_command. The local execute_command is unaffected.")]
+        "Connect to a PowerShell console on ANOTHER machine that is listening for you. Setup the user does on that machine, in PowerShell 7 " +
+        "(an elevated one if admin work is needed): Install-Module PowerShell.MCP (the same version as here), Import-Module PowerShell.MCP, Enable-MCPRemoteControl. " +
+        "That prints a pairing code and the machine's host name and IP addresses; inbound TCP 42777 must be open there (it prints the New-NetFirewallRule line). " +
+        "The user gives you host (name or IP, optionally host:port) and code. If that machine cannot accept inbound connections (NAT, cloud NSG), use accept_remote_console instead. " +
+        "One remote console at a time; the connection persists until disconnect_remote_console. Then run commands there with execute_remote_command; the local execute_command is unaffected.")]
     public static Task<string> ConnectRemoteConsole(
         RemoteConsoleClient client,
         [Description("Host name or IP address of the remote machine, optionally with :port (default 42777).")]
@@ -35,7 +36,8 @@ public class RemoteConsoleTools
 
     [McpServerTool(Name = "accept_remote_console"), Description(
         "Let a console on ANOTHER machine dial in to this MCP server — for a machine behind NAT, a cloud NSG or a firewall that cannot be opened; only an outbound connection is needed there. " +
-        "Binds a port on this machine, makes a pairing code, and returns the exact `Enable-MCPRemoteControl -ConnectTo <host:port> -Code <code>` line for the user to run on the remote console. " +
+        "Binds a port on this machine, makes a pairing code, and returns the exact `Enable-MCPRemoteControl -ConnectTo <host:port> -Code <code>` line for the user to run on the remote console, " +
+        "in PowerShell 7 after Install-Module PowerShell.MCP (the same version as here) and Import-Module PowerShell.MCP. Relay that line to the user. " +
         "Once that console has dialed in, execute_remote_command works as after connect_remote_console. One remote console at a time; disconnect_remote_console stops accepting.")]
     public static Task<string> AcceptRemoteConsole(
         RemoteConsoleClient client,
