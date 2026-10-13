@@ -155,7 +155,7 @@ public static class RemoteConsoleListener
         cts?.Dispose();
         if (!fromConsoleThread)
         {
-            Notify($"Remote listener stopped: {reason}.", "Yellow");
+            Notify($"Remote control ended: {reason}.", "Yellow");
             SetTitle($"#{Environment.ProcessId} ____");
         }
         else
@@ -314,7 +314,7 @@ public static class RemoteConsoleListener
                 return;
             }
 
-            Notify($"Remote MCP server connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green");
+            Notify($"Remote AI session connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green");
             SetTitle($"PowerShell.MCP [remote control: connected from {remote}]");
 
             NamedPipeServer.IsRemoteRequest.Value = true;
@@ -345,7 +345,7 @@ public static class RemoteConsoleListener
                 }
                 if (stillListening)
                 {
-                    Notify($"Remote MCP server at {remote} disconnected. Listening again on port {Port}.", "DarkGray");
+                    Notify($"Remote AI session disconnected. Waiting for next connection on port {Port}.", "Yellow");
                     SetTitle($"PowerShell.MCP [remote control: listening :{Port}]");
                 }
             }

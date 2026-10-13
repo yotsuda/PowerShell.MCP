@@ -126,7 +126,7 @@ public static class RemoteConsoleDialer
                 lock (_lock) _connected = true;
                 backoff = TimeSpan.FromSeconds(2);
                 announcedWaiting = false;
-                RemoteConsoleListener.Notify($"Remote MCP server at {host}:{port} is now controlling this console.", "Green");
+                RemoteConsoleListener.Notify($"Remote AI session connected ({host}:{port}).", "Green");
                 RemoteConsoleListener.SetTitle($"PowerShell.MCP [remote control: connected to {host}:{port}]");
 
                 NamedPipeServer.IsRemoteRequest.Value = true;
@@ -152,7 +152,7 @@ public static class RemoteConsoleDialer
                     lock (_lock) _connected = false;
                 }
                 if (ct.IsCancellationRequested) return;
-                RemoteConsoleListener.Notify($"Connection to {host}:{port} dropped; redialing.", "DarkGray");
+                RemoteConsoleListener.Notify($"Remote AI session disconnected. Redialing {host}:{port}.", "Yellow");
                 RemoteConsoleListener.SetTitle($"PowerShell.MCP [remote control: connecting to {host}:{port}]");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

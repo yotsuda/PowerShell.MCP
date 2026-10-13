@@ -152,6 +152,28 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             }
 
             # ===== Human-presence sampling + idle standby auto-reap =====
+            # Remote control notices and title. The listener's and dialer's
+            # threads cannot write to the host; they queue, and every tick
+            # applies them (a lock and a check: cheap at 100ms). Same shape as
+            # the local "AI session connected/disconnected" notices: end the
+            # prompt line, then a blank line and the notice — each notice its
+            # own, so a connect and a quick disconnect read as two events —
+            # then a blank line and the prompt again.
+            try {
+                $mcpRemoteTitle = [PowerShell.MCP.Services.RemoteConsoleListener]::TakePendingTitle()
+                if ($mcpRemoteTitle) { try { $Host.UI.RawUI.WindowTitle = $mcpRemoteTitle } catch {} }
+                $mcpRemoteNotices = @([PowerShell.MCP.Services.RemoteConsoleListener]::TakeNotices())
+                if ($mcpRemoteNotices.Count -gt 0) {
+                    [Console]::WriteLine()
+                    foreach ($mcpNotice in $mcpRemoteNotices) {
+                        [Console]::WriteLine()
+                        Write-Host $mcpNotice.Item1 -ForegroundColor $mcpNotice.Item2
+                    }
+                    [Console]::WriteLine()
+                    try { $global:McpEngineRenderingPrompt = $true; try { $p = & { prompt } } finally { $global:McpEngineRenderingPrompt = $false }; [Console]::Write(($p -join '').TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
+                }
+            } catch {}
+
             # Close an OWNED standby console that neither the AI nor the user has
             # used for a while, keeping only the most-recently-active one alive.
             # Every decision is local — a shared per-session marker directory is
@@ -247,20 +269,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     if ($mcpOutdated) {
                         [Console]::WriteLine()
                         Write-Host "⊘ MCP servers will not use this console: $mcpOutdated. Start a new console for the current build; this one keeps the DLL it loaded." -ForegroundColor Yellow
-                        try {
-                            $p = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $((Get-Location).Path)> " }
-                            [Console]::Write(($p -join ''))
-                        } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
-                    }
-
-                    # The remote listener's threads cannot write to the host;
-                    # they queue, and this tick — the prompt is idle — applies.
-                    $mcpRemoteTitle = try { [PowerShell.MCP.Services.RemoteConsoleListener]::TakePendingTitle() } catch { $null }
-                    if ($mcpRemoteTitle) { try { $Host.UI.RawUI.WindowTitle = $mcpRemoteTitle } catch {} }
-                    $mcpRemoteNotices = @(try { [PowerShell.MCP.Services.RemoteConsoleListener]::TakeNotices() } catch { @() })
-                    if ($mcpRemoteNotices.Count -gt 0) {
-                        [Console]::WriteLine()
-                        foreach ($mcpNotice in $mcpRemoteNotices) { Write-Host $mcpNotice.Item1 -ForegroundColor $mcpNotice.Item2 }
                         try {
                             $p = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $((Get-Location).Path)> " }
                             [Console]::Write(($p -join ''))
