@@ -302,6 +302,10 @@ public class RemoteConsoleTests
         Assert.Empty(errors);
         // The file is served over plain HTTP: the code travels on the pasted line.
         Assert.Contains("[Parameter(Mandatory = $true)][string]$Code", script);
+        // Pasted into PowerShell 7, remote control starts in that window; the
+        // module must outlive the script block it was imported from.
+        Assert.Contains("Import-Module $psd1 -Global", script);
+        Assert.Contains("Enable-MCPRemoteControl -ConnectTo $target -Code $Code", script);
         foreach (var placeholder in new[] { "__INSTALL__", "__MODULE_VERSION__", "__MODULE_DLL_HASH__", "__MODULE_ZIP_HASH__", "__MODULE_NUPKG_HASH__", "__PWSH_VERSION__", "__PWSH_ZIP_HASH__", "__PWSH_MSI_HASH__" })
             Assert.Contains(placeholder, script);
     }

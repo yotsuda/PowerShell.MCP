@@ -7,8 +7,8 @@ namespace PowerShell.MCP.Proxy.Services;
 
 /// <summary>
 /// What a bare Windows machine needs to dial in, handed out by the proxy over
-/// plain HTTP on the accept port: a bootstrap script for Windows PowerShell
-/// 5.1, the PowerShell.MCP module, and PowerShell 7.
+/// plain HTTP on the accept port: a bootstrap script that runs in PowerShell 7
+/// or Windows PowerShell 5.1, the PowerShell.MCP module, and PowerShell 7.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -129,10 +129,16 @@ public sealed class RemoteBootstrap
         };
     }
 
-    /// <summary>The line the user pastes into Windows PowerShell on the remote machine.</summary>
+    /// <summary>
+    /// The line the user pastes on the remote machine, into PowerShell 7 or
+    /// Windows PowerShell alike. The script runs in that session as a script
+    /// block (not a script file, so the execution policy does not apply), which
+    /// lets PowerShell 7 start remote control in the very window it was pasted
+    /// into.
+    /// </summary>
     public string OneLiner(string host, int port, string code) =>
         $"$u='http://{host}:{port}';$f=\"$env:TEMP\\psmcp-bootstrap.ps1\";iwr \"$u/bootstrap.ps1\" -OutFile $f -UseBasicParsing;" +
-        $"if((Get-FileHash $f).Hash -eq '{ScriptHash}'){{powershell -NoProfile -ExecutionPolicy Bypass -File $f $u {code}}}else{{'bootstrap.ps1 did not match its hash; not run.'}}";
+        $"if((Get-FileHash $f).Hash -eq '{ScriptHash}'){{& ([scriptblock]::Create([IO.File]::ReadAllText($f))) $u {code}}}else{{'bootstrap.ps1 did not match its hash; not run.'}}";
 
     /// <summary>What this bootstrap will do with the install choice, for the AI to tell the user.</summary>
     public string DescribeInstall()
@@ -145,7 +151,7 @@ public sealed class RemoteBootstrap
         return InstallScope switch
         {
             "user" => $"install = user (no admin needed): if missing, {pwsh} goes to %LOCALAPPDATA%\\Programs\\PowerShell\\7 and onto the user's PATH, and {module} into the user's PowerShell modules folder, {source}.",
-            "machine" => $"install = machine (Windows PowerShell must be opened as Administrator): if missing, {pwsh} is installed with its MSI into Program Files (on PATH, updated by Microsoft Update), and {module} into Program Files\\PowerShell\\Modules for all users, {source}.",
+            "machine" => $"install = machine (PowerShell must be opened as Administrator): if missing, {pwsh} is installed with its MSI into Program Files (on PATH, updated by Microsoft Update), and {module} into Program Files\\PowerShell\\Modules for all users, {source}.",
             _ => $"install = none: nothing is installed. Missing pieces ({pwsh}, {module}) are unpacked into %LOCALAPPDATA%\\PowerShell.MCP-remote, reused next time, and removed by deleting that folder.",
         };
     }
@@ -434,15 +440,18 @@ public sealed class RemoteBootstrap
         if (!headOnly) await input.CopyToAsync(stream, ct);
     }
 
-    // ----- the bootstrap: ASCII only, runs in Windows PowerShell 5.1 -----
+    // ----- the bootstrap: ASCII only, runs in Windows PowerShell 5.1 or PowerShell 7 -----
 
     internal const string BootstrapTemplate = """
         # PowerShell.MCP remote console bootstrap, handed out by accept_remote_console.
-        # Runs in Windows PowerShell 5.1 (or PowerShell 7). Uses PowerShell 7.4+ and
-        # PowerShell.MCP where they are already installed (the same build); otherwise
-        # fetches them from the MCP server that served this file, checks them against
-        # the hashes below, and installs or unpacks them as the user chose ($Install),
-        # then opens a PowerShell 7 window that dials the MCP server.
+        # Runs in PowerShell 7 or Windows PowerShell 5.1, as a script block in the
+        # session it was pasted into. Uses PowerShell 7.4+ and PowerShell.MCP where
+        # they are already installed (the same build); otherwise fetches them from the
+        # MCP server that served this file, checks them against the hashes below, and
+        # installs or unpacks them as the user chose ($Install). Then, in PowerShell
+        # 7.4+, remote control starts in this very window (elevated if it is); in
+        # Windows PowerShell, or when another PowerShell.MCP build is already loaded
+        # here, a new PowerShell 7 window opens and dials the MCP server.
         #   none    : nothing installed; unpacked under %LOCALAPPDATA%\PowerShell.MCP-remote
         #   user    : PowerShell 7 in %LOCALAPPDATA%\Programs\PowerShell\7 (+ user PATH),
         #             PowerShell.MCP for this user
@@ -470,9 +479,18 @@ public sealed class RemoteBootstrap
         $userPwshDir = Join-Path $env:LOCALAPPDATA 'Programs\PowerShell\7'
         $machinePwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
 
+        # Everything this prints goes through Say: a blank line before the first
+        # line and after the last, like the module's own remote control notices.
+        # (A hashtable, since this runs as a script block: no script scope.)
+        $said = @{ Any = $false }
+        function Say([string]$Text, [string]$Color) {
+            if (-not $said.Any) { Write-Host ''; $said.Any = $true }
+            if ($Color) { Write-Host $Text -ForegroundColor $Color } else { Write-Host $Text }
+        }
+
         function Get-Verified([string]$Name, [string]$Hash, [string]$What) {
             $file = Join-Path $root ("download-" + $Name)
-            Write-Host "Fetching $What from the MCP server ..."
+            Say "Fetching $What from the MCP server ..."
             Invoke-WebRequest "$Base/$Name" -OutFile $file -UseBasicParsing
             if ((Get-FileHash $file -Algorithm SHA256).Hash -ne $Hash) {
                 Remove-Item $file -Force
@@ -542,15 +560,32 @@ public sealed class RemoteBootstrap
             return $null
         }
 
-        # A blank line before and after everything this prints, like the
-        # module's own remote control notices.
-        Write-Host ''
         try {
-            $elevated =([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-            $psd1 = Find-Module
-            $pwsh = Find-Pwsh
+            $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+            # In PowerShell 7.4+ remote control starts in this window, so a
+            # console the user opened as Administrator is the one the AI drives.
+            # Not when another PowerShell.MCP build is already loaded here
+            # (Remove-Module does not unload a DLL, and a process cannot load a
+            # second build of it): then a new window, as from Windows PowerShell.
+            $here = (-not $Portable) -and ($PSVersionTable.PSVersion.Major * 100 + $PSVersionTable.PSVersion.Minor -ge 704)
+            $loadedPsd1 = $null
+            if ($here) {
+                $loaded = [AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GetName().Name -eq 'PowerShell.MCP' } | Select-Object -First 1
+                if ($loaded) {
+                    $loadedHash = try { (Get-FileHash $loaded.Location -Algorithm SHA256).Hash } catch { '' }
+                    if ($loadedHash -eq $ModuleDllHash) { $loadedPsd1 = Join-Path (Split-Path $loaded.Location) 'PowerShell.MCP.psd1' }
+                    else {
+                        Say "Another PowerShell.MCP build is already loaded in this window (from $(Split-Path $loaded.Location)), and a process cannot load two; remote control runs in a new window instead."
+                        $here = $false
+                    }
+                }
+            }
+
+            $psd1 = if ($loadedPsd1) { $loadedPsd1 } else { Find-Module }
+            $pwsh = if ($here) { (Get-Process -Id $PID).Path } else { Find-Pwsh }
             if ($Install -eq 'machine' -and -not $elevated -and (-not $psd1 -or -not $pwsh)) {
-                throw 'Installing for all users needs Windows PowerShell opened as Administrator. Open it that way and paste the same line again.'
+                throw 'Installing for all users needs PowerShell opened as Administrator. Open it that way and paste the same line again.'
             }
 
             # PowerShell 7
@@ -559,7 +594,7 @@ public sealed class RemoteBootstrap
                     $msi = Get-Verified 'pwsh.msi' $PwshMsiHash "PowerShell $PwshVersion installer"
                     $msiPath = [IO.Path]::ChangeExtension($msi, '.msi')
                     Move-Item $msi $msiPath -Force
-                    Write-Host "Installing PowerShell $PwshVersion for all users ..."
+                    Say "Installing PowerShell $PwshVersion for all users ..."
                     $p = Start-Process msiexec.exe -ArgumentList '/i', ('"' + $msiPath + '"'), '/qn', 'ADD_PATH=1', 'USE_MU=1', 'ENABLE_MU=1', 'REGISTER_MANIFEST=1' -Wait -PassThru
                     Remove-Item $msiPath -Force
                     if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "The PowerShell installer failed (exit code $($p.ExitCode))." }
@@ -572,7 +607,7 @@ public sealed class RemoteBootstrap
                         if (($userPath -split ';') -notcontains $userPwshDir) {
                             [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $userPwshDir).TrimStart(';'), 'User')
                         }
-                        Write-Host "Installed PowerShell $PwshVersion for this user in $userPwshDir (added to your PATH)."
+                        Say "Installed PowerShell $PwshVersion for this user in $userPwshDir (added to your PATH)."
                         $pwsh = Join-Path $userPwshDir 'pwsh.exe'
                     }
                     else {
@@ -601,7 +636,7 @@ public sealed class RemoteBootstrap
                     $flat = Join-Path $modulesRoot 'PowerShell.MCP\PowerShell.MCP.psd1'
                     if (Test-Path $flat) {
                         $flatVersion = try { (Import-PowerShellDataFile $flat).ModuleVersion } catch { 'another version' }
-                        Write-Host "PowerShell.MCP $flatVersion is installed in $(Split-Path $flat) without a version folder, so $ModuleVersion cannot be installed beside it; it is left as is, and $ModuleVersion is used from $root for this session."
+                        Say "PowerShell.MCP $flatVersion is installed in $(Split-Path $flat) without a version folder, so $ModuleVersion cannot be installed beside it; it is left as is, and $ModuleVersion is used from $root for this session."
                         $mode = 'none'
                     }
                 }
@@ -623,13 +658,13 @@ public sealed class RemoteBootstrap
                     if ($LASTEXITCODE -ne 0) { throw 'Install-PSResource failed.' }
                     Remove-Item $repo -Recurse -Force
                     $psd1 = Join-Path $modulesRoot "PowerShell.MCP\$ModuleVersion\PowerShell.MCP.psd1"
-                    Write-Host "Installed PowerShell.MCP $ModuleVersion from PowerShell Gallery ($scope)$(if ($others) { ' beside the existing ' + ($others -join ', ') + ', which is left as is' })."
+                    Say "Installed PowerShell.MCP $ModuleVersion from PowerShell Gallery ($scope)$(if ($others) { ' beside the existing ' + ($others -join ', ') + ', which is left as is' })."
                 }
                 elseif ($mode -ne 'none') {
                     $dir = Join-Path $modulesRoot "PowerShell.MCP\$ModuleVersion"
                     Expand-Verified 'module.zip' $ModuleZipHash $dir "PowerShell.MCP $ModuleVersion"
                     $psd1 = Join-Path $dir 'PowerShell.MCP.psd1'
-                    Write-Host "Installed PowerShell.MCP $ModuleVersion in $dir (copied from the MCP server's machine)$(if ($others) { ' beside the existing ' + ($others -join ', ') + ', which is left as is' })."
+                    Say "Installed PowerShell.MCP $ModuleVersion in $dir (copied from the MCP server's machine)$(if ($others) { ' beside the existing ' + ($others -join ', ') + ', which is left as is' })."
                 }
                 else {
                     $dir = Join-Path $root "PowerShell.MCP-$ModuleVersion"
@@ -639,19 +674,32 @@ public sealed class RemoteBootstrap
             }
 
             $target = $Base -replace '^https?://', ''
-            $command = "Import-Module '" + $psd1.Replace("'", "''") + "'; Enable-MCPRemoteControl -ConnectTo '" + $target + "' -Code '" + $Code.Replace("'", "''") + "'"
-            # -EncodedCommand: Windows PowerShell drops embedded double quotes
-            # when it passes arguments to a native program. -NoProfile: a
-            # profile that imports another PowerShell.MCP version would load a
-            # second copy of the module's DLL into this window.
-            $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
-            $process = Start-Process -FilePath $pwsh -ArgumentList '-NoExit', '-NoProfile', '-EncodedCommand', $encoded -PassThru
-            Write-Host "Opened a PowerShell 7 window (PID $($process.Id)) for the MCP server at $target. This window can be closed." -ForegroundColor Green
+            if ($here) {
+                # -Global: imported from a script block, the module would
+                # otherwise be visible only until this block returns.
+                if (-not (Get-Module PowerShell.MCP)) { Import-Module $psd1 -Global }
+                # Its notice starts and ends with a blank line, which also
+                # closes what this printed before it.
+                $said.Any = $false
+                Enable-MCPRemoteControl -ConnectTo $target -Code $Code
+            }
+            else {
+                $command = "Import-Module '" + $psd1.Replace("'", "''") + "'; Enable-MCPRemoteControl -ConnectTo '" + $target + "' -Code '" + $Code.Replace("'", "''") + "'"
+                # -EncodedCommand: Windows PowerShell drops embedded double quotes
+                # when it passes arguments to a native program. -NoProfile: a
+                # profile that imports another PowerShell.MCP version would load a
+                # second copy of the module's DLL into this window.
+                $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+                $process = Start-Process -FilePath $pwsh -ArgumentList '-NoExit', '-NoProfile', '-EncodedCommand', $encoded -PassThru
+                # The outcome stands apart from the progress lines, as a failure does.
+                if ($said.Any) { Write-Host '' }
+                Say "Opened a PowerShell 7 window (PID $($process.Id)) for the MCP server at $target. This window can be closed." Green
+            }
         }
         catch {
-            Write-Host ''
-            Write-Host "PowerShell.MCP bootstrap failed: $($_.Exception.Message)" -ForegroundColor Red
+            if ($said.Any) { Write-Host '' }
+            Say "PowerShell.MCP bootstrap failed: $($_.Exception.Message)" Red
         }
-        Write-Host ''
+        if ($said.Any) { Write-Host '' }
         """;
 }

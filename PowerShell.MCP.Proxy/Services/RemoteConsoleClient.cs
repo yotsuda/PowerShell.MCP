@@ -509,10 +509,11 @@ public sealed class RemoteConsoleClient : IDisposable
         text.Append($"Waiting for a remote console to dial in on TCP port {_acceptPort} of this machine.\n\n");
         if (_bootstrap != null)
         {
-            text.Append("Give the user this ONE line to paste into Windows PowerShell on the remote machine (open it as Administrator if admin work is needed there). " +
+            text.Append("Give the user this ONE line to paste on the remote machine: into PowerShell 7 if it is installed there, otherwise into Windows PowerShell " +
+                        "(opened as Administrator if admin work is needed there). " +
                         "Nothing needs to be installed beforehand: it fetches PowerShell.MCP " + _bootstrap.ModuleVersion +
                         (_bootstrap.PwshVersion != null ? $" and, unless PowerShell 7.4+ is already there, a portable PowerShell {_bootstrap.PwshVersion}" : " (PowerShell 7.4+ must already be installed there: this server could not get a portable one)") +
-                        " from this machine, checks their hashes, and opens a PowerShell 7 window that dials in:\n\n");
+                        " from this machine and checks their hashes. Pasted into PowerShell 7, remote control starts in that same window; pasted into Windows PowerShell, it opens a PowerShell 7 window that dials in:\n\n");
             text.Append(_bootstrap.OneLiner(host, _acceptPort, code)).Append("\n\n");
             text.Append(_bootstrap.DescribeInstall()).Append(" PowerShell 7.4+ and PowerShell.MCP " + _bootstrap.ModuleVersion +
                         " already there (the same build) are used as they are; another PowerShell.MCP version is left untouched and not loaded.\n\n");

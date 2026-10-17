@@ -36,8 +36,8 @@ public class RemoteConsoleTools
 
     [McpServerTool(Name = "accept_remote_console"), Description(
         "Let a console on ANOTHER machine dial in to this MCP server — for a machine behind NAT, a cloud NSG or a firewall that cannot be opened; only an outbound connection is needed there. " +
-        "Binds a port on this machine, makes a pairing code, and returns ONE line for the user to paste into Windows PowerShell on the remote machine: it needs nothing installed there, " +
-        "fetches PowerShell.MCP (this build) and, if PowerShell 7.4+ is missing, a portable PowerShell 7 from this machine, checks their hashes, and opens a PowerShell 7 window that dials in. " +
+        "Binds a port on this machine, makes a pairing code, and returns ONE line for the user to paste on the remote machine, into PowerShell 7 if it is there, else into Windows PowerShell: it needs nothing installed there, " +
+        "fetches PowerShell.MCP (this build) and, if PowerShell 7.4+ is missing, a portable PowerShell 7 from this machine, and checks their hashes. In PowerShell 7 remote control starts in that same window (elevated if it is); from Windows PowerShell it opens a PowerShell 7 window that dials in. " +
         "Relay that line to the user exactly (they may swap the host for an IP the answer lists). The answer also gives the shorter Enable-MCPRemoteControl line for machines that already have both. " +
         "Once that console has dialed in, execute_remote_command works as after connect_remote_console. One remote console at a time; disconnect_remote_console stops accepting.")]
     public static Task<string> AcceptRemoteConsole(
@@ -47,7 +47,7 @@ public class RemoteConsoleTools
         [Description("What may be installed on the remote machine if PowerShell 7 or PowerShell.MCP is missing there. ASK THE USER before choosing anything but 'none', and say where it goes: " +
                      "'none' (default) installs nothing: missing pieces are unpacked into %LOCALAPPDATA%\\PowerShell.MCP-remote, reused next time, removed by deleting that folder. " +
                      "'user' (no admin): PowerShell 7 into %LOCALAPPDATA%\\Programs\\PowerShell\\7 and onto the user's PATH; PowerShell.MCP into the user's modules folder. " +
-                     "'machine' (Windows PowerShell must be opened as Administrator): PowerShell 7 by its MSI into Program Files; PowerShell.MCP for all users. " +
+                     "'machine' (PowerShell must be opened as Administrator): PowerShell 7 by its MSI into Program Files; PowerShell.MCP for all users. " +
                      "Already-installed pieces of the same build are always reused; another PowerShell.MCP version there is never touched.")]
         string install = "none",
         CancellationToken cancellationToken = default)
