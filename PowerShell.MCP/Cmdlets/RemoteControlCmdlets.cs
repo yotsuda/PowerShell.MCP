@@ -181,12 +181,17 @@ public class DisableMCPRemoteControlCmdlet : PSCmdlet
 {
     protected override void ProcessRecord()
     {
+        var stopped = RemoteConsoleDialer.IsActive ? $"Stopped dialing {RemoteConsoleDialer.Target}" : "Remote listener stopped";
+        // Blank lines around what it prints, like the other remote control notices.
+        Host.UI.WriteLine();
         if (!RemoteControl.Stop("Disable-MCPRemoteControl", fromConsoleThread: true))
         {
             WriteWarning("This console is not under remote control.");
+            Host.UI.WriteLine();
             return;
         }
         try { Host.UI.RawUI.WindowTitle = $"#{Environment.ProcessId} ____"; } catch { }
-        Host.UI.WriteLine(ConsoleColor.DarkGray, Host.UI.RawUI.BackgroundColor, "Remote listener stopped. This console is a plain MCP console again.");
+        Host.UI.WriteLine(ConsoleColor.DarkGray, Host.UI.RawUI.BackgroundColor, $"{stopped}. This console is a plain MCP console again.");
+        Host.UI.WriteLine();
     }
 }

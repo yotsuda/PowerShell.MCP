@@ -16,6 +16,17 @@ namespace PowerShell.MCP.Tests.Unit.Proxy;
 /// </summary>
 public class RemoteConsoleTests
 {
+    [Fact]
+    public void Goodbye_FromTheProxy_IsRecognizedByTheDialer_AndPingIsNot()
+    {
+        // disconnect_remote_console sends this so a dialed-in console stops instead of redialing.
+        var goodbye = JsonSerializer.Serialize(new GoodbyeParams(), RemoteConsoleJsonContext.Default.GoodbyeParams);
+        var ping = JsonSerializer.Serialize(new PingParams(), RemoteConsoleJsonContext.Default.PingParams);
+        Assert.True(RemoteConsoleDialer.IsGoodbye(goodbye));
+        Assert.False(RemoteConsoleDialer.IsGoodbye(ping));
+        Assert.False(RemoteConsoleDialer.IsGoodbye("not json"));
+    }
+
     private static int FreePort()
     {
         var probe = new TcpListener(IPAddress.Loopback, 0);

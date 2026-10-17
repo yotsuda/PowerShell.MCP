@@ -32,7 +32,10 @@ public static class OutputTruncationHelper
     /// Returns the output unchanged if within threshold, otherwise saves the full content
     /// to a temp file and returns a head+tail preview with the file path.
     /// </summary>
-    public static string TruncateIfNeeded(string output, string? outputDirectory = null)
+    /// <param name="remote">The console runs under remote control: the file is saved on THIS machine,
+    /// which is the remote one for the AI, so point it at execute_remote_command, not execute_command
+    /// (which would look for the path on the AI's own machine).</param>
+    public static string TruncateIfNeeded(string output, string? outputDirectory = null, bool remote = false)
     {
         if (output.Length <= TruncationThreshold)
             return output;
@@ -64,8 +67,10 @@ public static class OutputTruncationHelper
 
         if (filePath != null)
         {
-            sb.AppendLine($"Output too large ({output.Length} characters). Full output saved to: {filePath}");
-            sb.AppendLine($"Use execute_command('Show-TextFiles \"{filePath}\" -Contains \"search term\"') or -Pattern \"regex\" to search the output.");
+            var where = remote ? " on the remote machine" : "";
+            var tool = remote ? "execute_remote_command" : "execute_command";
+            sb.AppendLine($"Output too large ({output.Length} characters). Full output saved{where} to: {filePath}");
+            sb.AppendLine($"Use {tool}('Show-TextFiles \"{filePath}\" -Contains \"search term\"') or -Pattern \"regex\" to search the output.");
         }
         else
         {

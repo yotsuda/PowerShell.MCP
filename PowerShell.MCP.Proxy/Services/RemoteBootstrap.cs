@@ -542,8 +542,11 @@ public sealed class RemoteBootstrap
             return $null
         }
 
+        # A blank line before and after everything this prints, like the
+        # module's own remote control notices.
+        Write-Host ''
         try {
-            $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            $elevated =([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
             $psd1 = Find-Module
             $pwsh = Find-Pwsh
             if ($Install -eq 'machine' -and -not $elevated -and (-not $psd1 -or -not $pwsh)) {
@@ -649,5 +652,6 @@ public sealed class RemoteBootstrap
             Write-Host ''
             Write-Host "PowerShell.MCP bootstrap failed: $($_.Exception.Message)" -ForegroundColor Red
         }
+        Write-Host ''
         """;
 }

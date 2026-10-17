@@ -22,6 +22,21 @@ public class OutputTruncationHelperTests : IDisposable
     #region TruncateIfNeeded Tests
 
     [Fact]
+    public void TruncateIfNeeded_Remote_PointsAtTheRemoteMachine()
+    {
+        // Under remote control the file is saved on the console's machine, which is the
+        // remote one for the AI: execute_command would look for it on the AI's own machine.
+        var output = new string('A', OutputTruncationHelper.TruncationThreshold + 1);
+        var local = OutputTruncationHelper.TruncateIfNeeded(output, _testDir);
+        var remote = OutputTruncationHelper.TruncateIfNeeded(output, _testDir, remote: true);
+
+        Assert.Contains("Use execute_command(", local);
+        Assert.Contains("Full output saved on the remote machine to:", remote);
+        Assert.Contains("Use execute_remote_command(", remote);
+        Assert.DoesNotContain("Use execute_command(", remote);
+    }
+
+    [Fact]
     public void TruncateIfNeeded_Empty_ReturnsEmpty()
     {
         var result = OutputTruncationHelper.TruncateIfNeeded("", _testDir);

@@ -13,6 +13,17 @@ public class PingParams : PowerShellMcpParams
     public override string Name { get; } = "ping";
 }
 
+/// <summary>
+/// Sent to a console that dialed in when disconnect_remote_console ends the
+/// session on purpose, so it stops instead of redialing as after a drop. Not
+/// answered; the proxy closes the connection right after.
+/// </summary>
+public class GoodbyeParams : PowerShellMcpParams
+{
+    [JsonPropertyName("name")]
+    public override string Name { get; } = "goodbye";
+}
+
 /// <summary>First frame of the remote handshake, sent by the proxy after TLS.</summary>
 public class RemoteHello
 {
@@ -74,6 +85,7 @@ public class RemoteAck
 // The proxy is published trimmed, so every type that is serialized needs a
 // source-generated context. Responses are read with JsonDocument.
 [JsonSerializable(typeof(PingParams))]
+[JsonSerializable(typeof(GoodbyeParams))]
 [JsonSerializable(typeof(RemoteHello))]
 [JsonSerializable(typeof(RemoteProof))]
 [JsonSerializable(typeof(RemoteChallenge))]

@@ -157,14 +157,34 @@ public sealed class RemoteConsoleClient : IDisposable
             var wasAccepting = _acceptListener != null || _peer != null;
             _pingTimer?.Dispose();
             _pingTimer = null;
+            // A console that dialed in redials whenever the connection drops. Tell it this
+            // end is deliberate so it stops; without this it keeps calling the closed port.
+            // (A listening console is meant to keep listening, so it gets no goodbye.)
+            var connected = wasAccepting && _ssl != null;
+            var peer = _peer; // kept after a drop; cleared below
+            var saidGoodbye = false;
+            if (connected)
+            {
+                try
+                {
+                    using var timeout = new CancellationTokenSource(PingTimeout);
+                    await WriteFrameAsync(_ssl!, JsonSerializer.Serialize(new GoodbyeParams(), RemoteConsoleJsonContext.Default.GoodbyeParams), timeout.Token);
+                    saidGoodbye = true;
+                }
+                catch { /* already gone: it keeps redialing until Disable-MCPRemoteControl */ }
+            }
             CloseLocked();
             StopAcceptingLocked();
             _host = null;
             _key = null;
             _salt = null;
-            return wasAccepting
-                ? $"Disconnected from {target} and no longer accepting. The console there will give up redialing; the user ends it with Disable-MCPRemoteControl, or accept_remote_console again starts over with a new code."
-                : $"Disconnected from {target}. The remote console keeps listening; connect_remote_console with the same code resumes.";
+            if (!wasAccepting)
+                return $"Disconnected from {target}. The remote console keeps listening; connect_remote_console with the same code resumes.";
+            if (saidGoodbye)
+                return $"Disconnected from {target} and no longer accepting. The console there was told the session ended and stops remote control by itself. accept_remote_console again starts over with a new code.";
+            return peer != null
+                ? $"Stopped accepting. The console that had dialed in from {peer} was no longer connected, so it could not be told; if it was not ended there with Disable-MCPRemoteControl, it keeps redialing until the user runs that. accept_remote_console again starts over with a new code."
+                : $"Stopped accepting; no console had dialed in. If the one-line command was already run, that console keeps dialing until the user runs Disable-MCPRemoteControl there. accept_remote_console again starts over with a new code.";
         }
         finally
         {

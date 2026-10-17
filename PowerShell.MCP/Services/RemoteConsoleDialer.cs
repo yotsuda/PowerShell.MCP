@@ -59,6 +59,17 @@ public static class RemoteConsoleDialer
         }
     }
 
+    /// <summary>True for the proxy's "goodbye" frame (sent by disconnect_remote_console).</summary>
+    internal static bool IsGoodbye(string request)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(request);
+            return doc.RootElement.TryGetProperty("name", out var name) && name.GetString() == "goodbye";
+        }
+        catch (JsonException) { return false; }
+    }
+
     /// <summary>Stops dialing and drops the session. False when not active.</summary>
     public static bool Stop(string reason, bool fromConsoleThread)
     {
@@ -139,6 +150,14 @@ public static class RemoteConsoleDialer
                         {
                             idle.CancelAfter(IdleTimeout);
                             request = await NamedPipeServer.ReceiveMessageAsync(ssl, idle.Token);
+                        }
+                        // disconnect_remote_console ended the session on purpose: stop for good
+                        // instead of redialing as after a drop.
+                        if (IsGoodbye(request))
+                        {
+                            lock (_lock) _connected = false;
+                            Stop("the AI ended the session (disconnect_remote_console)", fromConsoleThread: false);
+                            return;
                         }
                         await NamedPipeServer.HandleRequestAsync(ssl, request, ct);
                     }
