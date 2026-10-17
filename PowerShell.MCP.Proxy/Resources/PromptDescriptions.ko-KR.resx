@@ -58,32 +58,8 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
-    <value>콘텐츠 분석</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
-    <value>작업 절차서 생성</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
-    <value>작업 절차서 실행</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
-    <value>프로그래밍 및 CLI 학습</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>실습을 통해 프로그래밍 언어 또는 CLI 도구를 대화식으로 학습</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>외국어 받아쓰기 훈련</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
-    <value>콘텐츠를 분석하고 실행 가능한 권장 사항과 함께 통찰력 제공</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>프로젝트 워크플로우 관리를 위한 work_procedure.md 및 work_progress.md 생성</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>work_procedure.md를 따르고 work_progress.md에서 진행 상황 추적</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>PowerShell 오디오 및 AI 평가를 사용한 빠른 외국어 받아쓰기 훈련 시작</value>
@@ -94,26 +70,8 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>PowerShell.Map을 사용하여 테마별 대화형 지도 표시 (카페 투어, 한식당 지도, 역사 유적지 등)</value>
   </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
-    <value>AI를 위한 HTML 생성 가이드라인</value>
-  </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>적절한 형식, 차트 및 스타일이 포함된 고품질 HTML 보고서를 AI가 생성하기 위한 가이드라인 제공</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
-    <value>콘텐츠 경로 및 분석 요구사항 (예: &apos;C:\logs 오류 분석&apos;)</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
-    <value>작업 설명 및 디렉토리 (예: &apos;C:\project 문서 번역&apos;)</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
-    <value>작업 디렉토리 경로 (예: &apos;C:\project&apos;)</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
     <value>언어 및 옵션 (예: &apos;영어 빠름 짧음 비즈니스&apos;)</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
-    <value>기술 및 학습 분야 (예: &apos;Python async/await&apos;)</value>
   </data>
   <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
     <value>지도 테마 및 지역 (예: &apos;삼국시대 고대 왕국의 수도를 연대순으로 탐방&apos;)</value>

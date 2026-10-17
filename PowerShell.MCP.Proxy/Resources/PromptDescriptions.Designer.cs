@@ -61,87 +61,6 @@ namespace PowerShell.MCP.Proxy.Resources {
         }
         
         /// <summary>
-        ///   Analyze content and provide insights with actionable recommendations に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_AnalyzeContent_Description {
-            get {
-                return ResourceManager.GetString("Prompt_AnalyzeContent_Description", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Analyze Content に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_AnalyzeContent_Name {
-            get {
-                return ResourceManager.GetString("Prompt_AnalyzeContent_Name", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Content path and analysis requirements (e.g., &apos;C:\logs analyze errors&apos;) に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_AnalyzeContent_Param_Request {
-            get {
-                return ResourceManager.GetString("Prompt_AnalyzeContent_Param_Request", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Create work_procedure.md and work_progress.md for project workflow management に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_CreateWorkProcedure_Description {
-            get {
-                return ResourceManager.GetString("Prompt_CreateWorkProcedure_Description", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Create Work Procedure に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_CreateWorkProcedure_Name {
-            get {
-                return ResourceManager.GetString("Prompt_CreateWorkProcedure_Name", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Work description and directory (e.g., &apos;translate docs in C:\project&apos;) に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_CreateWorkProcedure_Param_Request {
-            get {
-                return ResourceManager.GetString("Prompt_CreateWorkProcedure_Param_Request", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Follow work_procedure.md and track progress in work_progress.md に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_ExecuteWorkProcedure_Description {
-            get {
-                return ResourceManager.GetString("Prompt_ExecuteWorkProcedure_Description", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Execute Work Procedure に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_ExecuteWorkProcedure_Name {
-            get {
-                return ResourceManager.GetString("Prompt_ExecuteWorkProcedure_Name", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Working directory path (e.g., &apos;C:\project&apos;) に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_ExecuteWorkProcedure_Param_Request {
-            get {
-                return ResourceManager.GetString("Prompt_ExecuteWorkProcedure_Param_Request", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Start fast-paced foreign language dictation training with PowerShell audio and AI evaluation に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Prompt_ForeignLanguageDictationTraining_Description {
@@ -165,51 +84,6 @@ namespace PowerShell.MCP.Proxy.Resources {
         internal static string Prompt_ForeignLanguageDictationTraining_Param_Request {
             get {
                 return ResourceManager.GetString("Prompt_ForeignLanguageDictationTraining_Param_Request", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Provide guidelines for AI to generate high-quality HTML reports with proper formatting, charts, and styling に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_HtmlGenerationGuidelinesForAi_Description {
-            get {
-                return ResourceManager.GetString("Prompt_HtmlGenerationGuidelinesForAi_Description", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   HTML Generation Guidelines for AI に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_HtmlGenerationGuidelinesForAi_Name {
-            get {
-                return ResourceManager.GetString("Prompt_HtmlGenerationGuidelinesForAi_Name", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Learn programming languages or CLI tools interactively with hands-on practice に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_LearnProgrammingAndCli_Description {
-            get {
-                return ResourceManager.GetString("Prompt_LearnProgrammingAndCli_Description", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Learn Programming &amp; CLI に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_LearnProgrammingAndCli_Name {
-            get {
-                return ResourceManager.GetString("Prompt_LearnProgrammingAndCli_Name", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Technology and focus area (e.g., &apos;Python async/await&apos;) に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Prompt_LearnProgrammingAndCli_Param_Request {
-            get {
-                return ResourceManager.GetString("Prompt_LearnProgrammingAndCli_Param_Request", resourceCulture);
             }
         }
         

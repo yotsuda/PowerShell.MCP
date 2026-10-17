@@ -58,32 +58,8 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
-    <value>Analisi contenuto</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
-    <value>Crea documento di procedura di lavoro</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
-    <value>Esegui documento di procedura di lavoro</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
-    <value>Imparare Programmazione e CLI</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Imparare linguaggi di programmazione o strumenti CLI in modo interattivo con pratica</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Allenamento di dettatura in lingua straniera</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
-    <value>Analizza contenuto e fornisce approfondimenti con raccomandazioni attuabili</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>Creare work_procedure.md e work_progress.md per la gestione del flusso di lavoro del progetto</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>Seguire work_procedure.md e tracciare i progressi in work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>Inizia allenamento rapido di dettatura in lingua straniera con audio PowerShell e valutazione AI</value>
@@ -94,26 +70,8 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>Mostra mappe tematiche con PowerShell.Map (pizzerie, gelaterie, piazze storiche, ecc.)</value>
   </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
-    <value>Linee guida per la generazione HTML per l'IA</value>
-  </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>Fornire linee guida per la generazione di report HTML di alta qualità con formattazione, grafici e stile appropriati da parte dell'IA</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
-    <value>Percorso contenuto e requisiti di analisi (es: &apos;C:\logs analizza errori&apos;)</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
-    <value>Descrizione lavoro e directory (es: &apos;traduci docs in C:\project&apos;)</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
-    <value>Percorso directory di lavoro (es: &apos;C:\project&apos;)</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
     <value>Lingua e opzioni (es: &apos;inglese veloce breve business&apos;)</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
-    <value>Tecnologia e area di apprendimento (es: &apos;Python async/await&apos;)</value>
   </data>
   <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
     <value>Tema mappa e zona (es: &apos;Città del Rinascimento in ordine cronologico&apos;)</value>

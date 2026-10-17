@@ -12,7 +12,7 @@ public static class PromptTemplateLoader
     /// <summary>
     /// Loads a prompt template from embedded resources and replaces the {{request}} placeholder.
     /// </summary>
-    /// <param name="templateName">Template file name (e.g., "learn.md")</param>
+    /// <param name="templateName">Template file name (e.g., "map.md")</param>
     /// <param name="request">The user's request to substitute for {{request}}</param>
     /// <returns>The processed prompt text</returns>
     public static string Load(string templateName, string? request = null)
@@ -25,9 +25,16 @@ public static class PromptTemplateLoader
         using var reader = new StreamReader(stream);
         var template = reader.ReadToEnd();
 
-        if (!string.IsNullOrEmpty(request))
+        if (!string.IsNullOrWhiteSpace(request))
         {
             template = template.Replace("{{request}}", request);
+        }
+        else if (template.Contains("{{request}}"))
+        {
+            // Slash-command clients may invoke the prompt with no arguments; ask instead of failing.
+            template = "NOTE: The target was not specified. Before doing anything else, ask the user what " +
+                       "{{request}} refers to below, then proceed with their answer.\n\n" + template;
+            template = template.Replace("{{request}}", "<the target>");
         }
 
         return template;

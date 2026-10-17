@@ -88,7 +88,9 @@ public static class LocalizedMcpServerBuilderExtensions
                 {
                     Services = null,
                     SerializerOptions = serializerOptions,
-                    Name = localizedName,
+                    // Name stays the ASCII identifier from [McpServerPrompt(Name = ...)]: clients turn it
+                    // into a slash command, so spaces or non-ASCII break it. The localized text is display-only.
+                    Title = localizedName,
                     SchemaCreateOptions = schemaCreateOptions
                 };
 

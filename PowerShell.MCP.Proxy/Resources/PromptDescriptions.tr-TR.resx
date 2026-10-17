@@ -58,32 +58,8 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
-    <value>İçerik analizi</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
-    <value>Çalışma prosedürü belgesi oluştur</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
-    <value>Çalışma prosedürü belgesini yürüt</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
-    <value>Programlama ve CLI Öğrenme</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>Programlama dillerini veya CLI araçlarını uygulamalı olarak etkileşimli şekilde öğren</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>Yabancı dil dikte eğitimi</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
-    <value>İçeriği analiz et ve uygulanabilir önerilerle içgörüler sağla</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>Proje iş akışı yönetimi için work_procedure.md ve work_progress.md oluştur</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>work_procedure.md takip et ve ilerlemeyi work_progress.md içinde izle</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>PowerShell ses ve AI değerlendirmesi ile hızlı yabancı dil dikte eğitimine başla</value>
@@ -94,26 +70,8 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>PowerShell.Map ile tematik haritalar görüntüleyin (çay bahçeleri, kebap salonları, pazarlar vb.)</value>
   </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
-    <value>Yapay Zeka için HTML Oluşturma Kılavuzu</value>
-  </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>Yapay zekanın uygun biçimlendirme, grafikler ve stil ile yüksek kaliteli HTML raporları oluşturması için kılavuz sağla</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
-    <value>İçerik yolu ve analiz gereksinimleri (örn: &apos;C:\logs hataları analiz et&apos;)</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
-    <value>İş açıklaması ve dizin (örn: &apos;C:\project belgelerini çevir&apos;)</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
-    <value>Çalışma dizini yolu (örn: &apos;C:\project&apos;)</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
     <value>Dil ve seçenekler (örn: &apos;İngilizce hızlı kısa iş&apos;)</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
-    <value>Teknoloji ve öğrenme alanı (örn: &apos;Python async/await&apos;)</value>
   </data>
   <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
     <value>Harita teması ve alan (örn: &apos;Antik Likya şehirlerini kronolojik olarak keşfet&apos;)</value>

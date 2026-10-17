@@ -60,38 +60,14 @@
   </resheader>
   <!-- Software Development Prompt -->
   <!-- Analyze Content Prompt -->
-  <data name="Prompt_AnalyzeContent_Name" xml:space="preserve">
-    <value>วิเคราะห์เนื้อหา</value>
-  </data>
   <!-- System Administration Prompt -->
   <!-- Learn Programming Language Prompt -->
   <!-- Create Work Procedure Prompt -->
-  <data name="Prompt_CreateWorkProcedure_Name" xml:space="preserve">
-    <value>สร้างเอกสารขั้นตอนการทำงาน</value>
-  </data>
   <!-- Execute Work Procedure Prompt -->
-  <data name="Prompt_ExecuteWorkProcedure_Name" xml:space="preserve">
-    <value>ดำเนินการตามเอกสารขั้นตอนการทำงาน</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Name" xml:space="preserve">
-    <value>เรียนรู้การเขียนโปรแกรมและ CLI</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Description" xml:space="preserve">
-    <value>เรียนรู้ภาษาโปรแกรมหรือเครื่องมือ CLI แบบโต้ตอบพร้อมการฝึกปฏิบัติ</value>
-  </data>
   <!-- Learn CLI Tools Prompt -->
   <!-- Foreign Language Dictation Training Prompt -->
   <data name="Prompt_ForeignLanguageDictationTraining_Name" xml:space="preserve">
     <value>การฝึกคัดลอกภาษาต่างประเทศ</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Description" xml:space="preserve">
-    <value>วิเคราะห์เนื้อหาและให้ข้อมูลเชิงลึกพร้อมคำแนะนำที่ปฏิบัติได้</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Description" xml:space="preserve">
-    <value>สร้าง work_procedure.md และ work_progress.md สำหรับการจัดการขั้นตอนการทำงานของโครงการ</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Description" xml:space="preserve">
-    <value>ทำตาม work_procedure.md และติดตามความคืบหน้าใน work_progress.md</value>
   </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Description" xml:space="preserve">
     <value>เริ่มการฝึกคัดลอกภาษาต่างประเทศแบบเร่งรัดด้วยเสียง PowerShell และการประเมินโดย AI</value>
@@ -102,26 +78,8 @@
   <data name="Prompt_ShowInteractiveMap_Description" xml:space="preserve">
     <value>แสดงแผนที่เชิงโต้ตอบตามธีมโดยใช้ PowerShell.Map (ตลาดนัด, ร้านอาหาร, วัด, ฯลฯ)</value>
   </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Name" xml:space="preserve">
-    <value>แนวทางการสร้าง HTML สำหรับ AI</value>
-  </data>
-  <data name="Prompt_HtmlGenerationGuidelinesForAi_Description" xml:space="preserve">
-    <value>จัดทำแนวทางสำหรับ AI ในการสร้างรายงาน HTML คุณภาพสูงพร้อมการจัดรูปแบบ แผนภูมิ และสไตล์ที่เหมาะสม</value>
-  </data>
-  <data name="Prompt_AnalyzeContent_Param_Request" xml:space="preserve">
-    <value>เส้นทางเนื้อหาและข้อกำหนดการวิเคราะห์ (เช่น &apos;C:\logs วิเคราะห์ข้อผิดพลาด&apos;)</value>
-  </data>
-  <data name="Prompt_CreateWorkProcedure_Param_Request" xml:space="preserve">
-    <value>คำอธิบายงานและไดเรกทอรี (เช่น &apos;แปลเอกสารใน C:\project&apos;)</value>
-  </data>
-  <data name="Prompt_ExecuteWorkProcedure_Param_Request" xml:space="preserve">
-    <value>เส้นทางไดเรกทอรีทำงาน (เช่น &apos;C:\project&apos;)</value>
-  </data>
   <data name="Prompt_ForeignLanguageDictationTraining_Param_Request" xml:space="preserve">
     <value>ภาษาและตัวเลือก (เช่น &apos;อังกฤษ เร็ว สั้น ธุรกิจ&apos;)</value>
-  </data>
-  <data name="Prompt_LearnProgrammingAndCli_Param_Request" xml:space="preserve">
-    <value>เทคโนโลยีและสาขาการเรียนรู้ (เช่น &apos;Python async/await&apos;)</value>
   </data>
   <data name="Prompt_ShowInteractiveMap_Param_Request" xml:space="preserve">
     <value>ธีมแผนที่และพื้นที่ (เช่น &apos;สำรวจอาณาจักรอยุธยาตามลำดับเวลา&apos;)</value>

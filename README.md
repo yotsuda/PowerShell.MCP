@@ -367,121 +367,27 @@ Experience PowerShell.MCP's capabilities:
 - "Automate Notepad: type text and smoothly move the window in a circle"
 - "How does it feel now that you have a tool like PowerShell.MCP?"
 
-After trying these demos, explore the built-in prompts below or ask AI to explain any command.
+After trying these demos, try the built-in prompts below or ask AI to explain any command.
 
 ## Built-in Prompts
 
-PowerShell.MCP includes 7 specialized prompts accessible from your MCP client's prompts menu. Each prompt is designed for specific tasks and guides AI to provide optimal results.
+PowerShell.MCP includes 2 prompts that teach AI how to use companion modules it does not otherwise know. In Claude Code, run them as slash commands, with what you want as the argument:
 
-<div align="center">
-  <table cellspacing="0" cellpadding="0" border="0" width="100%">
-    <tr>
-      <td align="center" width="45%">
-        <img src="images/builtin-prompt-1.png" alt="Built-in Prompts Menu" style="max-width: 100%; height: auto;"/>
-        <br/>
-        <em>Built-in Prompts Menu</em>
-      </td>
-      <td width="3%"></td>
-      <td align="center" width="45%">
-        <img src="images/builtin-prompt-2.png" alt="Selecting a Prompt" style="max-width: 100%; height: auto;"/>
-        <br/>
-        <em>Selecting a Prompt</em>
-      </td>
-    </tr>
-  </table>
-</div>
+```text
+/pwsh:show_interactive_map hot springs in Kanto
+/pwsh:foreign_language_dictation English, short sentences, normal speed
+```
 
----
-
-### 📋 Create Work Procedure + ⚙️ Execute Work Procedure
-**Best for:** Complex, multi-step tasks you'll perform repeatedly
-
-Work together as a powerful workflow system with automatic file management:
-
-1. **Create Work Procedure** - AI analyzes the task and generates `work_procedure.md` as the reusable procedure and `work_progress.txt` as the execution plan.
-2. **Execute Work Procedure** - AI follows and refines `work_procedure.md` during execution, and tracks and records outcomes in `work_progress.txt`.
-
-**Key benefits:** self-refining procedures, resumable workflows, automatic progress tracking, consistent results
-
-**Example:** "Write Get-Help markdown for multiple cmdlets through execution and verification"
-
-<div align="center">
-  <table cellspacing="0" cellpadding="0" border="0" width="100%">
-    <tr>
-      <td align="center" width="45%">
-        <img src="images/work_procedure.png" alt="AI-generated work_procedure.md" style="max-width: 100%; height: auto;"/>
-        <br/>
-        <em>AI-generated work_procedure.md</em>
-      </td>
-      <td width="3%"></td>
-      <td align="center" width="45%">
-        <img src="images/work_progress.png" alt="AI-generated work_progress.md" style="max-width: 100%; height: auto;"/>
-        <br/>
-        <em>AI-generated work_progress.md</em>
-      </td>
-    </tr>
-  </table>
-</div>
-
----
-
-### 📊 Analyze Content
-**Best for:** Deep analysis of files, folders, or datasets
-
-Generates comprehensive reports with insights and recommendations. Combine with **HTML Generation Guidelines for AI** for visual reports with charts.
-
-**Examples:** "Analyze my project's log files" • "Create a report on this CSV dataset" • "Analyze this HAR file"
-
-<div align="center">
-  <table cellspacing="0" cellpadding="0" border="0" width="100%">
-    <tr>
-      <td align="center" width="45%">
-        <img src="images/cs_analysis-1.png" alt="C# code quality analysis report" style="max-width: 100%; height: auto;"/>
-        <br/>
-        <em>C# code quality analysis report</em>
-      </td>
-      <td width="3%"></td>
-      <td align="center" width="45%">
-        <img src="images/cs_analysis-2.png" alt="C# code quality analysis report (continued)" style="max-width: 100%; height: auto;"/>
-        <br/>
-        <em>C# code quality analysis report (continued)</em>
-      </td>
-    </tr>
-  </table>
-</div>
-
----
-
-### 🎨 HTML Generation Guidelines for AI
-**Best for:** Professional HTML reports with charts and styling
-
-Companion prompt that ensures AI generates high-quality HTML with Chart.js visualization, responsive design, and proper styling. Works with any prompt or task that needs HTML output.
-
-**Examples:** Analyze Content + this = visual reports • Your custom prompt + this = professional HTML • Any data task + this = interactive output
-
-<div align="center">
-  <img src="images/combine_prompts.png" alt="Combined prompts generate visual HTML file" width="400"/>
-  <br/>
-  <em>Combined prompts generate visual HTML file</em>
-</div>
-
----
-
-### 📚 Learn Programming & CLI
-**Best for:** Learning programming languages and command-line tools at any level
-
-Provides personalized learning experiences with clear explanations, practical examples, and hands-on exercises. Specify your learning goals directly without worrying about experience levels.
-
-**Examples:** "Learn Python basics for data analysis" • "Learn Git commands for version control" • "Learn PowerShell scripting"
+The argument is optional; without it, AI asks what you want. Other MCP clients offer them in their prompt list, if the client shows MCP prompts.
 
 ---
 
 ### 🗣️ Foreign Language Dictation Training
 **Best for:** Improving listening skills in foreign languages
 
-Creates dictation exercises with automatic checking.
+Plays sentences aloud from the PowerShell console and checks what you type back. Windows only (uses the built-in speech synthesizer).
 
-**Examples:** "English dictation at beginner level" • "Japanese conversation at the zoo"
+**Examples:** `/pwsh:foreign_language_dictation English dictation at beginner level` • `/pwsh:foreign_language_dictation Japanese conversation at the zoo`
 
 ---
 
@@ -490,7 +396,7 @@ Creates dictation exercises with automatic checking.
 
 Generates interactive HTML maps with markers, descriptions, and optional 3D display using [PowerShell.Map](https://github.com/yotsuda/PowerShell.Map) module.
 
-**Examples:** "Show major Roman battles in chronological order" • "Create a map of hot springs in Japan"
+**Examples:** `/pwsh:show_interactive_map major Roman battles in chronological order` • `/pwsh:show_interactive_map hot springs in Japan`
 
 <div align="center">
   <table cellspacing="0" cellpadding="0" border="0" width="100%">
