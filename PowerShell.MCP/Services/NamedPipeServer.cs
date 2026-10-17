@@ -670,6 +670,23 @@ public class NamedPipeServer : IDisposable
                 return;
             }
 
+            // Under remote control the console belongs to that session. A
+            // remote proxy gets the requests it uses — nothing that runs a
+            // command out of the user's sight (execute_silent), rewrites the
+            // title that tells the user what is going on, or claims the
+            // console. A local client gets only the status probe (which
+            // answers "remote") — not a command, a cancel, or the remote
+            // session's output.
+            if (IsRemoteRequest.Value)
+            {
+                if (name is not ("get_status" or "execute_command" or "cache_output" or "consume_output" or "cancel" or "get_current_location"))
+                    throw new InvalidOperationException($"'{name}' is not available to a remote session.");
+            }
+            else if (name != "get_status" && RemoteControl.IsActive)
+            {
+                throw new InvalidOperationException($"This console is under remote control ({RemoteControl.Describe()}); local requests other than get_status are refused.");
+            }
+
             // Record liveness activity for requests that deliberately target
             // THIS console (run a command, read its location, cancel it). NOT
             // get_status / consume_output — those are the proxy's discovery
@@ -1378,16 +1395,23 @@ Please provide how to update the MCP client configuration to the user.";
     /// </summary>
     private const int MaxMessageLength = 10 * 1024 * 1024; // 10 MB
 
-    internal static async Task<string> ReceiveMessageAsync(Stream pipeServer, CancellationToken cancellationToken)
+    internal static Task<string> ReceiveMessageAsync(Stream pipeServer, CancellationToken cancellationToken) =>
+        ReceiveMessageAsync(pipeServer, cancellationToken, MaxMessageLength);
+
+    /// <summary>
+    /// With a smaller <paramref name="maxLength"/> for a peer that has not
+    /// authenticated yet: the body is allocated before it is read.
+    /// </summary>
+    internal static async Task<string> ReceiveMessageAsync(Stream pipeServer, CancellationToken cancellationToken, int maxLength)
     {
         // Receive message length (4 bytes)
         var lengthBytes = new byte[4];
         await ReadExactAsync(pipeServer, lengthBytes, cancellationToken);
         var messageLength = BitConverter.ToInt32(lengthBytes, 0);
 
-        if (messageLength <= 0 || messageLength > MaxMessageLength)
+        if (messageLength <= 0 || messageLength > maxLength)
         {
-            throw new InvalidOperationException($"Invalid message length: {messageLength} (max {MaxMessageLength})");
+            throw new InvalidOperationException($"Invalid message length: {messageLength} (max {maxLength})");
         }
 
         // Receive message body

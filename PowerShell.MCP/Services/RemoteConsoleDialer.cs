@@ -11,17 +11,18 @@ namespace PowerShell.MCP.Services;
 /// The other way round: this console dials the proxy's machine, for the
 /// usual case where the remote machine sits behind NAT, a cloud NSG or a
 /// firewall nobody wants to open. <c>Enable-MCPRemoteControl -ConnectTo
-/// host:port -Code XXXX-XXXX</c>; the proxy is waiting there with
+/// host:port -Code XXXX-XXXX-XXXX</c>; the proxy is waiting there with
 /// <c>accept_remote_console</c>, which made the code.
 /// </summary>
 /// <remarks>
 /// Same TLS, same proofs, same frames as the listener; only the roles are
 /// swapped. The side that accepted the connection proves first — here the
-/// proxy — so a console that dials a wrong address sends nothing. The
-/// session then runs exactly as a listener's does (NamedPipeServer serves
-/// one frame at a time). A dropped connection is redialed with backoff; a
-/// refused handshake (wrong code, other version, proxy busy) is final and
-/// ends remote control, with the reason printed in the console.
+/// proxy — so a console that dials a wrong address sends nothing. The code
+/// pairs once; the proxy then hands over a resume key, and a dropped
+/// connection is redialed with backoff, proving that key instead. A refused
+/// handshake (wrong code, expired code, another version, proxy busy) is final
+/// and ends remote control, with the reason printed in the console; so does
+/// the proxy's goodbye (disconnect_remote_console).
 /// </remarks>
 public static class RemoteConsoleDialer
 {
@@ -65,7 +66,8 @@ public static class RemoteConsoleDialer
         try
         {
             using var doc = JsonDocument.Parse(request);
-            return doc.RootElement.TryGetProperty("name", out var name) && name.GetString() == "goodbye";
+            return doc.RootElement.ValueKind == JsonValueKind.Object &&
+                   doc.RootElement.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String && name.GetString() == "goodbye";
         }
         catch (JsonException) { return false; }
     }
@@ -83,7 +85,8 @@ public static class RemoteConsoleDialer
             _connected = false;
         }
         try { cts.Cancel(); } catch { }
-        cts.Dispose();
+        // As RemoteConsoleListener.Stop: the remote session's cached output is not for the next user.
+        ExecutionState.ClearCachedOutputs();
         if (!fromConsoleThread)
         {
             RemoteConsoleListener.Notify($"Remote control ended: {reason}.", "Yellow");
@@ -96,6 +99,10 @@ public static class RemoteConsoleDialer
     {
         var backoff = TimeSpan.FromSeconds(2);
         var announcedWaiting = false;
+        // The code pairs once; after that, what a redial proves is the
+        // resume key the proxy handed over.
+        string? pairingCode = code;
+        byte[]? resumeKey = null;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -115,7 +122,7 @@ public static class RemoteConsoleDialer
                     return true;
                 });
 
-                string? refused;
+                (string? refused, byte[]? nextResumeKey) outcome;
                 using (var handshake = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
                     handshake.CancelAfter(HandshakeTimeout);
@@ -124,20 +131,23 @@ public static class RemoteConsoleDialer
                         TargetHost = host,
                         EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                     }, handshake.Token);
-                    refused = await HandshakeAsConnectorAsync(ssl, code, thumbprint!, handshake.Token);
+                    outcome = await HandshakeAsConnectorAsync(ssl, pairingCode, resumeKey, thumbprint!, handshake.Token);
                 }
-                if (refused != null)
+                if (outcome.refused != null)
                 {
-                    // Final: redialing with the same code would only count
-                    // against the proxy's five attempts.
-                    Stop(refused, fromConsoleThread: false);
+                    // Final: redialing would only count against the proxy's
+                    // five attempts, or ask again for what it no longer has.
+                    Stop(outcome.refused, fromConsoleThread: false);
                     return;
                 }
+                var resumed = resumeKey != null;
+                resumeKey = outcome.nextResumeKey;
+                pairingCode = null;
 
                 lock (_lock) _connected = true;
                 backoff = TimeSpan.FromSeconds(2);
                 announcedWaiting = false;
-                RemoteConsoleListener.Notify($"Remote AI session connected ({host}:{port}).", "Green");
+                RemoteConsoleListener.Notify($"Remote AI session {(resumed ? "reconnected" : "connected")} ({host}:{port}).", "Green");
                 RemoteConsoleListener.SetTitle($"PowerShell.MCP [remote control: connected to {host}:{port}]");
 
                 NamedPipeServer.IsRemoteRequest.Value = true;
@@ -180,6 +190,7 @@ public static class RemoteConsoleDialer
             }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested) return;
                 if (!announcedWaiting)
                 {
                     RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying until Disable-MCPRemoteControl.", "DarkGray");
@@ -194,10 +205,11 @@ public static class RemoteConsoleDialer
 
     /// <summary>
     /// The connector's half of the pairing: say hello, check that the proxy
-    /// proves the code before anything is sent, then prove in turn. Returns
-    /// null on success, or the reason the proxy (or this side) refused.
+    /// proves the key before anything is sent, then prove in turn. With a
+    /// resume key it proves that; otherwise the code. Returns the reason the
+    /// proxy (or this side) refused, or the resume key for the next redial.
     /// </summary>
-    private static async Task<string?> HandshakeAsConnectorAsync(SslStream ssl, string code, byte[] thumbprint, CancellationToken ct)
+    private static async Task<(string? refused, byte[]? resumeKey)> HandshakeAsConnectorAsync(SslStream ssl, string? code, byte[]? resumeKey, byte[] thumbprint, CancellationToken ct)
     {
         var clientNonce = RandomNumberGenerator.GetBytes(32);
         await SendJsonAsync(ssl, new
@@ -208,37 +220,61 @@ public static class RemoteConsoleDialer
             module_version = MCPModuleInitializer.ServerVersion,
             pid = Environment.ProcessId,
             client_nonce = Convert.ToBase64String(clientNonce),
+            resume = resumeKey != null,
         }, ct);
 
-        using var challenge = JsonDocument.Parse(await NamedPipeServer.ReceiveMessageAsync(ssl, ct));
+        using var challenge = JsonDocument.Parse(await NamedPipeServer.ReceiveMessageAsync(ssl, ct, RemoteConsoleListener.MaxHandshakeFrame));
         var root = challenge.RootElement;
-        if (root.TryGetProperty("ok", out var ok) && !ok.GetBoolean())
-            return RefusalText(root);
+        if (root.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.False)
+            return (RefusalText(root, resuming: resumeKey != null), null);
 
-        var salt = Convert.FromBase64String(root.GetProperty("salt").GetString() ?? "");
-        var iterations = root.GetProperty("iterations").GetInt32();
-        if (iterations <= 0 || iterations > 2_000_000) return "the other side asked for an unreasonable key derivation; it is not a PowerShell.MCP proxy";
         var serverNonce = Convert.FromBase64String(root.GetProperty("server_nonce").GetString() ?? "");
         var serverProof = Convert.FromBase64String(root.GetProperty("server_proof").GetString() ?? "");
+        byte[] key;
+        if (resumeKey != null)
+        {
+            key = resumeKey;
+        }
+        else
+        {
+            var salt = Convert.FromBase64String(root.GetProperty("salt").GetString() ?? "");
+            var iterations = root.GetProperty("iterations").GetInt32();
+            if (iterations <= 0 || iterations > 2_000_000) return ("the other side asked for an unreasonable key derivation; it is not a PowerShell.MCP proxy", null);
+            key = RemoteConsoleListener.DeriveKey(code!, salt, iterations);
+        }
 
-        var key = RemoteConsoleListener.DeriveKey(code, salt, iterations);
         var expected = RemoteConsoleListener.Proof(key, "srv", clientNonce, serverNonce, thumbprint);
         if (!CryptographicOperations.FixedTimeEquals(expected, serverProof))
-            return "the other side did not prove the pairing code (wrong code, wrong address, or an interceptor); nothing was sent to it";
+            return ("the other side did not prove the pairing code (wrong code, wrong address, or an interceptor); nothing was sent to it", null);
 
         await SendJsonAsync(ssl, new { client_proof = Convert.ToBase64String(RemoteConsoleListener.Proof(key, "cli", clientNonce, serverNonce, thumbprint)) }, ct);
 
-        using var ack = JsonDocument.Parse(await NamedPipeServer.ReceiveMessageAsync(ssl, ct));
-        if (!(ack.RootElement.TryGetProperty("ok", out var ackOk) && ackOk.GetBoolean()))
-            return RefusalText(ack.RootElement);
-        return null;
+        using var ack = JsonDocument.Parse(await NamedPipeServer.ReceiveMessageAsync(ssl, ct, RemoteConsoleListener.MaxHandshakeFrame));
+        if (!(ack.RootElement.TryGetProperty("ok", out var ackOk) && ackOk.ValueKind == JsonValueKind.True))
+            return (RefusalText(ack.RootElement, resuming: resumeKey != null), null);
+        var next = Convert.FromBase64String(ack.RootElement.GetProperty("resume_key").GetString() ?? "");
+        if (next.Length != 32) return ("the proxy sent no usable resume key", null);
+        return (null, next);
     }
 
-    private static string RefusalText(JsonElement root)
+    /// <summary>
+    /// The reason for a refusal, in our own words: until it has proved the
+    /// code, the other side is unauthenticated, so its text is not shown.
+    /// </summary>
+    private static string RefusalText(JsonElement root, bool resuming)
     {
-        if (root.TryGetProperty("message", out var m) && m.GetString() is { Length: > 0 } message) return message.TrimEnd('.');
-        if (root.TryGetProperty("error", out var e)) return $"the proxy refused the connection ({e.GetString()})";
-        return "the proxy refused the connection";
+        var error = root.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
+        return error switch
+        {
+            "version_mismatch" => "the PowerShell.MCP versions on the two machines differ; install the same version on both",
+            "busy" => "the MCP server is already connected to another console",
+            "bad_code" => "the pairing code did not match",
+            "expired" => resuming ? "the MCP server stopped waiting for this console to reconnect" : "the pairing code expired; ask the AI for a new one (accept_remote_console)",
+            "code_used" => "that pairing code was already used; ask the AI for a new one (accept_remote_console)",
+            "resume_unknown" => "the MCP server no longer knows this session; ask the AI for a new code (accept_remote_console)",
+            "protocol" => "the other side does not speak this protocol version",
+            _ => "the MCP server refused the connection",
+        };
     }
 
     private static Task SendJsonAsync(Stream stream, object value, CancellationToken ct) =>

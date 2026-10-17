@@ -38,6 +38,10 @@ public class RemoteHello
 
     [JsonPropertyName("client_nonce")]
     public required string ClientNonce { get; set; }
+
+    /// <summary>True to prove the resume key of an earlier pairing instead of the code.</summary>
+    [JsonPropertyName("resume")]
+    public bool Resume { get; set; }
 }
 
 /// <summary>Third frame: the proxy's proof, sent only after the console proved itself.</summary>
@@ -80,6 +84,11 @@ public class RemoteAck
     [JsonPropertyName("version")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Version { get; set; }
+
+    /// <summary>On success: a fresh random key the console proves when it redials.</summary>
+    [JsonPropertyName("resume_key")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ResumeKey { get; set; }
 }
 
 // The proxy is published trimmed, so every type that is serialized needs a

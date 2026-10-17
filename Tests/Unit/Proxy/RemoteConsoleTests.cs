@@ -200,14 +200,18 @@ public class RemoteConsoleTests
         var nonceS = Enumerable.Range(32, 32).Select(i => (byte)i).ToArray();
         var thumb = Enumerable.Range(64, 32).Select(i => (byte)i).ToArray();
 
-        var moduleKey = RemoteConsoleListener.DeriveKey("7q4k-m2xp", salt);
-        var proxyKey = RemoteConsoleClient.DeriveKey(RemoteConsoleClient.NormalizeCode("7Q4K M2XP"), salt, RemoteConsoleListener.KeyIterations);
+        var moduleKey = RemoteConsoleListener.DeriveKey("7q4k-m2xp-abcd", salt);
+        var proxyKey = RemoteConsoleClient.DeriveKey(RemoteConsoleClient.NormalizeCode("7Q4K M2XP ABCD"), salt, RemoteConsoleListener.KeyIterations);
         Assert.Equal(moduleKey, proxyKey);
         Assert.Equal(RemoteConsoleListener.Proof(moduleKey, "srv", nonceC, nonceS, thumb), RemoteConsoleClient.Proof(proxyKey, "srv", nonceC, nonceS, thumb));
         Assert.NotEqual(RemoteConsoleListener.Proof(moduleKey, "srv", nonceC, nonceS, thumb), RemoteConsoleListener.Proof(moduleKey, "cli", nonceC, nonceS, thumb));
 
-        Assert.Equal("7Q4KM2XP", RemoteConsoleListener.NormalizeCode("7q4k-m2xp"));
-        Assert.Equal("7Q4K-M2XP", RemoteConsoleListener.FormatCode("7Q4KM2XP"));
+        Assert.Equal("7Q4KM2XPABCD", RemoteConsoleListener.NormalizeCode("7q4k-m2xp-abcd"));
+        Assert.Equal("7Q4K-M2XP-ABCD", RemoteConsoleListener.FormatCode("7Q4KM2XPABCD"));
+        Assert.Equal("7Q4K-M2XP-ABCD", RemoteConsoleClient.FormatCode("7Q4KM2XPABCD"));
+        Assert.Equal(12, RemoteConsoleClient.NewPairingCode().Length);
+        Assert.Equal(RemoteConsoleListener.CodeLength, RemoteConsoleListener.NewPairingCode().Length);
+        Assert.Equal(RemoteConsoleListener.ProtocolVersion, RemoteConsoleClient.ProtocolVersion);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, int seconds = 15)
@@ -341,5 +345,215 @@ public class RemoteConsoleTests
     public void ParseTarget_ReadsHostAndPort(string target, string host, int port)
     {
         Assert.Equal((host, port), RemoteConsoleClient.ParseTarget(target));
+    }
+
+    // ----- the code is short-lived; reconnects prove a resume key -----
+
+    [Fact]
+    public async Task Code_PairsOnce_AndAfterADisconnectANewCodeIsShown()
+    {
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        try
+        {
+            using (var first = new RemoteConsoleClient())
+            {
+                await first.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+                Assert.Null(RemoteConsoleListener.CurrentCode); // used up by the pairing
+                await first.DisconnectAsync(CancellationToken.None);
+            }
+            // The goodbye ends the session there; a new code goes up.
+            await WaitUntilAsync(() => RemoteConsoleListener.CurrentCode != null);
+            var next = RemoteConsoleListener.CurrentCode!;
+            Assert.NotEqual(code, next);
+
+            // The old code is now just a wrong code (and counts as one attempt).
+            using var replay = new RemoteConsoleClient();
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => replay.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None));
+            Assert.Contains("did not prove the pairing code", ex.Message);
+
+            using var second = new RemoteConsoleClient();
+            await second.ConnectAsync($"127.0.0.1:{port}", next, CancellationToken.None);
+            Assert.Equal("pong", StatusOf(await second.SendRequestAsync(Ping(), CancellationToken.None)));
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task DroppedConnection_IsReopenedWithTheResumeKey_NotTheCode()
+    {
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        try
+        {
+            using var client = new RemoteConsoleClient();
+            await client.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            client.DropConnection();
+            await WaitUntilAsync(() => !RemoteConsoleListener.IsConnected);
+            Assert.False(RemoteConsoleListener.IsConnected);
+
+            // The code is spent, so only the resume key can have done this.
+            Assert.Equal("pong", StatusOf(await client.SendRequestAsync(Ping(), CancellationToken.None)));
+            Assert.True(RemoteConsoleListener.IsConnected);
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExpiredCode_IsRefused()
+    {
+        var lifetime = RemoteConsoleListener.CodeLifetime;
+        RemoteConsoleListener.CodeLifetime = TimeSpan.FromMilliseconds(200);
+        var port = FreePort();
+        try
+        {
+            var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+            await Task.Delay(600);
+            using var client = new RemoteConsoleClient();
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None));
+            Assert.Contains("expired", ex.Message);
+        }
+        finally
+        {
+            RemoteConsoleListener.CodeLifetime = lifetime;
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task OversizedFrameBeforeAuthentication_IsDropped_AndNotCountedAsAnAttempt()
+    {
+        var port = FreePort();
+        RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        try
+        {
+            for (var i = 0; i < RemoteConsoleListener.MaxFailures + 1; i++)
+            {
+                using var tcp = new TcpClient();
+                await tcp.ConnectAsync(IPAddress.Loopback, port);
+                using var ssl = new System.Net.Security.SslStream(tcp.GetStream(), false, (_, _, _, _) => true);
+                await ssl.AuthenticateAsClientAsync("localhost");
+                // Claims a 1 MB hello: the listener must not allocate it, and closes.
+                await ssl.WriteAsync(BitConverter.GetBytes(1_000_000));
+                await ssl.FlushAsync();
+                var buffer = new byte[16];
+                try
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    Assert.Equal(0, await ssl.ReadAsync(buffer, timeout.Token));
+                }
+                catch (IOException) { }
+            }
+            // Six garbage connections, yet no proof was ever sent: still listening.
+            Assert.True(RemoteConsoleListener.IsListening);
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    private static async Task<string> ServeLocallyAsync(string request)
+    {
+        using var pipe = new MemoryStream();
+        await NamedPipeServer.HandleRequestAsync(pipe, request, CancellationToken.None);
+        pipe.Position = 0;
+        return await NamedPipeServer.ReceiveMessageAsync(pipe, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UnderRemoteControl_LocalRequestsOtherThanStatus_AreRefused()
+    {
+        var port = FreePort();
+        RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        try
+        {
+            foreach (var name in new[] { "execute_command", "execute_silent", "cancel", "consume_output", "set_window_title" })
+                Assert.Contains("under remote control", await ServeLocallyAsync($"{{\"name\":\"{name}\",\"pipeline\":\"1\"}}"));
+            Assert.Equal("remote", StatusOf(await ServeLocallyAsync(GetStatus())));
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task RemoteSession_CannotRunSilentlyOrRetitleTheConsole()
+    {
+        NamedPipeServer.IsRemoteRequest.Value = true;
+        try
+        {
+            foreach (var name in new[] { "execute_silent", "set_window_title", "claim_console" })
+                Assert.Contains("not available to a remote session", await ServeLocallyAsync($"{{\"name\":\"{name}\",\"pipeline\":\"1\",\"title\":\"x\"}}"));
+        }
+        finally
+        {
+            NamedPipeServer.IsRemoteRequest.Value = false;
+        }
+    }
+
+    [Fact]
+    public async Task DialOut_DroppedConnection_IsRedialedWithTheResumeKey()
+    {
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            await client.AcceptAsync(0, "none", CancellationToken.None);
+            RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, client.AcceptCode!);
+            await WaitUntilAsync(() => client.IsConnected && RemoteConsoleDialer.IsConnected);
+            Assert.True(client.IsConnected);
+
+            client.DropConnection();
+            await WaitUntilAsync(() => !RemoteConsoleDialer.IsConnected);
+            // The console redials (2 s backoff) and proves the resume key.
+            await WaitUntilAsync(() => client.IsConnected && RemoteConsoleDialer.IsConnected);
+            Assert.True(client.IsConnected);
+            Assert.Equal("pong", StatusOf(await client.SendRequestAsync(Ping(), CancellationToken.None)));
+        }
+        finally
+        {
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task DialOut_CodePairsOnce_ASecondConsoleWithItIsRefused()
+    {
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            await client.AcceptAsync(0, "none", CancellationToken.None);
+            var code = client.AcceptCode!;
+            RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, code);
+            await WaitUntilAsync(() => client.IsConnected && RemoteConsoleDialer.IsConnected);
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+            client.DropConnection();
+
+            RemoteConsoleListener.TakeNotices();
+            RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, code);
+            await WaitUntilAsync(() => !RemoteConsoleDialer.IsActive);
+            Assert.False(RemoteConsoleDialer.IsActive);
+            Assert.Contains(RemoteConsoleListener.TakeNotices(), n => n.Message.Contains("already used"));
+            Assert.False(client.IsConnected);
+        }
+        finally
+        {
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public void Notices_CarryNoControlCharacters()
+    {
+        // A refusal's text can come from the other side: no escape sequences reach the terminal.
+        Assert.Equal("a [2Jb", RemoteConsoleListener.Printable("a\u001b[2Jb", 100));
+        Assert.Equal("abc…", RemoteConsoleListener.Printable("abcdef", 3));
     }
 }
