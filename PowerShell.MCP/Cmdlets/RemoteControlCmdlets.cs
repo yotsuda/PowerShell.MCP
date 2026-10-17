@@ -130,7 +130,7 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
             return;
         }
 
-        try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate($"PowerShell.MCP [remote control: listening :{Port}]"); } catch { }
+        try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate(RemoteControl.WaitingTitle); } catch { }
 
         var ui = Host.UI;
         var bg = ui.RawUI.BackgroundColor;
@@ -147,7 +147,7 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
             ? $"{Dns.GetHostName()}  —  IP: {string.Join(", ", addresses)}"
             : Dns.GetHostName();
         ui.WriteLine($"  Give the AI on the other machine the host and the code. Host: {hostInfo}");
-        ui.WriteLine("  It connects with connect_remote_console and then runs commands here with execute_remote_command; every prompt shows [REMOTE] meanwhile.");
+        ui.WriteLine("  It connects with connect_remote_console and then runs commands here with execute_remote_command; every prompt starts with [AI from <its address>] meanwhile.");
         ui.WriteLine(ConsoleColor.DarkGray, bg, "  The code works once and expires in 10 minutes; when a session ends a new one is shown, and remote control stops if nobody uses it.");
         ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Remote control also ends after {RemoteConsoleListener.MaxFailures} failed attempts, or with Disable-MCPRemoteControl.");
         if (publicNetworks.Count > 0 && allowFrom == null)
@@ -203,13 +203,13 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
             return;
         }
 
-        try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate($"PowerShell.MCP [remote control: connecting to {host}:{port}]"); } catch { }
+        try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate(RemoteControl.WaitingTitle); } catch { }
 
         var ui = Host.UI;
         var bg = ui.RawUI.BackgroundColor;
         ui.WriteLine();
         ui.WriteLine(ConsoleColor.Cyan, bg, $"  PowerShell.MCP is connecting to the remote MCP server at {host}:{port} (this console, PID {Environment.ProcessId}).");
-        ui.WriteLine("  Once it answers and the pairing code matches, the AI there controls this console; you keep the prompt, see every command, and every prompt shows [REMOTE].");
+        ui.WriteLine("  Once it answers and the pairing code matches, the AI there controls this console; you keep the prompt, see every command, and every prompt starts with [AI from <host>].");
         ui.WriteLine(ConsoleColor.DarkGray, bg, "  A dropped connection is redialed by itself. Remote control ends with Disable-MCPRemoteControl, when the AI disconnects, or when the other side refuses.");
         ui.WriteLine();
     }

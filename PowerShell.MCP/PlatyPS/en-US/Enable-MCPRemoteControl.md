@@ -49,7 +49,7 @@ one-line bootstrap, which runs it for you).
 
 Either way you keep the prompt and see every command the AI runs, in this window; a
 Read-Host is answered here. While remote control is on, every prompt starts with
-[REMOTE], and the window title says so.
+[AI from <host>] (the path is still this machine's), and the window title says so.
 
 Before it starts, it asks you to confirm, saying which user the commands will run as
 and whether elevated; the default answer is No, and there is no switch to skip the
@@ -226,7 +226,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 - The pairing code is shown in this window (and stays in its scrollback and in any transcript you are recording); in dial mode it is part of the line you were given. It is worthless once used or after 10 minutes.
 
-- The window title shows the state: `PowerShell.MCP [remote control: listening :42777]`, then `[remote control: connected from <address>]` (or `connecting to` / `connected to <host:port>` when dialing), after `Administrator: ` in an elevated console.
+- The window title shows the state, as the prompt does: `AI from <host>` while connected, `AI remote control: waiting` otherwise, after `Administrator: ` in an elevated console.
 
 - A local MCP server on this machine does not claim a console under remote control, and other local requests to it are refused.
 

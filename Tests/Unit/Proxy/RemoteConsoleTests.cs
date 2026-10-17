@@ -55,12 +55,15 @@ public class RemoteConsoleTests
         {
             Assert.True(RemoteConsoleListener.IsListening);
             Assert.Equal(RemoteConsoleListener.CodeLength, code.Length);
+            Assert.Equal("[AI remote control: waiting] ", RemoteControl.PromptTag);
 
             using var client = new RemoteConsoleClient();
             var notice = await client.ConnectAsync($"127.0.0.1:{port}", RemoteConsoleListener.FormatCode(code).ToLowerInvariant(), CancellationToken.None);
             Assert.Contains("Connected", notice);
             Assert.Equal(Environment.ProcessId, client.RemotePid);
             Assert.True(RemoteConsoleListener.IsConnected);
+            // Who drives the console, not where the path is.
+            Assert.Equal("[AI from localhost] ", RemoteControl.PromptTag);
 
             var pong = await client.SendRequestAsync(Ping(), CancellationToken.None);
             Assert.Equal("pong", StatusOf(pong));
@@ -77,6 +80,7 @@ public class RemoteConsoleTests
         {
             RemoteConsoleListener.Stop("test", fromConsoleThread: true);
         }
+        Assert.Equal("", RemoteControl.PromptTag);
     }
 
     [Fact]

@@ -394,7 +394,7 @@ public static class RemoteConsoleListener
             Notify(resumed.Value
                 ? $"Remote AI session reconnected from {remote}."
                 : $"Remote AI session connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green");
-            SetTitle($"PowerShell.MCP [remote control: connected from {remote}]");
+            SetTitle(RemoteControl.ConnectedTitle(remote));
 
             var goodbye = false;
             NamedPipeServer.IsRemoteRequest.Value = true;
@@ -448,7 +448,7 @@ public static class RemoteConsoleListener
         Notify(goodbye
             ? $"Remote AI session ended. To connect again within {minutes} minutes, give the AI the new pairing code {FormatCode(code)}; after that remote control ends."
             : $"Remote AI session disconnected. That MCP server can reconnect by itself within {minutes} minutes; another one needs the new pairing code {FormatCode(code)}. After that remote control ends.", "Yellow");
-        SetTitle($"PowerShell.MCP [remote control: listening :{Port}]");
+        SetTitle(RemoteControl.WaitingTitle);
     }
 
     /// <summary>

@@ -40,6 +40,7 @@ public static class RemoteConsoleDialer
     public static bool IsActive { get { lock (_lock) return _cts != null; } }
     public static bool IsConnected { get { lock (_lock) return _connected; } }
     public static string Target { get { lock (_lock) return _host == null ? "" : $"{_host}:{_port}"; } }
+    public static string Host { get { lock (_lock) return _host ?? ""; } }
 
     /// <summary>Starts dialing in the background. Throws when already active or listening.</summary>
     public static void Start(string host, int port, string code)
@@ -148,7 +149,7 @@ public static class RemoteConsoleDialer
                 backoff = TimeSpan.FromSeconds(2);
                 announcedWaiting = false;
                 RemoteConsoleListener.Notify($"Remote AI session {(resumed ? "reconnected" : "connected")} ({host}:{port}).", "Green");
-                RemoteConsoleListener.SetTitle($"PowerShell.MCP [remote control: connected to {host}:{port}]");
+                RemoteConsoleListener.SetTitle(RemoteControl.ConnectedTitle(host));
 
                 NamedPipeServer.IsRemoteRequest.Value = true;
                 try
@@ -182,7 +183,7 @@ public static class RemoteConsoleDialer
                 }
                 if (ct.IsCancellationRequested) return;
                 RemoteConsoleListener.Notify($"Remote AI session disconnected. Redialing {host}:{port}.", "Yellow");
-                RemoteConsoleListener.SetTitle($"PowerShell.MCP [remote control: connecting to {host}:{port}]");
+                RemoteConsoleListener.SetTitle(RemoteControl.WaitingTitle);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

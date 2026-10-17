@@ -102,9 +102,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch {}
             $rendered = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
             # While an AI on another machine drives this console, every prompt
-            # says so. It lives in this wrapper, which the tick below re-arms,
-            # so redefining prompt does not remove it for long.
-            try { if ([PowerShell.MCP.Services.RemoteControl]::IsActive) { $rendered = '[REMOTE] ' + ($rendered -join '') } } catch {}
+            # says so, and from where ([AI from <host>]). It lives in this
+            # wrapper, which the tick below re-arms, so redefining prompt does
+            # not remove it for long.
+            try { $mcpTag = [PowerShell.MCP.Services.RemoteControl]::PromptTag; if ($mcpTag) { $rendered = $mcpTag + ($rendered -join '') } } catch {}
             # A prompt the host renders lets a proxy launch's startup window close
             # on the next tick (ExecutionState.BeginStartup). The engine renders
             # the prompt itself as well (the command echo, the post-command prompt,
@@ -214,7 +215,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                                 # McpActivityHook
                                 try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch {}
                                 $rendered = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
-                                try { if ([PowerShell.MCP.Services.RemoteControl]::IsActive) { $rendered = '[REMOTE] ' + ($rendered -join '') } } catch {}
+                                try { $mcpTag = [PowerShell.MCP.Services.RemoteControl]::PromptTag; if ($mcpTag) { $rendered = $mcpTag + ($rendered -join '') } } catch {}
                                 try { if (-not $global:McpEngineRenderingPrompt) { [PowerShell.MCP.Services.ExecutionState]::MarkFirstPromptRendered() } } catch {}
                                 $rendered
                             }
