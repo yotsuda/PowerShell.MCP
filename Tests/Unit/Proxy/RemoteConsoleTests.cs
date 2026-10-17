@@ -211,7 +211,6 @@ public class RemoteConsoleTests
         Assert.Equal("7Q4K-M2XP-ABCD", RemoteConsoleClient.FormatCode("7Q4KM2XPABCD"));
         Assert.Equal(12, RemoteConsoleClient.NewPairingCode().Length);
         Assert.Equal(RemoteConsoleListener.CodeLength, RemoteConsoleListener.NewPairingCode().Length);
-        Assert.Equal(RemoteConsoleListener.ProtocolVersion, RemoteConsoleClient.ProtocolVersion);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, int seconds = 15)

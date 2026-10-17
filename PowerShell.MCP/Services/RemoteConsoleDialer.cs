@@ -215,7 +215,6 @@ public static class RemoteConsoleDialer
         await SendJsonAsync(ssl, new
         {
             hello = RemoteConsoleListener.Hello,
-            v = RemoteConsoleListener.ProtocolVersion,
             role = "console",
             module_version = MCPModuleInitializer.ServerVersion,
             pid = Environment.ProcessId,
@@ -272,7 +271,7 @@ public static class RemoteConsoleDialer
             "expired" => resuming ? "the MCP server stopped waiting for this console to reconnect" : "the pairing code expired; ask the AI for a new one (accept_remote_console)",
             "code_used" => "that pairing code was already used; ask the AI for a new one (accept_remote_console)",
             "resume_unknown" => "the MCP server no longer knows this session; ask the AI for a new code (accept_remote_console)",
-            "protocol" => "the other side does not speak this protocol version",
+            "protocol" => "the other side is not a PowerShell.MCP server",
             _ => "the MCP server refused the connection",
         };
     }

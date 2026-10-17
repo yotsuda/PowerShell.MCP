@@ -51,7 +51,6 @@ namespace PowerShell.MCP.Services;
 public static class RemoteConsoleListener
 {
     public const int DefaultPort = 42777;
-    public const int ProtocolVersion = 2;
     public const string Hello = "PSMCP-remote";
     public const int KeyIterations = 300_000;
     public const int MaxFailures = 5;
@@ -464,8 +463,9 @@ public static class RemoteConsoleListener
         using var hello = JsonDocument.Parse(helloJson);
         var root = hello.RootElement;
 
-        if ((root.TryGetProperty("hello", out var h) ? h.GetString() : null) != Hello ||
-            (root.TryGetProperty("v", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : -1) != ProtocolVersion)
+        // The exact PowerShell.MCP version is checked next: the same version
+        // means the same protocol, so there is no separate protocol number.
+        if ((root.TryGetProperty("hello", out var h) ? h.GetString() : null) != Hello)
         {
             await SendJsonAsync(ssl, new { ok = false, error = "protocol", message = "Not a PowerShell.MCP remote proxy." }, ct);
             return null;

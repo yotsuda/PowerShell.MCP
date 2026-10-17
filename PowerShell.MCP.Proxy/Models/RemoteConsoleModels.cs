@@ -30,9 +30,6 @@ public class RemoteHello
     [JsonPropertyName("hello")]
     public string Hello { get; set; } = RemoteConsoleClient.Hello;
 
-    [JsonPropertyName("v")]
-    public int Version { get; set; } = RemoteConsoleClient.ProtocolVersion;
-
     [JsonPropertyName("proxy_version")]
     public string ProxyVersion { get; set; } = Program.ProxyVersion;
 

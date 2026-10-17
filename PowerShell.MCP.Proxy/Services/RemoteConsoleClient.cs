@@ -28,7 +28,6 @@ namespace PowerShell.MCP.Proxy.Services;
 public sealed class RemoteConsoleClient : IDisposable
 {
     public const int DefaultPort = 42777;
-    public const int ProtocolVersion = 2;
     public const string Hello = "PSMCP-remote";
     public const int CodeLength = 12;
 
@@ -433,7 +432,7 @@ public sealed class RemoteConsoleClient : IDisposable
         "code_used" => "That pairing code was already used (a code pairs once). The remote console shows a new one; ask the user for it.",
         "resume_unknown" => "The remote console no longer knows this session (it was ended there). Ask the user for the pairing code it shows now and call connect_remote_console.",
         "version_mismatch" => $"The PowerShell.MCP versions differ: this MCP server is {Program.ProxyVersion}. Install the same version on the remote machine.",
-        "protocol" => "The remote side does not speak this protocol version. Install the same PowerShell.MCP version on both machines.",
+        "protocol" => "The remote side is not a PowerShell.MCP console.",
         _ => "The remote console refused the connection.",
     };
 
@@ -810,8 +809,9 @@ public sealed class RemoteConsoleClient : IDisposable
     {
         using var hello = JsonDocument.Parse(await ReadFrameAsync(ssl, ct, MaxHandshakeFrame));
         var root = hello.RootElement;
+        // The exact PowerShell.MCP version is checked next: the same version
+        // means the same protocol, so there is no separate protocol number.
         if ((root.TryGetProperty("hello", out var h) ? h.GetString() : null) != Hello ||
-            (root.TryGetProperty("v", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : -1) != ProtocolVersion ||
             (root.TryGetProperty("role", out var r) ? r.GetString() : null) != "console")
         {
             await RefuseAsync(ssl, "protocol", "Not a PowerShell.MCP console.", ct);
