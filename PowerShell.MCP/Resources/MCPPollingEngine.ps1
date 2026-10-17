@@ -1188,6 +1188,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # host-UI lines that happen to normalise the
                         # same as a pipeline line are virtually
                         # impossible in practice).
+                        #
+                        # The same drift also moves where a too-long
+                        # column is cut: Out-Host ends it one character
+                        # earlier ("d8353d2a-b1…" vs "d8353d2a-b15…"). So
+                        # a word that ends in the ellipsis is reduced to
+                        # the ellipsis alone before comparing.
+                        $ellipsisWord = '\S*' + [char]0x2026
                         $knownNorm = [System.Collections.Generic.HashSet[string]]::new(
                             [System.StringComparer]::Ordinal)
                         foreach ($src in @($pipelineText, $exceptionText, $infoText, $consoleOutText, $consoleErrText)) {
@@ -1197,7 +1204,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                                     $trimmed = $line.Trim()
                                     if ($trimmed) {
                                         [void]$known.Add($trimmed)
-                                        [void]$knownNorm.Add(($trimmed -replace '\s+', ' '))
+                                        [void]$knownNorm.Add((($trimmed -replace $ellipsisWord, [char]0x2026) -replace '\s+', ' '))
                                     }
                                 }
                             }
@@ -1207,7 +1214,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             $trimmed = $line.Trim()
                             if (-not $trimmed) { continue }
                             if ($known.Contains($trimmed)) { continue }
-                            $normalized = $trimmed -replace '\s+', ' '
+                            $normalized = ($trimmed -replace $ellipsisWord, [char]0x2026) -replace '\s+', ' '
                             if ($knownNorm.Contains($normalized)) { continue }
                             # Check substring containment for partial
                             # matches: Out-Host renders ErrorRecord

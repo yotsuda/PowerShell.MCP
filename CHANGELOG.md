@@ -54,6 +54,9 @@ sections at the TOP of the file; keep older sections for history.
 - **`Register-PwshToClaudeCode` recommends disabling the built-in shell tools, and Yes is now the default.** The question it asks after registering says "(recommended)", and Yes says why; pressing Enter disables Claude Code's built-in Bash and PowerShell tools, where it used to keep them. `-DisableBuiltInShellTools` / `-KeepBuiltInShellTools` still answer without asking, and with no one to ask nothing changes.
 - **An elevated console keeps "Administrator:" in its title.** Windows marks an elevated console's title with `Administrator: `; every title PowerShell.MCP sets (the initial `#PID ____`, the names the AI gives consoles, the remote control states) replaced it. They now keep it, so the one fact that matters most about the window stays in sight — for the user, and for the AI, which sees the title in every response.
 
+## Bug Fixes
+- **A table with a cut-off column no longer comes back twice.** When `Format-Table` had to shorten its last column, the copy rendered for the console cut it one character earlier than the copy returned to the AI, so the de-duplication of host output missed every row and repeated the whole table under `=== HOST.UI (direct) ===`. A word ending in `…` is now compared without its cut-off part.
+
 ## Breaking Changes
 - **Built-in prompts reduced to two, with fixed ASCII names.** `foreign_language_dictation` and `show_interactive_map` remain (their localized text is the prompt's title); the analysis, HTML-guideline, learning and work-procedure prompts were removed, since current AI clients do those well unprompted. The names are now identifiers, so Claude Code offers them as `/<server>:show_interactive_map` and so on; the `request` argument is optional, and without it the prompt asks what to work on.
 
