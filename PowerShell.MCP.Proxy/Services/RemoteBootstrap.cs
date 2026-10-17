@@ -593,7 +593,10 @@ public sealed class RemoteBootstrap
                 $candidates += (Join-Path $documents "PowerShell\Modules\PowerShell.MCP\$ModuleVersion\PowerShell.MCP.psd1"),
                                (Join-Path $documents 'PowerShell\Modules\PowerShell.MCP\PowerShell.MCP.psd1')
             }
-            $candidates += (Join-Path $root "PowerShell.MCP-$ModuleVersion\PowerShell.MCP.psd1")
+            # A copy an earlier run unpacked counts only when nothing is to be
+            # installed: with install=user/machine the user asked for an
+            # installation, which that private copy is not.
+            if ($Install -eq 'none') { $candidates += (Join-Path $root "PowerShell.MCP-$ModuleVersion\PowerShell.MCP.psd1") }
             foreach ($candidate in $candidates) {
                 if (-not (Test-Path $candidate)) { continue }
                 try {
@@ -645,7 +648,7 @@ public sealed class RemoteBootstrap
                 }
             }
             $unpacked = Join-Path $root "pwsh-$PwshVersion\pwsh.exe"
-            if ($PwshVersion -and (Test-Pwsh $unpacked)) { return $unpacked }
+            if ($Install -eq 'none' -and $PwshVersion -and (Test-Pwsh $unpacked)) { return $unpacked }
             return $null
         }
 
@@ -675,6 +678,9 @@ public sealed class RemoteBootstrap
             }
 
             $psd1 = if ($loadedPsd1) { $loadedPsd1 } else { Find-Module }
+            # Loaded here from a private copy, yet asked to install: install
+            # (this session keeps the copy it has loaded).
+            if ($psd1 -and $Install -ne 'none' -and $psd1.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { $psd1 = $null }
             $pwsh = if ($here) { (Get-Process -Id $PID).Path } else { Find-Pwsh }
             if ($Install -eq 'machine' -and -not $elevated -and (-not $psd1 -or -not $pwsh)) {
                 throw 'Installing for all users needs PowerShell opened as Administrator. Open it that way and paste the same line again.'
