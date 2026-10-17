@@ -47,9 +47,10 @@ public class RemoteConsoleTools
         int port = 0,
         [Description("What may be installed on the remote machine if PowerShell 7 or PowerShell.MCP is missing there. ASK THE USER before choosing anything but 'none', and say where it goes: " +
                      "'none' (default) installs nothing: missing pieces are unpacked into %LOCALAPPDATA%\\PowerShell.MCP-remote, reused next time, removed by deleting that folder. " +
-                     "'user' (no admin): PowerShell 7 into %LOCALAPPDATA%\\Programs\\PowerShell\\7 and onto the user's PATH; PowerShell.MCP into the user's modules folder. " +
+                     "'user' (no admin; refused in a console run as Administrator): PowerShell 7 into %LOCALAPPDATA%\\Programs\\PowerShell\\7 and onto the user's PATH; PowerShell.MCP into the user's modules folder. " +
                      "'machine' (PowerShell must be opened as Administrator): PowerShell 7 by its MSI into Program Files; PowerShell.MCP for all users. " +
-                     "Already-installed pieces of the same build are always reused; another PowerShell.MCP version there is never touched.")]
+                     "Already-installed pieces of the same build are always reused; another PowerShell.MCP version there is never touched. " +
+                     "The script there lists what it will install and asks the user before installing anything.")]
         string install = "none",
         CancellationToken cancellationToken = default)
         => client.AcceptAsync(port, install, cancellationToken);

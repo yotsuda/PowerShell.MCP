@@ -119,7 +119,7 @@ namespace PowerShell.MCP
                 if (!proxyPid.HasValue)
                 {
                     using var psTitle = System.Management.Automation.PowerShell.Create(RunspaceMode.CurrentRunspace);
-                    psTitle.AddScript($"$Host.UI.RawUI.WindowTitle = '#{Environment.ProcessId} ____'");
+                    psTitle.AddScript($"$Host.UI.RawUI.WindowTitle = '{ConsoleTitle.Decorate($"#{Environment.ProcessId} ____")}'");
                     psTitle.Invoke();
                 }
 

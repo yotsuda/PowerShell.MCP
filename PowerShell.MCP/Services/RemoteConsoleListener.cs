@@ -567,7 +567,7 @@ public static class RemoteConsoleListener
 
     internal static void SetTitle(string title)
     {
-        title = Printable(title, 200);
+        title = ConsoleTitle.Decorate(Printable(title, 200));
         lock (_lock) _pendingTitle = title;
     }
 

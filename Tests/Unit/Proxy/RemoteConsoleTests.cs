@@ -310,6 +310,18 @@ public class RemoteConsoleTests
         // module must outlive the script block it was imported from.
         Assert.Contains("Import-Module $psd1 -Global", script);
         Assert.Contains("Enable-MCPRemoteControl -ConnectTo $target -Code $Code", script);
+        // A new window gets the code through the environment, not its command line.
+        Assert.Contains("$env:PSMCP_REMOTE_CODE = $Code", script);
+        Assert.DoesNotContain("-Code '\" + $Code", script);
+        // Downloads are hashed in memory; nothing is checked in one place and used from another.
+        Assert.Contains("RawContentStream.ToArray()", script);
+        Assert.DoesNotContain("-OutFile", script);
+        // As Administrator: an admins-only folder, signed PowerShell, no install=user.
+        Assert.Contains("S-1-5-32-544", script);
+        Assert.Contains("Test-MicrosoftSigned $msiPath", script);
+        Assert.Contains("$Install -eq 'user' -and $elevated", script);
+        // Installing is confirmed by the person at the console.
+        Assert.Contains("Read-Host 'Continue? [y/N]'", script);
         foreach (var placeholder in new[] { "__INSTALL__", "__MODULE_VERSION__", "__MODULE_DLL_HASH__", "__MODULE_ZIP_HASH__", "__MODULE_NUPKG_HASH__", "__PWSH_VERSION__", "__PWSH_ZIP_HASH__", "__PWSH_MSI_HASH__" })
             Assert.Contains(placeholder, script);
     }
@@ -547,6 +559,14 @@ public class RemoteConsoleTests
         {
             RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
         }
+    }
+
+    [Fact]
+    public void Titles_KeepTheAdministratorMark_OnlyWhenElevated_AndOnlyOnce()
+    {
+        var once = ConsoleTitle.Decorate("#123 Opal");
+        Assert.Equal(ConsoleTitle.Elevated ? "Administrator: #123 Opal" : "#123 Opal", once);
+        Assert.Equal(once, ConsoleTitle.Decorate(once));
     }
 
     [Fact]

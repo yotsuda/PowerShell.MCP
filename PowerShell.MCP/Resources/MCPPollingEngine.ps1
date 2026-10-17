@@ -146,7 +146,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     [PowerShell.MCP.MCPModuleInitializer]::ReleaseConsole()
                     $global:PowerShellMCPProxyPid = $null
                     $global:PowerShellMCPAgentId = $null
-                    $Host.UI.RawUI.WindowTitle = "#$PID ____"
+                    $Host.UI.RawUI.WindowTitle = [PowerShell.MCP.Services.ConsoleTitle]::Decorate("#$PID ____")
                     [Console]::WriteLine()
                     [Console]::WriteLine()
                     Write-Host 'AI session disconnected. Waiting for next connection.' -ForegroundColor Yellow

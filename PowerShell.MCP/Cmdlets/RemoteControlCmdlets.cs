@@ -130,7 +130,7 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
             return;
         }
 
-        try { Host.UI.RawUI.WindowTitle = $"PowerShell.MCP [remote control: listening :{Port}]"; } catch { }
+        try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate($"PowerShell.MCP [remote control: listening :{Port}]"); } catch { }
 
         var ui = Host.UI;
         var bg = ui.RawUI.BackgroundColor;
@@ -203,7 +203,7 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
             return;
         }
 
-        try { Host.UI.RawUI.WindowTitle = $"PowerShell.MCP [remote control: connecting to {host}:{port}]"; } catch { }
+        try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate($"PowerShell.MCP [remote control: connecting to {host}:{port}]"); } catch { }
 
         var ui = Host.UI;
         var bg = ui.RawUI.BackgroundColor;
@@ -329,7 +329,7 @@ public class DisableMCPRemoteControlCmdlet : PSCmdlet
             Host.UI.WriteLine();
             return;
         }
-        try { Host.UI.RawUI.WindowTitle = $"#{Environment.ProcessId} ____"; } catch { }
+        try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate($"#{Environment.ProcessId} ____"); } catch { }
         Host.UI.WriteLine(ConsoleColor.DarkGray, Host.UI.RawUI.BackgroundColor, $"{stopped}. This console is a plain MCP console again.");
         Host.UI.WriteLine();
     }

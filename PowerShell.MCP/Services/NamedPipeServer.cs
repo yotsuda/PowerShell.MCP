@@ -1322,7 +1322,7 @@ Please provide how to update the MCP client configuration to the user.";
     {
         try
         {
-            var title = parameters.GetProperty("title").GetString() ?? "";
+            var title = ConsoleTitle.Decorate(parameters.GetProperty("title").GetString() ?? "");
             var escapedTitle = title.Replace("'", "''");
             if (!ExecutionState.WaitForHeartbeat())
                 return "{\"success\":false,\"error\":\"busy\"}";
