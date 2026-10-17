@@ -12,8 +12,10 @@ namespace PowerShell.MCP.Tests.Unit.Proxy;
 /// The remote console end to end over loopback: the module's listener in this
 /// process, the proxy's client connecting to it. The listener is a process
 /// singleton, so these tests share one class (xUnit runs a class's tests one
-/// at a time) and each stops it on the way out.
+/// at a time) and each stops it on the way out. Pairing and stopping clear
+/// ExecutionState's cache, so the class runs with the other tests of that state.
 /// </summary>
+[Collection("McpServerState")]
 public class RemoteConsoleTests
 {
     [Fact]
@@ -406,7 +408,7 @@ public class RemoteConsoleTests
             var next = RemoteConsoleListener.CurrentCode!;
             Assert.NotEqual(code, next);
 
-            // The old code is now just a wrong code (and counts as one attempt).
+            // The old code is now just a wrong code (which the client catches; not an attempt).
             using var replay = new RemoteConsoleClient();
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => replay.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None));
             Assert.Contains("did not prove the pairing code", ex.Message);
@@ -688,5 +690,133 @@ public class RemoteConsoleTests
         // A refusal's text can come from the other side: no escape sequences reach the terminal.
         Assert.Equal("a [2Jb", RemoteConsoleListener.Printable("a\u001b[2Jb", 100));
         Assert.Equal("abc…", RemoteConsoleListener.Printable("abcdef", 3));
+    }
+
+    // ----- what a session leaves behind is not for the next one -----
+
+    [Fact]
+    public async Task OutputASessionLeft_GoesToNeitherTheNextPairing_NorAfterAGoodbye_ButSurvivesAResume()
+    {
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        try
+        {
+            using (var first = new RemoteConsoleClient())
+            {
+                await first.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+                ExecutionState.AddToCache("first session's output");
+                // A resume continues the same session: its output stays.
+                first.DropConnection();
+                await WaitUntilAsync(() => !RemoteConsoleListener.IsConnected);
+                Assert.Equal("pong", StatusOf(await first.SendRequestAsync(Ping(), CancellationToken.None)));
+                Assert.Contains("first session's output", ExecutionState.PeekCachedOutputs());
+                // A goodbye ends it: nobody comes back for it.
+                await first.DisconnectAsync(CancellationToken.None);
+            }
+            await WaitUntilAsync(() => !RemoteConsoleListener.IsConnected);
+            Assert.Empty(ExecutionState.PeekCachedOutputs());
+
+            using (var second = new RemoteConsoleClient())
+            {
+                await second.ConnectAsync($"127.0.0.1:{port}", RemoteConsoleListener.CurrentCode!, CancellationToken.None);
+                ExecutionState.AddToCache("second session's output");
+                // Dropped for good, without a goodbye: a new code goes up.
+                second.DropConnection();
+            }
+            await WaitUntilAsync(() => !RemoteConsoleListener.IsConnected && RemoteConsoleListener.CurrentCode != null);
+            Assert.Contains("second session's output", ExecutionState.PeekCachedOutputs());
+
+            // Another proxy pairs with that code: it starts clean.
+            using var third = new RemoteConsoleClient();
+            await third.ConnectAsync($"127.0.0.1:{port}", RemoteConsoleListener.CurrentCode!, CancellationToken.None);
+            Assert.Empty(ExecutionState.PeekCachedOutputs());
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task ARemoteCommandQueuedWhenRemoteControlEnds_DoesNotRun_AndReleasesTheConsole()
+    {
+        PowerShellCommunication.ResetGenerationsForTests();
+        McpServerHost.ConsumeCommand();
+        ExecutionState.SetBusy("Remove-Item important.txt", ExecutionState.RemoteEpoch);
+        var waiting = Task.Run(() => McpServerHost.ExecuteCommand("Remove-Item important.txt", null, 30));
+        await Task.Delay(300); // the command is in the slot; the engine has not ticked yet
+
+        ExecutionState.EndRemoteEpoch(); // Disable-MCPRemoteControl
+
+        Assert.Null(McpServerHost.ConsumeCommand().Command); // the tick finds nothing to run
+        var (isTimeout, _, _, _) = await waiting.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(isTimeout);
+        Assert.NotEqual("busy", ExecutionState.Status);
+        Assert.Empty(ExecutionState.PeekCachedOutputs());
+
+        // A local command is not affected.
+        ExecutionState.SetBusy("Get-Date");
+        var local = Task.Run(() => McpServerHost.ExecuteCommand("Get-Date", null, 30));
+        await Task.Delay(300);
+        ExecutionState.EndRemoteEpoch();
+        Assert.Equal("Get-Date", McpServerHost.ConsumeCommand().Command);
+        PowerShellCommunication.NotifyResultReady("done");
+        await local.WaitAsync(TimeSpan.FromSeconds(10));
+        ExecutionState.ConsumeCachedOutputs();
+    }
+
+    /// <summary>A connection that breaks on the first write.</summary>
+    private sealed class BrokenStream : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count) => throw new IOException("connection reset");
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) => throw new IOException("connection reset");
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default) => throw new IOException("connection reset");
+    }
+
+    [Fact]
+    public async Task OutputDrainedIntoAResponseThatNeverArrived_IsKeptForTheResumedSession_NotForAnEndedOne()
+    {
+        NamedPipeServer.IsRemoteRequest.Value = true;
+        try
+        {
+            ExecutionState.ConsumeCachedOutputs();
+            NamedPipeServer.RemoteEpoch.Value = ExecutionState.RemoteEpoch;
+            ExecutionState.AddToCache("collected while the connection dropped");
+            await NamedPipeServer.HandleRequestAsync(new BrokenStream(), "{\"name\":\"consume_output\"}", CancellationToken.None);
+            Assert.Contains("collected while the connection dropped", ExecutionState.PeekCachedOutputs());
+
+            // The session ended meanwhile: dropped, not kept.
+            ExecutionState.EndRemoteEpoch();
+            ExecutionState.AddToCache("someone else's");
+            await NamedPipeServer.HandleRequestAsync(new BrokenStream(), "{\"name\":\"consume_output\"}", CancellationToken.None);
+            Assert.Empty(ExecutionState.PeekCachedOutputs());
+        }
+        finally
+        {
+            NamedPipeServer.IsRemoteRequest.Value = false;
+            NamedPipeServer.RemoteEpoch.Value = 0;
+        }
+    }
+
+    [Fact]
+    public async Task ARequestWaitingForTheConsole_WhenAcceptingStops_SaysSo_InsteadOfHandingOutAnEmptyCode()
+    {
+        var wait = RemoteConsoleClient.SessionWait;
+        RemoteConsoleClient.SessionWait = TimeSpan.FromSeconds(3);
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            await client.AcceptAsync(0, "none", CancellationToken.None);
+            var request = client.SendRequestAsync(Ping(), CancellationToken.None);
+            for (var i = 0; i < 5; i++)
+                await SendWrongClientProofAsync(client.AcceptPort, console: true);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => request);
+            Assert.Contains("accepting stopped", ex.Message);
+            Assert.DoesNotContain("-Code", ex.Message);
+        }
+        finally
+        {
+            RemoteConsoleClient.SessionWait = wait;
+        }
     }
 }

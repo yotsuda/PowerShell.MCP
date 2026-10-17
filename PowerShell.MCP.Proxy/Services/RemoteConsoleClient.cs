@@ -40,7 +40,8 @@ public sealed class RemoteConsoleClient : IDisposable
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(200);
     private static readonly TimeSpan PingInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan SessionWait = TimeSpan.FromSeconds(15);
+    /// <summary>How long a request waits for a dialed-in console to (re)connect. Settable for tests.</summary>
+    internal static TimeSpan SessionWait { get; set; } = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan AcceptHandshakeTimeout = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan HttpResponseTimeout = TimeSpan.FromMinutes(15);
     private const int MaxAcceptFailures = 5;
@@ -169,13 +170,19 @@ public sealed class RemoteConsoleClient : IDisposable
             if (_host == null && _acceptListener == null && _peer == null && _ssl == null) return "Not connected to a remote console.";
             var target = Target;
             var wasAccepting = _acceptListener != null || _peer != null;
-            var connected = _ssl != null;
             var peer = _peer;
             _pingTimer?.Dispose();
             _pingTimer = null;
             // Stop accepting first, so a console dialing in right now cannot
-            // slip in after the close below.
+            // slip in after the close below; whether one is connected is read
+            // after that (one may have redialed meanwhile).
             StopAcceptingLocked(keepSession: true);
+            bool connected;
+            lock (_sessionLock)
+            {
+                connected = _ssl != null;
+                if (connected && _peer != null) peer = _peer;
+            }
             // Tell the other side this end is deliberate: a console that
             // dialed in stops instead of redialing a closed port, and a
             // listening one forgets the session key and shows a new code.
@@ -238,12 +245,21 @@ public sealed class RemoteConsoleClient : IDisposable
                     try { await ready.WaitAsync(waiting.Token); }
                     catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                     {
-                        // A console that was connected redials by itself (the
-                        // code it used is spent, so the instructions would only
-                        // mislead); one that never came needs the line.
-                        throw new InvalidOperationException(_peer != null
-                            ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. A command that was running continues there; wait_for_remote_completion collects its output once it is back."
-                            : $"The remote console has not dialed in on port {_acceptPort}. It does once Enable-MCPRemoteControl -ConnectTo is running there and the user has confirmed it; " + AcceptInstructions());
+                        // Accepting may have stopped or expired during the wait
+                        // (a lockout, the deadline); a console may also have
+                        // come in just now.
+                        ExpireAcceptingIfDue();
+                        if (_ssl == null)
+                        {
+                            if (_acceptListener == null)
+                                throw new InvalidOperationException($"Not connected: accepting stopped ({_acceptStopped ?? "disconnect_remote_console"}). Call accept_remote_console again for a new code.");
+                            // A console that was connected redials by itself (the
+                            // code it used is spent, so the instructions would only
+                            // mislead); one that never came needs the line.
+                            throw new InvalidOperationException(_peer != null
+                                ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. A command that was running continues there; wait_for_remote_completion collects its output once it is back."
+                                : $"The remote console has not dialed in on port {_acceptPort}. It does once Enable-MCPRemoteControl -ConnectTo is running there and the user has confirmed it; " + AcceptInstructions());
+                        }
                     }
                 }
                 else
@@ -252,7 +268,7 @@ public sealed class RemoteConsoleClient : IDisposable
                 }
             }
 
-            var ssl = _ssl!;
+            var ssl = _ssl ?? throw new InvalidOperationException("The connection to the remote console closed just now. Try again in a moment.");
             try
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -276,8 +292,19 @@ public sealed class RemoteConsoleClient : IDisposable
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or AuthenticationException or InvalidDataException or OperationCanceledException)
             {
                 var target = Target;
-                var accepting = _acceptListener != null || _peer != null;
+                SslStream? successor;
+                lock (_sessionLock) successor = ReferenceEquals(_ssl, ssl) ? null : _ssl;
+                if (successor != null)
+                    throw new InvalidOperationException(
+                        $"The console {target} reconnected and replaced this connection while the request was in flight. " +
+                        "The command may have run there; use wait_for_remote_completion to collect its output.");
+                var accepting = _acceptListener != null;
+                var lockedOut = _acceptListener == null && _peer != null;
                 CloseLocked(ssl);
+                if (lockedOut)
+                    throw new InvalidOperationException(
+                        $"The connection to {target} dropped while the request was in flight ({ex.Message}). Accepting had already stopped ({_acceptStopped}), " +
+                        "so that console cannot dial back in. Call accept_remote_console again for a new code.");
                 if (accepting)
                     throw new InvalidOperationException(
                         $"The connection to {target} dropped while the request was in flight ({ex.Message}). The console redials by itself; " +
@@ -311,6 +338,8 @@ public sealed class RemoteConsoleClient : IDisposable
                 using var timeout = new CancellationTokenSource(PingTimeout);
                 await WriteFrameAsync(ssl, JsonSerializer.Serialize(new PingParams(), RemoteConsoleJsonContext.Default.PingParams), timeout.Token);
                 _ = await ReadFrameAsync(ssl, timeout.Token);
+                // As after a request: the console has the newest resume key.
+                lock (_sessionLock) { if (ReferenceEquals(_ssl, ssl)) _acceptPreviousResumeKey = null; }
             }
             catch
             {
@@ -406,7 +435,7 @@ public sealed class RemoteConsoleClient : IDisposable
             if (!CryptographicOperations.FixedTimeEquals(expectedServerProof, serverProof))
                 throw new InvalidOperationException(resuming
                     ? $"{Target} did not prove this session's key: it is not the console this session was with, or something is intercepting the connection. Nothing was sent to it."
-                    : $"{Target} did not prove the pairing code: the code is wrong, or something between here and there is intercepting the connection. Nothing was sent to it. (The listener there counts this as a failed attempt and stops after five.)");
+                    : $"{Target} did not prove the pairing code: the code is wrong, or something between here and there is intercepting the connection. Nothing was sent to it, and it does not count as a failed attempt there; ask the user to read the code again.");
 
             await WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteProof { ClientProof = Convert.ToBase64String(Proof(key, "cli", clientNonce, serverNonce, thumbprint!)) }, RemoteConsoleJsonContext.Default.RemoteProof), timeout.Token);
 
@@ -543,9 +572,10 @@ public sealed class RemoteConsoleClient : IDisposable
     public void Dispose()
     {
         _pingTimer?.Dispose();
-        CloseLocked();
+        // Stop accepting first, so no console is published after the close.
+        // _gate is not disposed: a request may still hold it and release it.
         StopAcceptingLocked();
-        _gate.Dispose();
+        CloseLocked();
     }
 
     // ----- accept mode -----
@@ -655,7 +685,7 @@ public sealed class RemoteConsoleClient : IDisposable
         text.Append("The console there asks the user to confirm before it dials in. ");
         text.Append($"The code pairs once and expires if no console dials in within {Minutes}. ");
         text.Append($"Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall: on Windows a dialog asks once whether to allow PowerShell.MCP.Proxy.exe (private networks is enough); if it was dismissed, tell the user to allow it or add a rule. ");
-        text.Append($"Accepting stops after {MaxAcceptFailures} failed pairing attempts. Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.");
+        text.Append($"Accepting stops after {MaxAcceptFailures} forged pairing attempts (a mistyped code is caught by the console and does not count). Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.");
         return text.ToString();
     }
 
@@ -801,11 +831,18 @@ public sealed class RemoteConsoleClient : IDisposable
             {
                 if (_acceptListener == null) busy = "expired";
                 else if (_claiming || (_ssl != null && !result.Value.resumed)) busy = "busy";
+                // The key proved at hello time may have been retired since
+                // (a request on the current session clears the previous one).
+                else if (result.Value.resumed && !ReferenceEquals(result.Value.keyUsed, _acceptResumeKey) && !ReferenceEquals(result.Value.keyUsed, _acceptPreviousResumeKey)) busy = "resume_unknown";
                 else _claiming = true;
             }
+            // The peer is authenticated by now, but a write that never
+            // completes must not hold _claiming (and with it every resume).
+            using var answering = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            answering.CancelAfter(AcceptHandshakeTimeout);
             if (busy != null)
             {
-                try { await RefuseAsync(ssl, busy, busy, ct); } catch { }
+                try { await RefuseAsync(ssl, busy, busy, answering.Token); } catch { }
                 return;
             }
 
@@ -818,7 +855,7 @@ public sealed class RemoteConsoleClient : IDisposable
             TcpClient? replacedTcp = null;
             try
             {
-                await WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteAck { Ok = true, Version = Program.ProxyVersion, ResumeKey = Convert.ToBase64String(resumeKey) }, RemoteConsoleJsonContext.Default.RemoteAck), ct);
+                await WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteAck { Ok = true, Version = Program.ProxyVersion, ResumeKey = Convert.ToBase64String(resumeKey) }, RemoteConsoleJsonContext.Default.RemoteAck), answering.Token);
                 lock (_sessionLock)
                 {
                     if (_acceptListener != null)
@@ -940,8 +977,21 @@ public sealed class RemoteConsoleClient : IDisposable
             CountAcceptFailure();
             return null;
         }
-        // A code pairs once.
-        if (!resume) lock (_sessionLock) { if (ReferenceEquals(_acceptCodeKey, key)) _acceptCodeKey = null; }
+        // A code pairs once, also when two handshakes with it ran at the same time.
+        if (!resume)
+        {
+            bool spent;
+            lock (_sessionLock)
+            {
+                spent = !ReferenceEquals(_acceptCodeKey, key);
+                if (!spent) _acceptCodeKey = null;
+            }
+            if (spent)
+            {
+                await RefuseAsync(ssl, "code_used", "code_used", ct);
+                return null;
+            }
+        }
         return (resume, key!, pid, moduleVersion);
     }
 

@@ -181,13 +181,23 @@ public static class McpServerHost
     /// </summary>
     public static CommandSlot ConsumeCommand()
     {
+        CommandSlot result;
         lock (_commandLock)
         {
-            var result = new CommandSlot(_executeCommand, _executeCommandVariables);
+            result = new CommandSlot(_executeCommand, _executeCommandVariables);
             _executeCommand = null;
             _executeCommandVariables = null;
-            return result;
         }
+        // Queued by a remote session that has ended since (the user ran
+        // Disable-MCPRemoteControl before this tick): not run. Completing it
+        // empty releases the waiting request and the busy state; nothing is
+        // cached, the result being stale.
+        if (result.Command != null && ExecutionState.IsStaleRemoteResult)
+        {
+            PowerShellCommunication.NotifyResultReady("");
+            return new CommandSlot(null, null);
+        }
+        return result;
     }
 
     /// <summary>

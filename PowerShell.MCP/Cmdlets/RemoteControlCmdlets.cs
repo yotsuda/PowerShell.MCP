@@ -152,7 +152,7 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
         ui.WriteLine($"  Give the AI on the other machine the host and the code. Host: {hostInfo}");
         ui.WriteLine("  It connects with connect_remote_console and then runs commands here with execute_remote_command; every prompt starts with [AI from <its address>] meanwhile.");
         ui.WriteLine(ConsoleColor.DarkGray, bg, "  The code works once and expires in 10 minutes; when a session ends a new one is shown, and remote control stops if nobody uses it.");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Remote control also ends after {RemoteConsoleListener.MaxFailures} failed attempts, or with Disable-MCPRemoteControl.");
+        ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Remote control also ends after {RemoteConsoleListener.MaxFailures} forged pairing attempts (a mistyped code does not count), or with Disable-MCPRemoteControl.");
         if (publicNetworks.Count > 0 && allowFrom == null)
             ui.WriteLine(ConsoleColor.Yellow, bg, $"  Public network ({string.Join(", ", publicNetworks)}): consider Enable-MCPRemoteControl -AllowFrom <IP of the AI's machine>.");
         ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Inbound TCP {Port} must be allowed through the firewall. On Windows, as administrator, for the AI's machine only:");

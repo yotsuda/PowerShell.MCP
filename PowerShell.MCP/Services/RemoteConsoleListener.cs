@@ -416,13 +416,14 @@ public static class RemoteConsoleListener
         using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var session = new Session { From = remote, Client = client, Cts = sessionCts };
         Session? replaced = null;
-        bool busy;
+        bool busy, stopped;
         lock (_lock)
         {
             // A reconnect that proved the resume key replaces a connection
             // this side still holds (the peer saw it drop first); a code
             // pairing never does.
-            busy = !ReferenceEquals(_listener, listener) || (_session != null && !paired.Resumed);
+            stopped = !ReferenceEquals(_listener, listener);
+            busy = stopped || (_session != null && !paired.Resumed);
             if (!busy)
             {
                 replaced = _session;
@@ -433,10 +434,19 @@ public static class RemoteConsoleListener
         }
         if (busy)
         {
-            try { await SendJsonAsync(ssl, new { ok = false, error = "busy", message = "Another MCP server is connected to this console. Disconnect it first." }, ct); }
+            try
+            {
+                await SendJsonAsync(ssl, stopped
+                    ? new { ok = false, error = "expired", message = "Remote control of this console has ended." }
+                    : new { ok = false, error = "busy", message = "Another MCP server is connected to this console. Disconnect it first." }, ct);
+            }
             catch { }
             return;
         }
+        // A pairing with a code is a new session: what an earlier one left
+        // (cached output, a command still running) is not for this one. A
+        // resume continues the same session and keeps it.
+        NamedPipeServer.RemoteEpoch.Value = paired.Resumed ? ExecutionState.RemoteEpoch : ExecutionState.EndRemoteEpoch();
         if (replaced != null)
         {
             try { replaced.Cts.Cancel(); } catch { }
@@ -465,10 +475,11 @@ public static class RemoteConsoleListener
             return;
         }
 
-        Notify(paired.Resumed
-            ? $"Remote AI session reconnected from {remote}."
-            : $"Remote AI session connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green");
-        SetTitle(RemoteControl.ConnectedTitle(remote));
+        Announce(() => _session == session,
+            paired.Resumed
+                ? $"Remote AI session reconnected from {remote}."
+                : $"Remote AI session connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green",
+            RemoteControl.ConnectedTitle(remote));
 
         var goodbye = false;
         NamedPipeServer.IsRemoteRequest.Value = true;
@@ -520,7 +531,13 @@ public static class RemoteConsoleListener
             if (_session != session) return;
             _session = null;
             if (_listener == null) return;
-            if (goodbye) { _resumeKey = null; _previousResumeKey = null; }
+            if (goodbye)
+            {
+                // Ended on purpose: nobody resumes it, so what it left is dropped now.
+                _resumeKey = null;
+                _previousResumeKey = null;
+                ExecutionState.EndRemoteEpoch();
+            }
             var code = NewCodeLocked();
             var minutes = $"{CodeLifetime.TotalMinutes:0}";
             // Queued under the lock, so a reconnect that follows at once
@@ -623,8 +640,21 @@ public static class RemoteConsoleListener
             return null;
         }
 
-        // A code pairs once.
-        if (!resume) lock (_lock) { if (ReferenceEquals(_codeKey, key)) _codeKey = null; }
+        // A code pairs once, also when two handshakes with it ran at the same time.
+        if (!resume)
+        {
+            bool spent;
+            lock (_lock)
+            {
+                spent = !ReferenceEquals(_codeKey, key);
+                if (!spent) _codeKey = null;
+            }
+            if (spent)
+            {
+                await SendJsonAsync(ssl, new { ok = false, error = "code_used", message = "code_used" }, ct);
+                return null;
+            }
+        }
         return new Paired(resume, key!);
     }
 
@@ -663,6 +693,22 @@ public static class RemoteConsoleListener
     {
         title = ConsoleTitle.Decorate(Printable(title, 200));
         lock (_lock) _pendingTitle = title;
+    }
+
+    /// <summary>
+    /// Queues a notice and the title together, only if <paramref name="current"/>
+    /// still holds under the lock: a session that a stop (which clears the
+    /// queue under the same lock) or a reconnect has already ended must not
+    /// announce itself afterwards. <paramref name="current"/> takes no other lock.
+    /// </summary>
+    internal static void Announce(Func<bool> current, string message, string color, string title)
+    {
+        lock (_lock)
+        {
+            if (!current()) return;
+            Notify(message, color);
+            SetTitle(title);
+        }
     }
 
     /// <summary>

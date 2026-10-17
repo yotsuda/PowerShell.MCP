@@ -315,19 +315,22 @@ public static class ExecutionState
         return false;
     }
 
-    public static void SetBusy(string pipeline)
+    /// <summary>
+    /// A command starts. <paramref name="remoteEpoch"/> is the epoch of the
+    /// remote session that sent it (see <see cref="RemoteEpoch"/>), null for
+    /// a local one; a remote command whose epoch has already ended is stale
+    /// from the start and is dropped before it runs (McpServerHost.ConsumeCommand).
+    /// </summary>
+    public static void SetBusy(string pipeline, long? remoteEpoch = null)
     {
-        // Under remote control every AI command is the remote session's
-        // (local ones are refused); see IsStaleRemoteResult.
-        var remote = RemoteControl.IsActive;
         lock (_lock)
         {
             _stopwatch.Restart();
             _currentPipeline = pipeline;
             _shouldCacheOutput = false;
             _isBusy = true;
-            _runningForRemote = remote;
-            _runningEpoch = _remoteEpoch;
+            _runningForRemote = remoteEpoch != null;
+            _runningEpoch = remoteEpoch ?? _remoteEpoch;
         }
     }
 
@@ -336,22 +339,34 @@ public static class ExecutionState
     private static long _runningEpoch;
 
     /// <summary>
-    /// Remote control ended. What the remote session left behind is not for
-    /// whoever uses this console next: its cached output goes now, and the
-    /// result of a command it started that is still running is dropped when
-    /// it arrives (a local AI would otherwise drain it as its own).
+    /// The current remote epoch. A remote session takes it when it pairs
+    /// with a code and stamps its commands with it; a resume keeps it.
     /// </summary>
-    public static void EndRemoteEpoch()
+    public static long RemoteEpoch
+    {
+        get { lock (_lock) return _remoteEpoch; }
+    }
+
+    /// <summary>
+    /// A remote session ended (remote control stopped, the AI said goodbye)
+    /// or a new one paired with a code. What the earlier session left behind
+    /// is not for whoever uses this console next: its cached output goes now,
+    /// a command it queued is dropped before it runs, and the result of one
+    /// still running is dropped when it arrives (a local AI, or the next
+    /// remote one, would otherwise drain it as its own). Returns the new epoch.
+    /// </summary>
+    public static long EndRemoteEpoch()
     {
         lock (_lock)
         {
             _remoteEpoch++;
             _cachedOutputs.Clear();
             _shouldCacheOutput = false;
+            return _remoteEpoch;
         }
     }
 
-    /// <summary>True when the command now finishing was started by a remote session that has since ended.</summary>
+    /// <summary>True when the current command was sent by a remote session that has since ended.</summary>
     public static bool IsStaleRemoteResult
     {
         get { lock (_lock) return _runningForRemote && _runningEpoch != _remoteEpoch; }
@@ -660,6 +675,12 @@ public class NamedPipeServer : IDisposable
     internal static readonly AsyncLocal<bool> IsRemoteRequest = new();
 
     /// <summary>
+    /// The ExecutionState remote epoch the session serving this request
+    /// took when it paired; set with <see cref="IsRemoteRequest"/>.
+    /// </summary>
+    internal static readonly AsyncLocal<long> RemoteEpoch = new();
+
+    /// <summary>
     /// Handles one connection: one request in, one response out. The pipe
     /// and the remote listener share HandleRequestAsync; only the framing
     /// stream differs, so everything takes a Stream.
@@ -907,7 +928,7 @@ public class NamedPipeServer : IDisposable
                     pid,
                     status = "success"
                 });
-                await SendMessageAsync(pipeServer, header + "\n\n" + combinedOutput, cancellationToken);
+                await SendOrKeepAsync(pipeServer, header + "\n\n" + combinedOutput, combinedOutput, cancellationToken);
                 return;
             }
 
@@ -1117,7 +1138,12 @@ Please provide how to update the MCP client configuration to the user.";
                     return;
                 }
 
-                ExecutionState.SetBusy(pipeline);
+                // A remote session that ended while this request was on its
+                // way (Disable-MCPRemoteControl, a goodbye) runs nothing more.
+                long? remoteEpoch = IsRemoteRequest.Value ? RemoteEpoch.Value : null;
+                if (remoteEpoch != null && remoteEpoch != ExecutionState.RemoteEpoch)
+                    throw new InvalidOperationException("Remote control of this console has ended.");
+                ExecutionState.SetBusy(pipeline, remoteEpoch);
 
                 try
                 {
@@ -1263,9 +1289,9 @@ Please provide how to update the MCP client configuration to the user.";
 
                 // Consume cached outputs and prepend (older first, then current result)
                 var cachedOutputs = ExecutionState.ConsumeCachedOutputs();
+                var combined = string.Join("\n\n", cachedOutputs);
                 if (cachedOutputs.Count > 0)
                 {
-                    var combined = string.Join("\n\n", cachedOutputs);
                     result = combined + "\n\n" + result;
                 }
 
@@ -1274,12 +1300,32 @@ Please provide how to update the MCP client configuration to the user.";
                     pid,
                     status = "success"
                 });
-                await SendMessageAsync(pipeServer, header + "\n\n" + result, cancellationToken);
+                await SendOrKeepAsync(pipeServer, header + "\n\n" + result, combined, cancellationToken);
             }
         }
         catch (Exception ex)
         {
             await TrySendErrorAsync(pipeServer, ex, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Sends a response that carries drained cached output. A remote
+    /// connection can drop in the middle — the case a resume exists for — so
+    /// when the send fails there, the output goes back to the cache for the
+    /// resumed session to collect, unless that session has ended meanwhile.
+    /// </summary>
+    private static async Task SendOrKeepAsync(Stream pipeServer, string response, string drained, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SendMessageAsync(pipeServer, response, cancellationToken);
+        }
+        catch when (IsRemoteRequest.Value)
+        {
+            if (drained.Length > 0 && RemoteEpoch.Value == ExecutionState.RemoteEpoch)
+                ExecutionState.ReturnToCache(drained);
+            throw;
         }
     }
 

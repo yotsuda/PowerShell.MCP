@@ -32,7 +32,9 @@ public static class RemoteConsoleDialer
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(30);
 
     private static readonly object _lock = new();
-    private static CancellationTokenSource? _cts;
+    // Written under _lock; read without it by Announce's check, which runs
+    // under the listener's lock (taking this one there would invert the order).
+    private static volatile CancellationTokenSource? _cts;
     private static string? _host;
     private static int _port;
     private static bool _connected;
@@ -74,12 +76,19 @@ public static class RemoteConsoleDialer
     }
 
     /// <summary>Stops dialing and drops the session. False when not active.</summary>
-    public static bool Stop(string reason, bool fromConsoleThread)
+    public static bool Stop(string reason, bool fromConsoleThread) => Stop(reason, fromConsoleThread, owner: null);
+
+    /// <summary>
+    /// With <paramref name="owner"/>, stops only the RunAsync that owns that
+    /// token, checked and cleared in one step: a late one, after Disable and a
+    /// new Enable, must not end its successor.
+    /// </summary>
+    private static bool Stop(string reason, bool fromConsoleThread, CancellationToken? owner)
     {
         CancellationTokenSource? cts;
         lock (_lock)
         {
-            if (_cts == null) return false;
+            if (_cts == null || (owner != null && _cts.Token != owner)) return false;
             cts = _cts;
             _cts = null;
             _host = null;
@@ -96,15 +105,11 @@ public static class RemoteConsoleDialer
         return true;
     }
 
-    /// <summary>
-    /// Stop on behalf of the RunAsync that owns <paramref name="ct"/> only: a
-    /// late one, after Disable and a new Enable, must not end its successor.
-    /// </summary>
-    private static void StopOwn(CancellationToken ct, string reason)
-    {
-        lock (_lock) { if (_cts == null || _cts.Token != ct) return; }
-        Stop(reason, fromConsoleThread: false);
-    }
+    private static void StopOwn(CancellationToken ct, string reason) => Stop(reason, fromConsoleThread: false, owner: ct);
+
+    /// <summary>Notice and title for the RunAsync that owns <paramref name="ct"/>, unless it has been stopped.</summary>
+    private static void Announce(CancellationToken ct, string message, string color, string title) =>
+        RemoteConsoleListener.Announce(() => _cts?.Token == ct && !ct.IsCancellationRequested, message, color, title);
 
     private static async Task RunAsync(string host, int port, string code, CancellationToken ct)
     {
@@ -118,6 +123,7 @@ public static class RemoteConsoleDialer
         // the last session dropped): the other side has stopped waiting, so
         // stop too rather than dial a closed port for ever.
         var unreachableSince = DateTime.UtcNow;
+        long epoch = 0;
         while (!ct.IsCancellationRequested)
         {
             if (DateTime.UtcNow - unreachableSince > RemoteConsoleListener.CodeLifetime)
@@ -173,9 +179,12 @@ public static class RemoteConsoleDialer
                 lock (_lock) { if (_cts == null || _cts.Token != ct) return; _connected = true; }
                 backoff = TimeSpan.FromSeconds(2);
                 announcedWaiting = false;
-                RemoteConsoleListener.Notify($"Remote AI session {(resumed ? "reconnected" : "connected")} ({host}:{port}).", "Green");
-                RemoteConsoleListener.SetTitle(RemoteControl.ConnectedTitle(host));
+                Announce(ct, $"Remote AI session {(resumed ? "reconnected" : "connected")} ({host}:{port}).", "Green", RemoteControl.ConnectedTitle(host));
 
+                // The code pairs once per Enable, so one epoch covers every
+                // redial; Stop ends it.
+                if (!resumed) epoch = ExecutionState.EndRemoteEpoch();
+                NamedPipeServer.RemoteEpoch.Value = epoch;
                 NamedPipeServer.IsRemoteRequest.Value = true;
                 try
                 {
@@ -208,8 +217,7 @@ public static class RemoteConsoleDialer
                 }
                 if (ct.IsCancellationRequested) return;
                 unreachableSince = DateTime.UtcNow;
-                RemoteConsoleListener.Notify($"Remote AI session disconnected. Redialing {host}:{port} for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "Yellow");
-                RemoteConsoleListener.SetTitle(RemoteControl.WaitingTitle);
+                Announce(ct, $"Remote AI session disconnected. Redialing {host}:{port} for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "Yellow", RemoteControl.WaitingTitle);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -31,13 +31,14 @@ This cmdlet has no aliases.
 
 Ends what Enable-MCPRemoteControl started — listening, or dialing an MCP server on
 another machine — and drops the remote session, if one is connected. A command the
-remote AI started keeps running until it finishes; its result is discarded, not left for whoever uses the console next. The console becomes a plain MCP
-console again, which a local MCP server may claim. Warns when the console is not under
-remote control.
+remote AI sent that has not started yet does not run; one already running keeps
+running until it finishes. Either way its result is discarded, not left for whoever
+uses the console next. The console becomes a plain MCP console again, which a local
+MCP server may claim. Warns when the console is not under remote control.
 
 Remote control also ends by itself: when the AI disconnects a console that dialed in,
-when nobody pairs or reconnects within 10 minutes, and after five failed pairing
-attempts. A firewall rule you added for it stays; remove it with
+when nobody pairs or reconnects within 10 minutes, and, for a listening console, after
+five forged pairing attempts. A firewall rule you added for it stays; remove it with
 Remove-NetFirewallRule -DisplayName 'PowerShell.MCP remote console'.
 
 ## EXAMPLES

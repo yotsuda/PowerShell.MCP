@@ -48,8 +48,9 @@ only an outbound connection is needed here. The AI gives you the line to run (or
 one-line bootstrap, which runs it for you).
 
 Either way you keep the prompt and see every command the AI runs, in this window; a
-Read-Host is answered here. While remote control is on, every prompt starts with
-[AI from <host>] (the path is still this machine's), and the window title says so.
+Read-Host is answered here. While an AI is connected, every prompt starts with
+[AI from <host>] (the path is still this machine's), and the window title says so;
+while remote control waits for one, the prompt starts with [AI remote control: waiting].
 
 Before it starts, it asks you to confirm, saying which user the commands will run as
 and whether elevated, and listing your other PowerShell.MCP consoles (a remote session
@@ -61,13 +62,16 @@ local MCP server is using.
 
 The pairing code is 12 characters (case, dashes and full-width characters do not
 matter) and works for one connection, within 10 minutes. A dropped connection
-reconnects by itself with a key the pairing handed over, even before this side has
-noticed the drop. When the AI disconnects, a listening console shows a new code; if
-nobody connects within 10 minutes, remote control stops. A dialing console likewise
-gives up after 10 minutes without reaching the AI's machine. It also stops after five
-wrong client proofs (guesses; a client given a wrong code stops before sending one),
-with Disable-MCPRemoteControl, or when the module is removed. A second console on the
-same port is refused, and one MCP server at a time can connect.
+reconnects by itself with a key the pairing handed over (to a listening console even
+before it has noticed the drop; a dialing console redials once it notices, at the
+latest when a running command finishes). When the AI disconnects, a listening console
+shows a new code, and output the session left is discarded; if nobody connects within
+10 minutes, remote control stops. A dialing console likewise gives up after 10 minutes
+without reaching the AI's machine. A listening console also stops after five wrong
+client proofs (forged attempts; a mistyped code is caught by the AI's side before it
+sends one and does not count). Remote control also ends with Disable-MCPRemoteControl
+or when the module is removed. A second console on the same port is refused, and one
+MCP server at a time can connect.
 
 Security: TLS under a certificate made for the session; the pairing handshake is bound
 to that certificate and to the code (PBKDF2-SHA256, 300,000 iterations). The side that

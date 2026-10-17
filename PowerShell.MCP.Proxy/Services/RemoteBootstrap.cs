@@ -471,11 +471,15 @@ public sealed class RemoteBootstrap
         #             PowerShell.MCP for this user (refused as Administrator)
         #   machine : PowerShell 7 by its MSI, PowerShell.MCP for all users (needs admin)
         # Anything to install is listed and confirmed first. In a console run as
-        # Administrator this script takes nothing from, checks nothing in, and
-        # unpacks nothing to a folder that non-admin processes of this user can
-        # change: such a process could swap a file between its check and its use,
-        # and so become administrator. (The console itself, which ran the user's
-        # profile, is beyond its reach.)
+        # Administrator this script takes no PowerShell or PowerShell.MCP from,
+        # checks nothing in, and unpacks nothing to a folder that non-admin
+        # processes of this user can change: such a process could swap a file
+        # between its check and its use, and so become administrator. What any
+        # elevated PowerShell loads by name is beyond its reach, as is the
+        # console itself, which ran the user's profile: modules found through
+        # PSModulePath (the user's Documents come first) such as PSReadLine, the
+        # cmdlets used here, and PSResourceGet with its per-user settings for
+        # install=machine.
         param(
             [Parameter(Mandatory = $true)][string]$Base,
             [Parameter(Mandatory = $true)][string]$Code,
@@ -578,9 +582,8 @@ public sealed class RemoteBootstrap
             Move-Item -LiteralPath $file -Destination $zip -Force
             $staging = $Dir + '.partial-' + [Guid]::NewGuid().ToString('N')
             try {
-                # ZipFile rather than Expand-Archive: no cmdlet autoloaded from
-                # a module folder the user (or something running as the user)
-                # can change.
+                # ZipFile rather than Expand-Archive: one module fewer loaded by
+                # name (see the note at the top on what still is).
                 Add-Type -AssemblyName System.IO.Compression.FileSystem
                 [IO.Compression.ZipFile]::ExtractToDirectory($zip, $staging)
                 if (Test-Path -LiteralPath $Dir) { Remove-Item -LiteralPath $Dir -Recurse -Force }
@@ -602,6 +605,10 @@ public sealed class RemoteBootstrap
                 $signature.SignerCertificate.Subject -ne 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US') { return $false }
             $chain = New-Object Security.Cryptography.X509Certificates.X509Chain
             try {
+                # Only the path to the root matters here (the signature was
+                # validated above), so no revocation lookup to wait on offline;
+                # Build's verdict is ignored for the same reason.
+                $chain.ChainPolicy.RevocationMode = 'NoCheck'
                 [void]$chain.Build($signature.SignerCertificate)
                 $top = $chain.ChainElements[$chain.ChainElements.Count - 1].Certificate
                 return $top.Thumbprint -eq '8F43288AD272F3103B6FB1428485EA3014C0BCFE'
@@ -817,10 +824,12 @@ public sealed class RemoteBootstrap
                     # Another version is never replaced: PSResourceGet puts this one
                     # in its own version folder. -Reinstall only replaces a different
                     # build of this same version, which Find-Module already rejected.
+                    # -Force: a registration an interrupted run left behind is
+                    # replaced instead of failing every later run.
                     $installScript = "`$ErrorActionPreference = 'Stop'; `$name = 'PowerShell.MCP.bootstrap'; " +
-                        "Register-PSResourceRepository -Name `$name -Uri '" + $repo.Replace("'", "''") + "' -Trusted; " +
-                        "try { Install-PSResource -Name PowerShell.MCP -Version '$ModuleVersion' -Repository `$name -Scope $scope -TrustRepository -Reinstall -Quiet } " +
-                        "finally { Unregister-PSResourceRepository -Name `$name }"
+                        "try { Register-PSResourceRepository -Name `$name -Uri '" + $repo.Replace("'", "''") + "' -Trusted -Force; " +
+                        "Install-PSResource -Name PowerShell.MCP -Version '$ModuleVersion' -Repository `$name -Scope $scope -TrustRepository -Reinstall -Quiet } " +
+                        "finally { Unregister-PSResourceRepository -Name `$name -ErrorAction SilentlyContinue }"
                     if ($here) {
                         # Already in PowerShell 7: install from here (a Store
                         # PowerShell's real path may not be startable directly).
@@ -832,6 +841,12 @@ public sealed class RemoteBootstrap
                     }
                     Remove-Item -LiteralPath $repo -Recurse -Force
                     $psd1 = Join-Path $modulesRoot "PowerShell.MCP\$ModuleVersion\PowerShell.MCP.psd1"
+                    # What was installed is this build, where it was expected.
+                    $installedDll = Join-Path (Split-Path $psd1) 'PowerShell.MCP.dll'
+                    if (-not (Test-Path -LiteralPath $psd1) -or -not (Test-Path -LiteralPath $installedDll) -or
+                        (Get-Sha256 ([IO.File]::ReadAllBytes($installedDll))) -ne $ModuleDllHash) {
+                        throw "Install-PSResource did not leave PowerShell.MCP $ModuleVersion in $(Split-Path $psd1) as expected."
+                    }
                     Say "Installed PowerShell.MCP $ModuleVersion from PowerShell Gallery ($scope)$(if ($others) { ' beside the existing ' + ($others -join ', ') + ', which is left as is' })."
                 }
                 elseif ($mode -ne 'none') {
