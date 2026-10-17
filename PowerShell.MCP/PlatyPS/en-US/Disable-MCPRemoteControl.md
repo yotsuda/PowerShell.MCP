@@ -13,7 +13,7 @@ title: Disable-MCPRemoteControl
 
 ## SYNOPSIS
 
-Stop listening for a remote MCP server
+End remote control of this console
 
 ## SYNTAX
 
@@ -29,9 +29,16 @@ This cmdlet has no aliases.
 
 ## DESCRIPTION
 
-Stops the listener started by Enable-MCPRemoteControl and drops the remote session,
-if one is connected. The console becomes a plain MCP console again, which a local MCP
-server may claim. Warns when the console is not listening.
+Ends what Enable-MCPRemoteControl started — listening, or dialing an MCP server on
+another machine — and drops the remote session, if one is connected. A command the
+remote AI started keeps running until it finishes. The console becomes a plain MCP
+console again, which a local MCP server may claim. Warns when the console is not under
+remote control.
+
+Remote control also ends by itself: when the AI disconnects a console that dialed in,
+when nobody pairs or reconnects within 10 minutes, and after five failed pairing
+attempts. A firewall rule you added for it stays; remove it with
+Remove-NetFirewallRule -DisplayName 'PowerShell.MCP remote console'.
 
 ## EXAMPLES
 
@@ -54,7 +61,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## NOTES
 
-- Removing the module (Remove-Module PowerShell.MCP) stops the listener as well.
+- Removing the module (Remove-Module PowerShell.MCP) ends remote control as well.
 
 
 ## RELATED LINKS

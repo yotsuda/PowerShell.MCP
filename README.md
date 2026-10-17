@@ -104,7 +104,7 @@ PowerShell.MCP complements your existing MCP setup by providing a flexible, gene
 - Real-time streaming output
 
 **🔐 Enterprise-Ready Security**
-- Local-only named pipe communication—no network exposure
+- Local named pipes by default; a TCP port only when someone at a remote machine turns on remote control ([Remote Control](SECURITY.md#remote-control))
 - Every command visible, and recordable with `Start-Transcript` or Script Block Logging ([Auditing an AI Session](SECURITY.md#auditing-an-ai-session))
 - Integrates with existing security policies
 
@@ -126,6 +126,8 @@ Six tools provide maximum flexibility with minimum complexity:
 | `wait_for_completion` | Wait for long-running commands to complete |
 | `cancel` | Interrupt the command currently running in the console |
 | `close_console` | Close a console by PID (e.g. one paused at an interactive prompt) |
+
+Six more drive a console on another machine (see [Remote console](#remote-console-another-machine)): `connect_remote_console` and `accept_remote_console` to pair with it, `execute_remote_command`, `wait_for_remote_completion` and `cancel_remote_command` to work there, and `disconnect_remote_console`.
 
 ## Quick Start
 
@@ -339,24 +341,30 @@ With the Claude Code CLI, pass it as `-e POWERSHELL_MCP_TIMEOUT_CEILING=120` to 
 
 ### Remote console (another machine)
 
-The AI can also drive a console on **another machine** — a test VM, a build box, a colleague's PC with that colleague watching.
+The AI can also drive a console on **another machine** — a test VM, a build box, a colleague's PC with that colleague watching. If that console is elevated, so is the AI, which makes it a practical tool for **defensive work**: auditing a server, reading its event logs, checking what it exposes, hardening it, with the person responsible watching every command.
+
+*"Audit this VM's security, read-only"* — against a lab VM in Azure, reached through a port its owner had opened to one address, one session went from the Security log (2,015 failed RDP logons in three hours, no account lockout configured) to the local accounts and password policy, the listening ports checked against what is reachable from outside, SQL Server's version and login mode, Defender, TLS settings and persistence points, and ended with a report the team that owns the VM template could act on, in about ten minutes. That kind of review is usually postponed; attackers' tooling is already automated, and the gap is on the defenders' side.
 
 On the remote machine, in PowerShell 7 with PowerShell.MCP installed:
 
 ```powershell
 Import-Module PowerShell.MCP
-Enable-MCPRemoteControl          # TCP port 42777 by default; -Port to change
+Enable-MCPRemoteControl -AllowFrom 192.168.0.10   # the AI's machine; TCP port 42777 by default, -Port to change
 ```
 
-The console prints a pairing code (`XXXX-XXXX`), its host name and IP addresses. Give those to the AI on your machine — *"connect to the remote console at 192.168.0.10 with code 7Q4K-M2XP"*. It calls `connect_remote_console`, then runs commands there with `execute_remote_command`: the same semantics as `execute_command` (a persistent session, `var1`–`var8`, the text-file cmdlets, `wait_for_remote_completion`, `cancel_remote_command`), with that machine's paths, in a window the person there can see. A `Read-Host` is answered by that person.
+It asks you to confirm — saying which user the AI will act as, and whether elevated — then prints a pairing code (`XXXX-XXXX-XXXX`, good for one connection within 10 minutes), its host name and IP addresses. Give those to the AI on your machine — *"connect to the remote console at 192.168.0.20 with code 7Q4K-M2XP-H9RT"*. It calls `connect_remote_console`, then runs commands there with `execute_remote_command`: the same semantics as `execute_command` (a persistent session, `var1`–`var8`, the text-file cmdlets, `wait_for_remote_completion`, `cancel_remote_command`), with that machine's paths, in a window the person there can see. A `Read-Host` is answered by that person. While the AI is connected, every prompt there starts with `[REMOTE]`.
 
-If the remote machine cannot take an inbound connection (NAT, a cloud NSG, a firewall you cannot open), or has nothing installed yet, turn it around: the AI calls `accept_remote_console` on **your** machine and gives you **one line to paste** there — into PowerShell 7 if it is installed, otherwise into Windows PowerShell. It fetches PowerShell.MCP (the same build as yours) and, if PowerShell 7.4+ is not installed, a portable PowerShell 7 from your machine, and checks their hashes — nothing to install, no admin right, no internet access needed on the remote side. Pasted into PowerShell 7, remote control starts in that same window, so a console you opened as Administrator is the one the AI drives; pasted into Windows PowerShell, it opens a PowerShell 7 window that dials in. Where PowerShell 7 and PowerShell.MCP are already installed, the same answer also gives the shorter `Enable-MCPRemoteControl -ConnectTo <your-host>:<port> -Code <code>`. Only an outbound connection is needed there; the inbound port is on your machine — Windows asks once whether to allow `PowerShell.MCP.Proxy.exe` through the firewall (private networks is enough). Same pairing, roles swapped.
+If the remote machine cannot take an inbound connection (NAT, a cloud NSG, a firewall you cannot open), or has nothing installed yet, turn it around: the AI calls `accept_remote_console` on **your** machine and gives you **one line to paste** there — into PowerShell 7 if it is installed, otherwise into Windows PowerShell. It fetches PowerShell.MCP (the same build as yours) and, if PowerShell 7.4+ is not installed, a portable PowerShell 7 from your machine, and checks their hashes — nothing to install, no admin right, no internet access needed on the remote side. Pasted into PowerShell 7, remote control starts in that same window, so a console you opened as Administrator is the one the AI drives; pasted into Windows PowerShell, it opens a PowerShell 7 window that dials in. Either way the console asks you to confirm before it dials. If you let the AI install PowerShell 7 and PowerShell.MCP there for later use (it asks you first: for this user, or for all users), the script lists what it will install and asks again. Where PowerShell 7 and PowerShell.MCP are already installed, the same answer also gives the shorter `Enable-MCPRemoteControl -ConnectTo <your-host>:<port> -Code <code>`. Only an outbound connection is needed there; the inbound port is on your machine — Windows asks once whether to allow `PowerShell.MCP.Proxy.exe` through the firewall (private networks is enough). Same pairing, roles swapped.
 
-- Inbound TCP 42777 must be allowed through the remote machine's firewall (listening mode); the cmdlet prints the `New-NetFirewallRule` line. In dial-out mode the port to open is on your machine instead.
-- One proxy at a time per console, one remote console at a time per proxy. `disconnect_remote_console` releases it; the listener keeps waiting and the same code reconnects. `Disable-MCPRemoteControl` (or `Remove-Module`) ends it.
+- Inbound TCP 42777 must be allowed through the remote machine's firewall (listening mode); the cmdlet prints a `New-NetFirewallRule` line scoped to the AI's address, and the line that removes it. In dial-out mode the port to open is on your machine instead.
+- One proxy at a time per console, one remote console at a time per proxy. A dropped connection reconnects by itself. A pairing code works once: after `disconnect_remote_console` the console shows a new one, and remote control stops by itself if nobody connects within 10 minutes. `Disable-MCPRemoteControl` (or `Remove-Module`) ends it at any time.
 - Remote control ends after five failed pairing attempts.
-- Security: TLS with a certificate generated per listener, a handshake bound to that certificate and to the pairing code (PBKDF2-SHA256, 300,000 iterations), console-proves-first so a proxy that reaches a wrong address sends nothing. Meant for a LAN or VPN — do not expose the port to the Internet.
+- Security: TLS with a certificate made for the session and a handshake bound to that certificate and to the code. The code is short-lived on purpose: anyone who reaches the port can try codes offline. Meant for a LAN or VPN — do not expose the port to the Internet. What an attacker on the network can and cannot do: [SECURITY.md](SECURITY.md#remote-control).
 - Both machines must run the same PowerShell.MCP version.
+
+**Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` or pastes the line and answers Yes. It refuses to start where nobody could be watching (a service, a script without a console, `-NonInteractive`), shows `[REMOTE]` on every prompt and `Administrator:` in the title of an elevated window, and is gone when it ends. Intrusion tooling is built to be the opposite: hidden and persistent. Like any tool, it cannot stop someone who already runs code on a machine from starting it out of sight — but it gives such a person nothing they did not have, and [SECURITY.md](SECURITY.md#remote-control) lists how to spot it.
+
+**Data on the remote machine can be written by an attacker.** Event logs, user names in failed-logon records, file contents, web pages: when the AI reads them, it reads text that someone else chose, possibly crafted to look like instructions — with whatever rights that console has. The server tells the AI to treat it as data and to connect only to hosts and codes you typed. For audits and incident response, ask for **read-only** work first and have the AI confirm before any change; to keep a record, run `Start-Transcript` in the remote console before pairing (see [Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
 
 ## First-Time Demo
 

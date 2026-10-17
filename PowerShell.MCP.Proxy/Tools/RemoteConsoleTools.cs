@@ -30,7 +30,7 @@ public class RemoteConsoleTools
         RemoteConsoleClient client,
         [Description("Host name or IP address of the remote machine, optionally with :port (default 42777).")]
         string host,
-        [Description("The pairing code shown by Enable-MCPRemoteControl on the remote console, e.g. 7Q4K-M2XP (case and dashes do not matter).")]
+        [Description("The pairing code shown by Enable-MCPRemoteControl on the remote console, e.g. 7Q4K-M2XP-H9RT (case and dashes do not matter).")]
         string code,
         CancellationToken cancellationToken = default)
         => client.ConnectAsync(host, code, cancellationToken);
