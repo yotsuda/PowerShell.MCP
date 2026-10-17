@@ -317,13 +317,44 @@ public static class ExecutionState
 
     public static void SetBusy(string pipeline)
     {
+        // Under remote control every AI command is the remote session's
+        // (local ones are refused); see IsStaleRemoteResult.
+        var remote = RemoteControl.IsActive;
         lock (_lock)
         {
             _stopwatch.Restart();
             _currentPipeline = pipeline;
             _shouldCacheOutput = false;
             _isBusy = true;
+            _runningForRemote = remote;
+            _runningEpoch = _remoteEpoch;
         }
+    }
+
+    private static long _remoteEpoch;
+    private static bool _runningForRemote;
+    private static long _runningEpoch;
+
+    /// <summary>
+    /// Remote control ended. What the remote session left behind is not for
+    /// whoever uses this console next: its cached output goes now, and the
+    /// result of a command it started that is still running is dropped when
+    /// it arrives (a local AI would otherwise drain it as its own).
+    /// </summary>
+    public static void EndRemoteEpoch()
+    {
+        lock (_lock)
+        {
+            _remoteEpoch++;
+            _cachedOutputs.Clear();
+            _shouldCacheOutput = false;
+        }
+    }
+
+    /// <summary>True when the command now finishing was started by a remote session that has since ended.</summary>
+    public static bool IsStaleRemoteResult
+    {
+        get { lock (_lock) return _runningForRemote && _runningEpoch != _remoteEpoch; }
     }
 
     /// <summary>
@@ -1212,8 +1243,9 @@ Please provide how to update the MCP client configuration to the user.";
                         }
                         catch
                         {
-                            // Pipe error - save result to cache for next request
-                            ExecutionState.AddToCache(resultText);
+                            // Pipe error - save result to cache for next request (unless
+                            // it belongs to a remote session that has ended meanwhile)
+                            if (!ExecutionState.IsStaleRemoteResult) ExecutionState.AddToCache(resultText);
                         }
                     }
                 }

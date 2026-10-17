@@ -103,23 +103,47 @@ public class RemoteConsoleTests
         }
     }
 
+    /// <summary>
+    /// A peer that answers the challenge with a wrong client proof — what an
+    /// online guess looks like. (A real client given a wrong code never gets
+    /// that far: it checks the server's proof first and closes, which does not
+    /// count.) <paramref name="console"/> speaks as a console dialing a proxy.
+    /// </summary>
+    private static async Task SendWrongClientProofAsync(int port, bool console = false)
+    {
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync(IPAddress.Loopback, port);
+        using var ssl = new System.Net.Security.SslStream(tcp.GetStream(), false, (_, _, _, _) => true);
+        await ssl.AuthenticateAsClientAsync("localhost");
+        var hello = console
+            ? JsonSerializer.Serialize(new { hello = RemoteConsoleListener.Hello, role = "console", module_version = PowerShell.MCP.MCPModuleInitializer.ServerVersion, pid = 1, client_nonce = Convert.ToBase64String(new byte[32]) })
+            : JsonSerializer.Serialize(new { hello = RemoteConsoleListener.Hello, proxy_version = PowerShell.MCP.MCPModuleInitializer.ServerVersion, client_nonce = Convert.ToBase64String(new byte[32]) });
+        await NamedPipeServer.SendMessageAsync(ssl, hello, CancellationToken.None);
+        await NamedPipeServer.ReceiveMessageAsync(ssl, CancellationToken.None); // the challenge
+        await NamedPipeServer.SendMessageAsync(ssl, JsonSerializer.Serialize(new { client_proof = Convert.ToBase64String(new byte[32]) }), CancellationToken.None);
+        await NamedPipeServer.ReceiveMessageAsync(ssl, CancellationToken.None); // bad_code
+    }
+
     [Fact]
-    public async Task FiveFailures_StopTheListener()
+    public async Task FiveWrongClientProofs_StopTheListener_ButWrongCodesTypedIntoAClientDoNot()
     {
         var port = FreePort();
         var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
         try
         {
+            // A client with a wrong code stops at the server's proof: no attempt counted.
             var wrong = code[0] == 'A' ? "B" + code[1..] : "A" + code[1..];
-            for (var i = 0; i < RemoteConsoleListener.MaxFailures; i++)
+            for (var i = 0; i < RemoteConsoleListener.MaxFailures + 1; i++)
             {
                 using var client = new RemoteConsoleClient();
                 await Assert.ThrowsAsync<InvalidOperationException>(() => client.ConnectAsync($"127.0.0.1:{port}", wrong, CancellationToken.None));
             }
-            // The server counts the dropped handshake when its read fails,
-            // a moment after the client gave up.
-            var deadline = DateTime.UtcNow.AddSeconds(5);
-            while (RemoteConsoleListener.IsListening && DateTime.UtcNow < deadline) await Task.Delay(50);
+            await Task.Delay(200);
+            Assert.True(RemoteConsoleListener.IsListening);
+
+            for (var i = 0; i < RemoteConsoleListener.MaxFailures; i++)
+                await SendWrongClientProofAsync(port);
+            await WaitUntilAsync(() => !RemoteConsoleListener.IsListening, 5);
             Assert.False(RemoteConsoleListener.IsListening);
 
             using var late = new RemoteConsoleClient();
@@ -256,23 +280,23 @@ public class RemoteConsoleTests
     }
 
     [Fact]
-    public async Task DialOut_WrongCode_EndsTheConsolesAttempt_AndFiveOfThemStopAccepting()
+    public async Task DialOut_WrongCode_EndsTheConsolesAttempt_WrongClientProofsStopAccepting()
     {
         using var client = new RemoteConsoleClient();
         try
         {
             await client.AcceptAsync(0, "none", CancellationToken.None);
             var wrong = client.AcceptCode![0] == 'A' ? "B" + client.AcceptCode[1..] : "A" + client.AcceptCode[1..];
+            RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, wrong);
+            // The console verifies the proxy's proof, fails, and stops for good.
+            await WaitUntilAsync(() => !RemoteConsoleDialer.IsActive);
+            Assert.False(RemoteConsoleDialer.IsActive);
+            Assert.False(client.IsConnected);
+            Assert.True(client.IsAccepting); // that was no attempt at the proxy
+
             for (var i = 0; i < 5; i++)
-            {
-                RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, wrong);
-                // The console verifies the proxy's proof, fails, and stops for good:
-                // redialing with a wrong code would only burn the proxy's attempts.
-                await WaitUntilAsync(() => !RemoteConsoleDialer.IsActive);
-                Assert.False(RemoteConsoleDialer.IsActive);
-                Assert.False(client.IsConnected);
-            }
-            await WaitUntilAsync(() => !client.IsAccepting);
+                await SendWrongClientProofAsync(client.AcceptPort, console: true);
+            await WaitUntilAsync(() => !client.IsAccepting, 5);
             Assert.False(client.IsAccepting);
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => client.SendRequestAsync(Ping(), CancellationToken.None));
             Assert.Contains("accepting stopped", ex.Message);
@@ -570,6 +594,92 @@ public class RemoteConsoleTests
         var once = ConsoleTitle.Decorate("#123 Opal");
         Assert.Equal(ConsoleTitle.Elevated ? "Administrator: #123 Opal" : "#123 Opal", once);
         Assert.Equal(once, ConsoleTitle.Decorate(once));
+    }
+
+    [Fact]
+    public async Task Reconnect_WhileTheConsoleStillHoldsTheOldConnection_ReplacesIt()
+    {
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        try
+        {
+            using var client = new RemoteConsoleClient();
+            await client.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            // This side has given the connection up; the console has not
+            // noticed and still counts it as live.
+            client.AbandonConnection();
+            Assert.True(RemoteConsoleListener.IsConnected);
+
+            // The reconnect proves the resume key, so it is not "busy": it
+            // takes over.
+            Assert.Equal("pong", StatusOf(await client.SendRequestAsync(Ping(), CancellationToken.None)));
+            Assert.True(RemoteConsoleListener.IsConnected);
+            Assert.Equal("pong", StatusOf(await client.SendRequestAsync(Ping(), CancellationToken.None)));
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task DialOut_ANewConsoleWithTheSpentCode_IsRefused_AndTheLiveSessionStays()
+    {
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            await client.AcceptAsync(0, "none", CancellationToken.None);
+            RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, client.AcceptCode!);
+            await WaitUntilAsync(() => client.IsConnected && RemoteConsoleDialer.IsConnected);
+
+            // The console goes away without a word while the proxy still holds
+            // its end; another console that has only the spent code (not the
+            // resume key) must not take that session over.
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+            Assert.True(client.IsConnected);
+            RemoteConsoleDialer.Start("127.0.0.1", client.AcceptPort, client.AcceptCode!);
+            await WaitUntilAsync(() => !RemoteConsoleDialer.IsActive, 5);
+            // A fresh dialer has only the (spent) code, not the resume key: it
+            // is refused, and the proxy's live session is untouched.
+            Assert.False(RemoteConsoleDialer.IsActive);
+            Assert.True(client.IsConnected);
+        }
+        finally
+        {
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public void Codes_TypedFullWidthByAnIme_AreTheSameCode()
+    {
+        Assert.Equal("7Q4KM2XPH9RT", RemoteConsoleListener.NormalizeCode("７ｑ４ｋ－ｍ２ｘｐ－ｈ９ｒｔ"));
+        Assert.Equal("7Q4KM2XPH9RT", RemoteConsoleClient.NormalizeCode("７Ｑ４Ｋ　Ｍ２ＸＰ　Ｈ９ＲＴ"));
+        // Letters and digits outside ASCII are not part of any code.
+        Assert.Equal("AB", RemoteConsoleListener.NormalizeCode("aéb٣"));
+        Assert.Equal(RemoteConsoleListener.KeyId(new byte[32]), RemoteConsoleClient.KeyId(new byte[32]));
+    }
+
+    [Fact]
+    public async Task Dialer_GivesUp_WhenTheServerStaysUnreachableForTheCodesLifetime()
+    {
+        var lifetime = RemoteConsoleListener.CodeLifetime;
+        RemoteConsoleListener.CodeLifetime = TimeSpan.FromSeconds(1);
+        try
+        {
+            RemoteConsoleListener.TakeNotices();
+            RemoteConsoleDialer.Start("127.0.0.1", FreePort(), "AAAABBBBCCCC");
+            // First attempt fails at once, the next comes after the 2 s backoff
+            // and finds the lifetime spent.
+            await WaitUntilAsync(() => !RemoteConsoleDialer.IsActive, 10);
+            Assert.False(RemoteConsoleDialer.IsActive);
+            Assert.Contains(RemoteConsoleListener.TakeNotices(), n => n.Message.Contains("could not be reached"));
+        }
+        finally
+        {
+            RemoteConsoleListener.CodeLifetime = lifetime;
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+        }
     }
 
     [Fact]

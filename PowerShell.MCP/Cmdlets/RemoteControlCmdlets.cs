@@ -15,10 +15,13 @@ namespace PowerShell.MCP.Cmdlets;
 /// </summary>
 /// <remarks>
 /// Remote control is something a person at this machine grants, in a console
-/// they can see: the cmdlet refuses to run where nobody could be watching (a
+/// they can see: the cmdlet refuses to run where nobody could answer (a
 /// service, redirected input, -NonInteractive, a host that is not a console)
 /// and asks for a yes before it listens or dials. There is deliberately no
-/// switch to skip the question — that would make it a background agent.
+/// switch to skip the question — that would make it a background agent. This
+/// stops accidents and scripts, not code already running as the user, which
+/// could open a hidden window and answer it; such code needs nothing from
+/// this module.
 /// </remarks>
 [Cmdlet(VerbsLifecycle.Enable, "MCPRemoteControl", DefaultParameterSetName = "Listen")]
 public class EnableMCPRemoteControlCmdlet : PSCmdlet
@@ -247,9 +250,13 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
     {
         var user = OperatingSystem.IsWindows() ? $"{Environment.UserDomainName}\\{Environment.UserName}" : Environment.UserName;
         var elevated = Environment.IsPrivilegedProcess;
+        var others = OtherMcpConsoles();
         var message = $"{what}{Environment.NewLine}" +
                       $"Commands will run in this console as {user}{(elevated ? ", ELEVATED (administrator)" : "")}, with everything this session can reach. " +
-                      "You see every command here; Disable-MCPRemoteControl ends it at any time.";
+                      "You see every command here; Disable-MCPRemoteControl ends it at any time." +
+                      (others.Count > 0
+                          ? $"{Environment.NewLine}Other PowerShell.MCP consoles are open (PID {string.Join(", ", others)}). They accept requests from any process of this user, so the remote AI can reach them too — elevated ones included. Close those you do not want it to reach."
+                          : "");
         var choices = new System.Collections.ObjectModel.Collection<ChoiceDescription>
         {
             new("&Yes", "Allow an AI on another machine to control this console."),
@@ -257,12 +264,38 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
         };
         try
         {
-            return Host.UI.PromptForChoice("Allow remote control of this console?", message, choices, 1) == 0;
+            if (Host.UI.PromptForChoice("Allow remote control of this console?", message, choices, 1) != 0) return false;
+            // While the question was open, a local MCP server may have claimed
+            // this console; it then belongs to that server.
+            if (ConsoleLiveness.IsOwned)
+            {
+                WriteWarning("A local MCP server took over this console while the question was open; it belongs to that server now.");
+                return false;
+            }
+            return true;
         }
         catch (Exception ex) when (ex is PSInvalidOperationException or HostException or NotImplementedException)
         {
             return false;
         }
+    }
+
+    /// <summary>PIDs of the other PowerShell.MCP consoles on this machine, from their pipe names (PSMCP.[…].PID).</summary>
+    private static List<int> OtherMcpConsoles()
+    {
+        var pids = new List<int>();
+        if (!OperatingSystem.IsWindows()) return pids;
+        try
+        {
+            foreach (var path in Directory.GetFiles(@"\\.\pipe\"))
+            {
+                var name = Path.GetFileName(path);
+                if (!name.StartsWith(NamedPipeServer.BasePipeName + ".", StringComparison.Ordinal)) continue;
+                if (int.TryParse(name.Split('.')[^1], out var pid) && pid != Environment.ProcessId && !pids.Contains(pid)) pids.Add(pid);
+            }
+        }
+        catch { }
+        return pids;
     }
 
     /// <summary>Names of the networks this machine is on that Windows treats as Public; empty elsewhere.</summary>

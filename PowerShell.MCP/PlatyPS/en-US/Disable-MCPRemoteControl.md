@@ -31,7 +31,7 @@ This cmdlet has no aliases.
 
 Ends what Enable-MCPRemoteControl started — listening, or dialing an MCP server on
 another machine — and drops the remote session, if one is connected. A command the
-remote AI started keeps running until it finishes. The console becomes a plain MCP
+remote AI started keeps running until it finishes; its result is discarded, not left for whoever uses the console next. The console becomes a plain MCP
 console again, which a local MCP server may claim. Warns when the console is not under
 remote control.
 

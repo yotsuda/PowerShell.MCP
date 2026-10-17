@@ -104,7 +104,7 @@ PowerShell.MCP complements your existing MCP setup by providing a flexible, gene
 - Real-time streaming output
 
 **🔐 Enterprise-Ready Security**
-- Local named pipes by default; a TCP port only when someone at a remote machine turns on remote control ([Remote Control](SECURITY.md#remote-control))
+- Local named pipes by default; a TCP port only while remote control is on — on the remote machine (`Enable-MCPRemoteControl`), or on this one while the AI waits for a console to dial in (`accept_remote_console`) ([Remote Control](SECURITY.md#remote-control))
 - Every command visible, and recordable with `Start-Transcript` or Script Block Logging ([Auditing an AI Session](SECURITY.md#auditing-an-ai-session))
 - Integrates with existing security policies
 
@@ -362,9 +362,9 @@ If the remote machine cannot take an inbound connection (NAT, a cloud NSG, a fir
 - Security: TLS with a certificate made for the session and a handshake bound to that certificate and to the code. The code is short-lived on purpose: anyone who reaches the port can try codes offline. Meant for a LAN or VPN — do not expose the port to the Internet. What an attacker on the network can and cannot do: [SECURITY.md](SECURITY.md#remote-control).
 - Both machines must run the same PowerShell.MCP version.
 
-**Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` or pastes the line and answers Yes. It refuses to start where nobody could be watching (a service, a script without a console, `-NonInteractive`), shows `[AI from <host>]` on every prompt and `Administrator:` in the title of an elevated window, and is gone when it ends. Intrusion tooling is built to be the opposite: hidden and persistent. Like any tool, it cannot stop someone who already runs code on a machine from starting it out of sight — but it gives such a person nothing they did not have, and [SECURITY.md](SECURITY.md#remote-control) lists how to spot it.
+**Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` or pastes the line and answers Yes. It refuses to start where nobody could answer (a service, a script without a console, `-NonInteractive`), shows `[AI from <host>]` on every prompt and `Administrator:` in the title of an elevated window, and ends with the session (what the AI changed meanwhile stays, as with any admin work). Intrusion tooling is built to be the opposite: hidden and persistent. Like any tool, it cannot stop code already running on a machine from starting it out of sight — but it gives such code nothing it did not have, and [SECURITY.md](SECURITY.md#remote-control) lists how to spot it. **Paste a line only if you asked an AI for it yourself**: "paste this into PowerShell" is also how lures begin, and the console's question names the machine it will connect to.
 
-**Data on the remote machine can be written by an attacker.** Event logs, user names in failed-logon records, file contents, web pages: when the AI reads them, it reads text that someone else chose, possibly crafted to look like instructions — with whatever rights that console has. The server tells the AI to treat it as data and to connect only to hosts and codes you typed. For audits and incident response, ask for **read-only** work first and have the AI confirm before any change; to keep a record, run `Start-Transcript` in the remote console before pairing (see [Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
+**Data on the remote machine can be written by an attacker.** Event logs, user names in failed-logon records, file contents, web pages: when the AI reads them, it reads text that someone else chose, possibly crafted to look like instructions — with whatever rights that console has, and with the AI's access to *your* machine as well. The server tells the AI to treat it as data and to connect only to hosts and codes you typed. Pair only with machines you trust that far; for audits and incident response, ask for **read-only** work first and have the AI confirm before any change; to keep a record, run `Start-Transcript` in the remote console before pairing (see [Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
 
 ## First-Time Demo
 
@@ -379,7 +379,7 @@ After trying these demos, try the built-in prompts below or ask AI to explain an
 
 ## Built-in Prompts
 
-PowerShell.MCP includes 2 prompts that teach AI how to use companion modules it does not otherwise know. In Claude Code, run them as slash commands, with what you want as the argument:
+PowerShell.MCP includes 2 prompts that teach AI workflows it does not otherwise know (a companion module, and the built-in speech synthesizer). In Claude Code, run them as slash commands, with what you want as the argument:
 
 ```text
 /pwsh:show_interactive_map hot springs in Kanto

@@ -86,14 +86,24 @@ public static class RemoteConsoleDialer
             _connected = false;
         }
         try { cts.Cancel(); } catch { }
-        // As RemoteConsoleListener.Stop: the remote session's cached output is not for the next user.
-        ExecutionState.ClearCachedOutputs();
+        // As RemoteConsoleListener.Stop: the remote session's output is not for the next user.
+        ExecutionState.EndRemoteEpoch();
         if (!fromConsoleThread)
         {
             RemoteConsoleListener.Notify($"Remote control ended: {reason}.", "Yellow");
             RemoteConsoleListener.SetTitle($"#{Environment.ProcessId} ____");
         }
         return true;
+    }
+
+    /// <summary>
+    /// Stop on behalf of the RunAsync that owns <paramref name="ct"/> only: a
+    /// late one, after Disable and a new Enable, must not end its successor.
+    /// </summary>
+    private static void StopOwn(CancellationToken ct, string reason)
+    {
+        lock (_lock) { if (_cts == null || _cts.Token != ct) return; }
+        Stop(reason, fromConsoleThread: false);
     }
 
     private static async Task RunAsync(string host, int port, string code, CancellationToken ct)
@@ -104,8 +114,17 @@ public static class RemoteConsoleDialer
         // resume key the proxy handed over.
         string? pairingCode = code;
         byte[]? resumeKey = null;
+        // Unreachable for as long as a code lives (before pairing, or since
+        // the last session dropped): the other side has stopped waiting, so
+        // stop too rather than dial a closed port for ever.
+        var unreachableSince = DateTime.UtcNow;
         while (!ct.IsCancellationRequested)
         {
+            if (DateTime.UtcNow - unreachableSince > RemoteConsoleListener.CodeLifetime)
+            {
+                StopOwn(ct, $"the MCP server at {host}:{port} could not be reached for {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes");
+                return;
+            }
             try
             {
                 using var tcp = new TcpClient { NoDelay = true };
@@ -123,7 +142,7 @@ public static class RemoteConsoleDialer
                     return true;
                 });
 
-                (string? refused, byte[]? nextResumeKey) outcome;
+                (string? refused, bool retry, byte[]? nextResumeKey) outcome;
                 using (var handshake = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
                     handshake.CancelAfter(HandshakeTimeout);
@@ -134,18 +153,24 @@ public static class RemoteConsoleDialer
                     }, handshake.Token);
                     outcome = await HandshakeAsConnectorAsync(ssl, pairingCode, resumeKey, thumbprint!, handshake.Token);
                 }
+                if (outcome.retry)
+                {
+                    // Reconnecting while the other side is still claiming
+                    // the previous connection: try again shortly.
+                    throw new IOException(outcome.refused);
+                }
                 if (outcome.refused != null)
                 {
                     // Final: redialing would only count against the proxy's
                     // five attempts, or ask again for what it no longer has.
-                    Stop(outcome.refused, fromConsoleThread: false);
+                    StopOwn(ct, outcome.refused);
                     return;
                 }
                 var resumed = resumeKey != null;
                 resumeKey = outcome.nextResumeKey;
                 pairingCode = null;
 
-                lock (_lock) _connected = true;
+                lock (_lock) { if (_cts == null || _cts.Token != ct) return; _connected = true; }
                 backoff = TimeSpan.FromSeconds(2);
                 announcedWaiting = false;
                 RemoteConsoleListener.Notify($"Remote AI session {(resumed ? "reconnected" : "connected")} ({host}:{port}).", "Green");
@@ -167,7 +192,7 @@ public static class RemoteConsoleDialer
                         if (IsGoodbye(request))
                         {
                             lock (_lock) _connected = false;
-                            Stop("the AI ended the session (disconnect_remote_console)", fromConsoleThread: false);
+                            StopOwn(ct, "the AI ended the session (disconnect_remote_console)");
                             return;
                         }
                         await NamedPipeServer.HandleRequestAsync(ssl, request, ct);
@@ -182,7 +207,8 @@ public static class RemoteConsoleDialer
                     lock (_lock) _connected = false;
                 }
                 if (ct.IsCancellationRequested) return;
-                RemoteConsoleListener.Notify($"Remote AI session disconnected. Redialing {host}:{port}.", "Yellow");
+                unreachableSince = DateTime.UtcNow;
+                RemoteConsoleListener.Notify($"Remote AI session disconnected. Redialing {host}:{port} for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "Yellow");
                 RemoteConsoleListener.SetTitle(RemoteControl.WaitingTitle);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -194,7 +220,7 @@ public static class RemoteConsoleDialer
                 if (ct.IsCancellationRequested) return;
                 if (!announcedWaiting)
                 {
-                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying until Disable-MCPRemoteControl.", "DarkGray");
+                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes, or until Disable-MCPRemoteControl.", "DarkGray");
                     announcedWaiting = true;
                 }
             }
@@ -208,9 +234,10 @@ public static class RemoteConsoleDialer
     /// The connector's half of the pairing: say hello, check that the proxy
     /// proves the key before anything is sent, then prove in turn. With a
     /// resume key it proves that; otherwise the code. Returns the reason the
-    /// proxy (or this side) refused, or the resume key for the next redial.
+    /// proxy (or this side) refused — with retry set when it is only "busy"
+    /// while reconnecting — or the resume key for the next redial.
     /// </summary>
-    private static async Task<(string? refused, byte[]? resumeKey)> HandshakeAsConnectorAsync(SslStream ssl, string? code, byte[]? resumeKey, byte[] thumbprint, CancellationToken ct)
+    private static async Task<(string? refused, bool retry, byte[]? resumeKey)> HandshakeAsConnectorAsync(SslStream ssl, string? code, byte[]? resumeKey, byte[] thumbprint, CancellationToken ct)
     {
         var clientNonce = RandomNumberGenerator.GetBytes(32);
         await SendJsonAsync(ssl, new
@@ -221,12 +248,13 @@ public static class RemoteConsoleDialer
             pid = Environment.ProcessId,
             client_nonce = Convert.ToBase64String(clientNonce),
             resume = resumeKey != null,
+            resume_id = resumeKey != null ? RemoteConsoleListener.KeyId(resumeKey) : null,
         }, ct);
 
         using var challenge = JsonDocument.Parse(await NamedPipeServer.ReceiveMessageAsync(ssl, ct, RemoteConsoleListener.MaxHandshakeFrame));
         var root = challenge.RootElement;
         if (root.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.False)
-            return (RefusalText(root, resuming: resumeKey != null), null);
+            return Refused(root, resumeKey != null);
 
         var serverNonce = Convert.FromBase64String(root.GetProperty("server_nonce").GetString() ?? "");
         var serverProof = Convert.FromBase64String(root.GetProperty("server_proof").GetString() ?? "");
@@ -239,22 +267,28 @@ public static class RemoteConsoleDialer
         {
             var salt = Convert.FromBase64String(root.GetProperty("salt").GetString() ?? "");
             var iterations = root.GetProperty("iterations").GetInt32();
-            if (iterations <= 0 || iterations > 2_000_000) return ("the other side asked for an unreasonable key derivation; it is not a PowerShell.MCP proxy", null);
+            if (iterations <= 0 || iterations > 2_000_000) return ("the other side asked for an unreasonable key derivation; it is not a PowerShell.MCP proxy", false, null);
             key = RemoteConsoleListener.DeriveKey(code!, salt, iterations);
         }
 
         var expected = RemoteConsoleListener.Proof(key, "srv", clientNonce, serverNonce, thumbprint);
         if (!CryptographicOperations.FixedTimeEquals(expected, serverProof))
-            return ("the other side did not prove the pairing code (wrong code, wrong address, or an interceptor); nothing was sent to it", null);
+            return ("the other side did not prove the pairing code (wrong code, wrong address, or an interceptor); nothing was sent to it", false, null);
 
         await SendJsonAsync(ssl, new { client_proof = Convert.ToBase64String(RemoteConsoleListener.Proof(key, "cli", clientNonce, serverNonce, thumbprint)) }, ct);
 
         using var ack = JsonDocument.Parse(await NamedPipeServer.ReceiveMessageAsync(ssl, ct, RemoteConsoleListener.MaxHandshakeFrame));
         if (!(ack.RootElement.TryGetProperty("ok", out var ackOk) && ackOk.ValueKind == JsonValueKind.True))
-            return (RefusalText(ack.RootElement, resuming: resumeKey != null), null);
+            return Refused(ack.RootElement, resumeKey != null);
         var next = Convert.FromBase64String(ack.RootElement.GetProperty("resume_key").GetString() ?? "");
-        if (next.Length != 32) return ("the proxy sent no usable resume key", null);
-        return (null, next);
+        if (next.Length != 32) return ("the proxy sent no usable resume key", false, null);
+        return (null, false, next);
+    }
+
+    private static (string? refused, bool retry, byte[]? resumeKey) Refused(JsonElement root, bool resuming)
+    {
+        var busy = root.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String && e.GetString() == "busy";
+        return (RefusalText(root, resuming), resuming && busy, null);
     }
 
     /// <summary>

@@ -36,7 +36,7 @@ public static class PowerShellCommunication
         // Under remote control every AI command comes from the remote proxy (local ones are refused),
         // so a saved overflow file lives on the remote side for that AI.
         var output = OutputTruncationHelper.TruncateIfNeeded(result, remote: RemoteControl.IsActive);
-        ExecutionState.AddToCache(output);
+        if (!ExecutionState.IsStaleRemoteResult) ExecutionState.AddToCache(output);
         ExecutionState.CompleteExecution();
 
         lock (_lock)

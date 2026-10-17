@@ -50,6 +50,12 @@ public static class RemoteControl
     public static string ConnectedTitle(string who) => $"AI from {who}";
 
     /// <summary>Ends either mode. False when neither was active.</summary>
-    public static bool Stop(string reason, bool fromConsoleThread) =>
-        RemoteConsoleListener.Stop(reason, fromConsoleThread) | RemoteConsoleDialer.Stop(reason, fromConsoleThread);
+    public static bool Stop(string reason, bool fromConsoleThread)
+    {
+        var stopped = RemoteConsoleListener.Stop(reason, fromConsoleThread) | RemoteConsoleDialer.Stop(reason, fromConsoleThread);
+        // The caller (a cmdlet, module removal) reports and titles the window
+        // itself; notices and a title queued earlier, by either mode, are stale.
+        if (stopped && fromConsoleThread) RemoteConsoleListener.ClearPendingNotices();
+        return stopped;
+    }
 }

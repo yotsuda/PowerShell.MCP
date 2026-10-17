@@ -33,11 +33,12 @@ namespace PowerShell.MCP.Services;
 /// PBKDF2-SHA256 with 300,000 iterations, good for ONE pairing and only for
 /// <see cref="CodeLifetime"/>. A successful pairing hands the proxy a random
 /// 256-bit resume key, which is what a reconnect after a dropped connection
-/// proves; when a session ends, a new code is shown, and remote control stops
-/// if nobody pairs or resumes within the lifetime. Failures are counted from
-/// the moment a proof has been sent (a port scan or garbage is not an
-/// attempt); after five the listener stops. Frames before authentication are
-/// capped, and only a few handshakes run at once.
+/// proves — also while this side still holds the old connection, which the
+/// proven reconnect replaces. When a session ends, a new code is shown, and
+/// remote control stops if nobody pairs or resumes within the lifetime. A
+/// failed attempt is a client proof that does not match; after five the
+/// listener stops. Frames before authentication are capped, and only a few
+/// handshakes run at once.
 /// </para>
 /// <para>
 /// Ownership. The console never calls ConsoleLiveness.SetOwned — an unowned
@@ -67,6 +68,14 @@ public static class RemoteConsoleListener
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(120);
     private static readonly TimeSpan ExpiryCheck = TimeSpan.FromSeconds(15);
 
+    /// <summary>One connection that paired: who, and how to end it if a proven reconnect replaces it.</summary>
+    private sealed class Session
+    {
+        public required string From { get; init; }
+        public required TcpClient Client { get; init; }
+        public required CancellationTokenSource Cts { get; init; }
+    }
+
     private static readonly object _lock = new();
     private static readonly SemaphoreSlim _pendingHandshakes = new(MaxPendingHandshakes, MaxPendingHandshakes);
     private static TcpListener? _listener;
@@ -75,19 +84,19 @@ public static class RemoteConsoleListener
     private static Timer? _expiryTimer;
     private static IPAddress[]? _allowFrom;
     private static byte[] _salt = [];
-    private static byte[]? _codeKey;       // null once used
-    private static string? _code;          // the code on screen, for messages
-    private static byte[]? _resumeKey;     // set by a pairing, cleared by a goodbye
-    private static DateTime _deadline;     // no session: pair or resume before this
+    private static byte[]? _codeKey;            // null once used
+    private static string? _code;               // the code on screen, for messages
+    private static byte[]? _resumeKey;          // set by a pairing, cleared by a goodbye
+    private static byte[]? _previousResumeKey;  // the one the latest reconnect proved, until it is used
+    private static DateTime _deadline;          // no session: pair or resume before this
     private static int _failures;
     private static int _port;
-    private static string? _connectedFrom;
-    private static object? _session;
+    private static Session? _session;
 
     public static bool IsListening { get { lock (_lock) return _listener != null; } }
-    public static bool IsConnected { get { lock (_lock) return _connectedFrom != null; } }
+    public static bool IsConnected { get { lock (_lock) return _session != null; } }
     public static int Port { get { lock (_lock) return _port; } }
-    public static string? ConnectedFrom { get { lock (_lock) return _connectedFrom; } }
+    public static string? ConnectedFrom { get { lock (_lock) return _session?.From; } }
     /// <summary>The code currently valid, raw (null once used); for the cmdlet and tests.</summary>
     internal static string? CurrentCode { get { lock (_lock) return _codeKey != null ? _code : null; } }
 
@@ -134,9 +143,9 @@ public static class RemoteConsoleListener
             _certificate = certificate;
             _allowFrom = allowFrom is { Length: > 0 } ? allowFrom.Select(Unmap).ToArray() : null;
             _resumeKey = null;
+            _previousResumeKey = null;
             _failures = 0;
             _port = port;
-            _connectedFrom = null;
             _session = null;
             var code = NewCodeLocked();
             _expiryTimer = new Timer(_ => CheckExpiry(), null, ExpiryCheck, ExpiryCheck);
@@ -158,34 +167,34 @@ public static class RemoteConsoleListener
         return code;
     }
 
-    private static void CheckExpiry()
-    {
-        lock (_lock)
-        {
-            if (_listener == null || _connectedFrom != null || DateTime.UtcNow <= _deadline) return;
-        }
-        Stop($"no MCP server paired or reconnected within {CodeLifetime.TotalMinutes:0} minutes", fromConsoleThread: false);
-    }
+    private static void CheckExpiry() =>
+        Stop($"no MCP server paired or reconnected within {CodeLifetime.TotalMinutes:0} minutes", fromConsoleThread: false, onlyIfExpired: true);
 
     /// <summary>
     /// Stops listening and drops the session, if any. Returns false when not
-    /// listening. From a background thread (lockout, expiry) the console is
-    /// told why and its title reset; from the runspace thread (a cmdlet,
-    /// module removal) the caller does that itself.
+    /// listening (or, with <paramref name="onlyIfExpired"/>, when a session
+    /// came in or the deadline moved meanwhile — decided under the lock, so a
+    /// pairing that just completed is not torn down). From a background
+    /// thread (lockout, expiry) the console is told why and its title reset;
+    /// from the runspace thread (a cmdlet, module removal) the caller does
+    /// that itself.
     /// </summary>
-    public static bool Stop(string reason, bool fromConsoleThread)
+    public static bool Stop(string reason, bool fromConsoleThread, bool onlyIfExpired = false)
     {
         TcpListener? listener;
         CancellationTokenSource? cts;
         X509Certificate2? certificate;
         Timer? timer;
+        Session? session;
         lock (_lock)
         {
             if (_listener == null) return false;
+            if (onlyIfExpired && (_session != null || DateTime.UtcNow <= _deadline)) return false;
             listener = _listener;
             cts = _cts;
             certificate = _certificate;
             timer = _expiryTimer;
+            session = _session;
             _listener = null;
             _cts = null;
             _certificate = null;
@@ -194,18 +203,18 @@ public static class RemoteConsoleListener
             _codeKey = null;
             _code = null;
             _resumeKey = null;
+            _previousResumeKey = null;
             _salt = [];
-            _connectedFrom = null;
             _session = null;
         }
         timer?.Dispose();
         try { cts?.Cancel(); } catch { }
         try { listener.Stop(); } catch { }
+        try { session?.Client.Dispose(); } catch { }
         certificate?.Dispose();
-        cts?.Dispose();
-        // Output the remote session left behind is not for whoever uses this
-        // console next (a local AI would otherwise drain it as its own).
-        ExecutionState.ClearCachedOutputs();
+        // Output the remote session left behind, now or from a command still
+        // running, is not for whoever uses this console next.
+        ExecutionState.EndRemoteEpoch();
         if (!fromConsoleThread)
         {
             Notify($"Remote control ended: {reason}.", "Yellow");
@@ -213,11 +222,19 @@ public static class RemoteConsoleListener
         }
         else
         {
-            // The caller reports and sets the title itself; a notice queued
-            // earlier would now be stale.
-            lock (_lock) { _notices.Clear(); _pendingTitle = null; }
+            ClearPendingNotices();
         }
         return true;
+    }
+
+    /// <summary>
+    /// Drops queued notices and title: the caller (a cmdlet on the runspace
+    /// thread) reports and sets the title itself, and anything queued earlier
+    /// would now be stale.
+    /// </summary>
+    internal static void ClearPendingNotices()
+    {
+        lock (_lock) { _notices.Clear(); _pendingTitle = null; }
     }
 
     private static IPAddress Unmap(IPAddress address) => address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
@@ -239,9 +256,12 @@ public static class RemoteConsoleListener
     public static string FormatCode(string code) =>
         code.Length == CodeLength ? string.Join('-', code.Chunk(4).Select(c => new string(c))) : code;
 
-    /// <summary>Upper case, letters and digits only: "7q4k-m2xp-…" and "7Q4K M2XP …" are the same code.</summary>
+    /// <summary>
+    /// Upper-case ASCII letters and digits only: "7q4k-m2xp-…", "7Q4K M2XP …"
+    /// and the full-width "７Ｑ４Ｋ…" an IME produces are the same code.
+    /// </summary>
     public static string NormalizeCode(string code) =>
-        new string(code.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        new string(code.Normalize(NormalizationForm.FormKC).Where(char.IsAsciiLetterOrDigit).ToArray()).ToUpperInvariant();
 
     internal static string NewPairingCode()
     {
@@ -251,8 +271,8 @@ public static class RemoteConsoleListener
         return new string(chars);
     }
 
-    // The proxy has copies of DeriveKey and Proof (RemoteConsoleClient); the
-    // two must stay identical.
+    // The proxy has copies of DeriveKey, Proof and KeyId (RemoteConsoleClient);
+    // the two must stay identical.
     internal static byte[] DeriveKey(string code, byte[] salt) => DeriveKey(code, salt, KeyIterations);
 
     internal static byte[] DeriveKey(string code, byte[] salt, int iterations) =>
@@ -267,6 +287,14 @@ public static class RemoteConsoleListener
         thumbprint.CopyTo(data, offset);
         return HMACSHA256.HashData(key, data);
     }
+
+    /// <summary>
+    /// Names a resume key in a hello without revealing it (a hash of 256
+    /// random bits), so the acceptor knows which of its keys the connector
+    /// holds — the latest, or the one before when the ack that carried the
+    /// latest never arrived.
+    /// </summary>
+    internal static string KeyId(byte[] key) => Convert.ToHexString(SHA256.HashData(key))[..16];
 
     private static X509Certificate2 CreateCertificate()
     {
@@ -303,7 +331,9 @@ public static class RemoteConsoleListener
             }
             // Not on the allow list, or too many handshakes already under
             // way: closed at once, before TLS, and not counted.
-            var address = Unmap((client.Client.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None);
+            IPAddress address;
+            try { address = Unmap((client.Client.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None); }
+            catch { client.Dispose(); continue; }
             IPAddress[]? allow;
             lock (_lock) allow = _allowFrom;
             if ((allow != null && !allow.Contains(address)) || !_pendingHandshakes.Wait(0))
@@ -311,153 +341,203 @@ public static class RemoteConsoleListener
                 client.Dispose();
                 continue;
             }
-            _ = Task.Run(() => ServeClientAsync(client, ct), CancellationToken.None);
+            _ = Task.Run(() => ServeClientAsync(listener, client, address, ct), CancellationToken.None);
         }
     }
 
-    /// <summary>How far a handshake got: failures count only once a proof was sent.</summary>
-    private sealed class Attempt { public bool ProofSent; }
+    /// <summary>What a handshake established: a reconnect (and the key it proved) or a pairing with the code.</summary>
+    private sealed record Paired(bool Resumed, byte[] KeyUsed);
 
-    private static async Task ServeClientAsync(TcpClient client, CancellationToken ct)
+    /// <summary>
+    /// One connection. Called holding a _pendingHandshakes slot, released here
+    /// exactly once whatever happens.
+    /// </summary>
+    private static async Task ServeClientAsync(TcpListener listener, TcpClient client, IPAddress address, CancellationToken ct)
     {
-        var remote = DescribeRemote((client.Client.RemoteEndPoint as IPEndPoint)?.Address);
-        X509Certificate2? certificate;
-        lock (_lock) certificate = _certificate;
-        if (certificate == null) { _pendingHandshakes.Release(); client.Dispose(); return; }
+        var holdingSlot = true;
+        void ReleaseSlot()
+        {
+            if (!holdingSlot) return;
+            holdingSlot = false;
+            _pendingHandshakes.Release();
+        }
 
         using (client)
         {
-            client.NoDelay = true;
-            using var ssl = new SslStream(client.GetStream(), leaveInnerStreamOpen: false);
-            var attempt = new Attempt();
-            bool? resumed;
             try
             {
-                using var handshake = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                handshake.CancelAfter(HandshakeTimeout);
-                await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                var remote = DescribeRemote(address);
+                X509Certificate2? certificate;
+                lock (_lock) certificate = ReferenceEquals(_listener, listener) ? _certificate : null;
+                if (certificate == null) return;
+
+                client.NoDelay = true;
+                using var ssl = new SslStream(client.GetStream(), leaveInnerStreamOpen: false);
+                Paired? paired;
+                try
                 {
-                    ServerCertificate = certificate,
-                    ClientCertificateRequired = false,
-                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                }, handshake.Token);
-                resumed = await HandshakeAsync(ssl, certificate, remote, attempt, handshake.Token);
+                    using var handshake = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    handshake.CancelAfter(HandshakeTimeout);
+                    await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = certificate,
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    }, handshake.Token);
+                    paired = await HandshakeAsync(ssl, certificate, listener, remote, handshake.Token);
+                }
+                catch
+                {
+                    // A dropped or malformed handshake is not an attempt: only
+                    // a client proof that does not match counts (HandshakeAsync).
+                    return;
+                }
+                finally
+                {
+                    ReleaseSlot();
+                }
+                if (paired == null) return; // refused, and answered
+
+                await RunSessionAsync(listener, client, ssl, remote, paired, ct);
             }
             catch
             {
-                // A proxy given the wrong code verifies the server's proof,
-                // fails, and simply closes: once our proof is out, a drop is
-                // a failed attempt. Before that it is noise (a port scan, a
-                // stray TLS client) and costs nothing.
-                if (attempt.ProofSent) CountFailure(remote);
-                return;
+                // Anything unexpected ends this connection only.
             }
             finally
             {
-                _pendingHandshakes.Release();
+                ReleaseSlot();
             }
-            if (resumed == null) return; // refused, and answered
+        }
+    }
 
-            var session = new object();
-            bool busy;
+    private static async Task RunSessionAsync(TcpListener listener, TcpClient client, SslStream ssl, string remote, Paired paired, CancellationToken ct)
+    {
+        using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var session = new Session { From = remote, Client = client, Cts = sessionCts };
+        Session? replaced = null;
+        bool busy;
+        lock (_lock)
+        {
+            // A reconnect that proved the resume key replaces a connection
+            // this side still holds (the peer saw it drop first); a code
+            // pairing never does.
+            busy = !ReferenceEquals(_listener, listener) || (_session != null && !paired.Resumed);
+            if (!busy)
+            {
+                replaced = _session;
+                _session = session;
+                _deadline = DateTime.MaxValue;
+                _failures = 0;
+            }
+        }
+        if (busy)
+        {
+            try { await SendJsonAsync(ssl, new { ok = false, error = "busy", message = "Another MCP server is connected to this console. Disconnect it first." }, ct); }
+            catch { }
+            return;
+        }
+        if (replaced != null)
+        {
+            try { replaced.Cts.Cancel(); } catch { }
+            try { replaced.Client.Dispose(); } catch { }
+        }
+
+        // A fresh resume key on every pairing: what the next reconnect proves.
+        // The key just proved stays good too until a request arrives here, in
+        // case this ack never reaches the other side.
+        var resumeKey = RandomNumberGenerator.GetBytes(32);
+        try
+        {
+            await SendJsonAsync(ssl, new { ok = true, pid = Environment.ProcessId, version = MCPModuleInitializer.ServerVersion, resume_key = Convert.ToBase64String(resumeKey) }, ct);
             lock (_lock)
             {
-                busy = _listener == null || _connectedFrom != null;
-                if (!busy)
+                if (_session == session)
                 {
-                    _connectedFrom = remote;
-                    _session = session;
-                    _deadline = DateTime.MaxValue;
-                    _failures = 0;
+                    _previousResumeKey = paired.Resumed ? paired.KeyUsed : null;
+                    _resumeKey = resumeKey;
                 }
             }
-            if (busy)
-            {
-                try { await SendJsonAsync(ssl, new { ok = false, error = "busy", message = "Another MCP server is connected to this console. Disconnect it first." }, ct); }
-                catch { }
-                return;
-            }
+        }
+        catch
+        {
+            EndSession(session, goodbye: false);
+            return;
+        }
 
-            // A fresh resume key on every pairing: what a reconnect proves.
-            var resumeKey = RandomNumberGenerator.GetBytes(32);
-            try
-            {
-                await SendJsonAsync(ssl, new { ok = true, pid = Environment.ProcessId, version = MCPModuleInitializer.ServerVersion, resume_key = Convert.ToBase64String(resumeKey) }, ct);
-                lock (_lock) { if (_session == session) _resumeKey = resumeKey; }
-            }
-            catch
-            {
-                EndSession(session, goodbye: false);
-                return;
-            }
+        Notify(paired.Resumed
+            ? $"Remote AI session reconnected from {remote}."
+            : $"Remote AI session connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green");
+        SetTitle(RemoteControl.ConnectedTitle(remote));
 
-            Notify(resumed.Value
-                ? $"Remote AI session reconnected from {remote}."
-                : $"Remote AI session connected from {remote}{(remote == "localhost" ? " (through a tunnel or a proxy on this machine)" : "")}.", "Green");
-            SetTitle(RemoteControl.ConnectedTitle(remote));
-
-            var goodbye = false;
-            NamedPipeServer.IsRemoteRequest.Value = true;
-            try
+        var goodbye = false;
+        NamedPipeServer.IsRemoteRequest.Value = true;
+        try
+        {
+            var first = true;
+            while (!sessionCts.IsCancellationRequested)
             {
-                while (!ct.IsCancellationRequested)
+                string request;
+                using (var idle = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token))
                 {
-                    string request;
-                    using (var idle = CancellationTokenSource.CreateLinkedTokenSource(ct))
-                    {
-                        idle.CancelAfter(IdleTimeout);
-                        request = await NamedPipeServer.ReceiveMessageAsync(ssl, idle.Token);
-                    }
-                    if (RemoteConsoleDialer.IsGoodbye(request))
-                    {
-                        goodbye = true;
-                        break;
-                    }
-                    await NamedPipeServer.HandleRequestAsync(ssl, request, ct);
+                    idle.CancelAfter(IdleTimeout);
+                    request = await NamedPipeServer.ReceiveMessageAsync(ssl, idle.Token);
                 }
+                if (first)
+                {
+                    // The other side has the new key: the old one is done.
+                    first = false;
+                    lock (_lock) { if (_session == session) _previousResumeKey = null; }
+                }
+                if (RemoteConsoleDialer.IsGoodbye(request))
+                {
+                    goodbye = true;
+                    break;
+                }
+                await NamedPipeServer.HandleRequestAsync(ssl, request, sessionCts.Token);
             }
-            catch
-            {
-                // Disconnected, or idle past the limit.
-            }
-            finally
-            {
-                EndSession(session, goodbye);
-            }
+        }
+        catch
+        {
+            // Disconnected, idle past the limit, or replaced by a reconnect.
+        }
+        finally
+        {
+            EndSession(session, goodbye);
         }
     }
 
     /// <summary>
-    /// The session is over. A new code goes up for whoever connects next; a
-    /// dropped session (no goodbye) may also be resumed with its key, until
-    /// the same deadline. Nobody by then, and remote control stops.
+    /// The session is over (unless a reconnect already replaced it). A new
+    /// code goes up for whoever connects next; a dropped session (no goodbye)
+    /// may also be resumed with its key, until the same deadline. Nobody by
+    /// then, and remote control stops.
     /// </summary>
-    private static void EndSession(object session, bool goodbye)
+    private static void EndSession(Session session, bool goodbye)
     {
-        string code;
         lock (_lock)
         {
             if (_session != session) return;
             _session = null;
-            _connectedFrom = null;
             if (_listener == null) return;
-            if (goodbye) _resumeKey = null;
-            code = NewCodeLocked();
+            if (goodbye) { _resumeKey = null; _previousResumeKey = null; }
+            var code = NewCodeLocked();
+            var minutes = $"{CodeLifetime.TotalMinutes:0}";
+            // Queued under the lock, so a reconnect that follows at once
+            // cannot have its notice and title overtaken by these.
+            Notify(goodbye
+                ? $"Remote AI session ended. To connect again within {minutes} minutes, give the AI the new pairing code {FormatCode(code)}; after that remote control ends."
+                : $"Remote AI session disconnected. That MCP server can reconnect by itself within {minutes} minutes; another one needs the new pairing code {FormatCode(code)}. After that remote control ends.", "Yellow");
+            SetTitle(RemoteControl.WaitingTitle);
         }
-        var minutes = $"{CodeLifetime.TotalMinutes:0}";
-        Notify(goodbye
-            ? $"Remote AI session ended. To connect again within {minutes} minutes, give the AI the new pairing code {FormatCode(code)}; after that remote control ends."
-            : $"Remote AI session disconnected. That MCP server can reconnect by itself within {minutes} minutes; another one needs the new pairing code {FormatCode(code)}. After that remote control ends.", "Yellow");
-        SetTitle(RemoteControl.WaitingTitle);
     }
 
     /// <summary>
     /// Proves the key both ways over the TLS session, bound to the
-    /// certificate the client actually saw. Returns whether the proxy resumed
-    /// a session (true) or paired with the code (false), or null after
-    /// answering a refusal.
+    /// certificate the client actually saw. Returns how the proxy paired, or
+    /// null after answering a refusal.
     /// </summary>
-    private static async Task<bool?> HandshakeAsync(SslStream ssl, X509Certificate2 certificate, string remote, Attempt attempt, CancellationToken ct)
+    private static async Task<Paired?> HandshakeAsync(SslStream ssl, X509Certificate2 certificate, TcpListener listener, string remote, CancellationToken ct)
     {
         var helloJson = await NamedPipeServer.ReceiveMessageAsync(ssl, ct, MaxHandshakeFrame);
         using var hello = JsonDocument.Parse(helloJson);
@@ -487,20 +567,35 @@ public static class RemoteConsoleListener
         }
 
         var resume = root.TryGetProperty("resume", out var r) && r.ValueKind == JsonValueKind.True;
+        var resumeId = root.TryGetProperty("resume_id", out var rid) && rid.ValueKind == JsonValueKind.String ? rid.GetString() : null;
         byte[]? key;
         byte[] salt;
-        string? refusal = null, error = null;
+        string? error = null;
         lock (_lock)
         {
             salt = _salt;
-            key = resume ? _resumeKey : _codeKey;
-            if (_connectedFrom != null) { error = "busy"; refusal = "Another MCP server is connected to this console. Disconnect it first."; }
-            else if (DateTime.UtcNow > _deadline) { error = "expired"; refusal = "The pairing code expired."; }
-            else if (key == null) { error = resume ? "resume_unknown" : "code_used"; refusal = resume ? "This console no longer knows that session." : "That pairing code was already used."; }
+            if (!ReferenceEquals(_listener, listener)) { key = null; error = "expired"; }
+            else if (resume)
+            {
+                key = _resumeKey != null && KeyId(_resumeKey) == resumeId ? _resumeKey
+                    : _previousResumeKey != null && KeyId(_previousResumeKey) == resumeId ? _previousResumeKey
+                    : null;
+                // While connected the deadline is not running: a proven
+                // reconnect replaces the connection this side still holds.
+                if (key == null) error = "resume_unknown";
+                else if (_session == null && DateTime.UtcNow > _deadline) error = "expired";
+            }
+            else
+            {
+                key = _codeKey;
+                if (_session != null) error = "busy";
+                else if (DateTime.UtcNow > _deadline) error = "expired";
+                else if (key == null) error = "code_used";
+            }
         }
-        if (refusal != null)
+        if (error != null)
         {
-            await SendJsonAsync(ssl, new { ok = false, error, message = refusal }, ct);
+            await SendJsonAsync(ssl, new { ok = false, error, message = error }, ct);
             return null;
         }
 
@@ -509,7 +604,6 @@ public static class RemoteConsoleListener
         var serverNonce = RandomNumberGenerator.GetBytes(32);
         var thumbprint = certificate.GetCertHash(HashAlgorithmName.SHA256);
 
-        attempt.ProofSent = true;
         await SendJsonAsync(ssl, new
         {
             salt = Convert.ToBase64String(salt),
@@ -525,21 +619,21 @@ public static class RemoteConsoleListener
         if (!CryptographicOperations.FixedTimeEquals(expected, clientProof))
         {
             await SendJsonAsync(ssl, new { ok = false, error = "bad_code", message = "The pairing code did not match." }, ct);
-            CountFailure(remote);
+            CountFailure(listener, remote);
             return null;
         }
 
         // A code pairs once.
         if (!resume) lock (_lock) { if (ReferenceEquals(_codeKey, key)) _codeKey = null; }
-        return resume;
+        return new Paired(resume, key!);
     }
 
-    private static void CountFailure(string remote)
+    private static void CountFailure(TcpListener listener, string remote)
     {
         int failures;
         lock (_lock)
         {
-            if (_listener == null) return;
+            if (!ReferenceEquals(_listener, listener)) return;
             failures = ++_failures;
         }
         Notify($"Remote pairing attempt from {remote} failed ({failures}/{MaxFailures}).", "Yellow");

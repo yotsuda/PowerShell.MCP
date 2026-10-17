@@ -39,6 +39,11 @@ public class RemoteHello
     /// <summary>True to prove the resume key of an earlier pairing instead of the code.</summary>
     [JsonPropertyName("resume")]
     public bool Resume { get; set; }
+
+    /// <summary>Which resume key is proved (a hash naming it), so the other side can pick it.</summary>
+    [JsonPropertyName("resume_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ResumeId { get; set; }
 }
 
 /// <summary>Third frame: the proxy's proof, sent only after the console proved itself.</summary>
