@@ -70,7 +70,7 @@ Anywhere it cannot ask, it changes nothing and explains the parameters below ins
 
 Register-PwshToClaudeCode
 
-Registers the server, then asks whether to disable the built-in shell tools.
+Registers the server, then asks whether to disable the built-in shell tools (recommended; Yes is the default).
 
 ### EXAMPLE 2
 

@@ -29,6 +29,7 @@ sections at the TOP of the file; keep older sections for history.
 - **A console under remote control is spoken for.** A local MCP server probing it over the pipe is told `remote` and passes it over, as it does an outdated console; it is never registered with the idle reaper, so it is not closed for being idle; `Disable-MCPRemoteControl` and `Remove-Module` stop it.
 
 ## Improvements
+- **`Register-PwshToClaudeCode` recommends disabling the built-in shell tools, and Yes is now the default.** The question it asks after registering says "(recommended)", and Yes says why; pressing Enter disables Claude Code's built-in Bash and PowerShell tools, where it used to keep them. `-DisableBuiltInShellTools` / `-KeepBuiltInShellTools` still answer without asking, and with no one to ask nothing changes.
 - **An elevated console keeps "Administrator:" in its title.** Windows marks an elevated console's title with `Administrator: `; every title PowerShell.MCP sets (the initial `#PID ____`, the names the AI gives consoles, the remote control states) replaced it. They now keep it, so the one fact that matters most about the window stays in sight — for the user, and for the AI, which sees the title in every response.
 
 ## Breaking Changes

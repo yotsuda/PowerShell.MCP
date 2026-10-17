@@ -181,7 +181,7 @@ function Read-BuiltInShellToolsChoice {
         -not ([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-noni' })
     if (-not $viaMcp -and -not $interactive) { return 'CannotAsk' }
 
-    $caption = "Disable Claude Code's built-in Bash and PowerShell tools?"
+    $caption = "Disable Claude Code's built-in Bash and PowerShell tools? (recommended)"
     $message = @"
 Claude Code can also run commands in hidden shells of its own (its built-in Bash
 and PowerShell tools), where you cannot see them. Disabling those makes it run
@@ -193,11 +193,14 @@ If the pwsh MCP server ever fails to start, Claude Code will have no shell until
 you remove them again.
 "@
     $choices = [System.Collections.ObjectModel.Collection[System.Management.Automation.Host.ChoiceDescription]]@(
-        [System.Management.Automation.Host.ChoiceDescription]::new('&Yes', 'Disable the built-in shell tools.')
+        [System.Management.Automation.Host.ChoiceDescription]::new('&Yes', 'Recommended: disable the built-in shell tools, so every command runs where you can see it.')
         [System.Management.Automation.Host.ChoiceDescription]::new('&No', 'Keep them enabled.')
     )
     try {
-        $answer = $Host.UI.PromptForChoice($caption, $message, $choices, 1)
+        # Yes is the default, as recommended: the user ran this cmdlet and
+        # reads the question before pressing Enter, and the change is undone
+        # by removing the two entries again (said above and after).
+        $answer = $Host.UI.PromptForChoice($caption, $message, $choices, 0)
     }
     catch {
         # A host that cannot prompt after all.
