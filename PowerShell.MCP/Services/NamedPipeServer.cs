@@ -1661,17 +1661,14 @@ Please provide how to update the MCP client configuration to the user.";
             try { return Console.Title; }
             catch { }
         }
-        else
+        else if (ConsoleTitle.Known is { } known)
         {
-            try
-            {
-                var result = McpServerHost.ExecuteSilentCommand("$Host.UI.RawUI.WindowTitle");
-                if (!string.IsNullOrEmpty(result))
-                    return result.Trim();
-            }
-            catch { }
+            // Not a command sent to the runspace: while a command runs or
+            // waits at a prompt, it would queue behind it and then take that
+            // command's result (see ConsoleTitle.Known).
+            return known;
         }
-        return $"#{System.Diagnostics.Process.GetCurrentProcess().Id}";
+        return $"#{Environment.ProcessId}";
     }
 
     /// <summary>

@@ -131,6 +131,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # actual cwd, not the stale process cwd that Set-Location
             # never updates.
             try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
+            # Same for the window title: on Linux and macOS the pipe server
+            # reads it from here instead of sending the runspace a command.
+            try { [PowerShell.MCP.Services.ConsoleTitle]::Remember($Host.UI.RawUI.WindowTitle) } catch {}
 
             # ===== Proxy disconnect detection (event-driven) =====
             # MCPModuleInitializer watches the owning proxy process via
