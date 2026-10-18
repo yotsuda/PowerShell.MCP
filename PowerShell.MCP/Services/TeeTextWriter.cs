@@ -91,11 +91,29 @@ public sealed class TeeTextWriter : TextWriter
 
     private static bool Capturing => t_suppressed == 0;
 
+    private static volatile bool _atLineStart = true;
+
+    /// <summary>
+    /// Whether the last text written through a tee ended a line. On Linux and
+    /// macOS everything the console shows during a command goes through here,
+    /// so the engine asks this before writing the next prompt instead of
+    /// Console.CursorLeft — which there asks the terminal and reads the reply
+    /// from the keyboard input, and after a cancelled command waited for that
+    /// reply until the user pressed a key.
+    /// </summary>
+    public static bool AtLineStart => _atLineStart;
+
+    private static void Track(string text)
+    {
+        if (text.Length > 0) _atLineStart = text[^1] is '\n' or '\r';
+    }
+
     public override Encoding Encoding => _primary.Encoding;
 
     public override void Write(char value)
     {
         _primary.Write(value);
+        _atLineStart = value is '\n' or '\r';
         if (Capturing) _capture.Append(value);
     }
 
@@ -103,12 +121,14 @@ public sealed class TeeTextWriter : TextWriter
     {
         if (value == null) return;
         _primary.Write(value);
+        Track(value);
         if (Capturing) _capture.Append(value);
     }
 
     public override void WriteLine(string? value)
     {
         _primary.WriteLine(value);
+        _atLineStart = true;
         if (!Capturing) return;
         if (value != null) _capture.Append(value);
         _capture.Append(_primary.NewLine ?? "\n");

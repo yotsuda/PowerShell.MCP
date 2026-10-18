@@ -67,6 +67,23 @@ public class TeeTextWriterTests
     }
 
     [Fact]
+    public void AtLineStart_FollowsTheLastText_SuppressedOrNot()
+    {
+        // The engine asks this instead of Console.CursorLeft on Linux and
+        // macOS, where CursorLeft waits for the terminal's reply on stdin.
+        var tee = new TeeTextWriter(new StringWriter(), new StringBuilder());
+
+        tee.Write("no newline yet");
+        Assert.False(TeeTextWriter.AtLineStart);
+        tee.WriteLine("done");
+        Assert.True(TeeTextWriter.AtLineStart);
+        using (TeeTextWriter.Suppress()) tee.Write("host output without newline");
+        Assert.False(TeeTextWriter.AtLineStart);
+        tee.Write('\n');
+        Assert.True(TeeTextWriter.AtLineStart);
+    }
+
+    [Fact]
     public void HostWrites_ThatGoThroughConsoleOut_AreNotCapturedAsDirect()
     {
         // A host that renders through the console writer, as ConsoleHost

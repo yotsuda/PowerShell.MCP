@@ -27,13 +27,53 @@ public static class ConsoleControl
     private static extern bool GenerateConsoleCtrlEvent(uint dwCtrlEvent, uint dwProcessGroupId);
 
     /// <summary>
-    /// Sends a real Ctrl+C (CTRL_C_EVENT) to this process's console group —
-    /// the same signal a human Ctrl+C raises. pwsh's handler stops the
-    /// running pipeline and any native child receives the break too; pwsh
-    /// itself survives. Group id 0 targets every process attached to the
-    /// caller's console.
+    /// Sends a Ctrl+C to the native commands running under this console.
+    /// On Windows that is a real CTRL_C_EVENT to the console group (id 0:
+    /// every process attached to the caller's console) — pwsh's handler and
+    /// any native child receive it, and pwsh survives. On Linux and macOS it
+    /// is SIGINT to this process's children only (pkill -INT -P): signalling
+    /// pwsh itself while it ran a PowerShell command (Start-Sleep) left the
+    /// command stopped but never completed, and the console stuck busy. A
+    /// PowerShell command is stopped by <see cref="StopRunningPipeline"/> —
+    /// and only once the signalled children are gone: stopping the pipeline
+    /// while a native command was still exiting left it stuck the same way.
+    /// (Calling kernel32 there threw, so cancel used to fail outright.)
     /// </summary>
-    public static bool SendCtrlC() => GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+    public static bool SendCtrlC()
+    {
+        if (OperatingSystem.IsWindows())
+            return GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+        var pid = Environment.ProcessId.ToString();
+        // 0: signalled at least one child; 1: none running.
+        var sent = RunTool("pkill", "-INT", "-P", pid) is 0 or 1;
+        // Wait (up to 2 s) for them to exit; pgrep exits 1 when none match.
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (sent && RunTool("pgrep", "-P", pid) == 0 && DateTime.UtcNow < deadline)
+            System.Threading.Thread.Sleep(100);
+        return sent;
+    }
+
+    /// <summary>Runs a small tool and returns its exit code, or -1 when it cannot run.</summary>
+    private static int RunTool(string file, params string[] args)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file, args)
+            {
+                UseShellExecute = false,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            if (p == null) return -1;
+            if (!p.WaitForExit(5000)) return -1;
+            return p.ExitCode;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
 
     // ===== Pipeline-level cancel (for PowerShell-side commands) =====
     //

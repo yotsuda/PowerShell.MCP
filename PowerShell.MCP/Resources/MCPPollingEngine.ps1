@@ -131,9 +131,6 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # actual cwd, not the stale process cwd that Set-Location
             # never updates.
             try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
-            # Same for the window title: on Linux and macOS the pipe server
-            # reads it from here instead of sending the runspace a command.
-            try { [PowerShell.MCP.Services.ConsoleTitle]::Remember($Host.UI.RawUI.WindowTitle) } catch {}
 
             # ===== Proxy disconnect detection (event-driven) =====
             # MCPModuleInitializer watches the owning proxy process via
@@ -170,6 +167,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             try {
                 $mcpRemoteTitle = [PowerShell.MCP.Services.RemoteConsoleListener]::TakePendingTitle()
                 if ($mcpRemoteTitle) { try { $Host.UI.RawUI.WindowTitle = $mcpRemoteTitle } catch {} }
+                # Remember the title for the status line (on Linux and macOS
+                # the pipe server reads it from here instead of sending the
+                # runspace a command) — after the remote title above, or a
+                # command right after a connect reports the old one.
+                try { [PowerShell.MCP.Services.ConsoleTitle]::Remember($Host.UI.RawUI.WindowTitle) } catch {}
                 $mcpRemoteNotices = @([PowerShell.MCP.Services.RemoteConsoleListener]::TakeNotices())
                 if ($mcpRemoteNotices.Count -gt 0) {
                     [Console]::WriteLine()
@@ -1612,12 +1614,16 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # prompt written at that position appears glued
                         # to the AI's last output line and PSReadLine
                         # then anchors user input there.
-                        if ([Console]::CursorLeft -gt 0) { [Console]::WriteLine() }
+                        # Not CursorLeft on Linux/macOS: there it reads the
+                        # terminal's reply from the keyboard input and, after
+                        # a cancel, waited for it until a key was pressed.
+                        $mcpMidLine = if ($IsWindows) { [Console]::CursorLeft -gt 0 } else { -not [PowerShell.MCP.Services.TeeTextWriter]::AtLineStart }
+                        if ($mcpMidLine) { [Console]::WriteLine() }
                         [Console]::Write($promptText.TrimEnd(' ').TrimEnd('>') + '> ')
                     }
                     catch {
                         try {
-                            if ([Console]::CursorLeft -gt 0) { [Console]::WriteLine() }
+                            if (-not $IsWindows -or [Console]::CursorLeft -gt 0) { [Console]::WriteLine() }
                             [Console]::Write("PS $((Get-Location).Path)> ")
                         } catch { [Console]::Write("PS> ") }
                     }
