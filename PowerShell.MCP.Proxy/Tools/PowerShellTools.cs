@@ -781,17 +781,17 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             string notice;
             if (string.IsNullOrEmpty(expectedCwd))
             {
-                notice = $"ℹ️ Console {consoleName} is at '{liveCwd}', and this server has no record of where the AI's earlier commands ran (it has just started, or the AI's console was closed).\n"
-                    + $"Pipeline NOT executed. Re-issue to run at '{liveCwd}', or prepend `Set-Location -LiteralPath '<folder>';` to run elsewhere.";
+                notice = $"ℹ️ Location check, routine at the start of a session: console {consoleName} is at '{liveCwd}', and this server has no record yet of where the AI's earlier commands ran (it has just started, or the AI's console was closed).\n"
+                    + $"Pipeline NOT executed — nothing ran. Re-issue it as is to run at '{liveCwd}' (no need to involve the user), or prepend `Set-Location -LiteralPath '<folder>';` to run elsewhere.";
             }
             else
             {
                 var revert = $"prepend `Set-Location -LiteralPath '{expectedCwd.Replace("'", "''")}';` to revert.";
                 notice = consoleAiCwd != null && !newConsole
-                    ? $"ℹ️ cwd in console {consoleName} changed from '{expectedCwd}' to '{liveCwd}' outside the AI's commands (e.g. a `cd` typed in the console).\n"
-                        + $"Pipeline NOT executed. Re-issue to run at '{liveCwd}', or {revert}"
-                    : $"ℹ️ Console {consoleName} is at '{liveCwd}', not at '{expectedCwd}' where the AI's last command ended.\n"
-                        + $"Pipeline NOT executed. Re-issue to run at '{liveCwd}', or {revert}";
+                    ? $"ℹ️ Location check: cwd in console {consoleName} changed from '{expectedCwd}' to '{liveCwd}' outside the AI's commands (e.g. a `cd` typed in the console).\n"
+                        + $"Pipeline NOT executed — nothing ran. Re-issue to run at '{liveCwd}', or {revert}"
+                    : $"ℹ️ Location check: console {consoleName} is at '{liveCwd}', not at '{expectedCwd}' where the AI's last command ended.\n"
+                        + $"Pipeline NOT executed — nothing ran. Re-issue to run at '{liveCwd}', or {revert}";
             }
             return Wrap(PipelineHelper.JoinBlocks(
                 string.Join("\n", closedConsoleMessages),

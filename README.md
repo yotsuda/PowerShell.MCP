@@ -355,13 +355,15 @@ The AI can also drive a console on **another machine** — a test VM, a build bo
 
 *"Audit this VM's security, read-only"* — against a lab VM in Azure, reached through a port its owner had opened to one address, one session went from the Security log (2,015 failed RDP logons in three hours, no account lockout configured) to the local accounts and password policy, the listening ports checked against what is reachable from outside, SQL Server's version and login mode, Defender, TLS settings and persistence points, and ended with a report the team that owns the VM template could act on, in about ten minutes. That kind of review is usually postponed; attackers' tooling is already automated, and the gap is on the defenders' side.
 
-On the remote machine, install PowerShell 7.4+ (`winget install Microsoft.PowerShell` on Windows) and PowerShell.MCP the usual way, then in PowerShell 7:
+On the remote machine, install PowerShell 7.4+ (`winget install Microsoft.PowerShell` on Windows; [other platforms](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)), then in PowerShell 7:
 
 ```powershell
-Install-Module PowerShell.MCP -RequiredVersion <the version on your machine>   # once
+Install-Module PowerShell.MCP -RequiredVersion <version>   # once; the version your own machine runs — ask the AI
 Import-Module PowerShell.MCP
-Enable-MCPRemoteControl -AllowFrom 192.168.0.10   # the AI's machine; TCP port 42777 by default, -Port to change
+Enable-MCPRemoteControl -AllowFrom 192.168.0.10           # the AI's machine; TCP port 42777 by default, -Port to change
 ```
+
+On Linux and macOS the remote console can be a plain SSH session — no desktop is needed on that side.
 
 It asks you to confirm — saying which user the AI will act as, and whether elevated — then prints a pairing code (`XXXX-XXXX-XXXX`, good for one connection within 10 minutes), its host name and IP addresses. Give those to the AI on your machine — *"connect to the remote console at 192.168.0.20 with code 7Q4K-M2XP-H9RT"*. It calls `connect_remote_console`, then runs commands there with `execute_remote_command`: the same semantics as `execute_command` (a persistent session, `var1`–`var8`, the text-file cmdlets, `wait_for_remote_completion`, `cancel_remote_command`), with that machine's paths, in a window the person there can see. A `Read-Host` is answered by that person. While the AI is connected, every prompt there starts with `[AI from <your host>]`.
 
