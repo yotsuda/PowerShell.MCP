@@ -680,9 +680,11 @@ public sealed class RemoteConsoleClient : IDisposable
                         " already there (the same build) are used as they are; another PowerShell.MCP version is left untouched and not loaded.\n\n");
         }
         text.Append(where);
-        text.Append("The console there asks the user to confirm before it dials in. ");
-        text.Append($"The code pairs once and expires if no console dials in within {Minutes}. ");
-        text.Append($"Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall: on Windows a dialog asks once whether to allow PowerShell.MCP.Proxy.exe (private networks is enough); if it was dismissed, tell the user to allow it or add a rule. ");
+        text.Append("Tell the user, in a few short lines, only what they do: where to paste the line, that the console there asks them to confirm, and what to allow if a firewall dialog appears here. ");
+        text.Append($"The pairing code is inside the line: the user never sees or types it, so do not mention it — say only that the line works once, within {Minutes}. ");
+        text.Append($"Inbound TCP {_acceptPort} must be allowed through THIS machine's firewall: on Windows a dialog asks once whether to allow PowerShell.MCP.Proxy.exe. " +
+                    "For a machine on the LAN, private networks is enough; a VM or Windows Sandbox on this machine comes in through a Hyper-V virtual switch, which Windows usually counts as a public network, so public must be allowed too. " +
+                    "If the dialog was dismissed, tell the user to allow it or add a rule. ");
         text.Append($"Accepting stops after {MaxAcceptFailures} forged pairing attempts (a mistyped code is caught by the console and does not count). Once the console has dialed in, execute_remote_command works; disconnect_remote_console stops accepting.");
         return text.ToString();
     }
