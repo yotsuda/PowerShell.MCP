@@ -25,6 +25,7 @@ namespace PowerShell.MCP.Proxy
         /// </summary>
         internal static readonly string ServerInstructions =
 $@"PowerShell.MCP: persistent PowerShell 7 consoles the user can see and share. Use execute_command for shell work here.
+Admin work on THIS machine needs no remote control: ask the user to open PowerShell 7 as Administrator and run Import-Module PowerShell.MCP. This server uses such a user-opened console only when none of its own is free, so close yours (close_console) — the next command then goes there. start_console with a reason always starts a new, non-elevated console.
 
 It can also drive a console on ANOTHER machine (a VM, a server, a colleague's PC; elevated if that console is), with the user there watching. If the user asks for work on another machine, you may mention this option; set it up only when they ask for it. Users come back to this, so make the first setup the plain one:
 1. If not yet there, the user installs PowerShell 7.4+ on that machine (Windows: winget install Microsoft.PowerShell; elsewhere: https://aka.ms/install-powershell), then in PowerShell 7: Install-Module PowerShell.MCP. Both machines must run the same version (this server is {ModuleVersion}): when they differ, neither may be the latest, so ask the user to run Update-Module PowerShell.MCP by hand on BOTH machines, or on the older one only with -RequiredVersion <the newer one's version>. After updating this machine, the MCP client must be restarted.

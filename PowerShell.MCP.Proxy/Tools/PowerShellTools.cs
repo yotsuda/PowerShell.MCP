@@ -1274,7 +1274,9 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
     [McpServerTool]
     [Description(@"Ensure a PowerShell console is available, or launch a new one. When reason is empty or omitted, reuses an existing standby console if one is available. When reason is provided, always launches a new console regardless of existing ones.
 
-📌 Calling this first is optional — execute_command auto-starts or reuses a console as needed. Call it explicitly to pre-warm a console at a specific start_location, to show a startup banner, or (with reason) to force an additional console.")]
+📌 Calling this first is optional — execute_command auto-starts or reuses a console as needed. Call it explicitly to pre-warm a console at a specific start_location, to show a startup banner, or (with reason) to force an additional console.
+
+🔐 Consoles started here are never elevated. For admin work on this machine, ask the user to open PowerShell 7 as Administrator and run Import-Module PowerShell.MCP, then close_console your own consoles: with none of yours free, the next execute_command goes to that console (its title shows 'Administrator:').")]
     public static async Task<string> StartConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,

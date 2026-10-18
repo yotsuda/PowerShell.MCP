@@ -345,6 +345,10 @@ With the Claude Code CLI, pass it as `-e POWERSHELL_MCP_TIMEOUT_CEILING=120` to 
 
 ---
 
+### Admin work on this machine
+
+The consoles the AI starts are not elevated. For admin work, open PowerShell 7 **as Administrator** and run `Import-Module PowerShell.MCP`; then close the AI's own consoles (or let the AI close them with `close_console`). With none of its own left, the next command goes to your elevated console, whose title shows `Administrator:`. That first command stops once to say where the console is; the AI re-issues it there. No remote control is involved.
+
 ### Remote console (another machine)
 
 The AI can also drive a console on **another machine** — a test VM, a build box, a colleague's PC with that colleague watching (they run `Enable-MCPRemoteControl` and read you the code, below). If that console is elevated, so is the AI, which makes it a practical tool for **defensive work**: auditing a server, reading its event logs, checking what it exposes, hardening it, with the person responsible watching every command.
