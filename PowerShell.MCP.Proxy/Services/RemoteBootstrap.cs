@@ -731,7 +731,8 @@ public sealed class RemoteBootstrap
                     Say ("  PowerShell.MCP $ModuleVersion " + $(if ($Install -eq 'machine') { 'for all users (Program Files\PowerShell\Modules)' } else { "for this user ($documents\PowerShell\Modules)" }))
                 }
                 $answer = Read-Host 'Continue? [y/N]'
-                if ($answer -notmatch '^\s*(y|yes)\s*$') { throw 'Stopped at your request; nothing was installed.' }
+                # The user's choice, not a failure: no red "bootstrap failed".
+                if ($answer -notmatch '^\s*(y|yes)\s*$') { Say 'Stopped at your request; nothing was installed.'; return }
             }
 
             # PowerShell 7
