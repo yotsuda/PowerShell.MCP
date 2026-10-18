@@ -574,23 +574,22 @@ jobs:
           # Test: execute_command with Get-Date (first call).
           # On a fresh proxy this is the first console attach for the agent — the
           # resume / cold-start boundary — so the response carries the "New server
-          # session" notice and the working directory is normalized to $HOME (the
-          # pipeline is prefixed with a Set-Location), after which the Get-Date still
-          # runs in the same call. So the first call should show BOTH the "New server
-          # session" notice AND the actual Get-Date result.
+          # session" notice and the working directory is normalized to $HOME. The
+          # pipeline is NOT run on this call: the server has no record of where the
+          # AI's earlier commands ran, so it says where the console is instead.
           Write-Host "`n=== Test: execute_command (Get-Date) - First call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"execute_command","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 60000
-          Write-Host "Response (truncated): $($response.Substring(0, [Math]::Min(200, $response.Length)))..."
+          Write-Host "Response (truncated): $($response.Substring(0, [Math]::Min(300, $response.Length)))..."
 
           $today = Get-Date -Format "yyyy-MM-dd"
-          if ($response -match "New server session" -and $response -match $today) {
-            Write-Host "First execute_command: PASSED (new-session treatment + executed in one call)" -ForegroundColor Green
+          if ($response -match "New server session" -and $response -match "Pipeline NOT executed" -and $response -notmatch $today) {
+            Write-Host "First execute_command: PASSED (new-session notice, not executed without a record of the AI's place)" -ForegroundColor Green
           } else {
-            throw "First execute_command did not return both ''New server session'' and today''s date ($today)"
+            throw "First execute_command should return ''New server session'' and ''Pipeline NOT executed'' without running Get-Date"
           }
 
-          # Test: execute_command with Get-Date (second call - reuses existing pipe, no switch notice)
+          # Test: execute_command with Get-Date (second call - the re-issue runs where the console is)
           Write-Host "`n=== Test: execute_command (Get-Date) - Second call ===" -ForegroundColor Yellow
           $invokeRequest = '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"execute_command","arguments":{"pipeline":"Get-Date -Format yyyy-MM-dd"}}}'
           $response = Send-JsonRpc $invokeRequest 60000

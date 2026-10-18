@@ -86,9 +86,9 @@ jobs:
         screencapture -x /tmp/screenshot-after-start.png 2>/dev/null
         echo "Terminal.app with pwsh is running"
 
-    - name: Test execute_command via Named Pipe (Issue #38)
+    - name: Test execute_command via Named Pipe (Issue #38, output, cancel)
       shell: pwsh
-      timeout-minutes: 3
+      timeout-minutes: 6
       run: |
         $ErrorActionPreference = "Stop"
 
@@ -182,10 +182,79 @@ jobs:
           throw "Post-long command failed"
         }
 
+        # Test 5: output comes back once. On macOS the console host renders
+        # through Console.Out, which the direct-write tee used to capture too,
+        # so every result also arrived under "CONSOLE.OUT (direct)".
+        Write-Host "`n=== Test 5: output not duplicated ===" -ForegroundColor Cyan
+        # The marker is built at run time so the command text in the status
+        # line cannot match it.
+        $response = Send-PipeCommand "'plain' + '-once'; [pscustomobject]@{ A = 1 } | Format-List"
+        Write-Host "Response: $response"
+        if ($response -match 'CONSOLE\.OUT \(direct\)') { throw "Output came back twice (CONSOLE.OUT (direct) present)" }
+        if (([regex]::Matches($response, 'plain-once')).Count -ne 1) { throw "plain-once should appear exactly once" }
+        Write-Host "PASS: output not duplicated" -ForegroundColor Green
+
+        # Helpers for requests sent while a command runs.
+        function Send-PipeRequest {
+          param([hashtable]$Request, [int]$TimeoutSec = 30)
+          $client = [System.IO.Pipes.NamedPipeClientStream]::new('.', $pipeName)
+          $client.Connect($TimeoutSec * 1000)
+          $msgBytes = [System.Text.Encoding]::UTF8.GetBytes(($Request | ConvertTo-Json -Compress))
+          $client.Write([BitConverter]::GetBytes([int]$msgBytes.Length), 0, 4)
+          $client.Write($msgBytes, 0, $msgBytes.Length)
+          $client.Flush()
+          $lenBytes = [byte[]]::new(4); $client.Read($lenBytes, 0, 4) | Out-Null
+          $len = [BitConverter]::ToInt32($lenBytes, 0)
+          $buf = [byte[]]::new($len); $got = 0
+          while ($got -lt $len) { $n = $client.Read($buf, $got, $len - $got); if ($n -eq 0) { break }; $got += $n }
+          $client.Dispose()
+          [System.Text.Encoding]::UTF8.GetString($buf, 0, $got)
+        }
+        $sendDef = ${function:Send-PipeRequest}.ToString()
+
+        # Test 6/7: cancel a native command and a grandchild (bash -c sleep).
+        # On macOS cancel used to call kernel32 and throw; now it stops the
+        # pipeline and SIGINTs the command's processes. The statement after
+        # the native command must not run, and no sleep may be left.
+        foreach ($case in @(
+            # Markers built at run time, so the command text echoed in the
+            # status line cannot match them.
+            @{ Name = 'native sleep'; Pipeline = "sleep 30; 'should' + '-not-run'" },
+            @{ Name = 'grandchild'; Pipeline = "bash -c 'sleep 30; printf ""bash-%s\n"" continued'; 'should' + '-not-run'" })) {
+          Write-Host "`n=== Test: cancel $($case.Name) ===" -ForegroundColor Cyan
+          $job = Start-ThreadJob -ArgumentList $pipeName, $moduleVersion, $case.Pipeline, $sendDef -ScriptBlock {
+            param($pipeName, $moduleVersion, $pipeline, $sendDef)
+            ${function:Send-PipeRequest} = [scriptblock]::Create($sendDef)
+            Send-PipeRequest @{ name = 'execute_command'; pipeline = $pipeline; proxy_version = $moduleVersion } 60
+          }
+          Start-Sleep -Seconds 3
+
+          # While it runs, get_status answers at once with a sane title (it
+          # used to queue a command behind the running one to read the title).
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          $status = Send-PipeRequest @{ name = 'get_status'; proxy_version = $moduleVersion } 10
+          Write-Host "get_status ($([int]$sw.Elapsed.TotalMilliseconds) ms): $status"
+          if ($sw.Elapsed.TotalSeconds -gt 3) { throw "get_status took too long while busy" }
+          if ($status -notmatch '"busy"') { throw "get_status should report busy" }
+
+          $cancel = Send-PipeRequest @{ name = 'cancel'; proxy_version = $moduleVersion } 10
+          Write-Host "cancel: $cancel"
+          if ($cancel -notmatch '"success"') { throw "cancel was not acknowledged" }
+
+          $done = $job | Wait-Job -Timeout 20
+          if (-not $done) { throw "command did not finish within 20 s of the cancel (console stuck busy)" }
+          $result = Receive-Job $job
+          Write-Host "result: $result"
+          if ($result -match 'should-not-run|bash-continued') { throw "statements after the cancelled native command ran" }
+          $left = @(pgrep -f '^sleep 30$')
+          if ($left.Count) { throw "sleep processes left after cancel: $($left -join ',')" }
+          Write-Host "PASS: cancel $($case.Name)" -ForegroundColor Green
+        }
+
         screencapture -x /tmp/screenshot-final.png 2>$null
 
         Write-Host "`n========================================" -ForegroundColor Green
-        Write-Host "ALL TESTS PASSED - Issue #38 not reproduced" -ForegroundColor Green
+        Write-Host "ALL TESTS PASSED" -ForegroundColor Green
         Write-Host "========================================" -ForegroundColor Green
 
     - name: Upload screenshots
