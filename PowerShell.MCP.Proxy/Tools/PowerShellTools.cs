@@ -25,34 +25,23 @@ public class PowerShellTools
     }
 
     /// <summary>
-    /// Checks whether the AI's intended cwd has drifted from the live cwd
-    /// (typically because the user typed <c>cd</c> in the visible console
-    /// between AI calls). Returns the AI cwd we want to restore to plus
-    /// the live cwd we observed, or null when no drift / no LastAiCwd /
-    /// missing live cwd. The caller prepends a Set-Location preamble to
-    /// the AI's pipeline and surfaces a routing notice on drift.
+    /// Whether two paths name the same directory. False when either is
+    /// missing. Separators are normalized (GetFullPath) and a trailing one
+    /// ignored (TrimEndingDirectorySeparator — GetFullPath alone keeps it), so
+    /// "C:\Project" and "C:\Project\" match; drive roots ("C:\", "/") keep
+    /// theirs. Case-insensitive on Windows, case-sensitive elsewhere. A path
+    /// GetFullPath rejects (a provider path such as HKLM:\) is compared as is.
     /// </summary>
-    private static (string AiCwd, string LiveCwd)? DetectCwdDrift(string? readyPipeName, string? liveCwd)
+    private static bool SameDirectory(string? a, string? b)
     {
-        if (string.IsNullOrEmpty(readyPipeName) || string.IsNullOrEmpty(liveCwd))
-            return null;
-        var pid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
-        if (!pid.HasValue) return null;
-        var aiCwd = ConsoleSessionManager.Instance.GetLastAiCwd(pid.Value);
-        if (string.IsNullOrEmpty(aiCwd)) return null;
-        // Normalize separators (GetFullPath) and strip a trailing directory
-        // separator (TrimEndingDirectorySeparator — GetFullPath alone keeps it)
-        // so "C:\Project" and "C:\Project\" don't trigger a spurious cd. Drive
-        // roots ("C:\", "/") keep their separator. Comparison is
-        // case-insensitive on Windows, case-sensitive elsewhere.
-        var normalizedAi = Path.TrimEndingDirectorySeparator(Path.GetFullPath(aiCwd));
-        var normalizedLive = Path.TrimEndingDirectorySeparator(Path.GetFullPath(liveCwd));
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        return string.Equals(normalizedAi, normalizedLive, comparison)
-            ? null
-            : (aiCwd, liveCwd);
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        static string Normalize(string path)
+        {
+            try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)); }
+            catch { return path; }
+        }
+        return string.Equals(Normalize(a), Normalize(b), comparison);
     }
 
     private static string FormatBusyStatus(GetStatusResponse status)
@@ -644,14 +633,12 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         // The startup notice surfaces "spawned a new console" / "switched
-        // to a sibling" context to the AI. Pre-1.9 these paths returned
-        // early with `Pipeline NOT executed - verify location and
-        // re-execute`, forcing a second tool call. The new contract:
-        // spawn / switch silently and run the pipeline in the same call.
-        // The user-cd drift case still bails (see drift block below) — that
-        // bail surfaces its own notice; the startup notice is folded into
-        // it when both fire on the same call.
+        // to a sibling" context to the AI. A spawn or switch runs the
+        // pipeline in the same call when the console is where the AI's last
+        // command ended; otherwise the location check below bails, with the
+        // startup notice folded into its response.
         string? startupNotice = null;
+        var newConsole = false;
 
         if (readyPipeName == null)
         {
@@ -694,17 +681,18 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             var newStatus = await powerShellService.GetStatusFromPipeAsync(readyPipeName, cancellationToken);
             liveCwd = newStatus?.Cwd;
 
-            startupNotice = $"ℹ️ Started new console {GetConsoleName(readyPipeName)} with PowerShell.MCP module imported. Pipeline running on the new console.";
+            startupNotice = $"ℹ️ Started new console {GetConsoleName(readyPipeName)} with PowerShell.MCP module imported.";
+            newConsole = true;
         }
         else if (consoleSwitched)
         {
             // Console switched (active died → sibling owned pipe, or
-            // unowned pipe claimed). Set the title and fall through to
-            // execute. Drift check below catches the case where the
-            // sibling has its own LastAiCwd from prior AI work.
+            // unowned pipe claimed). Set the title and fall through; the
+            // location check below decides whether the pipeline runs there.
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
             await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
-            startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}. Pipeline running there.";
+            startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}.";
+            newConsole = true;
         }
 
         // A Start-Process that redirects output into a new console writes
@@ -717,55 +705,63 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // resume / cold-start boundary. The proxy is fresh but the AI may carry
         // a stale cwd/state assumption from earlier in the conversation, and the
         // console we just spawned/reclaimed could be sitting anywhere. Normalize
-        // to $HOME so this first command runs at a predictable baseline (not an
-        // inherited or arbitrary cwd), and replace the plain spawn/switch notice
-        // with the "new server session" notice. The move is a silent command of
-        // its own, run just before the pipeline — not prepended to it, which
-        // made it the command the console echoed and the one the status line's
-        // `Pipeline:` summary named. A reclaim's prior cwd is surfaced as a
-        // restore hint. Mid-session re-attaches (TryMarkFirstAttach == false)
-        // keep the existing notices.
+        // to $HOME as a predictable baseline, and replace the plain spawn/switch
+        // notice with the "new server session" notice. The move is a silent
+        // command of its own — not prepended to the pipeline, which made it the
+        // command the console echoed and the one the status line's `Pipeline:`
+        // summary named. A reclaim's prior cwd is surfaced as a restore hint.
+        // The pipeline itself does not run on this call: this server has no
+        // record of where the AI was (the location check below). Mid-session
+        // re-attaches (TryMarkFirstAttach == false) keep the existing notices.
         if (readyPipeName != null && sessionManager.TryMarkFirstAttach(agentId))
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            string? priorCwd = null;
-            if (!string.IsNullOrEmpty(liveCwd))
-            {
-                var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-                var normLive = Path.TrimEndingDirectorySeparator(Path.GetFullPath(liveCwd));
-                var normHome = Path.TrimEndingDirectorySeparator(Path.GetFullPath(home));
-                if (!string.Equals(normLive, normHome, comparison)) priorCwd = liveCwd;
-            }
+            var priorCwd = !string.IsNullOrEmpty(liveCwd) && !SameDirectory(liveCwd, home) ? liveCwd : null;
             await powerShellService.ExecuteSilentAsync(readyPipeName, $"Set-Location -LiteralPath '{home.Replace("'", "''")}'", cancellationToken);
             liveCwd = home;
             startupNotice = BuildNewSessionNotice(GetConsoleName(readyPipeName), home, priorCwd);
+            newConsole = true;
         }
 
-        // Cwd drift detection: if the user typed `cd` in the visible console
-        // since the AI's last successful execute_command, the live cwd has
-        // moved off AI's intended cwd. Bail out without executing — the AI's
-        // pipeline was built assuming cwd=AiCwd, silently running at LiveCwd
-        // could trigger destructive ops at the wrong place (e.g. Remove-Item
-        // *.tmp at C:\Windows\System32). Update LastAiCwd to LiveCwd so the
-        // user-cd state is cleared: a re-issue of the same pipeline runs at
-        // LiveCwd with no drift, and the AI keeps full agency to either
-        // accept the new cwd or prepend Set-Location to revert.
-        // DetectCwdDrift returns null when there's no LastAiCwd recorded
-        // (e.g. fresh console / auto-start), so those paths naturally fall
-        // through to execute.
-        var drift = DetectCwdDrift(readyPipeName, liveCwd);
-        if (drift.HasValue)
+        // Run only where the AI's last command ended. The pipeline was written
+        // for that place; run anywhere else, it could act on the wrong files
+        // (Remove-Item *.tmp in the wrong folder). The console is elsewhere when
+        // the user typed `cd` in it, or when this call started, switched to or
+        // first attached to a console that is not there; and this server may
+        // not know the place at all — its records start empty when it starts
+        // (a restart included), while the AI may still have an earlier location
+        // in mind. In each case the pipeline is not run and the response says
+        // where the console is. The live cwd is recorded as the AI's, so a
+        // re-issue runs there; to go back, the AI prepends Set-Location. With no
+        // live cwd to compare (a failed status probe) the pipeline runs.
+        var cwdPid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
+        var consoleAiCwd = cwdPid.HasValue ? sessionManager.GetLastAiCwd(cwdPid.Value) : null;
+        var expectedCwd = consoleAiCwd ?? sessionManager.GetSessionLastAiCwd(agentId);
+        if (readyPipeName != null && !string.IsNullOrEmpty(liveCwd) && !SameDirectory(expectedCwd, liveCwd))
         {
-            var driftPid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
-            if (driftPid.HasValue)
-                sessionManager.SetLastAiCwd(agentId, driftPid.Value, drift.Value.LiveCwd);
+            if (cwdPid.HasValue)
+                sessionManager.SetLastAiCwd(agentId, cwdPid.Value, liveCwd);
 
-            var driftConsoleName = GetConsoleName(readyPipeName);
+            var consoleName = GetConsoleName(readyPipeName);
+            string notice;
+            if (string.IsNullOrEmpty(expectedCwd))
+            {
+                notice = $"ℹ️ Console {consoleName} is at '{liveCwd}', and this server has no record of where the AI's earlier commands ran (it may have just started).\n"
+                    + $"Pipeline NOT executed. Re-issue to run at '{liveCwd}', or prepend `Set-Location -LiteralPath '<folder>';` to run elsewhere.";
+            }
+            else
+            {
+                var revert = $"prepend `Set-Location -LiteralPath '{expectedCwd.Replace("'", "''")}';` to revert.";
+                notice = consoleAiCwd != null && !newConsole
+                    ? $"ℹ️ cwd in console {consoleName} changed from '{expectedCwd}' to '{liveCwd}' outside the AI's commands (e.g. a `cd` typed in the console).\n"
+                        + $"Pipeline NOT executed. Re-issue to run at '{liveCwd}', or {revert}"
+                    : $"ℹ️ Console {consoleName} is at '{liveCwd}', not at '{expectedCwd}' where the AI's last command ended.\n"
+                        + $"Pipeline NOT executed. Re-issue to run at '{liveCwd}', or {revert}";
+            }
             return Wrap(PipelineHelper.JoinBlocks(
                 string.Join("\n", closedConsoleMessages),
                 startupNotice,
-                $"ℹ️ cwd in console {driftConsoleName} changed from '{drift.Value.AiCwd}' to '{drift.Value.LiveCwd}' outside the AI's commands (e.g. a `cd` typed in the console).\n"
-                    + $"Pipeline NOT executed. Re-issue to run at '{drift.Value.LiveCwd}', or prepend `Set-Location -LiteralPath '{drift.Value.AiCwd.Replace("'", "''")}';` to revert."));
+                notice));
         }
 
         // Running a command in a console contradicts the intent to abandon it,

@@ -1376,11 +1376,13 @@ public class PowerShellToolsTests
     }
 
     [Fact]
-    public async Task ExecuteCommand_NoLastAiCwd_ExecutesPipelineVerbatim()
+    public async Task ExecuteCommand_NoLastAiCwd_BailsOnce_ThenReissueRuns()
     {
-        // Arrange: fresh console — no LastAiCwd recorded yet. Even if liveCwd
-        // is reported, drift detection must skip the bail-out (no baseline to
-        // compare against).
+        // No AI cwd recorded at all (neither for the console nor the session):
+        // this server cannot tell whether the console is where the AI thinks
+        // it is — after a restart its records are empty while the AI may still
+        // have an earlier location in mind. Call 1 must NOT execute and must
+        // say where the console is; it records that place, so the re-issue runs.
         var sessionManager = ConsoleSessionManager.Instance;
         const int testPid = 88813;
         var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
@@ -1392,31 +1394,109 @@ public class PowerShellToolsTests
             .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, liveCwd));
 
-        string? sentPipeline = null;
+        var sentPipelines = new List<string>();
         var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = liveCwd });
         _mockPowerShellService
             .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipelines.Add(p))
             .ReturnsAsync(headerJson + "\n\n✓ done");
 
         _mockPipeDiscoveryService
             .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CachedOutputResult("", ""));
 
-        // Act
-        await PowerShellTools.ExecuteCommand(
-            _mockPowerShellService.Object,
-            _mockPipeDiscoveryService.Object,
-            // No live MCP server in unit tests: the client is unidentified,
-            // so the conservative ceiling applies (see TimeoutCeiling).
-            null!,
-            "Get-Date",
-            agent_id: TestAgentId);
+        var first = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-Date", agent_id: TestAgentId);
+        Assert.Empty(sentPipelines);
+        Assert.Contains("Pipeline NOT executed", first);
+        Assert.Contains("no record", first);
+        Assert.Contains(liveCwd, first);
+        Assert.Equal(liveCwd, sessionManager.GetLastAiCwd(testPid));
 
-        // Assert: no preamble — first call has nothing to compare against
-        Assert.Equal("Get-Date", sentPipeline);
+        var second = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-Date", agent_id: TestAgentId);
+        Assert.Equal(new[] { "Get-Date" }, sentPipelines);
+        Assert.DoesNotContain("Pipeline NOT executed", second);
 
         // Cleanup
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_SwitchedToConsoleElsewhere_BailsWithBothLocations()
+    {
+        // The active console died and discovery switched to another one that
+        // is not where the AI's last command ended (the session-level record;
+        // the new console has none of its own). Must NOT execute.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int deadPid = 88850, testPid = 88851;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var aiCwd = Path.Combine(Path.GetTempPath(), "ai-worked-here");
+        var otherCwd = Path.Combine(Path.GetTempPath(), "sibling-sits-here");
+
+        sessionManager.SetLastAiCwd(TestAgentId, deadPid, aiCwd);  // session record
+        sessionManager.SetLastAiCwd(TestAgentId, deadPid, null);   // its console is gone
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, true, new List<string>(), null, otherCwd));
+        _mockPowerShellService
+            .Setup(s => s.SetWindowTitleAsync(pipeName, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var executed = false;
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback(() => executed = true)
+            .ReturnsAsync("");
+
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Remove-Item *.tmp", agent_id: TestAgentId);
+
+        Assert.False(executed);
+        Assert.Contains("Switched to existing console", result);
+        Assert.Contains("Pipeline NOT executed", result);
+        Assert.Contains("where the AI's last command ended", result);
+        Assert.Contains(aiCwd, result);
+        Assert.Contains(otherCwd, result);
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_SwitchedToConsoleAtAiCwd_Executes()
+    {
+        // A switch to a console that is where the AI's last command ended
+        // runs the pipeline in the same call, as before.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int deadPid = 88852, testPid = 88853;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var aiCwd = Path.Combine(Path.GetTempPath(), "ai-worked-here-too");
+
+        sessionManager.SetLastAiCwd(TestAgentId, deadPid, aiCwd);
+        sessionManager.SetLastAiCwd(TestAgentId, deadPid, null);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, true, new List<string>(), null, aiCwd));
+        _mockPowerShellService
+            .Setup(s => s.SetWindowTitleAsync(pipeName, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        string? sentPipeline = null;
+        var headerJson = JsonSerializer.Serialize(new { pid = testPid, status = "success", pipeline = "Get-Date", duration = 0.01, cwd = aiCwd });
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(pipeName, It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, Dictionary<string, string>?, int, CancellationToken>((_, p, _, _, _) => sentPipeline = p)
+            .ReturnsAsync(headerJson + "\n\n✓ done");
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-Date", agent_id: TestAgentId);
+
+        Assert.Equal("Get-Date", sentPipeline);
+        Assert.DoesNotContain("Pipeline NOT executed", result);
+
         sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
     }
 
@@ -1686,13 +1766,13 @@ public class PowerShellToolsTests
     #region First-attach (resume / cold-start) new-session treatment
 
     [Fact]
-    public async Task ExecuteCommand_FirstAttach_MovesToHomeAndAnnouncesNewSession()
+    public async Task ExecuteCommand_FirstAttach_MovesToHomeAnnouncesNewSessionAndDoesNotRun()
     {
         // A fresh (never-attached) agent reclaiming an existing console at a prior
-        // session's cwd is the resume / cold-start boundary. execute_command runs
-        // (no suppression) but first moves to $HOME with a silent command of its
-        // own, and announces the new server session with a restore hint for the
-        // old cwd.
+        // session's cwd is the resume / cold-start boundary. execute_command moves
+        // to $HOME with a silent command of its own and announces the new server
+        // session with a restore hint for the old cwd — but does not run the
+        // pipeline: this server has no record of where the AI was.
         var freshAgent = ConsoleSessionManager.Instance.AllocateSubAgentId(); // unmarked
         var pipeName = $"PSMCP.{ConsoleSessionManager.Instance.ProxyPid}.{freshAgent}.94001";
         var reclaimedCwd = Path.Combine(Path.GetTempPath(), "prior-session-cwd");
@@ -1723,14 +1803,24 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: freshAgent);
 
-        // Ran (not suppressed) verbatim; the move to $HOME went separately, as
-        // a silent command, so it is neither echoed nor named in the status line.
-        Assert.Equal("Get-ChildItem", sentPipeline);
+        // Not run; the move to $HOME went separately, as a silent command, so
+        // it is neither echoed nor named in the status line.
+        Assert.Null(sentPipeline);
         Assert.Equal($"Set-Location -LiteralPath '{home.Replace("'", "''")}'", silentPipeline);
-        Assert.DoesNotContain("Pipeline NOT executed", result);
+        Assert.Contains("Pipeline NOT executed", result);
+        Assert.Contains("no record", result);
         // New-session notice with the prior-cwd restore hint.
         Assert.Contains("New server session", result);
         Assert.Contains(reclaimedCwd, result);
+
+        // The re-issue (the console now owned and at $HOME) runs there.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(freshAgent, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, home));
+        var second = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: freshAgent);
+        Assert.Equal("Get-ChildItem", sentPipeline);
+        Assert.DoesNotContain("Pipeline NOT executed", second);
 
         ConsoleSessionManager.Instance.SetLastAiCwd(freshAgent, 94001, null);
     }
@@ -1776,6 +1866,7 @@ public class PowerShellToolsTests
         // moved to $HOME and the new-session notice fires, but there is NO
         // prior cwd to restore (priorCwd is null when liveCwd == home). Complements
         // the reclaim-at-a-different-cwd test, which DOES carry a restore hint.
+        // As there, the pipeline does not run on the first attach.
         var freshAgent = ConsoleSessionManager.Instance.AllocateSubAgentId(); // unmarked
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var pipeName = $"PSMCP.{ConsoleSessionManager.Instance.ProxyPid}.{freshAgent}.94005";
@@ -1805,9 +1896,9 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-ChildItem", agent_id: freshAgent);
 
-        Assert.Equal("Get-ChildItem", sentPipeline);
+        Assert.Null(sentPipeline);
         Assert.StartsWith("Set-Location -LiteralPath '", silentPipeline);   // still moved to $HOME
-        Assert.DoesNotContain("Pipeline NOT executed", result);
+        Assert.Contains("Pipeline NOT executed", result);
         Assert.Contains("New server session", result);
         Assert.DoesNotContain("to resume there", result);                   // no restore hint: already at $HOME
 

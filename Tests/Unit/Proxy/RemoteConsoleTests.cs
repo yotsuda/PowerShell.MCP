@@ -673,9 +673,16 @@ public class RemoteConsoleTests
             RemoteConsoleDialer.Start("127.0.0.1", FreePort(), "AAAABBBBCCCC");
             // First attempt fails at once, the next comes after the 2 s backoff
             // and finds the lifetime spent.
-            await WaitUntilAsync(() => !RemoteConsoleDialer.IsActive, 10);
+            // The dialer clears its state first and queues the notice just
+            // after, so wait for the notice itself, not only for IsActive.
+            var notices = new List<string>();
+            await WaitUntilAsync(() =>
+            {
+                notices.AddRange(RemoteConsoleListener.TakeNotices().Select(n => n.Message));
+                return !RemoteConsoleDialer.IsActive && notices.Any(m => m.Contains("could not be reached"));
+            }, 10);
             Assert.False(RemoteConsoleDialer.IsActive);
-            Assert.Contains(RemoteConsoleListener.TakeNotices(), n => n.Message.Contains("could not be reached"));
+            Assert.Contains(notices, m => m.Contains("could not be reached"));
         }
         finally
         {
