@@ -228,7 +228,7 @@ public static class RemoteConsoleDialer
                 if (ct.IsCancellationRequested) return;
                 if (!announcedWaiting)
                 {
-                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes, or until Disable-MCPRemoteControl.", "DarkGray");
+                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "DarkGray");
                     announcedWaiting = true;
                 }
             }
@@ -308,7 +308,7 @@ public static class RemoteConsoleDialer
         var error = root.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
         return error switch
         {
-            "version_mismatch" => "the PowerShell.MCP versions on the two machines differ; install the same version on both",
+            "version_mismatch" => "the PowerShell.MCP versions on the two machines differ; run Update-Module PowerShell.MCP on both, or on the older one with -RequiredVersion <the newer one's version>",
             "busy" => "the MCP server is already connected to another console",
             "bad_code" => "the pairing code did not match",
             "expired" => resuming ? "the MCP server stopped waiting for this console to reconnect" : "the pairing code expired; ask the AI for a new one (accept_remote_console)",

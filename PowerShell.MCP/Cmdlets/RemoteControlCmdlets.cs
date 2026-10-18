@@ -113,9 +113,9 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
 
         var publicNetworks = PublicNetworks();
         if (!Confirm(
-                $"An AI on another machine will be able to connect to this console on TCP port {Port}" +
-                (allowFrom != null ? $", from {string.Join(", ", allowFrom.Select(a => a.ToString()))} only," : "") +
-                " with the pairing code shown next (valid for one connection, for 10 minutes)." +
+                $"An AI on another machine will be able to connect to this console (TCP {Port}" +
+                (allowFrom != null ? $", from {string.Join(", ", allowFrom.Select(a => a.ToString()))} only" : "") +
+                ") with the pairing code shown next." +
                 (publicNetworks.Count > 0 && allowFrom == null ? $" This machine is on a Public network ({string.Join(", ", publicNetworks)}): anyone on it can reach the port." : "")))
         {
             WriteWarning("Remote control was not enabled.");
@@ -135,30 +135,22 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
 
         try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate(RemoteControl.WaitingTitle); } catch { }
 
+        // Only what the user needs now: what to tell the AI. The firewall rule,
+        // the failure limit and the like reach the user through the AI, when
+        // they matter — a long notice here is where people give up.
         var ui = Host.UI;
         var bg = ui.RawUI.BackgroundColor;
         ui.WriteLine();
-        ui.WriteLine(ConsoleColor.Cyan, bg, $"  PowerShell.MCP is listening for a remote MCP server on TCP port {Port} (this console, PID {Environment.ProcessId}).");
-        ui.WriteLine();
-        ui.WriteLine(ConsoleColor.Yellow, bg, $"      Pairing code:   {RemoteConsoleListener.FormatCode(code)}");
-        ui.WriteLine();
+        ui.WriteLine(ConsoleColor.Yellow, bg, $"  Pairing code:  {RemoteConsoleListener.FormatCode(code)}");
         // The host name alone often does not resolve from the other machine
         // (another subnet, a VPN, no shared DNS); the addresses spare the user
         // an ipconfig. IPv4 only: link-local IPv6 would be noise.
         var addresses = LocalAddresses(address);
-        var hostInfo = addresses.Count > 0
-            ? $"{Dns.GetHostName()}  —  IP: {string.Join(", ", addresses)}"
-            : Dns.GetHostName();
-        ui.WriteLine($"  Give the AI on the other machine the host and the code. Host: {hostInfo}");
-        ui.WriteLine("  It connects with connect_remote_console and then runs commands here with execute_remote_command; every prompt starts with [AI from <its address>] meanwhile.");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, "  The code works once and expires in 10 minutes; when a session ends a new one is shown, and remote control stops if nobody uses it.");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Remote control also ends after {RemoteConsoleListener.MaxFailures} forged pairing attempts (a mistyped code does not count), or with Disable-MCPRemoteControl.");
+        var port = Port == RemoteConsoleListener.DefaultPort ? "" : $"  (port {Port})";
+        ui.WriteLine($"  Host:          {Dns.GetHostName()}{(addresses.Count > 0 ? $"  {string.Join(", ", addresses)}" : "")}{port}");
+        ui.WriteLine(ConsoleColor.DarkGray, bg, "  Tell the AI the host and the code. The code works once, for 10 minutes.");
         if (publicNetworks.Count > 0 && allowFrom == null)
-            ui.WriteLine(ConsoleColor.Yellow, bg, $"  Public network ({string.Join(", ", publicNetworks)}): consider Enable-MCPRemoteControl -AllowFrom <IP of the AI's machine>.");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, $"  Inbound TCP {Port} must be allowed through the firewall. On Windows, as administrator, for the AI's machine only:");
-        var remoteAddress = allowFrom != null ? string.Join(",", allowFrom.Select(a => a.ToString())) : "<IP of the AI's machine>";
-        ui.WriteLine(ConsoleColor.DarkGray, bg, $"    New-NetFirewallRule -DisplayName 'PowerShell.MCP remote console' -Direction Inbound -Protocol TCP -LocalPort {Port} -RemoteAddress {remoteAddress} -Action Allow");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, "  and when you are done:  Remove-NetFirewallRule -DisplayName 'PowerShell.MCP remote console'");
+            ui.WriteLine(ConsoleColor.Yellow, bg, "  Public network: consider -AllowFrom <IP of the AI's machine>.");
         ui.WriteLine();
     }
 
@@ -209,11 +201,8 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
         try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate(RemoteControl.WaitingTitle); } catch { }
 
         var ui = Host.UI;
-        var bg = ui.RawUI.BackgroundColor;
         ui.WriteLine();
-        ui.WriteLine(ConsoleColor.Cyan, bg, $"  PowerShell.MCP is connecting to the remote MCP server at {host}:{port} (this console, PID {Environment.ProcessId}).");
-        ui.WriteLine("  Once it answers and the pairing code matches, the AI there controls this console; you keep the prompt, see every command, and every prompt starts with [AI from <host>].");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, "  A dropped connection is redialed by itself. Remote control ends with Disable-MCPRemoteControl, when the AI disconnects, or when the other side refuses.");
+        ui.WriteLine(ConsoleColor.DarkGray, ui.RawUI.BackgroundColor, $"  Connecting to {host}:{port} ...");
         ui.WriteLine();
     }
 
@@ -252,10 +241,9 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
         var elevated = Environment.IsPrivilegedProcess;
         var others = OtherMcpConsoles();
         var message = $"{what}{Environment.NewLine}" +
-                      $"Commands will run in this console as {user}{(elevated ? ", ELEVATED (administrator)" : "")}, with everything this session can reach. " +
-                      "You see every command here; Disable-MCPRemoteControl ends it at any time." +
+                      $"It runs commands here as {user}{(elevated ? ", ELEVATED (administrator)" : "")}. You see every command; Disable-MCPRemoteControl ends it." +
                       (others.Count > 0
-                          ? $"{Environment.NewLine}Other PowerShell.MCP consoles are open (PID {string.Join(", ", others)}). They accept requests from any process of this user, so the remote AI can reach them too — elevated ones included. Close those you do not want it to reach."
+                          ? $"{Environment.NewLine}Other PowerShell.MCP consoles are open (PID {string.Join(", ", others)}); the remote AI can reach them too, elevated ones included. Close those it should not reach."
                           : "");
         var choices = new System.Collections.ObjectModel.Collection<ChoiceDescription>
         {

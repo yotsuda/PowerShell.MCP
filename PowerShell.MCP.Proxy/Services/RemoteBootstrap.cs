@@ -565,7 +565,7 @@ public sealed class RemoteBootstrap
         # Downloaded into memory and checked there; only verified bytes reach
         # the disk, in $root, under a name nobody could have prepared.
         function Get-Verified([string]$Name, [string]$Hash, [string]$What) {
-            Say "Fetching $What from the MCP server ..."
+            Say "Fetching $What ..."
             $bytes = (Invoke-WebRequest "$Base/$Name" -UseBasicParsing).RawContentStream.ToArray()
             if ((Get-Sha256 $bytes) -ne $Hash) { throw "$Name did not match the hash the MCP server promised; not used." }
             $file = Join-Path $root ([Guid]::NewGuid().ToString('N') + '-' + $Name)
@@ -645,18 +645,6 @@ public sealed class RemoteBootstrap
             return $null
         }
 
-        # Other PowerShell.MCP versions installed here: left exactly as they are.
-        # This window always imports this build by its full path.
-        function Get-OtherModuleVersions([string]$ModulesRoot) {
-            $dir = Join-Path $ModulesRoot 'PowerShell.MCP'
-            $found = @()
-            if (-not (Test-Path -LiteralPath $dir)) { return $found }
-            foreach ($psd in @(Get-ChildItem -LiteralPath $dir -Filter PowerShell.MCP.psd1 -Recurse -Depth 1 -ErrorAction SilentlyContinue)) {
-                try { $v = (Import-PowerShellDataFile -LiteralPath $psd.FullName).ModuleVersion; if ($v -ne $ModuleVersion) { $found += $v } } catch { }
-            }
-            return $found
-        }
-
         # A usable PowerShell: 7.4 or later and signed by Microsoft. One odd
         # candidate (a Store alias, a shim) is skipped, not fatal.
         function Test-Pwsh([string]$Path) {
@@ -711,7 +699,7 @@ public sealed class RemoteBootstrap
                     $loadedHash = try { Get-Sha256 ([IO.File]::ReadAllBytes($loaded.Location)) } catch { '' }
                     if ($loadedHash -eq $ModuleDllHash) { $loadedPsd1 = Join-Path (Split-Path $loaded.Location) 'PowerShell.MCP.psd1' }
                     else {
-                        Say "Another PowerShell.MCP build is already loaded in this window (from $(Split-Path $loaded.Location)), and a process cannot load two; remote control runs in a new window instead."
+                        Say "Another PowerShell.MCP build is loaded in this window; remote control runs in a new window."
                         $here = $false
                     }
                 }
@@ -779,7 +767,7 @@ public sealed class RemoteBootstrap
                             }
                         }
                         finally { $environmentKey.Dispose() }
-                        Say "Installed PowerShell $PwshVersion for this user in $userPwshDir (added to your PATH)."
+                        Say "Installed PowerShell $PwshVersion for this user."
                         $pwsh = Join-Path $userPwshDir 'pwsh.exe'
                     }
                     else {
@@ -799,9 +787,7 @@ public sealed class RemoteBootstrap
                 $scope = if ($Install -eq 'machine') { 'AllUsers' } else { 'CurrentUser' }
                 $modulesRoot = if ($Install -eq 'machine') { Join-Path $programFiles 'PowerShell\Modules' } else { Join-Path $documents 'PowerShell\Modules' }
                 $mode = $Install
-                $others = @()
                 if ($mode -ne 'none') {
-                    $others = @(Get-OtherModuleVersions $modulesRoot)
                     # Another version installed WITHOUT a version folder occupies
                     # PowerShell.MCP\ itself: a second one cannot sit beside it
                     # there without breaking both. Leave it; unpack this build
@@ -809,7 +795,7 @@ public sealed class RemoteBootstrap
                     $flat = Join-Path $modulesRoot 'PowerShell.MCP\PowerShell.MCP.psd1'
                     if (Test-Path -LiteralPath $flat) {
                         $flatVersion = try { (Import-PowerShellDataFile -LiteralPath $flat).ModuleVersion } catch { 'another version' }
-                        Say "PowerShell.MCP $flatVersion is installed in $(Split-Path $flat) without a version folder, so $ModuleVersion cannot be installed beside it; it is left as is, and $ModuleVersion is used from $root for this session."
+                        Say "PowerShell.MCP $flatVersion (no version folder) blocks installing $ModuleVersion beside it; left as is, and $ModuleVersion is used for this session only."
                         $mode = 'none'
                     }
                 }
@@ -847,13 +833,13 @@ public sealed class RemoteBootstrap
                         (Get-Sha256 ([IO.File]::ReadAllBytes($installedDll))) -ne $ModuleDllHash) {
                         throw "Install-PSResource did not leave PowerShell.MCP $ModuleVersion in $(Split-Path $psd1) as expected."
                     }
-                    Say "Installed PowerShell.MCP $ModuleVersion from PowerShell Gallery ($scope)$(if ($others) { ' beside the existing ' + ($others -join ', ') + ', which is left as is' })."
+                    Say "Installed PowerShell.MCP $ModuleVersion ($scope)."
                 }
                 elseif ($mode -ne 'none') {
                     $dir = Join-Path $modulesRoot "PowerShell.MCP\$ModuleVersion"
                     Expand-Verified 'module.zip' $ModuleZipHash $dir "PowerShell.MCP $ModuleVersion"
                     $psd1 = Join-Path $dir 'PowerShell.MCP.psd1'
-                    Say "Installed PowerShell.MCP $ModuleVersion in $dir (copied from the MCP server's machine)$(if ($others) { ' beside the existing ' + ($others -join ', ') + ', which is left as is' })."
+                    Say "Installed PowerShell.MCP $ModuleVersion ($scope)."
                 }
                 else {
                     $dir = Join-Path $root "PowerShell.MCP-$ModuleVersion"
@@ -888,7 +874,7 @@ public sealed class RemoteBootstrap
                 finally { Remove-Item Env:PSMCP_REMOTE_CODE -ErrorAction SilentlyContinue }
                 # The outcome stands apart from the progress lines, as a failure does.
                 if ($said.Any) { Write-Host '' }
-                Say "Opened a PowerShell 7 window (PID $($process.Id)) for the MCP server at $target. This window can be closed." Green
+                Say "Remote control continues in the new PowerShell 7 window (PID $($process.Id)); this one can be closed." Green
             }
         }
         catch {

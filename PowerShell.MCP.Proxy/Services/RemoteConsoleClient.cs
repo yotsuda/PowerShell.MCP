@@ -377,7 +377,9 @@ public sealed class RemoteConsoleClient : IDisposable
         {
             tcp.Dispose();
             throw new InvalidOperationException(
-                $"Could not reach {Target}: {ex.Message.TrimEnd('.')}. Is Enable-MCPRemoteControl running there, and is inbound TCP {_port} allowed through its firewall?");
+                $"Could not reach {Target}: {ex.Message.TrimEnd('.')}. Is Enable-MCPRemoteControl running there, and is inbound TCP {_port} allowed through its firewall? " +
+                $"If it is the Windows firewall, tell the user to run there, as administrator (with this machine's IP address): New-NetFirewallRule -DisplayName 'PowerShell.MCP remote console' -Direction Inbound -Protocol TCP -LocalPort {_port} -RemoteAddress <this machine's IP> -Action Allow — " +
+                "and, when done, Remove-NetFirewallRule -DisplayName 'PowerShell.MCP remote console'.");
         }
 
         byte[]? thumbprint = null;
@@ -435,7 +437,7 @@ public sealed class RemoteConsoleClient : IDisposable
             if (!CryptographicOperations.FixedTimeEquals(expectedServerProof, serverProof))
                 throw new InvalidOperationException(resuming
                     ? $"{Target} did not prove this session's key: it is not the console this session was with, or something is intercepting the connection. Nothing was sent to it."
-                    : $"{Target} did not prove the pairing code: the code is wrong, or something between here and there is intercepting the connection. Nothing was sent to it, and it does not count as a failed attempt there; ask the user to read the code again.");
+                    : $"{Target} did not prove the pairing code: the code is wrong, or something between here and there is intercepting the connection. Nothing was sent to it, and it does not count as a failed attempt there (that console notes, once per address and code, that a connection broke off pairing); ask the user to read the code again.");
 
             await WriteFrameAsync(ssl, JsonSerializer.Serialize(new RemoteProof { ClientProof = Convert.ToBase64String(Proof(key, "cli", clientNonce, serverNonce, thumbprint!)) }, RemoteConsoleJsonContext.Default.RemoteProof), timeout.Token);
 
@@ -477,7 +479,7 @@ public sealed class RemoteConsoleClient : IDisposable
             : $"That pairing code expired (a code is good for {Minutes}). Ask the user for the new code the remote console shows, or to run Enable-MCPRemoteControl again.",
         "code_used" => "That pairing code was already used (a code pairs once). The remote console shows a new one; ask the user for it.",
         "resume_unknown" => "The remote console no longer knows this session (it was ended there). Ask the user for the pairing code it shows now and call connect_remote_console.",
-        "version_mismatch" => $"The PowerShell.MCP versions differ: this MCP server is {Program.ProxyVersion}. Install the same version on the remote machine.",
+        "version_mismatch" => $"The PowerShell.MCP versions differ: this MCP server is {Program.ProxyVersion}. Neither may be the latest: ask the user to run Update-Module PowerShell.MCP by hand on BOTH machines, or on the older one only with -RequiredVersion <the newer one's version> (after updating this machine, the MCP client must be restarted), then connect again.",
         "protocol" => "The remote side is not a PowerShell.MCP console.",
         _ => "The remote console refused the connection.",
     };
@@ -661,9 +663,14 @@ public sealed class RemoteConsoleClient : IDisposable
         var where = addresses.Count > 0 ? $"If the name {host} does not resolve on the remote machine, replace it with an IP address of this machine: {string.Join(", ", addresses)}.\n" : "";
         var text = new StringBuilder();
         text.Append($"Waiting for a remote console to dial in on TCP port {_acceptPort} of this machine.\n\n");
+        // -RequiredVersion: with another version installed beside it, loading
+        // by name alone may pick that one, which this proxy would refuse.
+        var version = _bootstrap?.ModuleVersion ?? Program.ProxyVersion.TrimEnd('0').TrimEnd('.');
+        text.Append($"Where PowerShell 7 and PowerShell.MCP {version} are installed on the remote machine (set them up first if they can be: see this server's instructions), the user runs in PowerShell 7 there:\n");
+        text.Append($"  Import-Module PowerShell.MCP -RequiredVersion {version}; Enable-MCPRemoteControl -ConnectTo {host}:{_acceptPort} -Code {code}\n\n");
         if (_bootstrap != null)
         {
-            text.Append("Give the user this ONE line to paste on the remote machine: into PowerShell 7 if it is installed there, otherwise into Windows PowerShell " +
+            text.Append("Only where they cannot be installed (no Internet access there, or the user would rather not), on Windows, give the user this ONE line to paste there instead: into PowerShell 7 if it is installed there, otherwise into Windows PowerShell " +
                         "(opened as Administrator if admin work is needed there). " +
                         "Nothing needs to be installed beforehand: it fetches PowerShell.MCP " + _bootstrap.ModuleVersion +
                         (_bootstrap.PwshVersion != null ? $" and, unless PowerShell 7.4+ is already there, a portable PowerShell {_bootstrap.PwshVersion}" : " (PowerShell 7.4+ must already be installed there: this server could not get a portable one)") +
@@ -671,16 +678,7 @@ public sealed class RemoteConsoleClient : IDisposable
             text.Append(_bootstrap.OneLiner(host, _acceptPort, code)).Append("\n\n");
             text.Append(_bootstrap.DescribeInstall()).Append(" PowerShell 7.4+ and PowerShell.MCP " + _bootstrap.ModuleVersion +
                         " already there (the same build) are used as they are; another PowerShell.MCP version is left untouched and not loaded.\n\n");
-            text.Append("Or, where PowerShell 7 and PowerShell.MCP " + _bootstrap.ModuleVersion + " are already installed, in PowerShell 7:\n");
         }
-        else
-        {
-            text.Append("On the remote machine, in PowerShell 7 with PowerShell.MCP (the same version as here) imported, the user runs:\n");
-        }
-        // -RequiredVersion: with another version installed beside it, loading
-        // by name alone may pick that one, which this proxy would refuse.
-        var version = _bootstrap?.ModuleVersion ?? Program.ProxyVersion.TrimEnd('0').TrimEnd('.');
-        text.Append($"  Import-Module PowerShell.MCP -RequiredVersion {version}; Enable-MCPRemoteControl -ConnectTo {host}:{_acceptPort} -Code {code}\n\n");
         text.Append(where);
         text.Append("The console there asks the user to confirm before it dials in. ");
         text.Append($"The code pairs once and expires if no console dials in within {Minutes}. ");

@@ -154,7 +154,7 @@ HelpMessage: ''
 ### -AllowFrom
 
 IP addresses allowed to connect (the machine the AI runs on). Connections from any
-other address are closed before TLS, and the printed firewall rule is scoped to them.
+other address are closed before TLS.
 IPv4 addresses must be complete (all four numbers).
 
 ```yaml

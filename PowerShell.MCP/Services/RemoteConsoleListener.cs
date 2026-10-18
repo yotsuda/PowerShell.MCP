@@ -90,6 +90,7 @@ public static class RemoteConsoleListener
     private static byte[]? _previousResumeKey;  // the one the latest reconnect proved, until it is used
     private static DateTime _deadline;          // no session: pair or resume before this
     private static int _failures;
+    private static readonly HashSet<string> _brokenOffFrom = []; // told once per address per code: each code is a new target
     private static int _port;
     private static Session? _session;
 
@@ -164,6 +165,7 @@ public static class RemoteConsoleListener
         _codeKey = DeriveKey(code, _salt);
         _code = code;
         _deadline = DateTime.UtcNow + CodeLifetime;
+        _brokenOffFrom.Clear();
         return code;
     }
 
@@ -543,8 +545,8 @@ public static class RemoteConsoleListener
             // Queued under the lock, so a reconnect that follows at once
             // cannot have its notice and title overtaken by these.
             Notify(goodbye
-                ? $"Remote AI session ended. To connect again within {minutes} minutes, give the AI the new pairing code {FormatCode(code)}; after that remote control ends."
-                : $"Remote AI session disconnected. That MCP server can reconnect by itself within {minutes} minutes; another one needs the new pairing code {FormatCode(code)}. After that remote control ends.", "Yellow");
+                ? $"Remote AI session ended. New pairing code: {FormatCode(code)} ({minutes} minutes)."
+                : $"Remote AI session disconnected; it reconnects by itself within {minutes} minutes. New pairing code: {FormatCode(code)}.", "Yellow");
             SetTitle(RemoteControl.WaitingTitle);
         }
     }
@@ -578,7 +580,7 @@ public static class RemoteConsoleListener
             {
                 ok = false,
                 error = "version_mismatch",
-                message = "The PowerShell.MCP versions on the two machines differ. Install the same version on both.",
+                message = "The PowerShell.MCP versions on the two machines differ. Run Update-Module PowerShell.MCP on both, or on the older one with -RequiredVersion <the newer one's version>.",
             }, ct);
             return null;
         }
@@ -629,7 +631,21 @@ public static class RemoteConsoleListener
             server_proof = Convert.ToBase64String(Proof(key!, "srv", clientNonce, serverNonce, thumbprint)),
         }, ct);
 
-        var proofJson = await NamedPipeServer.ReceiveMessageAsync(ssl, ct, MaxHandshakeFrame);
+        string proofJson;
+        try
+        {
+            proofJson = await NamedPipeServer.ReceiveMessageAsync(ssl, ct, MaxHandshakeFrame);
+        }
+        catch
+        {
+            // It took this side's proof and left without its own: the AI's
+            // side found the code wrong (a typo there), or someone collected
+            // the proof to try codes against offline. The two look alike from
+            // here. Not counted as a failure — then anyone could end remote
+            // control by hanging up five times — but the person here is told.
+            if (!resume) NoteBrokenOff(listener, remote);
+            throw;
+        }
         using var proofDoc = JsonDocument.Parse(proofJson);
         var clientProof = Convert.FromBase64String(proofDoc.RootElement.GetProperty("client_proof").GetString() ?? "");
         var expected = Proof(key!, "cli", clientNonce, serverNonce, thumbprint);
@@ -669,6 +685,16 @@ public static class RemoteConsoleListener
         Notify($"Remote pairing attempt from {remote} failed ({failures}/{MaxFailures}).", "Yellow");
         if (failures >= MaxFailures)
             Stop($"{MaxFailures} failed pairing attempts", fromConsoleThread: false);
+    }
+
+    /// <summary>Once per address per code, so repeated connections cannot flood the console.</summary>
+    private static void NoteBrokenOff(TcpListener listener, string remote)
+    {
+        lock (_lock)
+        {
+            if (!ReferenceEquals(_listener, listener) || !_brokenOffFrom.Add(remote)) return;
+        }
+        Notify($"A connection from {remote} broke off pairing (a mistyped code on the AI's side, or someone probing). If that is not your AI's machine: Disable-MCPRemoteControl.", "Yellow");
     }
 
     private static Task SendJsonAsync(Stream stream, object value, CancellationToken ct) =>
