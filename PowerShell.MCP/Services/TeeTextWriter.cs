@@ -65,6 +65,9 @@ public sealed class TeeTextWriter : TextWriter
     {
         _primary = primary;
         _capture = capture;
+        // A tee is installed as a command starts, right after the command's
+        // echo, which ends its line — not whatever the previous command left.
+        _atLineStart = true;
     }
 
     /// <summary>
@@ -105,7 +108,17 @@ public sealed class TeeTextWriter : TextWriter
 
     private static void Track(string text)
     {
-        if (text.Length > 0) _atLineStart = text[^1] is '\n' or '\r';
+        // A colour reset or other control sequence after the newline does
+        // not move the cursor off the line start: judge by what precedes it.
+        var end = text.Length;
+        while (end > 0)
+        {
+            var esc = text.LastIndexOf('\u001b', end - 1);
+            if (esc < 0 || esc + 1 >= end || text[esc + 1] != '[' || !char.IsAsciiLetter(text[end - 1])) break;
+            if (text.AsSpan(esc + 2, end - esc - 3).ContainsAnyExcept("0123456789;?")) break;
+            end = esc;
+        }
+        if (end > 0) _atLineStart = text[end - 1] is '\n' or '\r';
     }
 
     public override Encoding Encoding => _primary.Encoding;

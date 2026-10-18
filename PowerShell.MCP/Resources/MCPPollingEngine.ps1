@@ -1617,7 +1617,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # Not CursorLeft on Linux/macOS: there it reads the
                         # terminal's reply from the keyboard input and, after
                         # a cancel, waited for it until a key was pressed.
-                        $mcpMidLine = if ($IsWindows) { [Console]::CursorLeft -gt 0 } else { -not [PowerShell.MCP.Services.TeeTextWriter]::AtLineStart }
+                        # An interrupted command ($mcpOutput still null) may have
+                        # left a native program's prompt mid-line on the terminal
+                        # itself (sudo writes to /dev/tty), where no tee saw it.
+                        $mcpMidLine = if ($IsWindows) { [Console]::CursorLeft -gt 0 } else { $null -eq $mcpOutput -or -not [PowerShell.MCP.Services.TeeTextWriter]::AtLineStart }
                         if ($mcpMidLine) { [Console]::WriteLine() }
                         [Console]::Write($promptText.TrimEnd(' ').TrimEnd('>') + '> ')
                     }
@@ -1632,7 +1635,10 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # cwd snapshot reflects any Set-Location the pipeline did.
                     # The 100ms timer Action only fires when runspace is idle,
                     # so the pre-pipeline tick's cached value is stale here.
+                    # Same for the title the status line shows, which the
+                    # command may have set.
                     try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
+                    try { [PowerShell.MCP.Services.ConsoleTitle]::Remember($Host.UI.RawUI.WindowTitle) } catch {}
 
                     # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
                     if ($null -eq $mcpOutput) {
@@ -1684,7 +1690,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                 }
                 finally {
                     # Refresh AI cwd cache (silent commands can also Set-Location)
+                    # and the remembered title (set_window_title is a silent command)
                     try { [PowerShell.MCP.Services.ExecutionState]::SetCurrentAiCwd($PWD.Path) } catch {}
+                    try { [PowerShell.MCP.Services.ConsoleTitle]::Remember($Host.UI.RawUI.WindowTitle) } catch {}
 
                     # Ensure NotifyResultReady is always called, even if exit or other terminating statements were executed
                     if ($null -eq $mcpOutput) {

@@ -874,7 +874,7 @@ public sealed class RemoteBootstrap
                 finally { Remove-Item Env:PSMCP_REMOTE_CODE -ErrorAction SilentlyContinue }
                 # The outcome stands apart from the progress lines, as a failure does.
                 if ($said.Any) { Write-Host '' }
-                Say "Remote control continues in the new PowerShell 7 window (PID $($process.Id)); this one can be closed." Green
+                Say "Remote control starts in the new PowerShell 7 window (PID $($process.Id)) once you confirm there; this one can be closed." Green
             }
         }
         catch {

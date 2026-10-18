@@ -81,6 +81,16 @@ public class TeeTextWriterTests
         Assert.False(TeeTextWriter.AtLineStart);
         tee.Write('\n');
         Assert.True(TeeTextWriter.AtLineStart);
+
+        // A colour reset after the newline leaves the cursor at the line start.
+        tee.Write("coloured line\n\u001b[0m");
+        Assert.True(TeeTextWriter.AtLineStart);
+        tee.Write("\u001b[32mgreen, no newline\u001b[0m");
+        Assert.False(TeeTextWriter.AtLineStart);
+
+        // A new tee starts a command right after its echo, at a line start.
+        _ = new TeeTextWriter(new StringWriter(), new StringBuilder());
+        Assert.True(TeeTextWriter.AtLineStart);
     }
 
     [Fact]

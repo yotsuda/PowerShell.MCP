@@ -129,7 +129,7 @@ Twelve tools — six for consoles on this machine, six mirroring them for a cons
 | `close_console` | Kill a console by PID (e.g. one paused at an interactive prompt), returning any output it still holds |
 | **Another machine** ([Remote console](#remote-console-another-machine)) | |
 | `connect_remote_console` | Connect to a console that is listening (`Enable-MCPRemoteControl`) with its pairing code |
-| `accept_remote_console` | Let a console dial in — returns one line for the user to paste there (for machines behind NAT or a firewall) |
+| `accept_remote_console` | Let a console dial in (for machines behind NAT or a firewall) — returns the `Enable-MCPRemoteControl -ConnectTo` line to run there, or, where nothing can be installed, one line to paste |
 | `execute_remote_command` | Execute a command in the remote console |
 | `wait_for_remote_completion` | Wait for the remote command to finish and collect its output |
 | `cancel_remote_command` | Send Ctrl+C to the remote console |
@@ -358,7 +358,7 @@ The AI can also drive a console on **another machine** — a test VM, a build bo
 On the remote machine, install PowerShell 7.4+ (`winget install Microsoft.PowerShell` on Windows) and PowerShell.MCP the usual way, then in PowerShell 7:
 
 ```powershell
-Install-Module PowerShell.MCP                     # once; later, Update-Module PowerShell.MCP
+Install-Module PowerShell.MCP -RequiredVersion <the version on your machine>   # once
 Import-Module PowerShell.MCP
 Enable-MCPRemoteControl -AllowFrom 192.168.0.10   # the AI's machine; TCP port 42777 by default, -Port to change
 ```
@@ -371,9 +371,9 @@ If PowerShell 7 and PowerShell.MCP cannot be installed there the usual way — a
 
 - Inbound TCP 42777 must be allowed through the remote machine's firewall (listening mode); if connecting fails, the AI gives you a `New-NetFirewallRule` line scoped to its address, and the line that removes it. In dial-out mode the port to open is on your machine instead.
 - One proxy at a time per console, one remote console at a time per proxy. A dropped connection reconnects by itself. A pairing code works once: after `disconnect_remote_console` the console shows a new one, and remote control stops by itself if nobody connects within 10 minutes. `Disable-MCPRemoteControl` (or `Remove-Module`) ends it at any time.
-- A listening console ends remote control after five forged pairing attempts (a mistyped code does not count). A connection that takes the console's proof of the code and hangs up — a mistyped code on the AI's side, or someone collecting it to guess codes offline — is not counted, but the console shows its address (once per address and code).
+- A listening console ends remote control after five forged pairing attempts (a mistyped code does not count). A connection that takes the console's proof of the code and hangs up — a mistyped code on the AI's side, or someone collecting it to guess codes offline — is not counted, but the console shows its address (once per address and code; after three addresses, one line for the rest).
 - Security: TLS with a certificate made for the session and a handshake bound to that certificate and to the code. The code is short-lived on purpose: anyone who reaches the port can try codes offline. Meant for a LAN or VPN — do not expose the port to the Internet. What an attacker on the network can and cannot do: [SECURITY.md](SECURITY.md#remote-control).
-- Both machines must run the same PowerShell.MCP version. If they differ — and neither may be the latest — run `Update-Module PowerShell.MCP` on both, or on the older one with `-RequiredVersion <the newer one's version>`; after updating your own machine, restart the MCP client.
+- Both machines must run the same PowerShell.MCP version. If they differ — and neither may be the latest — run `Update-Module PowerShell.MCP` on both, or on the older one with `-RequiredVersion <the newer one's version>`. If `Update-Module` refuses (a module not installed with `Install-Module`, such as one the one-line bootstrap installed), use `Install-Module PowerShell.MCP -RequiredVersion <that version> -Force`. After updating your own machine, restart the MCP client.
 
 **Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` or pastes the line and answers Yes. It refuses to start where nobody could answer (a service, a script without a console, `-NonInteractive`), shows `[AI from <host>]` on every prompt and `Administrator:` in the title of an elevated window, and ends with `Disable-MCPRemoteControl` or by itself once no AI has been connected for 10 minutes (what the AI changed meanwhile stays, as with any admin work). Intrusion tooling is built to be the opposite: hidden and persistent. Like any tool, it cannot stop code already running on a machine from starting it out of sight — but it gives such code nothing it did not have, and [SECURITY.md](SECURITY.md#remote-control) lists how to spot it. **Paste a line only if you asked an AI for it yourself**: "paste this into PowerShell" is also how lures begin, and the console's question names the machine it will connect to. To help on a colleague's PC, use the listening mode, so no line is handed over.
 

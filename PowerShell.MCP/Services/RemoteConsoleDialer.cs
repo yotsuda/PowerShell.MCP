@@ -308,7 +308,7 @@ public static class RemoteConsoleDialer
         var error = root.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
         return error switch
         {
-            "version_mismatch" => "the PowerShell.MCP versions on the two machines differ; run Update-Module PowerShell.MCP on both, or on the older one with -RequiredVersion <the newer one's version>",
+            "version_mismatch" => "the PowerShell.MCP versions on the two machines differ; run Update-Module PowerShell.MCP on both, or on the older one with -RequiredVersion <the newer one's version> (if it refuses: Install-Module PowerShell.MCP -RequiredVersion <that version> -Force)",
             "busy" => "the MCP server is already connected to another console",
             "bad_code" => "the pairing code did not match",
             "expired" => resuming ? "the MCP server stopped waiting for this console to reconnect" : "the pairing code expired; ask the AI for a new one (accept_remote_console)",

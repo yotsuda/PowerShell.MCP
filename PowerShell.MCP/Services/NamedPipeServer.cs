@@ -952,8 +952,10 @@ public class NamedPipeServer : IDisposable
                 return;
             }
 
-            // Handle cancel request - sends a real Ctrl+C to the console
-            // group. Handled BEFORE the busy gate (and the version check)
+            // Handle cancel request - sends a Ctrl+C: CTRL_C_EVENT to the
+            // console group on Windows, SIGINT to the running command's
+            // processes on Linux/macOS (ConsoleControl.SendCtrlC, which also
+            // waits for them to exit). Handled BEFORE the busy gate (and the version check)
             // because its whole purpose is to interrupt a command that is
             // currently running/blocked. Runs on this background pipe
             // thread, so it fires even while the home thread is stuck in a
@@ -970,13 +972,25 @@ public class NamedPipeServer : IDisposable
                 // actually in-flight, so an idle housekeeping tick is never
                 // interrupted; then re-arm the poll timer as a safety net so
                 // the engine keeps ticking through the stop's unwind.
-                var ctrlC = ConsoleControl.SendCtrlC();
+                // On Linux/macOS the pipeline is marked stopping FIRST, as a
+                // terminal's Ctrl+C reaches pwsh and its native command at
+                // once: signalled first, the native command exited and the
+                // statements after it ran before the stop arrived.
+                // The command's processes are listed BEFORE the stop: the
+                // stop ends the direct child, and a grandchild it orphans
+                // (bash -c '… sleep') is then no longer found under pwsh — yet
+                // still holds the output pipe the pipeline waits on.
+                var busy = ExecutionState.Status == "busy";
+                var ctrlC = false;
                 var stoppedPipeline = false;
-                if (ExecutionState.Status == "busy")
+                var natives = OperatingSystem.IsWindows() || !busy ? null : ConsoleControl.CommandProcesses();
+                if (OperatingSystem.IsWindows()) ctrlC = ConsoleControl.SendCtrlC();
+                if (busy)
                 {
                     stoppedPipeline = ConsoleControl.StopRunningPipeline();
                     ConsoleControl.EnsurePollTimerArmed();
                 }
+                if (natives != null) ctrlC = ConsoleControl.Interrupt(natives);
                 var resp = JsonSerializer.Serialize(new { pid, status = (ctrlC || stoppedPipeline) ? "success" : "error" });
                 await SendMessageAsync(pipeServer, resp, cancellationToken);
                 return;

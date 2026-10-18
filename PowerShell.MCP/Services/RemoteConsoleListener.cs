@@ -580,7 +580,7 @@ public static class RemoteConsoleListener
             {
                 ok = false,
                 error = "version_mismatch",
-                message = "The PowerShell.MCP versions on the two machines differ. Run Update-Module PowerShell.MCP on both, or on the older one with -RequiredVersion <the newer one's version>.",
+                message = "The PowerShell.MCP versions on the two machines differ. Run Update-Module PowerShell.MCP on both, or on the older one with -RequiredVersion <the newer one's version> (if it refuses: Install-Module PowerShell.MCP -RequiredVersion <that version> -Force).",
             }, ct);
             return null;
         }
@@ -687,15 +687,27 @@ public static class RemoteConsoleListener
             Stop($"{MaxFailures} failed pairing attempts", fromConsoleThread: false);
     }
 
-    /// <summary>Once per address per code, so repeated connections cannot flood the console.</summary>
+    /// <summary>
+    /// Once per address per code, and at most <see cref="MaxBrokenOffNotices"/>
+    /// addresses per code plus one line for the rest, so many addresses (an
+    /// IPv6 /64, several hosts) cannot flood the console. Also on a handshake
+    /// timeout: holding the connection until then must not take the proof
+    /// away unseen. Queued under the lock, so a stop in between cannot leave
+    /// it printed after remote control ended.
+    /// </summary>
     private static void NoteBrokenOff(TcpListener listener, string remote)
     {
         lock (_lock)
         {
-            if (!ReferenceEquals(_listener, listener) || !_brokenOffFrom.Add(remote)) return;
+            if (!ReferenceEquals(_listener, listener)) return;
+            if (_brokenOffFrom.Count > MaxBrokenOffNotices || !_brokenOffFrom.Add(remote)) return;
+            Notify(_brokenOffFrom.Count <= MaxBrokenOffNotices
+                ? $"A connection from {remote} broke off pairing (a mistyped code on the AI's side, or someone probing). If that is not your AI's machine: Disable-MCPRemoteControl."
+                : "More connections broke off pairing, from other addresses; not shown one by one. If that is not your AI's machine: Disable-MCPRemoteControl.", "Yellow");
         }
-        Notify($"A connection from {remote} broke off pairing (a mistyped code on the AI's side, or someone probing). If that is not your AI's machine: Disable-MCPRemoteControl.", "Yellow");
     }
+
+    private const int MaxBrokenOffNotices = 3;
 
     private static Task SendJsonAsync(Stream stream, object value, CancellationToken ct) =>
         NamedPipeServer.SendMessageAsync(stream, JsonSerializer.Serialize(value), ct);

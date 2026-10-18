@@ -479,7 +479,7 @@ public sealed class RemoteConsoleClient : IDisposable
             : $"That pairing code expired (a code is good for {Minutes}). Ask the user for the new code the remote console shows, or to run Enable-MCPRemoteControl again.",
         "code_used" => "That pairing code was already used (a code pairs once). The remote console shows a new one; ask the user for it.",
         "resume_unknown" => "The remote console no longer knows this session (it was ended there). Ask the user for the pairing code it shows now and call connect_remote_console.",
-        "version_mismatch" => $"The PowerShell.MCP versions differ: this MCP server is {Program.ProxyVersion}. Neither may be the latest: ask the user to run Update-Module PowerShell.MCP by hand on BOTH machines, or on the older one only with -RequiredVersion <the newer one's version> (after updating this machine, the MCP client must be restarted), then connect again.",
+        "version_mismatch" => $"The PowerShell.MCP versions differ: this MCP server is {Program.ModuleVersion}. Neither may be the latest: ask the user to run Update-Module PowerShell.MCP by hand on BOTH machines, or on the older one only with -RequiredVersion <the newer one's version> — if Update-Module refuses (a module not installed by Install-Module), Install-Module PowerShell.MCP -RequiredVersion <that version> -Force (after updating this machine, the MCP client must be restarted), then connect again.",
         "protocol" => "The remote side is not a PowerShell.MCP console.",
         _ => "The remote console refused the connection.",
     };

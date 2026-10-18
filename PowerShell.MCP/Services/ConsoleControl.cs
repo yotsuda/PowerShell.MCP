@@ -11,8 +11,9 @@ namespace PowerShell.MCP.Services;
 /// thread is busy. Mirrors a human pressing Ctrl+C.
 /// </summary>
 /// <remarks>
-/// This raises a real CTRL_C_EVENT, which interrupts NATIVE console reads
-/// (git/npm/ssh/cmd waiting on stdin). It does NOT reliably interrupt a
+/// On Windows this raises a real CTRL_C_EVENT, and on Linux and macOS a
+/// SIGINT to the running command's processes (see <see cref="SendCtrlC"/>);
+/// either interrupts NATIVE console reads (git/npm/ssh/cmd waiting on stdin). It does NOT reliably interrupt a
 /// PowerShell HOST prompt (Read-Host / a missing mandatory parameter):
 /// those run via the polling-engine event and the signal does not unwind
 /// the host read. For a PowerShell prompt the recovery path is to answer it
@@ -31,47 +32,132 @@ public static class ConsoleControl
     /// On Windows that is a real CTRL_C_EVENT to the console group (id 0:
     /// every process attached to the caller's console) — pwsh's handler and
     /// any native child receive it, and pwsh survives. On Linux and macOS it
-    /// is SIGINT to this process's children only (pkill -INT -P): signalling
-    /// pwsh itself while it ran a PowerShell command (Start-Sleep) left the
-    /// command stopped but never completed, and the console stuck busy. A
-    /// PowerShell command is stopped by <see cref="StopRunningPipeline"/> —
-    /// and only once the signalled children are gone: stopping the pipeline
-    /// while a native command was still exiting left it stuck the same way.
-    /// (Calling kernel32 there threw, so cancel used to fail outright.)
+    /// is SIGINT to the processes the running command started — this
+    /// process's descendants started since the command began, grandchildren
+    /// included, as a terminal's Ctrl+C reaches the whole job; not to pwsh
+    /// itself (its own handling raced the pipeline stop), and not to children
+    /// that were already there (Start-Job workers, servers from Start-Process).
+    /// The cancel handler lists them first (<see cref="CommandProcesses"/>),
+    /// marks the pipeline stopping (<see cref="StopRunningPipeline"/>) so what
+    /// follows the native command does not run, and then signals them
+    /// (<see cref="Interrupt"/>), waiting up to 2 s for them to exit.
+    /// (kernel32, called there before, threw — cancel failed outright.)
     /// </summary>
     public static bool SendCtrlC()
     {
         if (OperatingSystem.IsWindows())
             return GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
-        var pid = Environment.ProcessId.ToString();
-        // 0: signalled at least one child; 1: none running.
-        var sent = RunTool("pkill", "-INT", "-P", pid) is 0 or 1;
-        // Wait (up to 2 s) for them to exit; pgrep exits 1 when none match.
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (sent && RunTool("pgrep", "-P", pid) == 0 && DateTime.UtcNow < deadline)
-            System.Threading.Thread.Sleep(100);
-        return sent;
+        return ExecutionState.Status == "busy" && Interrupt(CommandProcesses());
     }
 
-    /// <summary>Runs a small tool and returns its exit code, or -1 when it cannot run.</summary>
-    private static int RunTool(string file, params string[] args)
+    /// <summary>
+    /// Linux/macOS: the running command's processes (see <see cref="SendCtrlC"/>).
+    /// Listed before the pipeline is stopped, which ends the direct child and
+    /// would orphan the rest out of reach. Empty when there are none or the
+    /// process tree cannot be read.
+    /// </summary>
+    public static IReadOnlyList<int> CommandProcesses()
     {
         try
         {
-            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file, args)
-            {
-                UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            });
-            if (p == null) return -1;
-            if (!p.WaitForExit(5000)) return -1;
-            return p.ExitCode;
+            var since = DateTime.Now - TimeSpan.FromSeconds(ExecutionState.ElapsedSeconds + 1);
+            return CommandDescendants(Environment.ProcessId, since);
         }
         catch
         {
-            return -1;
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Linux/macOS: SIGINT to each of <paramref name="targets"/>, then waits
+    /// up to 2 s for them to exit (signal 0 only checks that one exists).
+    /// </summary>
+    public static bool Interrupt(IReadOnlyList<int> targets)
+    {
+        try
+        {
+            foreach (var pid in targets) kill(pid, SIGINT);
+            var deadline = DateTime.UtcNow.AddSeconds(2);
+            while (targets.Any(pid => kill(pid, 0) == 0) && DateTime.UtcNow < deadline)
+                System.Threading.Thread.Sleep(100);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private const int SIGINT = 2;
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int kill(int pid, int sig);
+
+    /// <summary>
+    /// This process's descendants started since <paramref name="since"/> —
+    /// the running command's native processes and theirs, as a terminal's
+    /// Ctrl+C would reach them. A child that was already there (a job worker,
+    /// a server started earlier) is left out, and so is everything under it.
+    /// </summary>
+    private static List<int> CommandDescendants(int root, DateTime since)
+    {
+        var children = new Dictionary<int, List<int>>();
+        foreach (var (pid, ppid) in ProcessParents())
+        {
+            if (!children.TryGetValue(ppid, out var list)) children[ppid] = list = [];
+            list.Add(pid);
+        }
+        var result = new List<int>();
+        var pending = new Queue<int>();
+        pending.Enqueue(root);
+        while (pending.Count > 0 && result.Count < 256)
+        {
+            if (!children.TryGetValue(pending.Dequeue(), out var list)) continue;
+            foreach (var pid in list)
+            {
+                DateTime started;
+                try { using var p = System.Diagnostics.Process.GetProcessById(pid); started = p.StartTime; }
+                catch { continue; } // gone already
+                if (started < since) continue;
+                result.Add(pid);
+                pending.Enqueue(pid);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>(pid, parent pid) of every process: /proc on Linux, ps elsewhere.</summary>
+    private static IEnumerable<(int pid, int ppid)> ProcessParents()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            foreach (var dir in Directory.EnumerateDirectories("/proc"))
+            {
+                if (!int.TryParse(Path.GetFileName(dir), out var pid)) continue;
+                string stat;
+                try { stat = File.ReadAllText(Path.Combine(dir, "stat")); } catch { continue; }
+                // "pid (comm) state ppid ...": comm may hold spaces and parentheses.
+                var fields = stat[(stat.LastIndexOf(')') + 2)..].Split(' ');
+                if (fields.Length > 1 && int.TryParse(fields[1], out var ppid)) yield return (pid, ppid);
+            }
+            yield break;
+        }
+        using var ps = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ps", ["-A", "-o", "pid=", "-o", "ppid="])
+        {
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+        if (ps == null) yield break;
+        var output = ps.StandardOutput.ReadToEndAsync();
+        if (!ps.WaitForExit(2000)) { try { ps.Kill(); } catch { } yield break; }
+        foreach (var line in output.Result.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2 && int.TryParse(parts[0], out var pid) && int.TryParse(parts[1], out var ppid))
+                yield return (pid, ppid);
         }
     }
 

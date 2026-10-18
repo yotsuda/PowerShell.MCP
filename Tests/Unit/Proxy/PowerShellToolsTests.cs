@@ -1463,6 +1463,71 @@ public class PowerShellToolsTests
     }
 
     [Fact]
+    public async Task ExecuteCommand_SwitchedBackToOlderConsole_ComparesWithTheAisLatestPlace()
+    {
+        // Console A was left at dirA; the AI then worked on console B at dirB
+        // (the session's latest). B is gone and discovery switches back to A,
+        // still at dirA. A's own record matches, but the AI is at dirB now:
+        // the pipeline must NOT run in dirA.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int consoleA = 88860, consoleB = 88861;
+        var pipeA = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{consoleA}";
+        var dirA = Path.Combine(Path.GetTempPath(), "older-console-dir");
+        var dirB = Path.Combine(Path.GetTempPath(), "latest-ai-dir");
+
+        sessionManager.SetLastAiCwd(TestAgentId, consoleA, dirA);
+        sessionManager.SetLastAiCwd(TestAgentId, consoleB, dirB);   // session latest
+        sessionManager.SetLastAiCwd(TestAgentId, consoleB, null);   // B is gone
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeA, true, new List<string>(), null, dirA));
+        _mockPowerShellService
+            .Setup(s => s.SetWindowTitleAsync(pipeA, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var executed = false;
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback(() => executed = true)
+            .ReturnsAsync("");
+
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Remove-Item *.tmp", agent_id: TestAgentId);
+
+        Assert.False(executed);
+        Assert.Contains("Pipeline NOT executed", result);
+        Assert.Contains(dirB, result);
+
+        sessionManager.SetLastAiCwd(TestAgentId, consoleA, null);
+    }
+
+    [Fact]
+    public async Task GetCurrentLocation_RecordsTheReportedPlace_SoTheNextCommandRuns()
+    {
+        // The AI has just been told where the console is; the next
+        // execute_command must not stop to say it again.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88862;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var cwd = Path.Combine(Path.GetTempPath(), "told-location");
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, cwd));
+        _mockPowerShellService
+            .Setup(s => s.GetCurrentLocationFromPipeAsync(pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync($"Location [FileSystem]: {cwd}");
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        await PowerShellTools.GetCurrentLocation(_mockPowerShellService.Object, _mockPipeDiscoveryService.Object, agent_id: TestAgentId);
+
+        Assert.Equal(cwd, sessionManager.GetLastAiCwd(testPid));
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
     public async Task ExecuteCommand_SwitchedToConsoleAtAiCwd_Executes()
     {
         // A switch to a console that is where the AI's last command ended

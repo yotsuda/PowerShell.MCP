@@ -25,6 +25,19 @@ public class PowerShellTools
     }
 
     /// <summary>
+    /// Records a console location the AI was just given (start_console,
+    /// get_current_location) as the AI's place on that console, so the
+    /// location check in execute_command does not stop the next command to
+    /// report it again. No-op when the pipe or the location is unknown.
+    /// </summary>
+    private static void RecordToldLocation(string agentId, string? pipeName, string? cwd)
+    {
+        var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+        if (pid.HasValue && !string.IsNullOrEmpty(cwd))
+            ConsoleSessionManager.Instance.SetLastAiCwd(agentId, pid.Value, cwd);
+    }
+
+    /// <summary>
     /// Whether two paths name the same directory. False when either is
     /// missing. Separators are normalized (GetFullPath) and a trailing one
     /// ignored (TrimEndingDirectorySeparator — GetFullPath alone keeps it), so
@@ -194,6 +207,11 @@ public class PowerShellTools
 
             // Get location (DLL will include its own cached outputs automatically)
             var result = await powerShellService.GetCurrentLocationFromPipeAsync(readyPipeName, cancellationToken);
+
+            // The AI has just been told where this console is: that is its
+            // place now, so the next execute_command runs there rather than
+            // stopping to say the same thing again.
+            RecordToldLocation(agentId, readyPipeName, liveCwd);
 
             // Collect completed outputs and busy status info from other pipes
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
@@ -409,6 +427,16 @@ If the target has unsubmitted text at its prompt, a human is typing in it: the f
         public string? Value;
     }
 
+    /// <summary>
+    /// Tells a caller of ExecuteCommandCore whether the pipeline was refused
+    /// by the location check — so the busy auto-route does not announce
+    /// "executed automatically" over a reply that says it was not.
+    /// </summary>
+    private sealed class CallOutcome
+    {
+        public bool NotExecuted;
+    }
+
     // The stash keeps whatever the response was, including a timeout notice
     // whose "use wait_for_completion / cancel / close_console" guidance was
     // true when written and may well be obsolete by the time it is read. It is
@@ -606,7 +634,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         bool is_subagent,
         AgentIdBox? agentIdBox,
         System.Diagnostics.Stopwatch callClock,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        CallOutcome? outcome = null)
     {
         // Clamp to the ceiling in force for the connected client (see
         // TimeoutCeiling): blocking past what the client will wait for turns
@@ -642,9 +671,9 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
 
         if (readyPipeName == null)
         {
-            // No ready pipe - auto-start, then fall through to execute the
-            // AI's pipeline at the new console in the same tool call.
-            // Pick the start_location the same way busy-route does: prefer
+            // No ready pipe - auto-start, then fall through to the location
+            // check, which runs the pipeline in the same tool call when the
+            // new console is where the AI was. Pick the start_location the same way busy-route does: prefer
             // the agent's session-scoped LastAiCwd so the new console
             // resumes where the AI was working, falling back to UserProfile
             // when this agent has no recorded cwd (first call, fresh agent).
@@ -677,7 +706,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
 
             // Probe the new console for its live cwd — fresh pwsh starts at
             // home, but a future StartConsoleInternal might honor an explicit
-            // start_location. Drift check below depends on this value.
+            // start_location. The location check below depends on this value.
             var newStatus = await powerShellService.GetStatusFromPipeAsync(readyPipeName, cancellationToken);
             liveCwd = newStatus?.Cwd;
 
@@ -734,19 +763,25 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // where the console is. The live cwd is recorded as the AI's, so a
         // re-issue runs there; to go back, the AI prepends Set-Location. With no
         // live cwd to compare (a failed status probe) the pipeline runs.
+        // The AI's place is the console's own record while it stays on that
+        // console, but the session's latest for a console it just started,
+        // switched to or attached to: an older console's record is where the AI
+        // was before it moved on, not where it is now.
         var cwdPid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
         var consoleAiCwd = cwdPid.HasValue ? sessionManager.GetLastAiCwd(cwdPid.Value) : null;
-        var expectedCwd = consoleAiCwd ?? sessionManager.GetSessionLastAiCwd(agentId);
+        var agentAiCwd = sessionManager.GetSessionLastAiCwd(agentId);
+        var expectedCwd = newConsole ? agentAiCwd ?? consoleAiCwd : consoleAiCwd ?? agentAiCwd;
         if (readyPipeName != null && !string.IsNullOrEmpty(liveCwd) && !SameDirectory(expectedCwd, liveCwd))
         {
             if (cwdPid.HasValue)
                 sessionManager.SetLastAiCwd(agentId, cwdPid.Value, liveCwd);
+            if (outcome != null) outcome.NotExecuted = true;
 
             var consoleName = GetConsoleName(readyPipeName);
             string notice;
             if (string.IsNullOrEmpty(expectedCwd))
             {
-                notice = $"ℹ️ Console {consoleName} is at '{liveCwd}', and this server has no record of where the AI's earlier commands ran (it may have just started).\n"
+                notice = $"ℹ️ Console {consoleName} is at '{liveCwd}', and this server has no record of where the AI's earlier commands ran (it has just started, or the AI's console was closed).\n"
                     + $"Pipeline NOT executed. Re-issue to run at '{liveCwd}', or prepend `Set-Location -LiteralPath '<folder>';` to run elsewhere.";
             }
             else
@@ -823,8 +858,9 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                     var lastAiCwd = jsonResponse.Pid > 0
                                         ? sessionManager.GetLastAiCwd(jsonResponse.Pid)
                                         : null;
-                                    var startLoc = (!string.IsNullOrEmpty(lastAiCwd) && Directory.Exists(lastAiCwd))
-                                        ? lastAiCwd
+                                    var atAiCwd = !string.IsNullOrEmpty(lastAiCwd) && Directory.Exists(lastAiCwd);
+                                    var startLoc = atAiCwd
+                                        ? lastAiCwd!
                                         : (!string.IsNullOrEmpty(jsonResponse.Cwd) && Directory.Exists(jsonResponse.Cwd))
                                             ? jsonResponse.Cwd
                                             : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -845,6 +881,15 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
 
                                     var newConsoleName = GetConsoleName(activeAfterBusy);
 
+                                    // Started where the AI left the busy console: that
+                                    // is its place on the new one too, so the location
+                                    // check lets the pipeline run there. Started anywhere
+                                    // else (no record, or that folder is gone), the check
+                                    // refuses and says where the console is.
+                                    var newPid = ConsoleSessionManager.GetPidFromPipeName(activeAfterBusy);
+                                    if (newPid.HasValue && atAiCwd)
+                                        sessionManager.SetLastAiCwd(agentId, newPid.Value, startLoc);
+
                                     // Recurse: the new console is now the active standby,
                                     // so FindReadyPipeAsync on the recursive call sees it
                                     // as ready and the pipeline runs cleanly. Recursion
@@ -858,13 +903,16 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                     // loop, just one extra console.
                                     // Same clock: the spawn we just paid for
                                     // comes out of the caller's budget too.
+                                    var retryOutcome = new CallOutcome();
                                     var retryResult = await ExecuteCommandCore(
                                         powerShellService, pipeDiscoveryService, pipeline,
                                         timeout_seconds, parsedVariables,
                                         agentId, is_subagent: false,
                                         agentIdBox: null,
                                         callClock: callClock,
-                                        cancellationToken: cancellationToken);
+                                        cancellationToken: cancellationToken,
+                                        outcome: retryOutcome);
+                                    if (outcome != null && retryOutcome.NotExecuted) outcome.NotExecuted = true;
 
                                     // Surface the auto-route notice + closed-console
                                     // messages collected by THIS outer call (the recursive
@@ -878,7 +926,9 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                         string.Join("\n", closedConsoleMessages),
                                         // The source console the pipeline did NOT run on.
                                         PipelineHelper.MarkOtherConsole(FormatBusyStatus(jsonResponse)),
-                                        $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.",
+                                        retryOutcome.NotExecuted
+                                            ? $"ℹ️ Source console busy with {jsonResponse.Reason}; started {newConsoleName} at {startLoc}."
+                                            : $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.",
                                         retryResult));
                                 }
                                 break;
@@ -992,7 +1042,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                             case "success":
                                 // Snapshot AI-intended cwd at successful completion. This
                                 // is the post-execution cwd — where AI's pipeline left the
-                                // shell — so the next execute_command's drift check
+                                // shell — so the next execute_command's location check
                                 // compares against the place AI actually finished at.
                                 if (jsonResponse.Pid > 0 && !string.IsNullOrEmpty(jsonResponse.Cwd))
                                     sessionManager.SetLastAiCwd(agentId, jsonResponse.Pid, jsonResponse.Cwd);
@@ -1001,7 +1051,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
                                 // Redundant leading cd hint: liveCwd is the
-                                // pre-execution cwd (drift check guarantees it
+                                // pre-execution cwd (the location check guarantees it
                                 // matches the AI's last cwd), jsonResponse.Cwd
                                 // the post-execution one.
                                 var redundantCdHint = PipelineHelper.CheckRedundantLeadingCd(pipeline, liveCwd, jsonResponse.Cwd);
@@ -1334,6 +1384,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 }
 
                 var reuseLocationResult = await powerShellService.GetCurrentLocationFromPipeAsync(discoveryResult.ReadyPipeName, cancellationToken);
+                RecordToldLocation(agentId, discoveryResult.ReadyPipeName, discoveryResult.LiveCwd);
 
                 // First attach for this agent (resume / cold-start). Mark it so a
                 // following execute_command treats this console as owned-active
@@ -1381,6 +1432,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         {
             await SetConsoleTitleAsync(powerShellService, newPipeName, cancellationToken);
         }
+        // Started where the AI asked (or $HOME): its place on this console.
+        RecordToldLocation(agentId, newPipeName, resolvedPath);
 
         // Collect busy status from Proxy side
         var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, newPipeName, cancellationToken);
