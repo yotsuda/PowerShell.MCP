@@ -81,15 +81,43 @@ $ridMap = @{
     'OsxArm64' = 'osx-arm64'
 }
 
-# Determine output base from installed module if not specified
+# Determine output base from the installed module if not specified. A machine
+# may have more than one copy on PSModulePath (an AllUsers install under
+# Program Files next to a user-writable one such as C:\PSModules, which
+# PSModulePath lists later), and the first one found is not necessarily
+# one this process can write to: deploying into Program Files without
+# elevation fails at the first Move-Item with "Access to the path is
+# denied". The first copy whose folder accepts a file is used; the probe
+# is a real file create, since ACLs cannot be judged from the path alone.
+# PlatyPS\Build-Help.ps1 resolves the installed module the same way.
+function Test-DirectoryWritable([string]$Path) {
+    $probe = Join-Path $Path ".write-probe-$(Get-Random)"
+    try {
+        [IO.File]::WriteAllBytes($probe, [byte[]]@())
+        Remove-Item -LiteralPath $probe -Force
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 if (-not $OutputBase) {
-    $module = Get-Module PowerShell.MCP -ListAvailable | Select-Object -First 1
-    if (-not $module) {
+    $candidates = @(Get-Module PowerShell.MCP -ListAvailable)
+    if (-not $candidates) {
         Write-Error "PowerShell.MCP module not found. Please install the module first or specify -OutputBase parameter."
+        exit 1
+    }
+    $module = $candidates | Where-Object { Test-DirectoryWritable $_.ModuleBase } | Select-Object -First 1
+    if (-not $module) {
+        $list = ($candidates | ForEach-Object { "  $($_.Version)  $($_.ModuleBase)" }) -join "`n"
+        Write-Error "No writable PowerShell.MCP install found (run elevated, or pass -OutputBase). Found:`n$list"
         exit 1
     }
     $OutputBase = $module.ModuleBase
     Write-Host "Detected module path: $OutputBase" -ForegroundColor Gray
+    foreach ($other in ($candidates | Where-Object { $_.ModuleBase -ne $module.ModuleBase })) {
+        Write-Host "  (not deploying to $($other.Version) at $($other.ModuleBase))" -ForegroundColor DarkGray
+    }
 }
 
 $moduleProjectPath = Join-Path $PSScriptRoot 'PowerShell.MCP'

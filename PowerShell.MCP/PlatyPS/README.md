@@ -31,10 +31,11 @@ This will:
    - `bin/Debug/net9.0/en-US/`
    - `bin/Release/net8.0/en-US/`
    - `bin/Release/net9.0/en-US/`
-3. Copy them into the installed module's `en-US\` folder — wherever
-   `Get-Module PowerShell.MCP -ListAvailable` finds it (the same resolution
-   `Build-AllPlatforms.ps1` uses). Administrator privileges are needed only
-   when that is under Program Files.
+3. Copy them into the installed module's `en-US\` folder — the first copy
+   `Get-Module PowerShell.MCP -ListAvailable` finds whose folder is writable
+   (the same resolution `Build-AllPlatforms.ps1` uses for its default
+   `-OutputBase`). Administrator privileges are needed only when the sole
+   copy is under Program Files.
 
 ## Requirements
 

@@ -67,6 +67,7 @@ sections at the TOP of the file; keep older sections for history.
 
 ## Internal
 - **`NamedPipeServer` serves requests from any `Stream`.** The per-connection handler is split into receiving a frame and serving it (`HandleRequestAsync`), and the framing helpers take a `Stream`, so the remote listener runs the same request code over TLS, one frame at a time, for the life of a connection. A `ping` request answers `pong` from the pipe thread. `IsRemoteRequest` (an `AsyncLocal`) tells the handler which side of the console it is serving.
+- **`Build-AllPlatforms.ps1` deploys to an install it can write to.** With no `-OutputBase` it took the first `Get-Module -ListAvailable` hit, which on a machine that also has an AllUsers copy under Program Files is that copy, and an unelevated build failed at the first `Move-Item` with "Access to the path is denied". It now takes the first copy whose folder accepts a file (probed by creating one), lists the copies it passed over, and when none is writable says so and names them. `PlatyPS\Build-Help.ps1` picks the installed module the same way.
 
 # Version: 1.15.0
 

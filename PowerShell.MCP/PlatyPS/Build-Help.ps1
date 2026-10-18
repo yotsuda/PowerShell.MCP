@@ -136,9 +136,25 @@ foreach ($tfm in $targetFrameworks) {
 
 # Copy to the installed module (wherever Get-Module finds it — e.g.
 # C:\PSModules\PowerShell.MCP or a Program Files path), the same
-# resolution Build-AllPlatforms.ps1 uses for its default -OutputBase.
+# resolution Build-AllPlatforms.ps1 uses for its default -OutputBase:
+# when several copies are on PSModulePath, the first one whose folder
+# this process can write to (an unelevated run skips Program Files).
 # Skipped with a note when the module is not installed.
-$installed = Get-Module PowerShell.MCP -ListAvailable | Select-Object -First 1
+function Test-DirectoryWritable([string]$Path) {
+    $probe = Join-Path $Path ".write-probe-$(Get-Random)"
+    try {
+        [IO.File]::WriteAllBytes($probe, [byte[]]@())
+        Remove-Item -LiteralPath $probe -Force
+        return $true
+    } catch {
+        return $false
+    }
+}
+$candidates = @(Get-Module PowerShell.MCP -ListAvailable)
+$installed = $candidates | Where-Object { Test-DirectoryWritable $_.ModuleBase } | Select-Object -First 1
+if (-not $installed -and $candidates) {
+    $installed = $candidates[0]   # none writable: try anyway so the catch below explains
+}
 if ($installed) {
     $psModulePath = Join-Path $installed.ModuleBase "en-US"
     try {
@@ -154,7 +170,7 @@ if ($installed) {
         Write-Host "  [COPY] $psModulePath\" -ForegroundColor Gray
     } catch {
         Write-Warning "Could not copy to the installed module at ${psModulePath}: $_"
-        Write-Warning "If the module lives under Program Files, run as Administrator"
+        Write-Warning "No writable PowerShell.MCP install was found; if the only copy lives under Program Files, run as Administrator"
     }
 } else {
     Write-Warning "PowerShell.MCP is not installed (Get-Module -ListAvailable found nothing); help was built into bin\ only."
