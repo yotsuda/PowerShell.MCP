@@ -35,6 +35,13 @@ namespace PowerShell.MCP.Services;
 /// restores the original. Visible-console rendering is preserved
 /// because every method forwards to the original inner UI; the AI
 /// side gets the captured text from the StringBuilder.
+/// <para>
+/// (The caching above is Windows behaviour. On Linux and macOS the console
+/// host writes through Console.Out, so everything forwarded from here would
+/// also land in the <see cref="TeeTextWriter"/> capture as "direct" output.
+/// Every forwarding call is therefore made inside
+/// <see cref="TeeTextWriter.Suppress"/>.)
+/// </para>
 /// </summary>
 /// <remarks>
 /// <para>
@@ -81,32 +88,32 @@ public sealed class TeePSHostUserInterface : PSHostUserInterface
     public override string ReadLine()
     {
         PowerShellCommunication.SignalAwaitingInput("Read-Host");
-        try { return _inner.ReadLine(); }
+        try { using (TeeTextWriter.Suppress()) return _inner.ReadLine(); }
         finally { PowerShellCommunication.ClearAwaitingInput(); }
     }
 
     public override SecureString ReadLineAsSecureString()
     {
         PowerShellCommunication.SignalAwaitingInput("Read-Host (secure)");
-        try { return _inner.ReadLineAsSecureString(); }
+        try { using (TeeTextWriter.Suppress()) return _inner.ReadLineAsSecureString(); }
         finally { PowerShellCommunication.ClearAwaitingInput(); }
     }
 
     public override void Write(string value)
     {
-        _inner.Write(value);
+        using (TeeTextWriter.Suppress()) _inner.Write(value);
         if (value != null) _capture.Append(value);
     }
 
     public override void Write(ConsoleColor foregroundColor, ConsoleColor backgroundColor, string value)
     {
-        _inner.Write(foregroundColor, backgroundColor, value);
+        using (TeeTextWriter.Suppress()) _inner.Write(foregroundColor, backgroundColor, value);
         if (value != null) _capture.Append(value);
     }
 
     public override void WriteLine(string value)
     {
-        _inner.WriteLine(value);
+        using (TeeTextWriter.Suppress()) _inner.WriteLine(value);
         if (value != null) _capture.Append(value);
         _capture.Append('\n');
     }
@@ -115,11 +122,11 @@ public sealed class TeePSHostUserInterface : PSHostUserInterface
     // these signals via the stream system (-WarningVariable,
     // -InformationVariable, 2>&1 4>&1 5>&1) so a host-level tap here
     // would double-count.
-    public override void WriteErrorLine(string value)   => _inner.WriteErrorLine(value);
-    public override void WriteDebugLine(string message) => _inner.WriteDebugLine(message);
-    public override void WriteVerboseLine(string message) => _inner.WriteVerboseLine(message);
-    public override void WriteWarningLine(string message) => _inner.WriteWarningLine(message);
-    public override void WriteProgress(long sourceId, ProgressRecord record) => _inner.WriteProgress(sourceId, record);
+    public override void WriteErrorLine(string value) { using (TeeTextWriter.Suppress()) _inner.WriteErrorLine(value); }
+    public override void WriteDebugLine(string message) { using (TeeTextWriter.Suppress()) _inner.WriteDebugLine(message); }
+    public override void WriteVerboseLine(string message) { using (TeeTextWriter.Suppress()) _inner.WriteVerboseLine(message); }
+    public override void WriteWarningLine(string message) { using (TeeTextWriter.Suppress()) _inner.WriteWarningLine(message); }
+    public override void WriteProgress(long sourceId, ProgressRecord record) { using (TeeTextWriter.Suppress()) _inner.WriteProgress(sourceId, record); }
 
     // Interactive prompts: pure passthrough so a human at the visible
     // terminal can answer. Each one first signals "awaiting input" so the
@@ -129,28 +136,28 @@ public sealed class TeePSHostUserInterface : PSHostUserInterface
     {
         var fields = descriptions is null ? "" : string.Join(", ", descriptions.Select(d => d.Name));
         PowerShellCommunication.SignalAwaitingInput(string.IsNullOrEmpty(fields) ? "parameter prompt" : $"parameter(s): {fields}");
-        try { return _inner.Prompt(caption, message, descriptions); }
+        try { using (TeeTextWriter.Suppress()) return _inner.Prompt(caption, message, descriptions); }
         finally { PowerShellCommunication.ClearAwaitingInput(); }
     }
 
     public override PSCredential PromptForCredential(string caption, string message, string userName, string targetName)
     {
         PowerShellCommunication.SignalAwaitingInput("credential");
-        try { return _inner.PromptForCredential(caption, message, userName, targetName); }
+        try { using (TeeTextWriter.Suppress()) return _inner.PromptForCredential(caption, message, userName, targetName); }
         finally { PowerShellCommunication.ClearAwaitingInput(); }
     }
 
     public override PSCredential PromptForCredential(string caption, string message, string userName, string targetName, PSCredentialTypes allowedCredentialTypes, PSCredentialUIOptions options)
     {
         PowerShellCommunication.SignalAwaitingInput("credential");
-        try { return _inner.PromptForCredential(caption, message, userName, targetName, allowedCredentialTypes, options); }
+        try { using (TeeTextWriter.Suppress()) return _inner.PromptForCredential(caption, message, userName, targetName, allowedCredentialTypes, options); }
         finally { PowerShellCommunication.ClearAwaitingInput(); }
     }
 
     public override int PromptForChoice(string caption, string message, Collection<ChoiceDescription> choices, int defaultChoice)
     {
         PowerShellCommunication.SignalAwaitingInput(string.IsNullOrEmpty(caption) ? "choice" : $"choice: {caption}");
-        try { return _inner.PromptForChoice(caption, message, choices, defaultChoice); }
+        try { using (TeeTextWriter.Suppress()) return _inner.PromptForChoice(caption, message, choices, defaultChoice); }
         finally { PowerShellCommunication.ClearAwaitingInput(); }
     }
 }

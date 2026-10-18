@@ -228,7 +228,7 @@ public static class RemoteConsoleDialer
                 if (ct.IsCancellationRequested) return;
                 if (!announcedWaiting)
                 {
-                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "DarkGray");
+                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "Gray");
                     announcedWaiting = true;
                 }
             }

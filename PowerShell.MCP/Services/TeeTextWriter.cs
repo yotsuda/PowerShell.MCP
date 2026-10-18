@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Text;
 
@@ -34,6 +35,15 @@ namespace PowerShell.MCP.Services;
 /// level work.
 /// </para>
 /// <para>
+/// What the host itself renders is not a direct write. On Windows the
+/// console host draws through Win32 calls that never reach this tee, but
+/// on Linux and macOS it writes through Console.Out — every formatted
+/// result, Write-Host line and prompt would be captured a second time and
+/// come back to the AI as "direct" output. <see cref="TeePSHostUserInterface"/>
+/// therefore opens a <see cref="Suppress"/> scope around each host write:
+/// the text still reaches the console, it is just not captured.
+/// </para>
+/// <para>
 /// Flush forwards to the primary; the StringBuilder doesn't need
 /// flushing. Not thread-safe — the polling engine runs one command at a
 /// time and the swap/restore happens around a single
@@ -46,30 +56,60 @@ public sealed class TeeTextWriter : TextWriter
     private readonly TextWriter _primary;
     private readonly StringBuilder _capture;
 
+    // Per thread: the host writes on the pipeline thread, the same one a
+    // user's [Console]::WriteLine runs on, and a scope there must not hide
+    // a write from another thread.
+    [ThreadStatic] private static int t_suppressed;
+
     public TeeTextWriter(TextWriter primary, StringBuilder capture)
     {
         _primary = primary;
         _capture = capture;
     }
 
+    /// <summary>
+    /// Until the returned scope is disposed, writes on this thread reach
+    /// the primary writer but are not captured. Scopes nest.
+    /// </summary>
+    public static IDisposable Suppress()
+    {
+        t_suppressed++;
+        return new SuppressScope();
+    }
+
+    private sealed class SuppressScope : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            t_suppressed--;
+        }
+    }
+
+    private static bool Capturing => t_suppressed == 0;
+
     public override Encoding Encoding => _primary.Encoding;
 
     public override void Write(char value)
     {
         _primary.Write(value);
-        _capture.Append(value);
+        if (Capturing) _capture.Append(value);
     }
 
     public override void Write(string? value)
     {
         if (value == null) return;
         _primary.Write(value);
-        _capture.Append(value);
+        if (Capturing) _capture.Append(value);
     }
 
     public override void WriteLine(string? value)
     {
         _primary.WriteLine(value);
+        if (!Capturing) return;
         if (value != null) _capture.Append(value);
         _capture.Append(_primary.NewLine ?? "\n");
     }

@@ -148,7 +148,8 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
         var addresses = LocalAddresses(address);
         var port = Port == RemoteConsoleListener.DefaultPort ? "" : $"  (port {Port})";
         ui.WriteLine($"  Host:          {Dns.GetHostName()}{(addresses.Count > 0 ? $"  {string.Join(", ", addresses)}" : "")}{port}");
-        ui.WriteLine(ConsoleColor.DarkGray, bg, "  Tell the AI the host and the code. The code works once, for 10 minutes.");
+        // Not DarkGray: a Linux text console draws it as black on black.
+        ui.WriteLine("  Tell the AI the host and the code. The code works once, for 10 minutes.");
         if (publicNetworks.Count > 0 && allowFrom == null)
             ui.WriteLine(ConsoleColor.Yellow, bg, "  Public network: consider -AllowFrom <IP of the AI's machine>.");
         ui.WriteLine();
@@ -202,7 +203,7 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
 
         var ui = Host.UI;
         ui.WriteLine();
-        ui.WriteLine(ConsoleColor.DarkGray, ui.RawUI.BackgroundColor, $"  Connecting to {host}:{port} ...");
+        ui.WriteLine($"  Connecting to {host}:{port} ...");
         ui.WriteLine();
     }
 
@@ -351,7 +352,7 @@ public class DisableMCPRemoteControlCmdlet : PSCmdlet
             return;
         }
         try { Host.UI.RawUI.WindowTitle = ConsoleTitle.Decorate($"#{Environment.ProcessId} ____"); } catch { }
-        Host.UI.WriteLine(ConsoleColor.DarkGray, Host.UI.RawUI.BackgroundColor, $"{stopped}. This console is a plain MCP console again.");
+        Host.UI.WriteLine($"{stopped}. This console is a plain MCP console again.");
         Host.UI.WriteLine();
     }
 }
