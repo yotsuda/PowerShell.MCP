@@ -826,4 +826,86 @@ public class RemoteConsoleTests
             RemoteConsoleClient.SessionWait = wait;
         }
     }
+
+    [Fact]
+    public async Task Registry_TwoConsoles_EachCallNamesOne_AndTheLimitHolds()
+    {
+        // This process can be only one console, so the second one is still
+        // waiting to dial in — enough to tell them apart.
+        using var consoles = new RemoteConsoleRegistry();
+        try
+        {
+            await consoles.AcceptAsync(0, "none", CancellationToken.None);
+            var first = consoles.Resolve(null); // the only one, so it need not be named
+            // Asked again while that one waits: its instructions, not a second listener.
+            Assert.Contains($"port {first.AcceptPort}", await consoles.AcceptAsync(0, "none", CancellationToken.None));
+            RemoteConsoleDialer.Start("127.0.0.1", first.AcceptPort, first.AcceptCode!);
+            await WaitUntilAsync(() => first.IsConnected && RemoteConsoleDialer.IsConnected);
+            Assert.True(first.IsConnected);
+
+            // That one has dialed in, so accepting again is a second console.
+            var notice = await consoles.AcceptAsync(0, "none", CancellationToken.None);
+            Assert.Contains("Also connected", notice);
+            Assert.Contains($"\"port {first.AcceptPort}\"", notice);
+
+            // Two now: an unnamed call is refused and lists both.
+            var ex = Assert.Throws<InvalidOperationException>(() => consoles.Resolve(null));
+            Assert.Contains("nothing was sent", ex.Message);
+            Assert.Contains($"port {first.AcceptPort}", ex.Message);
+            Assert.Throws<InvalidOperationException>(() => consoles.Resolve("elsewhere"));
+
+            Assert.Same(first, consoles.Resolve($"port {first.AcceptPort}"));
+            Assert.Same(first, consoles.Resolve(first.AcceptPort.ToString()));
+            Assert.Same(first, consoles.Resolve("localhost")); // the address it dialed in from
+            var secondPort = System.Text.RegularExpressions.Regex.Match(notice, @"dial in on TCP port (\d+)").Groups[1].Value;
+            var waiting = consoles.Resolve($"port {secondPort}");
+            Assert.NotSame(first, waiting);
+            Assert.False(waiting.IsConnected);
+            Assert.Equal("pong", StatusOf(await first.SendRequestAsync(Ping(), CancellationToken.None)));
+
+            var max = RemoteConsoleRegistry.MaxConsoles;
+            RemoteConsoleRegistry.MaxConsoles = 2;
+            try
+            {
+                // Refused before any connection is tried.
+                var full = await Assert.ThrowsAsync<InvalidOperationException>(() => consoles.ConnectAsync("127.0.0.1:1", "7Q4K-M2XP-H9RT", CancellationToken.None));
+                Assert.Contains("Already 2 remote consoles", full.Message);
+            }
+            finally
+            {
+                RemoteConsoleRegistry.MaxConsoles = max;
+            }
+
+            // Disconnecting one leaves the other, which then needs no name again.
+            var bye = await consoles.DisconnectAsync($"port {waiting.AcceptPort}", CancellationToken.None);
+            Assert.Contains("Still connected", bye);
+            Assert.Same(first, consoles.Resolve(null));
+            Assert.Equal("pong", StatusOf(await first.SendRequestAsync(Ping(), CancellationToken.None)));
+        }
+        finally
+        {
+            RemoteConsoleDialer.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task Registry_TheSameHostAgain_IsThatConsole_NotASecondOne()
+    {
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        using var consoles = new RemoteConsoleRegistry();
+        try
+        {
+            await consoles.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => consoles.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None));
+            Assert.Contains("Already connected", ex.Message);
+            Assert.Same(consoles.Resolve(null), consoles.Resolve($"127.0.0.1:{port}"));
+            await consoles.DisconnectAsync(null, CancellationToken.None);
+            Assert.Throws<InvalidOperationException>(() => consoles.Resolve(null));
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
 }

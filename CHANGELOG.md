@@ -17,6 +17,14 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.17.0
+
+## New Features
+- **Several remote machines at once.** One MCP server can now hold up to four remote consoles, one per machine — to compare servers, or to work on both ends of a connection — instead of one. `connect_remote_console` and `accept_remote_console` add a console; every other remote tool takes a `remote` parameter naming it (the host it was connected with, or `port N` for one that dialed in). With a single console it may be omitted as before; with two or more, a call that omits it, or names none or several, is refused with the list of consoles and nothing is sent — a command never goes to a console the AI guessed. `disconnect_remote_console` ends one and leaves the others. The limit is low on purpose: each console is a machine the AI must not mix up. One console waits to dial in at a time; the wire protocol is unchanged.
+
+## Bug Fixes
+- **`Get-Job | Remove-Job` no longer kills the console's engine.** The engine's event job showed up in `Get-Job`, so a routine cleanup of the AI's own `Start-Job` jobs removed it too, and the console never answered again (nor closed when idle). It is now registered with `-SupportEvent`, out of `Get-Job` and `Get-EventSubscriber`.
+
 # Version: 1.16.0
 
 ## Highlights

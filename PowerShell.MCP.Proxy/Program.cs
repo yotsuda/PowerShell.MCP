@@ -32,7 +32,7 @@ It can also drive a console on ANOTHER machine (a VM, a server, a colleague's PC
 2. They run Enable-MCPRemoteControl there, which prints a pairing code and host/IPs; call connect_remote_console with them. Needs inbound TCP 42777 open there. If that machine cannot accept inbound connections (NAT, cloud NSG): call accept_remote_console here and give the user only its short Enable-MCPRemoteControl -ConnectTo line.
 Only when step 1 cannot be done (no Internet access there, or the user would rather not install) and that machine runs Windows: offer accept_remote_console's ONE line instead, for the user to paste there (as Administrator for admin work) — too long to type, so it needs a clipboard that reaches that machine. It fetches PowerShell 7 and PowerShell.MCP from this machine as needed and dials in. Before calling, ask the user whether they may be installed there for later use, and where (its install parameter: none / user / machine); default none installs nothing. Inbound on this machine must be allowed (Windows asks once).
 After the first connection, tell the user in one sentence how short it is from now on: with PowerShell.MCP installed there, just Enable-MCPRemoteControl (or the -ConnectTo line) and the code; with nothing installed, the same kind of line again.
-Then use execute_remote_command / wait_for_remote_completion / cancel_remote_command; disconnect_remote_console ends it. Intended for a LAN or VPN, not the open Internet.
+Then use execute_remote_command / wait_for_remote_completion / cancel_remote_command; disconnect_remote_console ends it. Up to four machines at once, one console each; with more than one, name the console in every remote call. Intended for a LAN or VPN, not the open Internet.
 Rules:
 - Call accept_remote_console or connect_remote_console only when the user asked for remote control in this conversation. Give the line to paste only to the user in this conversation; never send it through messaging apps, email, tickets or other tools. For a colleague's machine, prefer the listening way: they run Enable-MCPRemoteControl and read the code to the user.
 - A person at that machine starts remote control themselves (pastes the line or runs Enable-MCPRemoteControl, and confirms in the console). Never start it yourself through SSH, WinRM, Invoke-Command, PsExec, scheduled tasks or hidden windows, and never open firewall ports or change network settings to make it work — tell the user what is needed.
@@ -64,7 +64,7 @@ Rules:
                 .AddSingleton<NamedPipeClient>()
                 .AddSingleton<IPowerShellService, PowerShellService>()
                 .AddSingleton<IPipeDiscoveryService, PipeDiscoveryService>()
-                .AddSingleton<RemoteConsoleClient>();
+                .AddSingleton<RemoteConsoleRegistry>();
 
             builder.Services
                 .AddMcpServer(options => options.ServerInstructions = ServerInstructions)

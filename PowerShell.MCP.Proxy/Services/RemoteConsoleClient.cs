@@ -97,8 +97,61 @@ public sealed class RemoteConsoleClient : IDisposable
     /// <summary>"host" or "host:port" as the user gave it, or the console that dialed in, for messages.</summary>
     public string Target =>
         _acceptListener != null || _peer != null
-            ? (_peer != null ? $"{_peer} (dialed in)" : $"(waiting on port {_acceptPort})")
-            : _host == null ? "(not connected)" : _port == DefaultPort ? _host : $"{_host}:{_port}";
+            ? (_peer != null ? $"{_peer} (dialed in on port {_acceptPort})" : $"(waiting on port {_acceptPort})")
+            : _host == null ? "(not connected)" : HostText;
+
+    private string HostText =>
+        _port == DefaultPort ? _host! : _host!.Contains(':') ? $"[{_host}]:{_port}" : $"{_host}:{_port}";
+
+    /// <summary>
+    /// What the AI passes as the remote parameter to name this console: the
+    /// host as given (with a port other than the default), or, for a console
+    /// that dials in, its accept port, which stays the same before and after.
+    /// </summary>
+    public string Handle => _host != null ? HostText : $"port {_acceptPort}";
+
+    /// <summary>Connected (or reconnecting) to a listening console with connect_remote_console.</summary>
+    internal bool IsDialMode => _host != null;
+
+    /// <summary>Accepting, and no console has dialed in yet.</summary>
+    internal bool IsWaitingForDialIn
+    {
+        get { lock (_sessionLock) return _acceptListener != null && _peer == null && _ssl == null; }
+    }
+
+    /// <summary>
+    /// Nothing left: accepting stopped (expired, or locked out) with no console
+    /// connected, or the session was disconnected. EndedReason says why.
+    /// </summary>
+    internal bool IsEnded
+    {
+        get { lock (_sessionLock) return _host == null && _acceptListener == null && _ssl == null; }
+    }
+
+    internal string? EndedReason => _acceptStopped;
+
+    /// <summary>
+    /// Whether <paramref name="remote"/> names this console: host or host:port
+    /// as given to connect_remote_console; for one that dials in, "port N" (or
+    /// N) of its accept port, or the address it dialed in from.
+    /// </summary>
+    internal bool Matches(string remote)
+    {
+        remote = remote.Trim();
+        if (_host != null)
+        {
+            try
+            {
+                var (host, port) = ParseTarget(remote);
+                return port == _port && string.Equals(host, _host, StringComparison.OrdinalIgnoreCase);
+            }
+            catch (ArgumentException) { return false; }
+        }
+        var number = remote.StartsWith("port ", StringComparison.OrdinalIgnoreCase) ? remote[5..].Trim() : remote;
+        if (int.TryParse(number, out var p) && p == _acceptPort) return true;
+        var peer = _peer;
+        return peer != null && string.Equals(remote, peer, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string Minutes => $"{CodeLifetime.TotalMinutes:0} minutes";
 
