@@ -376,6 +376,11 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         # given. Built from the real cmdlet so every parameter
                         # set is kept. Done in a child scope so nothing but the
                         # function is left in the sandbox for commands to see.
+                        # A module-qualified `Microsoft.PowerShell.Core\Import-Module`
+                        # resolves to the cmdlet, bypasses this and imports nested.
+                        # Left as is: $PSDefaultParameterValues here would hide the
+                        # user's own, and promoting nested modules after every
+                        # command costs more than this rare case is worth.
                         & {
                             $mcpText = [System.Management.Automation.ProxyCommand]::Create((Get-Command Import-Module -CommandType Cmdlet))
                             $mcpGuard = 'if (-not $PSBoundParameters.ContainsKey(''Global'') -and -not $PSBoundParameters.ContainsKey(''Scope'')) { $PSBoundParameters[''Global''] = $true }'
