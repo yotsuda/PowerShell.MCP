@@ -3,9 +3,10 @@ try {
     # serving a proxy on another machine from a runspace with no engine.
     try { [void][PowerShell.MCP.Services.RemoteControl]::Stop('module removed', $true) } catch {}
 
-    $eventSubscriber = Get-EventSubscriber -SourceIdentifier MCP_Poll -ErrorAction SilentlyContinue
+    # -Force: the engine registers with -SupportEvent, which hides it otherwise.
+    $eventSubscriber = Get-EventSubscriber -SourceIdentifier MCP_Poll -Force -ErrorAction SilentlyContinue
     if ($eventSubscriber) {
-        Unregister-Event -SourceIdentifier MCP_Poll -ErrorAction SilentlyContinue
+        Unregister-Event -SourceIdentifier MCP_Poll -Force -ErrorAction SilentlyContinue
         #Write-Host '[PowerShell.MCP] Event handler unregistered' -ForegroundColor Green
     } else {
         #Write-Host '[PowerShell.MCP] No event handler found for MCP_Poll' -ForegroundColor Yellow
