@@ -118,10 +118,17 @@ if (-not (Test-Path Variable:global:McpTimer)) {
         }
     }
 
+    # -SupportEvent keeps the engine's action job out of Get-Job and its
+    # subscriber out of Get-EventSubscriber / Unregister-Event (without
+    # -Force). A routine `Get-Job | Remove-Job -Force` from an AI command,
+    # meant for its own Start-Job jobs, otherwise removed MCP_Poll too: the
+    # engine stopped for good, the console read as a user command forever,
+    # and it never reaped. MCPCleanup.ps1 passes -Force to find it.
     Register-ObjectEvent `
         -InputObject    $global:McpTimer `
         -EventName      Elapsed `
         -SourceIdentifier MCP_Poll `
+        -SupportEvent `
         -Action { try {
             # Update heartbeat to indicate runspace is available
             [PowerShell.MCP.Services.ExecutionState]::Heartbeat()
