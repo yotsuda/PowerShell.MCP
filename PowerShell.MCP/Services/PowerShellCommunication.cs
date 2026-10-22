@@ -38,6 +38,17 @@ public static class PowerShellCommunication
         var output = OutputTruncationHelper.TruncateIfNeeded(result, remote: RemoteControl.IsActive);
         if (!ExecutionState.IsStaleRemoteResult) ExecutionState.AddToCache(output);
         ExecutionState.CompleteExecution();
+        // This runs on the runspace's home thread, inside the timer tick that
+        // ran the command: the runspace is demonstrably alive, so say so now.
+        // The tick's own Heartbeat() fired BEFORE the command, and the next
+        // tick is at least 100 ms away. Without this, a get_status that
+        // arrives in that gap after a command of 10 s or more finds the
+        // heartbeat older than HeartbeatTimeoutMs and answers "busy (user
+        // command)": the proxy then passed over a perfectly idle console and
+        // started a new one. An AI that sends its next command the moment
+        // the previous one returns — Claude Code with two tool calls in one
+        // turn, 22 ms apart — hit this every time the first took 10 s.
+        ExecutionState.Heartbeat();
 
         lock (_lock)
         {
@@ -54,6 +65,7 @@ public static class PowerShellCommunication
     {
         ExecutionState.AddToCache(result);
         ExecutionState.CompleteExecution();
+        ExecutionState.Heartbeat(); // same reason as in NotifyResultReady
 
         lock (_lock)
         {

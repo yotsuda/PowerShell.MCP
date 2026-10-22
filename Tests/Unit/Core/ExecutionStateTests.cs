@@ -166,6 +166,34 @@ public class ExecutionStateTests
     }
 
     [Fact]
+    public void CompletingACommand_CountsAsAHeartbeat()
+    {
+        // The timer tick heartbeats BEFORE it runs the AI's command, and cannot
+        // tick again until the command is done. After a command of 10 s or more
+        // the heartbeat is therefore stale at the very moment the result goes
+        // out — and a get_status arriving right then (the AI's next call, 22 ms
+        // later) read "busy (user command)" off an idle console, so the proxy
+        // started a second one. Completion runs on the runspace's own thread:
+        // it is the freshest heartbeat there is.
+        Reset();
+        ExecutionState.MarkStartupComplete();
+        ExecutionState.SetLastHeartbeatForTests(DateTime.UtcNow.AddSeconds(-12));
+        Assert.False(ExecutionState.IsRunspaceAvailable);
+
+        ExecutionState.SetBusy("Start-Sleep 12");
+        PowerShellCommunication.NotifyResultReady("done");
+
+        Assert.True(ExecutionState.IsRunspaceAvailable);
+        Assert.Equal("completed", ExecutionState.Status);
+
+        ExecutionState.SetLastHeartbeatForTests(DateTime.UtcNow.AddSeconds(-12));
+        ExecutionState.SetBusy("silent");
+        PowerShellCommunication.NotifySilentResultReady("done");
+        Assert.True(ExecutionState.IsRunspaceAvailable);
+        Reset();
+    }
+
+    [Fact]
     public void SetCurrentAiCwd_RoundTrips()
     {
         ExecutionState.SetCurrentAiCwd(@"C:\Work\Proj");

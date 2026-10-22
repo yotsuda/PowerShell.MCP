@@ -113,8 +113,23 @@ MCP のログ（Claude Code 側、ツール呼び出しだけが残る）:
 ## 使う側への補足
 
 - `Start-Process` で切り離す対処は正しい。切り離した子は、コンソールが閉じても残る。
-- 「1 ターンに 2 つ送ると 2 本目が起きる」は、ログ上は 22 ms 間隔の逐次呼び出し。1 本目の応答を返した直後、コンソールの状態が
-  standby に戻る前に 2 本目の探索が来て「空きなし」と見た競合の可能性が高い（未確認、別件として扱う）。孤児になったコンソールは
-  ジョブがなければ 11 分後に閉じるのが仕様で、今回の修正後はそのことが次の応答に出る。
+- 「1 ターンに 2 つ送ると 2 本目が起きる」は、ログ上は 22 ms 間隔の逐次呼び出し（同じ assistant メッセージの 2 つの tool_use を
+  Claude Code が順に実行）。原因を特定して直した（下記「追記」）。孤児になったコンソールはジョブがなければ 11 分後に閉じるのが仕様で、
+  今回の修正後はそのことが次の応答に出る。
+
+## 追記: 2 本目のコンソールが起きた原因（同日）
+
+- 2 本目の応答は「ℹ️ Started new console PID #27876 Roof」だけで、「was closed」も busy 表示もない。これは proxy の探索が
+  Hallway を「ready でない」と見て、ほかに空きもなく新規起動した経路（`ExecuteCommandCore` の `readyPipeName == null`）。
+- Hallway の `get_status` は `_isBusy` でもキャッシュ有りでもないとき、**ハートビート**で runspace の空きを判定する
+  （`ExecutionState.IsRunspaceAvailable`: 最後のハートビートから 10 秒以内なら standby、超えていれば `busy (user command)`）。
+  ハートビートはエンジンの 100 ms タイマーの tick が打つが、AI のコマンドはその tick の中で実行されるので、
+  **コマンド実行中とその直後は tick が打てない。** 1 本目のコマンドは 12.45 秒かかった。完了して応答を返した時点で
+  最後のハートビートは 12 秒以上前。22 ms 後に来た 2 本目の `get_status` は `busy (user command)` を返し、proxy は Hallway を
+  素通りして Roof を起こした。次の tick（100 ms 後）が来ていれば standby だった。
+- 修正: コマンド完了（`PowerShellCommunication.NotifyResultReady` / `NotifySilentResultReady`）をハートビートとして数える。
+  完了処理は runspace のホームスレッドで動くので、runspace が空いている最も確かな証拠になる。
+  10 秒以上かかるコマンドの直後に次を送ると必ず起きていた再現性の高い不具合で、Claude Code が 1 ターンに 2 つのツール呼び出しを
+  連続実行する使い方では毎回踏む。
 - インストール済みモジュール（`C:\PSModules\PowerShell.MCP`）への反映は `.\Build-AllPlatforms.ps1`。反映後に始めた会話から有効
   （動いている proxy は古い exe のまま）。
