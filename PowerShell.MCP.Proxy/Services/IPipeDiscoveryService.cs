@@ -57,7 +57,21 @@ public interface IPipeDiscoveryService
     Task<CachedOutputResult> CollectAllCachedOutputsAsync(string agentId, string? excludePipeName, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Detect externally closed consoles
+    /// Detect consoles this agent used that are gone: every previously busy
+    /// or owned PID with no pipe left, each reported with the reason the
+    /// console noted when it closed itself (see <see cref="ClosedConsoleNotices"/>),
+    /// and cleared from tracking. Enumerates the pipe namespace — the full
+    /// discovery (slow) path.
     /// </summary>
     IReadOnlyList<string> DetectClosedConsoles(string agentId, int? excludePid = null);
+
+    /// <summary>
+    /// The cheap counterpart for the fast path, where the active console
+    /// answered and nothing else is probed: takes the self-close notes of
+    /// the agent's group and checks each other owned console's process for
+    /// liveness. A handful of process lookups and one directory read, no
+    /// pipe enumeration. Same reporting and clearing as
+    /// <see cref="DetectClosedConsoles"/>.
+    /// </summary>
+    IReadOnlyList<string> DetectVanishedConsoles(string agentId, int? excludePid = null);
 }

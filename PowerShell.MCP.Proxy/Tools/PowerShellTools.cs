@@ -77,6 +77,21 @@ public class PowerShellTools
         => ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
 
     /// <summary>
+    /// The "console was closed" line for a pipe that is gone, with the reason
+    /// the console noted if it closed itself (see <see cref="ClosedConsoleNotices"/>).
+    /// Call BEFORE ClearDeadPipe, which forgets the display name.
+    /// </summary>
+    private static string DescribeClosedPipe(string agentId, string? pipeName)
+    {
+        var name = GetConsoleName(pipeName);
+        var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+        var reason = pid.HasValue
+            ? ClosedConsoleNotices.TakeReason(ConsoleSessionManager.Instance.ProxyPid, agentId, pid.Value)
+            : null;
+        return ClosedConsoleNotices.Describe(name, reason);
+    }
+
+    /// <summary>
     /// Sets the console window title if not already set
     /// </summary>
     private static async Task SetConsoleTitleAsync(IPowerShellService powerShellService, string pipeName, CancellationToken cancellationToken)
@@ -959,6 +974,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                 // Start-Process hint at the end: the log the AI is
                                 // about to wait for is the one being garbled.
                                 return Wrap(PipelineHelper.JoinBlocks(
+                                    string.Join("\n", closedConsoleMessages),
                                     timeoutBusyStatusInfo,
                                     startupNotice,
                                     currentPipeCachedOutput,
@@ -1028,6 +1044,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                 // the AI still knows the result is being delivered
                                 // somewhere, rather than staring at an empty response.
                                 return Wrap(PipelineHelper.JoinBlocks(
+                                    string.Join("\n", closedConsoleMessages),
                                     cachedBusyStatusInfo,
                                     startupNotice,
                                     cachedCompletedOutput,
@@ -1096,10 +1113,10 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         {
             Console.Error.WriteLine($"[ERROR] ExecuteCommand failed: {ex.Message}");
             // Detect and report closed consoles (the failed pipe + any others)
-            var consoleName = sessionManager.GetConsoleDisplayName(readyPipeName);
+            var failedLine = "  - " + DescribeClosedPipe(agentId, readyPipeName);
             sessionManager.ClearDeadPipe(agentId, readyPipeName);
             var otherClosed = pipeDiscoveryService.DetectClosedConsoles(agentId);
-            var closedMessages = new List<string> { $"  - ⚠ Console {consoleName} was closed" };
+            var closedMessages = new List<string> { failedLine };
             closedMessages.AddRange(otherClosed);
             return Wrap($"Command execution failed: {ex.Message}\n{string.Join("\n", closedMessages)}\nPlease try again. A new console will be started automatically if needed.");
         }
@@ -1171,7 +1188,9 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         {
             if (!currentPids.Contains(pid))
             {
-                closedConsoleMessages.Add($"⚠ Console {ConsoleSessionManager.Instance.GetConsoleDisplayName(pid)} was closed");
+                var line = DescribeClosedPipe(agentId, ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, agentId, pid));
+                sessionManager.ClearDeadPipe(agentId, ConsoleSessionManager.GetPipeNameForPids(sessionManager.ProxyPid, agentId, pid));
+                closedConsoleMessages.Add(line);
             }
         }
 
@@ -1192,10 +1211,10 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
 
             if (status == null)
             {
-                // Dead pipe detected - get display name before clearing
-                var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
+                // Dead pipe detected - describe (display name, reason) before clearing
+                var line = DescribeClosedPipe(agentId, pipeName);
                 sessionManager.ClearDeadPipe(agentId, pipeName);
-                closedConsoleMessages.Add($"⚠ Console {consoleName} was closed");
+                closedConsoleMessages.Add(line);
 
                 var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                 return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
@@ -1259,11 +1278,11 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
 
                 if (status == null)
                 {
-                    // Dead pipe detected - get display name before clearing
-                    var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
+                    // Dead pipe detected - describe (display name, reason) before clearing
+                    var line = DescribeClosedPipe(agentId, pipeName);
                     sessionManager.ClearDeadPipe(agentId, pipeName);
                     busyPipes.Remove(pipeName);
-                    closedConsoleMessages.Add($"⚠ Console {consoleName} was closed");
+                    closedConsoleMessages.Add(line);
 
                     var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
                     return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);

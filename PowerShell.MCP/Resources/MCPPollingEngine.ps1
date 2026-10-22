@@ -275,6 +275,23 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # from "the engine stopped ticking".
                     try { [PowerShell.MCP.Services.ConsoleLiveness]::SetTypedTextPresent($typedText) } catch {}
 
+                    # A console with an unfinished job is not idle, whatever its
+                    # prompt says: Start-Job / & run in a child pwsh that dies with
+                    # this process. A console whose only work was a 20-minute
+                    # Start-Job otherwise read as standby from the moment the
+                    # Start-Job line returned, and closed itself — job and all —
+                    # 11 minutes later, with no one the wiser until the log stayed
+                    # empty. The engine's own event job is -SupportEvent and so
+                    # not listed here. Like the typed-text check, a LOCAL veto:
+                    # it must not make this console the keeper.
+                    $jobsRunning = $false
+                    if ($rsAvail -and $isStandby) {
+                        try {
+                            $jobsRunning = @(Get-Job -ErrorAction SilentlyContinue |
+                                Where-Object { $_.State -in 'Running', 'NotStarted', 'Blocked', 'Stopping', 'Suspending', 'Suspended' }).Count -gt 0
+                        } catch {}
+                    }
+
                     # No early-out when reaping is disabled: EvaluateReap checks
                     # warnSeconds <= 0 first and returns None before touching the
                     # marker directory, so the disk stays untouched. Returning here
@@ -293,7 +310,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                         } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
                     }
 
-                    $reapAct =[PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby, $typedText)
+                    $reapAct =[PowerShell.MCP.Services.ConsoleLiveness]::EvaluateReap($global:McpReapWarnSec, $global:McpReapGraceSec, $rsAvail, $isStandby, $typedText, $jobsRunning)
                     if ($reapAct -eq [PowerShell.MCP.Services.ReapAction]::Warn) {
                         [Console]::WriteLine()
                         Write-Host "⚠ This console has been idle and will close in $($global:McpReapGraceSec)s without use. Run any command (or just start typing) to keep it open." -ForegroundColor Yellow
@@ -330,7 +347,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                                 ([PowerShell.MCP.Services.ConsoleLiveness]::IdleSeconds -ge 2)
                         } catch {}
                         if ($stillReapable) {
-                            [PowerShell.MCP.Services.ConsoleLiveness]::DeleteOwnMarker()
+                            # Leave the reason where the proxy will find it: the
+                            # window and its farewell line are about to vanish, and
+                            # the AI otherwise learns nothing — it kept waiting for
+                            # a job this console had taken down with it.
+                            $idleMin = [int][Math]::Round([PowerShell.MCP.Services.ConsoleLiveness]::IdleSeconds / 60)
+                            [PowerShell.MCP.Services.ConsoleLiveness]::RecordSelfClose("closed itself after $idleMin min without use (idle standby, not this session's most recently used console; a ${global:McpReapGraceSec}s warning was shown in its window)")
                             [Environment]::Exit(0)
                         }
                         else {

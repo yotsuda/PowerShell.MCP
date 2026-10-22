@@ -181,6 +181,44 @@
 
 ---
 
+## 7. Idle Auto-Close
+
+Set the user environment variables `POWERSHELL_MCP_STANDBY_REAP_MINUTES=1` and `POWERSHELL_MCP_STANDBY_REAP_GRACE_SECONDS=10` for these (user or system scope — consoles do not inherit the proxy's environment), then restart the MCP client.
+
+### 7.1 A stale standby console closes and the AI is told why
+🤖 Console A: `execute_command('Write-Output "A"')`
+🤖 `start_console(reason='second console')` → console B
+🤖 In console B: `execute_command('Write-Output "B"')` (B is now the most recently used console)
+👤 Wait about 70 seconds without touching either window
+✅ Console A prints the idle warning after 1 minute and closes 10 seconds later; console B stays open
+
+🤖 `execute_command('Get-Date')`
+✅ Runs in B. The response starts with `⚠ Console PID #<A> <name> was closed: it closed itself after 1 min without use …` and mentions that its Start-Job jobs ended with it
+✅ No later response repeats the line
+
+### 7.2 A running background job keeps a standby console open
+🤖 Console A: `execute_command('Start-Job { Start-Sleep 150 } | Out-Null; "job started"')`
+🤖 `start_console(reason='second console')` → console B, then `execute_command('Write-Output "B"')` there
+👤 Wait 2 minutes
+✅ Console A is still open: no warning while the job runs
+👤 Wait another 90 seconds (the job has finished)
+✅ Console A now warns and closes
+
+### 7.3 A console closed by hand is reported without a reason
+🤖 Console A: `execute_command('Write-Output "A"')`, then console B as in 7.1
+👤 Close console A's window
+🤖 `execute_command('Get-Date')`
+✅ Response starts with `⚠ Console PID #<A> <name> was closed: its window was closed or its process ended outside this server.`
+
+### 7.4 Two sessions do not see each other's consoles
+👤 Open a second MCP client session on the same `pwsh` server registration (e.g. a second Claude Code window)
+🤖 Session 1: `execute_command('"one"')`; 🤖 Session 2: `execute_command('"two"')`
+✅ Each session gets its own console; neither response mentions the other's console
+👤 Let session 1's console idle past the threshold while session 2 keeps working
+✅ Session 1's console is the only console of its session, so it is the keeper and stays open
+
+---
+
 ## Recommended Execution Order
 
 1. 2.4 → 1.1 → 1.2 (basic behavior)

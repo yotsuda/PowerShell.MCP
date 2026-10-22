@@ -417,4 +417,90 @@ public class ConsoleLivenessTests : IDisposable
         Advance(300);
         Assert.Equal(300, ConsoleLiveness.IdleSeconds, precision: 1);
     }
+
+    // ── Running jobs ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Reap_None_WhileJobsRunning()
+    {
+        // The 2026-10-23 incident: a standby console whose only work was a
+        // 20-minute Start-Job read as idle from the moment the Start-Job line
+        // returned, and closed itself — job and all — 11 minutes later. A
+        // console with an unfinished job is not idle.
+        Own();
+        MakeReapableByNewerSibling();
+        Advance(Warn + Grace + 100);
+
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, jobsRunning: true));
+        Assert.False(ConsoleLiveness.IsReapPending);
+    }
+
+    [Fact]
+    public void Reap_JobsVetoWithoutCountingAsActivity_AndResumeWhenJobsFinish()
+    {
+        // Same shape as the typed-text veto: local only. The job must not make
+        // this console look recently used (it would steal keeper from the console
+        // the AI is working in), and once the job is gone the reap resumes.
+        Own();
+        MakeReapableByNewerSibling();
+        Advance(Warn + 5);
+
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, jobsRunning: true));
+        Assert.True(ConsoleLiveness.IdleSeconds >= Warn, "a running job must not reset the idle clock");
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, jobsRunning: false));
+    }
+
+    [Fact]
+    public void Reap_JobStartedDuringGraceCancelsClose()
+    {
+        Own();
+        MakeReapableByNewerSibling();
+        Advance(Warn + 5);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+
+        Advance(Grace + 5);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, jobsRunning: true));
+        Assert.False(ConsoleLiveness.IsReapPending, "the warning is withdrawn; a later reap warns afresh");
+    }
+
+    // ── Self-close note ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void RecordSelfClose_LeavesNoteForProxyAndDeletesMarker()
+    {
+        Own();
+        var marker = Path.Combine(_groupDir!, _ownPid.ToString());
+        Assert.True(File.Exists(marker));
+
+        ConsoleLiveness.RecordSelfClose("closed itself after 10 min without use");
+
+        Assert.False(File.Exists(marker), "the marker must go so no sibling counts a closed console");
+        var note = marker + ConsoleLiveness.ClosedNoteSuffix;
+        Assert.True(File.Exists(note));
+        Assert.Equal("closed itself after 10 min without use", File.ReadAllText(note));
+    }
+
+    [Fact]
+    public void RecordSelfClose_NoOpWhenUnowned()
+    {
+        // An unowned console has no group dir to write into and nothing to say
+        // to any proxy. Must not throw.
+        ConsoleLiveness.RecordSelfClose("whatever");
+    }
+
+    [Fact]
+    public void KeeperElection_IgnoresClosedNotes_AndLeavesThemForTheProxy()
+    {
+        // A note sits in the same directory as the markers. The sweep that
+        // removes dead peers' markers must neither count it as a peer nor delete
+        // it — the proxy, not a sibling console, consumes notes.
+        Own();
+        MakeReapableByNewerSibling();
+        var note = Path.Combine(_groupDir!, "424242" + ConsoleLiveness.ClosedNoteSuffix);
+        File.WriteAllText(note, "closed itself after 10 min without use");
+        Advance(Warn + 5);
+
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Assert.True(File.Exists(note));
+    }
 }

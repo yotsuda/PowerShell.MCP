@@ -22,23 +22,79 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     public IReadOnlyList<string> DetectClosedConsoles(string agentId, int? excludePid = null)
     {
         var closedMessages = new List<string>();
-        var previouslyBusyPids = _sessionManager.ConsumeKnownBusyPids(agentId);
-        var currentPipes = _sessionManager.EnumeratePipes(_sessionManager.ProxyPid, agentId).ToList();
-        var currentPids = currentPipes
+        // Busy PIDs are consumed (the slow path re-marks the ones still busy);
+        // owned PIDs stay until the console is seen to be gone. Both are
+        // checked: a standby console that closed itself was in neither the
+        // busy set nor the active slot, and so used to vanish unreported.
+        var candidates = _sessionManager.ConsumeKnownBusyPids(agentId);
+        candidates.UnionWith(_sessionManager.GetKnownOwnedPids(agentId));
+        var currentPids = _sessionManager.EnumeratePipes(_sessionManager.ProxyPid, agentId)
             .Select(ConsoleSessionManager.GetPidFromPipeName)
             .OfType<int>()
             .ToHashSet();
 
-        foreach (var pid in previouslyBusyPids)
+        foreach (var pid in candidates.OrderBy(p => p))
         {
             if (pid == excludePid) continue;
             if (!currentPids.Contains(pid))
             {
-                closedMessages.Add($"  - ⚠ Console {ConsoleSessionManager.Instance.GetConsoleDisplayName(pid)} was closed");
+                var reason = ClosedConsoleNotices.TakeReason(_sessionManager.ProxyPid, agentId, pid);
+                closedMessages.Add(ReportClosed(agentId, pid, reason));
             }
         }
 
         return closedMessages;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> DetectVanishedConsoles(string agentId, int? excludePid = null)
+    {
+        var closedMessages = new List<string>();
+        var notes = ClosedConsoleNotices.TakeAll(_sessionManager.ProxyPid, agentId);
+        var candidates = _sessionManager.GetKnownOwnedPids(agentId);
+        candidates.UnionWith(notes.Keys);
+
+        foreach (var pid in candidates.OrderBy(p => p))
+        {
+            if (pid == excludePid) continue;
+            if (notes.TryGetValue(pid, out var reason) || !IsProcessAlive(pid))
+            {
+                closedMessages.Add(ReportClosed(agentId, pid, reason));
+            }
+        }
+
+        return closedMessages;
+    }
+
+    /// <summary>
+    /// The closed-console line for one PID, and the bookkeeping that goes with
+    /// it: the display name is read BEFORE ClearDeadPipe forgets it, and the
+    /// console leaves every tracking set so it is reported exactly once.
+    /// </summary>
+    private string ReportClosed(string agentId, int pid, string? reason)
+    {
+        var name = _sessionManager.GetConsoleDisplayName(pid);
+        _sessionManager.ClearDeadPipe(agentId, ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pid));
+        return "  - " + ClosedConsoleNotices.Describe(name, reason);
+    }
+
+    private static bool IsProcessAlive(int pid)
+    {
+        try { using var p = System.Diagnostics.Process.GetProcessById(pid); return !p.HasExited; }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// The closed-console line for a pipe that stopped answering, with the
+    /// console's own reason when it left one. Reads the display name before
+    /// the caller clears the pipe.
+    /// </summary>
+    private string DescribeDeadPipe(string agentId, string pipeName)
+    {
+        var name = _sessionManager.GetConsoleDisplayName(pipeName);
+        var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
+        var reason = pid.HasValue ? ClosedConsoleNotices.TakeReason(_sessionManager.ProxyPid, agentId, pid.Value) : null;
+        return "  - " + ClosedConsoleNotices.Describe(name, reason);
     }
 
     /// <inheritdoc />
@@ -53,7 +109,11 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             if (activePipeStatus != null && activePipeStatus.IsReady())
             {
                 if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
-                return new PipeDiscoveryResult(activePipe, false, [], null, activePipeStatus.Cwd);
+                // Cheap check only (no pipe enumeration): a sibling that closed
+                // itself while this console stayed ready would otherwise never
+                // be reported — this path is the one every routine call takes.
+                var vanished = DetectVanishedConsoles(agentId, activePipeStatus.Pid > 0 ? activePipeStatus.Pid : ConsoleSessionManager.GetPidFromPipeName(activePipe));
+                return new PipeDiscoveryResult(activePipe, false, vanished, null, activePipeStatus.Cwd);
             }
         }
 
@@ -70,9 +130,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         {
             if (activePipeStatus == null)
             {
-                var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(activePipe);
+                var line = DescribeDeadPipe(agentId, activePipe);
                 _sessionManager.ClearDeadPipe(agentId, activePipe);
-                closedMessages.Add($"  - ⚠ Console {consoleName} was closed");
+                closedMessages.Add(line);
             }
             else if (activePipeStatus.IsReady())
             {
@@ -97,9 +157,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
             if (status == null)
             {
-                var consoleName = ConsoleSessionManager.Instance.GetConsoleDisplayName(pipeName);
+                var line = DescribeDeadPipe(agentId, pipeName);
                 _sessionManager.ClearDeadPipe(agentId, pipeName);
-                closedMessages.Add($"  - ⚠ Console {consoleName} was closed");
+                closedMessages.Add(line);
                 continue;
             }
 

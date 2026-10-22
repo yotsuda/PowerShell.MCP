@@ -13,6 +13,29 @@ public class ConsoleSessionManagerTests
     private readonly ConsoleSessionManager _manager = ConsoleSessionManager.Instance;
 
     [Fact]
+    public void OwnedPids_TrackEveryConsoleUsed_UntilClearDeadPipe()
+    {
+        // Active, busy and standby consoles alike stay "owned" until seen dead;
+        // UnmarkPipeBusy (back to standby) must not forget one.
+        var agentId = _manager.AllocateSubAgentId();
+        var proxyPid = _manager.ProxyPid;
+        var active = ConsoleSessionManager.GetPipeNameForPids(proxyPid, agentId, 91011);
+        var busy = ConsoleSessionManager.GetPipeNameForPids(proxyPid, agentId, 91012);
+
+        _manager.SetActivePipeName(agentId, active);
+        _manager.MarkPipeBusy(agentId, 91012);
+        _manager.UnmarkPipeBusy(agentId, 91012);
+
+        Assert.Equal(new HashSet<int> { 91011, 91012 }, _manager.GetKnownOwnedPids(agentId));
+
+        _manager.ClearDeadPipe(agentId, busy);
+        Assert.Equal(new HashSet<int> { 91011 }, _manager.GetKnownOwnedPids(agentId));
+
+        _manager.ClearDeadPipe(agentId, active);
+        Assert.Empty(_manager.GetKnownOwnedPids(agentId));
+    }
+
+    [Fact]
     public void SetLastAiCwd_PerPidValueRoundTrips()
     {
         const int pid = 91001;

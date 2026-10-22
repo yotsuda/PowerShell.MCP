@@ -212,7 +212,8 @@ public static class ConsoleLiveness
     /// <summary>
     /// Decides whether this idle standby console should warn or close itself.
     /// Only an OWNED, idle, genuinely-standby console with nothing typed at its
-    /// prompt that is NOT its group's most-recently-active member is ever reaped.
+    /// prompt and no job running that is NOT its group's most-recently-active
+    /// member is ever reaped.
     /// Returns <see cref="ReapAction.Close"/> only after the warning has been
     /// shown and the grace has elapsed with no intervening activity.
     ///
@@ -222,8 +223,8 @@ public static class ConsoleLiveness
     /// keeper from the console the AI is actually using.</para>
     ///
     /// <para>A console owned by a sub-agent has no keeper: see the class remarks.
-    /// Every other guard (busy, not standby, typed text, idle below threshold,
-    /// the warn-then-grace sequence) applies to it unchanged.</para>
+    /// Every other guard (busy, not standby, typed text, running jobs, idle below
+    /// threshold, the warn-then-grace sequence) applies to it unchanged.</para>
     /// </summary>
     /// <param name="warnSeconds">Idle seconds before warning (0 disables reaping).</param>
     /// <param name="graceSeconds">Seconds after the warning before closing.</param>
@@ -237,7 +238,16 @@ public static class ConsoleLiveness
     /// with <see cref="RecordActivity"/>, which both resets idle AND re-stamps
     /// the marker; the buffer check deliberately wants the former, not the latter.
     /// </param>
-    public static ReapAction EvaluateReap(int warnSeconds, int graceSeconds, bool runspaceAvailable, bool statusStandby, bool typedTextPresent = false)
+    /// <param name="jobsRunning">
+    /// True while the console has unfinished PowerShell jobs (<c>Start-Job</c>,
+    /// <c>&amp;</c>). A job runs in a child process that dies with this console,
+    /// so the console is not idle while one is running, whatever its prompt
+    /// says. Also a LOCAL veto: the AI's attention is elsewhere, so this console
+    /// must not become the keeper and reap the one the AI is actually using.
+    /// Without this guard a standby console whose only work was a 20-minute
+    /// Start-Job closed itself after 10 minutes and took the job with it.
+    /// </param>
+    public static ReapAction EvaluateReap(int warnSeconds, int graceSeconds, bool runspaceAvailable, bool statusStandby, bool typedTextPresent = false, bool jobsRunning = false)
     {
         if (warnSeconds <= 0) { lock (_lock) { _warned = false; } return ReapAction.None; }
 
@@ -246,9 +256,9 @@ public static class ConsoleLiveness
 
         // Only reap an owned console that is idle AND truly standby: a running
         // user command (runspace unavailable), a busy AI pipeline, awaiting
-        // input, undrained completed output, or text half-typed at the prompt
-        // all keep it alive.
-        if (!owned || !runspaceAvailable || !statusStandby || typedTextPresent)
+        // input, undrained completed output, text half-typed at the prompt, or
+        // a background job still running all keep it alive.
+        if (!owned || !runspaceAvailable || !statusStandby || typedTextPresent || jobsRunning)
         {
             lock (_lock) { _warned = false; }
             return ReapAction.None;
@@ -309,6 +319,31 @@ public static class ConsoleLiveness
     {
         string? path;
         lock (_lock) { path = _markerPath; }
+        TryDelete(path);
+    }
+
+    /// <summary>
+    /// Suffix of the note a console leaves behind when it closes itself, next
+    /// to where its marker was: <c>&lt;pid&gt;.closed</c>, content = the reason.
+    /// The proxy (which cannot see the window's farewell line) picks the note up
+    /// on its next tool call, reports "console #N was closed: &lt;reason&gt;" to
+    /// the AI and deletes it. A marker sweep ignores these files (their name is
+    /// not a bare PID); a dead proxy's group dir is pruned with them inside.
+    /// Mirrored in the proxy's <c>ClosedConsoleNotices</c> — keep in sync.
+    /// </summary>
+    public const string ClosedNoteSuffix = ".closed";
+
+    /// <summary>
+    /// Commits a self-close: leaves the closed note for the proxy, then deletes
+    /// this console's marker. Called once, right before <c>[Environment]::Exit</c>.
+    /// Best-effort like everything here — the console exits either way.
+    /// </summary>
+    public static void RecordSelfClose(string reason)
+    {
+        string? path;
+        lock (_lock) { path = _markerPath; }
+        if (path == null) return;
+        try { File.WriteAllText(path + ClosedNoteSuffix, reason); } catch { }
         TryDelete(path);
     }
 

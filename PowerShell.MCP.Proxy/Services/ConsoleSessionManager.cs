@@ -48,12 +48,21 @@ public class ConsoleSessionManager
     public int ProxyPid { get; } = Process.GetCurrentProcess().Id;
 
     /// <summary>
-    /// Per-agent session state (ActivePipeName and KnownBusyPids)
+    /// Per-agent session state (ActivePipeName, KnownBusyPids, KnownOwnedPids)
     /// </summary>
     private class AgentSessionState
     {
         public string? ActivePipeName { get; set; }
         public readonly HashSet<int> KnownBusyPids = new();
+        /// <summary>
+        /// Every console this agent has used in this proxy's lifetime and not
+        /// yet seen die: active, busy or standby alike. KnownBusyPids tracks
+        /// only the busy ones and is consumed on each check, so a standby
+        /// console that disappeared (closed itself when idle, window closed)
+        /// went unreported — the AI learned of it only when it next tried to
+        /// use it, if ever. Removed by <see cref="ClearDeadPipe"/>.
+        /// </summary>
+        public readonly HashSet<int> KnownOwnedPids = new();
     }
 
     private readonly Dictionary<string, AgentSessionState> _agentSessions = new();
@@ -280,9 +289,12 @@ public class ConsoleSessionManager
     {
         lock (_lock)
         {
-            GetOrCreateAgentState(agentId).ActivePipeName = pipeName;
+            var state = GetOrCreateAgentState(agentId);
+            state.ActivePipeName = pipeName;
             if (pipeName != null)
             {
+                var pid = GetPidFromPipeName(pipeName);
+                if (pid.HasValue) state.KnownOwnedPids.Add(pid.Value);
                 Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Active pipe set to '{pipeName}' (agent={agentId})");
             }
         }
@@ -295,7 +307,21 @@ public class ConsoleSessionManager
     {
         lock (_lock)
         {
-            GetOrCreateAgentState(agentId).KnownBusyPids.Add(pid);
+            var state = GetOrCreateAgentState(agentId);
+            state.KnownBusyPids.Add(pid);
+            state.KnownOwnedPids.Add(pid);
+        }
+    }
+
+    /// <summary>
+    /// Snapshot of every console the agent has used and not yet seen die
+    /// (see <c>AgentSessionState.KnownOwnedPids</c>).
+    /// </summary>
+    public HashSet<int> GetKnownOwnedPids(string agentId)
+    {
+        lock (_lock)
+        {
+            return new HashSet<int>(GetOrCreateAgentState(agentId).KnownOwnedPids);
         }
     }
 
@@ -340,13 +366,14 @@ public class ConsoleSessionManager
             if (pid.HasValue)
             {
                 state.KnownBusyPids.Remove(pid.Value);
+                state.KnownOwnedPids.Remove(pid.Value);
                 _pidToTitle.Remove(pid.Value);
                 _pidToLastAiCwd.Remove(pid.Value);
             }
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}' (agent={agentId})");
 
             // Remove empty agent session to prevent memory accumulation
-            if (agentId != "default" && state.ActivePipeName == null && state.KnownBusyPids.Count == 0)
+            if (agentId != "default" && state.ActivePipeName == null && state.KnownBusyPids.Count == 0 && state.KnownOwnedPids.Count == 0)
             {
                 _agentSessions.Remove(agentId);
                 _agentToLastAiCwd.Remove(agentId);
