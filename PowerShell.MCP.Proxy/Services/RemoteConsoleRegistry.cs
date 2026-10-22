@@ -18,6 +18,26 @@ public sealed class RemoteConsoleRegistry : IDisposable
     /// <summary>At most this many remote consoles at once. Settable for tests.</summary>
     internal static int MaxConsoles { get; set; } = 4;
 
+    /// <summary>
+    /// The server's registry (the DI singleton), for the local tools: a
+    /// remote result that is ready comes back with whatever tool call is made
+    /// next, local or remote, the way a local console's cached output does.
+    /// Set once at startup; null in tests that do not set it, where the
+    /// local tools then see no remote consoles.
+    /// </summary>
+    public static RemoteConsoleRegistry? Current { get; internal set; }
+
+    /// <summary>
+    /// The consoles with a result the AI has not collected
+    /// (<see cref="RemoteConsoleClient.ResultPending"/>) — the only ones a
+    /// wait or a harvest probes.
+    /// </summary>
+    public IReadOnlyList<RemoteConsoleClient> PendingResults()
+    {
+        Prune();
+        lock (_lock) return _consoles.Where(c => c.ResultPending).ToList();
+    }
+
     // Connect, accept and disconnect, one at a time (a connect can take
     // seconds); requests only read the list, under _lock, and never wait here.
     private readonly SemaphoreSlim _changes = new(1, 1);

@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using Moq;
 using PowerShell.MCP.Proxy.Models;
 using PowerShell.MCP.Proxy.Services;
+using PowerShell.MCP.Proxy.Tools;
 using PowerShell.MCP.Services;
 using Xunit;
 
@@ -902,6 +904,82 @@ public class RemoteConsoleTests
             Assert.Same(consoles.Resolve(null), consoles.Resolve($"127.0.0.1:{port}"));
             await consoles.DisconnectAsync(null, CancellationToken.None);
             Assert.Throws<InvalidOperationException>(() => consoles.Resolve(null));
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task WaitForCompletion_CollectsAPendingRemoteResult_OnceAndForTheMainAgentOnly()
+    {
+        // One wait for every console: a remote command that outran its timeout
+        // (ResultPending) is collected by the same wait_for_completion as a
+        // local one, tagged with its console. Here the console in this process
+        // is free, so the wait returns at once with what it had cached.
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        using var consoles = new RemoteConsoleRegistry();
+        var previous = RemoteConsoleRegistry.Current;
+        RemoteConsoleRegistry.Current = consoles;
+        try
+        {
+            await consoles.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            var client = consoles.Resolve(null);
+            Assert.Empty(consoles.PendingResults());
+            client.ResultPending = true;
+            Assert.Same(client, Assert.Single(consoles.PendingResults()));
+
+            var discovery = new Mock<IPipeDiscoveryService>();
+            discovery.Setup(d => d.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(new CachedOutputResult("", ""));
+            var ps = new Mock<IPowerShellService>();
+
+            // A sub-agent never sees the main agent's remote consoles.
+            var subAgent = ConsoleSessionManager.Instance.AllocateSubAgentId();
+            var subResult = await PowerShellTools.WaitForCompletion(ps.Object, discovery.Object, null!, timeout_seconds: 1, agent_id: subAgent);
+            Assert.Contains("No commands to wait for completion", subResult);
+            Assert.True(client.ResultPending);
+
+            // The main agent collects it, tagged with the console...
+            var result = await PowerShellTools.WaitForCompletion(ps.Object, discovery.Object, null!, timeout_seconds: 1);
+            Assert.Contains($"[remote console: 127.0.0.1:{port}]", result);
+            Assert.DoesNotContain("No commands to wait for completion", result);
+            Assert.False(client.ResultPending);
+
+            // ...once.
+            Assert.Contains("No commands to wait for completion",
+                await PowerShellTools.WaitForCompletion(ps.Object, discovery.Object, null!, timeout_seconds: 1));
+        }
+        finally
+        {
+            RemoteConsoleRegistry.Current = previous;
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteRemoteCommand_TracksAPendingResult_AndCollectsItBeforeTheNextCommand()
+    {
+        // A command cancelled there leaves a result to collect; the next
+        // execute_remote_command collects it first and keeps it apart from
+        // its own output, as a local call drains the other consoles' caches.
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        using var consoles = new RemoteConsoleRegistry();
+        try
+        {
+            await consoles.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            var client = consoles.Resolve(null);
+            Assert.False(client.ResultPending);
+            // (cancel_remote_command is not exercised here: the console in this
+            // process would deliver a real Ctrl+C to the test host.)
+
+            client.ResultPending = true; // as a timeout or an acknowledged cancel leaves it
+            var response = await RemoteConsoleTools.ExecuteRemoteCommand(consoles, null!, "'hello'", null, 30, null, null, null, null, null, null, null, null, CancellationToken.None);
+            Assert.Contains("(no pending output)", response); // the earlier result's block came first
+            Assert.False(client.ResultPending);
         }
         finally
         {

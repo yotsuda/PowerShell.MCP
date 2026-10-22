@@ -88,6 +88,18 @@ public sealed class RemoteConsoleClient : IDisposable
 
     public bool IsConnected => _ssl != null;
     public bool IsAccepting => _acceptListener != null;
+
+    /// <summary>
+    /// A command the AI sent is, or may be, still running there, and its
+    /// result has not been collected: set when execute_remote_command came
+    /// back with a timeout or a host prompt, when a cancel was sent, or when
+    /// the connection dropped mid-request (the command may have run). Cleared
+    /// when the output is collected. The local counterpart is the busy set of
+    /// <c>ConsoleSessionManager</c>: it is what wait_for_completion and the
+    /// result harvesting on every tool call look at, so a console with
+    /// nothing pending is never probed over the network.
+    /// </summary>
+    public bool ResultPending { get; set; }
     public int AcceptPort => _acceptPort;
     internal string? AcceptCode => _acceptCode;
     public string? Host => _host;
@@ -310,7 +322,7 @@ public sealed class RemoteConsoleClient : IDisposable
                             // code it used is spent, so the instructions would only
                             // mislead); one that never came needs the line.
                             throw new InvalidOperationException(_peer != null
-                                ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. A command that was running continues there; wait_for_remote_completion collects its output once it is back."
+                                ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. A command that was running continues there; wait_for_completion collects its output once it is back."
                                 : $"The remote console has not dialed in on port {_acceptPort}. It does once Enable-MCPRemoteControl -ConnectTo is running there and the user has confirmed it; " + AcceptInstructions());
                         }
                     }
@@ -350,7 +362,7 @@ public sealed class RemoteConsoleClient : IDisposable
                 if (successor != null)
                     throw new InvalidOperationException(
                         $"The console {target} reconnected and replaced this connection while the request was in flight. " +
-                        "The command may have run there; use wait_for_remote_completion to collect its output.");
+                        "The command may have run there; use wait_for_completion to collect its output.");
                 var accepting = _acceptListener != null;
                 var lockedOut = _acceptListener == null && _peer != null;
                 CloseLocked(ssl);
@@ -361,13 +373,13 @@ public sealed class RemoteConsoleClient : IDisposable
                 if (accepting)
                     throw new InvalidOperationException(
                         $"The connection to {target} dropped while the request was in flight ({ex.Message}). The console redials by itself; " +
-                        "a command that was running continues there — try again in a moment, then wait_for_remote_completion to collect its output.");
+                        "a command that was running continues there — try again in a moment, then wait_for_completion to collect its output.");
                 var reconnected = false;
                 try { await OpenAsync(null, ct); reconnected = true; } catch { }
                 throw new InvalidOperationException(
                     $"The connection to {target} dropped while the request was in flight ({ex.Message}). " +
                     (reconnected
-                        ? "Reconnected. A command that was running continues there; use wait_for_remote_completion to collect its output."
+                        ? "Reconnected. A command that was running continues there; use wait_for_completion to collect its output."
                         : "Reconnecting failed: the console may have stopped listening, or it no longer knows this session. Ask the user for the pairing code it shows now, then connect_remote_console again."));
             }
         }

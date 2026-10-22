@@ -61,7 +61,12 @@ public class PowerShellTools
         => PipelineHelper.FormatBusyStatus(status.StatusLine, status.Pid, status.Pipeline, status.Duration ?? 0);
 
     /// <summary>
-    /// Collects cached outputs and busy status from all pipes. Delegates to PipeDiscoveryService.
+    /// Collects cached outputs and busy status from all pipes (via
+    /// PipeDiscoveryService) and from the remote consoles with a result
+    /// pending (via RemoteConsoleTools). Every response that carries other
+    /// consoles' results goes through here, so a remote command that outran
+    /// its timeout comes back with the next tool call of any kind — local or
+    /// remote — exactly as a local console's cached output does.
     /// </summary>
     private static async Task<(string completedOutput, string busyStatusInfo)> CollectAllCachedOutputsAsync(
         IPipeDiscoveryService pipeDiscoveryService,
@@ -70,7 +75,9 @@ public class PowerShellTools
         CancellationToken cancellationToken)
     {
         var result = await pipeDiscoveryService.CollectAllCachedOutputsAsync(agentId, excludePipeName, cancellationToken);
-        return (result.CompletedOutput, result.BusyStatusInfo);
+        var (remoteCompleted, remoteBusy) = await RemoteConsoleTools.CollectPendingAsync(agentId, cancellationToken);
+        return (PipelineHelper.JoinBlocks(result.CompletedOutput, remoteCompleted),
+                PipelineHelper.JoinBlocks(result.BusyStatusInfo, remoteBusy));
     }
 
     private static string GetConsoleName(string? pipeName)
@@ -1123,7 +1130,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
     }
 
     [McpServerTool]
-    [Description("Wait for busy console(s) to complete and retrieve cached results. Use this after receiving a 'Pipeline is running' response instead of executing Start-Sleep (which would open a new console).")]
+    [Description("Wait for busy console(s) — on this machine or on a remote machine (execute_remote_command) — to complete and retrieve cached results. Use this after receiving a 'Pipeline is running' response instead of executing Start-Sleep (which would open a new console). Returns as soon as any one of them completes; a result that is ready also arrives with your next tool call of any kind.")]
     public static async Task<string> WaitForCompletion(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
@@ -1249,8 +1256,13 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             }
         }
 
-        // No MCP-initiated busy pipes - collect any cached outputs and return
-        if (busyPipes.Count == 0)
+        // Remote consoles with a result pending that are not free yet are
+        // waited on alongside the local busy pipes; the free ones are
+        // collected by CollectAllCachedOutputsAsync like any cached output.
+        var busyRemotes = await RemoteConsoleTools.StillPendingAsync(agentId, cancellationToken);
+
+        // No MCP-initiated busy pipes, nothing running remotely - collect any cached outputs and return
+        if (busyPipes.Count == 0 && busyRemotes.Count == 0)
         {
             var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
 
@@ -1308,8 +1320,19 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 }
             }
 
-            // All busy pipes became standby or dead
-            if (busyPipes.Count == 0)
+            // A remote console that has finished (or answered a prompt): its
+            // result is collected with everything else.
+            foreach (var client in busyRemotes.ToList())
+            {
+                if (await RemoteConsoleTools.IsFreeAsync(client, cancellationToken))
+                {
+                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
+                    return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+                }
+            }
+
+            // All busy pipes became standby or dead, and nothing remote is running
+            if (busyPipes.Count == 0 && busyRemotes.Count == 0)
             {
                 break;
             }
