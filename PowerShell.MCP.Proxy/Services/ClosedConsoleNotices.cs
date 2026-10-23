@@ -77,12 +77,27 @@ public static class ClosedConsoleNotices
     /// most needs to know and could not see: whatever that console was running
     /// in the background is gone with it.
     /// </summary>
-    public static string Describe(string displayName, string? reason)
+    /// <param name="processAlive">
+    /// True when the console's process is still there although its pipe is
+    /// gone or silent: the module was removed from it (<c>Remove-Module</c>),
+    /// or it is stuck. Then nothing of it has ended, and the line says so
+    /// instead of claiming its window was closed.
+    /// </param>
+    public static string Describe(string displayName, string? reason, bool processAlive = false)
     {
+        if (reason == null && processAlive)
+            return $"⚠ Console {displayName} no longer answers on its pipe, though its process is still running (PowerShell.MCP was removed from it, or it is stuck). This session has let go of it; its jobs and child processes are untouched.";
         var cause = reason != null
             ? $"it {reason}"
             : "its window was closed or its process ended outside this server";
         return $"⚠ Console {displayName} was closed: {cause}. Any Start-Job jobs it was running ended with it; a process it started with Start-Process may still be running.";
+    }
+
+    /// <summary>Whether a console's process exists; false for a PID that is gone or unknown.</summary>
+    public static bool IsProcessAlive(int pid)
+    {
+        try { using var p = System.Diagnostics.Process.GetProcessById(pid); return !p.HasExited; }
+        catch { return false; }
     }
 
     private static string LiveRoot()

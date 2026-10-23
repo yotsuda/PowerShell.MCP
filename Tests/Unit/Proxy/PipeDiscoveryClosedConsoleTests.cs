@@ -109,6 +109,27 @@ public class PipeDiscoveryClosedConsoleTests : IDisposable
     }
 
     [Fact]
+    public async Task Collecting_ReportsAPipeThatStoppedAnswering_InsteadOfDroppingItInSilence()
+    {
+        // A real pipe with this agent's name, so EnumeratePipes finds it; the
+        // console behind it (mocked) does not answer. It used to be cleared
+        // from tracking without a word. The process behind the PID is this
+        // one, so the line says the process is still running.
+        var pipeName = Pipe(Environment.ProcessId);
+        using var server = new System.IO.Pipes.NamedPipeServerStream(pipeName, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+        _sm.SetActivePipeName(_agentId, pipeName);
+        _ps.Setup(s => s.GetStatusFromPipeAsync(pipeName, It.IsAny<CancellationToken>()))
+           .ReturnsAsync((GetStatusResponse?)null);
+
+        var result = await _service.CollectAllCachedOutputsAsync(_agentId, excludePipeName: null, CancellationToken.None);
+
+        Assert.Contains($"Console PID #{Environment.ProcessId} no longer answers on its pipe, though its process is still running", result.ClosedConsoles);
+        Assert.Equal("", result.CompletedOutput);
+        Assert.DoesNotContain(Environment.ProcessId, _sm.GetKnownOwnedPids(_agentId));
+        Assert.Null(_sm.GetActivePipeName(_agentId));
+    }
+
+    [Fact]
     public void SlowPath_DetectClosedConsoles_CoversOwnedStandbyConsoles_NotOnlyBusyOnes()
     {
         // No real pipe exists for a test PID, so the enumeration-based check

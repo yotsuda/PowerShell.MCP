@@ -35,9 +35,15 @@ public record PipeDiscoveryResult(
 /// <summary>
 /// Result of collecting cached outputs from all pipes
 /// </summary>
+/// <param name="ClosedConsoles">
+/// Closed-console lines for pipes that stopped answering during this
+/// collection (one per line, empty when none) — a console that died after
+/// discovery and before the collection, which no other check sees.
+/// </param>
 public record CachedOutputResult(
     string CompletedOutput,
-    string BusyStatusInfo
+    string BusyStatusInfo,
+    string ClosedConsoles = ""
 );
 
 /// <summary>

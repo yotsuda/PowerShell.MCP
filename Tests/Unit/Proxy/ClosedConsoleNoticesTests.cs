@@ -94,5 +94,19 @@ public class ClosedConsoleNoticesTests : IDisposable
         var withoutReason = ClosedConsoleNotices.Describe("PID #20888 Hallway", null);
         Assert.StartsWith("⚠ Console PID #20888 Hallway was closed: its window was closed or its process ended outside this server.", withoutReason);
         Assert.Contains("Start-Job jobs it was running ended with it", withoutReason);
+
+        // Pipe gone, process there (Remove-Module, or stuck): nothing ended.
+        var alive = ClosedConsoleNotices.Describe("PID #20888 Hallway", null, processAlive: true);
+        Assert.StartsWith("⚠ Console PID #20888 Hallway no longer answers on its pipe, though its process is still running", alive);
+        Assert.DoesNotContain("ended with it", alive);
+        // A reason wins over liveness: the console said why it closed.
+        Assert.Equal(withReason, ClosedConsoleNotices.Describe("PID #20888 Hallway", "closed itself after 10 min without use", processAlive: true));
+    }
+
+    [Fact]
+    public void IsProcessAlive_KnowsThisProcess_AndNotAnImpossiblePid()
+    {
+        Assert.True(ClosedConsoleNotices.IsProcessAlive(Environment.ProcessId));
+        Assert.False(ClosedConsoleNotices.IsProcessAlive(1_999_999_999));
     }
 }

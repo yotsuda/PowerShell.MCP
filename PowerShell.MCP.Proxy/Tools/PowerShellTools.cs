@@ -91,7 +91,9 @@ public class PowerShellTools
     {
         var result = await pipeDiscoveryService.CollectAllCachedOutputsAsync(agentId, excludePipeName, cancellationToken);
         var (remoteCompleted, remoteBusy) = await RemoteConsoleTools.CollectPendingAsync(agentId, cancellationToken);
-        return (PipelineHelper.JoinBlocks(result.CompletedOutput, remoteCompleted),
+        // A console found dead while collecting is reported with the
+        // collected results: it is news about another console, like them.
+        return (PipelineHelper.JoinBlocks(result.ClosedConsoles, result.CompletedOutput, remoteCompleted),
                 PipelineHelper.JoinBlocks(result.BusyStatusInfo, remoteBusy));
     }
 
@@ -110,7 +112,8 @@ public class PowerShellTools
         var reason = pid.HasValue
             ? ClosedConsoleNotices.TakeReason(ConsoleSessionManager.Instance.ProxyPid, agentId, pid.Value)
             : null;
-        return ClosedConsoleNotices.Describe(name, reason);
+        var alive = reason == null && pid.HasValue && ClosedConsoleNotices.IsProcessAlive(pid.Value);
+        return ClosedConsoleNotices.Describe(name, reason, alive);
     }
 
     /// <summary>

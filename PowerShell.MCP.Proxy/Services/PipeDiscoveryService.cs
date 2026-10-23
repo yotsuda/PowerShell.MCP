@@ -75,14 +75,10 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     {
         var name = _sessionManager.GetConsoleDisplayName(pid);
         _sessionManager.ClearDeadPipe(agentId, ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pid));
-        return "  - " + ClosedConsoleNotices.Describe(name, reason);
+        return "  - " + ClosedConsoleNotices.Describe(name, reason, reason == null && IsProcessAlive(pid));
     }
 
-    private static bool IsProcessAlive(int pid)
-    {
-        try { using var p = System.Diagnostics.Process.GetProcessById(pid); return !p.HasExited; }
-        catch { return false; }
-    }
+    private static bool IsProcessAlive(int pid) => ClosedConsoleNotices.IsProcessAlive(pid);
 
     /// <summary>
     /// The one clause an AI needs about a console it was using that was not
@@ -103,15 +99,17 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
     /// <summary>
     /// The closed-console line for a pipe that stopped answering, with the
-    /// console's own reason when it left one. Reads the display name before
-    /// the caller clears the pipe.
+    /// console's own reason when it left one, or the fact that its process
+    /// is still there when it is. Reads the display name before the caller
+    /// clears the pipe.
     /// </summary>
     private string DescribeDeadPipe(string agentId, string pipeName)
     {
         var name = _sessionManager.GetConsoleDisplayName(pipeName);
         var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
         var reason = pid.HasValue ? ClosedConsoleNotices.TakeReason(_sessionManager.ProxyPid, agentId, pid.Value) : null;
-        return "  - " + ClosedConsoleNotices.Describe(name, reason);
+        var alive = reason == null && pid.HasValue && IsProcessAlive(pid.Value);
+        return "  - " + ClosedConsoleNotices.Describe(name, reason, alive);
     }
 
     /// <inheritdoc />
@@ -281,6 +279,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     {
         var completedOutputs = new List<string>();
         var busyStatusLines = new List<string>();
+        var closedLines = new List<string>();
         // With an excluded pipe, the caller's own console is left out and
         // everything collected here belongs to other consoles, so mark it.
         // wait_for_completion passes null: every console is one it is waiting
@@ -295,7 +294,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
 
             if (status == null)
             {
+                // A console that died between discovery and this collection
+                // used to be dropped from tracking here in silence, and so was
+                // never reported at all. Say it now, like everywhere else.
+                var line = DescribeDeadPipe(agentId, pipeName);
                 _sessionManager.ClearDeadPipe(agentId, pipeName);
+                closedLines.Add(line);
             }
             else if (status.Status == PipeStatus.Completed)
             {
@@ -345,7 +349,8 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         // One blank line between consoles, in both lists.
         return new CachedOutputResult(
             PipelineHelper.JoinBlocks([.. completedOutputs]),
-            PipelineHelper.JoinBlocks([.. busyStatusLines]));
+            PipelineHelper.JoinBlocks([.. busyStatusLines]),
+            string.Join("\n", closedLines));
     }
 
 }
