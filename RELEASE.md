@@ -123,6 +123,8 @@ Run the test suite:
 .\Tests\Run-AllTests.ps1
 ```
 
+Then run the manual procedure in [docs/Pre-Release-Test-Procedure.md](docs/Pre-Release-Test-Procedure.md) on a **second machine** with this build installed: it covers what the unit suite cannot — the tool list the client receives, consoles that outlive a conversation, the idle close, and remote control against a real second machine.
+
 Optional (but recommended for signed releases): verify local signing still works end-to-end:
 
 ```powershell
@@ -339,6 +341,7 @@ Prefer fixing the workflow over using this path — manual publishes bypass the 
 - [ ] `CHANGELOG.md` has a new `# Version: X.Y.Z` section at the top
 - [ ] `.\Build-AllPlatforms.ps1` clean
 - [ ] `.\Tests\Run-AllTests.ps1` green
+- [ ] `docs/Pre-Release-Test-Procedure.md` passed on a second machine
 - [ ] Bump commit pushed to `main`
 - [ ] Tag `vX.Y.Z` pushed
 - [ ] GHA `Release` workflow succeeded
