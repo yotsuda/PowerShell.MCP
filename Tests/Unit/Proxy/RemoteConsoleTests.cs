@@ -960,6 +960,50 @@ public class RemoteConsoleTests
     }
 
     [Fact]
+    public async Task WaitForCompletion_ReturnsAtOnce_WhenARemoteResultIsAlreadyReady_EvenWithALocalConsoleBusy()
+    {
+        // Loopback test of 2026-10-23: the remote command had finished a
+        // second before the wait began, a local command was still running,
+        // and the wait sat out the local command's full 25 s before handing
+        // over the remote result. A ready remote result must end the wait at
+        // once, as a local console found completed does.
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        using var consoles = new RemoteConsoleRegistry();
+        var previous = RemoteConsoleRegistry.Current;
+        RemoteConsoleRegistry.Current = consoles;
+        var sm = ConsoleSessionManager.Instance;
+        var localPipe = ConsoleSessionManager.GetPipeNameForPids(sm.ProxyPid, "default", 1_999_990_010);
+        using var localServer = new System.IO.Pipes.NamedPipeServerStream(localPipe, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+        try
+        {
+            await consoles.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            consoles.Resolve(null).ResultPending = true; // free in this process: its result is ready
+
+            var ps = new Mock<IPowerShellService>();
+            ps.Setup(s => s.GetStatusFromPipeAsync(localPipe, It.IsAny<CancellationToken>()))
+              .ReturnsAsync(new GetStatusResponse { Status = "busy", Pipeline = "Start-Sleep 25", Pid = 1_999_990_010, Duration = 3 });
+            var discovery = new Mock<IPipeDiscoveryService>();
+            discovery.Setup(d => d.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(new CachedOutputResult("", "[other console] ⧗ local still running"));
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var result = await PowerShellTools.WaitForCompletion(ps.Object, discovery.Object, null!, timeout_seconds: 8);
+
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(4), $"the wait took {clock.Elapsed.TotalSeconds:F1}s although a remote result was ready");
+            Assert.Contains($"[remote console: 127.0.0.1:{port}]", result);
+            Assert.Contains("local still running", result);
+            Assert.False(consoles.Resolve(null).ResultPending);
+        }
+        finally
+        {
+            sm.ClearDeadPipe("default", localPipe);
+            RemoteConsoleRegistry.Current = previous;
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
     public async Task ExecuteRemoteCommand_TracksAPendingResult_AndCollectsItBeforeTheNextCommand()
     {
         // A command cancelled there leaves a result to collect; the next

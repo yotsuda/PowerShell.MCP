@@ -210,19 +210,28 @@ public class RemoteConsoleTools
     }
 
     /// <summary>
-    /// The remote consoles wait_for_completion has to poll: those with a
-    /// result pending whose console is not free right now (busy, at a host
-    /// prompt, silent or unreachable). The free ones are left for the
-    /// harvest, which collects them.
+    /// For wait_for_completion's first pass: the pending remote consoles
+    /// split into those still to poll (busy, at a host prompt, silent or
+    /// unreachable) and whether any is already free. A free one has a result
+    /// ready right now, and the wait must return with it at once — exactly as
+    /// it does for a local console found "completed" — rather than let it sit
+    /// until the local consoles are done too. (Seen in a loopback test: the
+    /// remote command had finished a second before the wait began, and the
+    /// wait still ran the local command's full 25 s.) The free ones are
+    /// collected by CollectAllCachedOutputsAsync, not here.
     /// </summary>
-    internal static async Task<List<RemoteConsoleClient>> StillPendingAsync(string agentId, CancellationToken ct)
+    internal static async Task<(List<RemoteConsoleClient> stillBusy, bool anyReady)> PartitionPendingAsync(string agentId, CancellationToken ct)
     {
         var still = new List<RemoteConsoleClient>();
+        var anyReady = false;
         var registry = RemoteConsoleRegistry.Current;
-        if (registry == null || agentId != "default") return still;
+        if (registry == null || agentId != "default") return (still, false);
         foreach (var client in registry.PendingResults())
-            if (!await IsFreeAsync(client, ct)) still.Add(client);
-        return still;
+        {
+            if (await IsFreeAsync(client, ct)) anyReady = true;
+            else still.Add(client);
+        }
+        return (still, anyReady);
     }
 
     /// <summary>True when the console answers and is neither busy nor at a prompt.</summary>

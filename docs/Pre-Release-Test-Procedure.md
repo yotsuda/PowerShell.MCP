@@ -154,7 +154,7 @@ confirm, and read the code to the AI. (For a NAT'd VM use
 🤖 `execute_command('Start-Sleep 25; "local slow"', timeout_seconds=3)` ✅ timeout.
 🤖 `execute_remote_command('Start-Sleep 8; "remote fast"', timeout_seconds=3)` ✅ timeout.
 🤖 `wait_for_completion(timeout_seconds=60)`
-✅ Returns after about 5 s with `remote fast`, and the local console still listed as busy.
+✅ Returns as soon as the remote command is done (about 5 s; at once if it already finished while the AI was between calls) with `remote fast`, and the local console still listed as busy. It must **not** wait for the local command.
 🤖 `wait_for_completion(timeout_seconds=60)` ✅ `local slow` after the rest.
 
 ### 4.6 A sub-agent does not see remote results (optional; needs a sub-agent)

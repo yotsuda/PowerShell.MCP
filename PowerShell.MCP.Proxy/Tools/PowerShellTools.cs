@@ -1281,9 +1281,15 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         }
 
         // Remote consoles with a result pending that are not free yet are
-        // waited on alongside the local busy pipes; the free ones are
-        // collected by CollectAllCachedOutputsAsync like any cached output.
-        var busyRemotes = await RemoteConsoleTools.StillPendingAsync(agentId, cancellationToken);
+        // waited on alongside the local busy pipes. One that is already free
+        // has its result ready: return with it now, as for a local console
+        // found completed above — CollectAllCachedOutputsAsync collects it.
+        var (busyRemotes, remoteReady) = await RemoteConsoleTools.PartitionPendingAsync(agentId, cancellationToken);
+        if (remoteReady)
+        {
+            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
+            return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+        }
 
         // No MCP-initiated busy pipes, nothing running remotely - collect any cached outputs and return
         if (busyPipes.Count == 0 && busyRemotes.Count == 0)
