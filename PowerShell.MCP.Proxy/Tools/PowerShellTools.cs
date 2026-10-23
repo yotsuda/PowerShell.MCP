@@ -15,14 +15,27 @@ public class PowerShellTools
     /// <summary>
     /// Finds a ready pipe. Delegates to PipeDiscoveryService.
     /// </summary>
-    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo, string? liveCwd)> FindReadyPipeAsync(
+    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo, string? liveCwd, string? activeNotFree)> FindReadyPipeAsync(
         IPipeDiscoveryService pipeDiscoveryService,
         string agentId,
         CancellationToken cancellationToken)
     {
         var result = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
-        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo, result.LiveCwd);
+        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo, result.LiveCwd, result.ActiveNotFree);
     }
+
+    /// <summary>
+    /// The line that goes with a "started a new console" / "switched" notice
+    /// when the console the AI was using was passed over: which console, what
+    /// it reported at that moment (<see cref="PipeDiscoveryResult.ActiveNotFree"/>),
+    /// and what that means for the AI — nothing is lost, the console is still
+    /// this session's, and a result of the AI's own command there arrives the
+    /// usual way. Without it a new console simply appeared, and the AI had to
+    /// guess whether its previous one was dead, busy, or taken.
+    /// </summary>
+    private static string? NotFreeNotice(string? activeNotFree)
+        => activeNotFree == null ? null
+            : $"ℹ️ {activeNotFree}. It stays with this session: a result of your own command there comes with wait_for_completion or your next call, and it is used again when this console is busy.";
 
     /// <summary>
     /// Records a console location the AI was just given (start_console,
@@ -189,7 +202,7 @@ public class PowerShellTools
             return Wrap(error);
 
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -198,8 +211,12 @@ public class PowerShellTools
             // here; if we passed it as true the inner StartConsole would skip its own
             // ResolveAgentId allocation but our Wrap would still add the notice. Either
             // shape works; passing false makes the inner call's intent explicit.
+            // StartConsole runs its own discovery, which no longer sees the
+            // moment that sent us here, so the reason is added from this one.
             Console.Error.WriteLine($"[INFO] No ready PowerShell console found, auto-starting... Reason: {allPipesStatusInfo}");
-            return Wrap(await StartConsole(powerShellService, pipeDiscoveryService, agent_id: agentId, is_subagent: false, cancellationToken: cancellationToken));
+            return Wrap(PipelineHelper.JoinBlocks(
+                NotFreeNotice(activeNotFree),
+                await StartConsole(powerShellService, pipeDiscoveryService, agent_id: agentId, is_subagent: false, cancellationToken: cancellationToken)));
         }
 
         try
@@ -681,7 +698,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         // The startup notice surfaces "spawned a new console" / "switched
         // to a sibling" context to the AI. A spawn or switch runs the
@@ -732,7 +749,9 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             var newStatus = await powerShellService.GetStatusFromPipeAsync(readyPipeName, cancellationToken);
             liveCwd = newStatus?.Cwd;
 
-            startupNotice = $"ℹ️ Started new console {GetConsoleName(readyPipeName)} with PowerShell.MCP module imported.";
+            startupNotice = PipelineHelper.JoinBlocks(
+                $"ℹ️ Started new console {GetConsoleName(readyPipeName)} with PowerShell.MCP module imported.",
+                NotFreeNotice(activeNotFree));
             newConsole = true;
         }
         else if (consoleSwitched)
@@ -742,7 +761,9 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             // location check below decides whether the pipeline runs there.
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
             await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
-            startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}.";
+            startupNotice = PipelineHelper.JoinBlocks(
+                $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}.",
+                NotFreeNotice(activeNotFree));
             newConsole = true;
         }
 
@@ -1402,11 +1423,14 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // treatment below normalizes it (move to $HOME for execution) and the
         // "new server session" notice tells the AI its prior context may differ.
         var includeUnowned = true;
+        // Why the AI's console was passed over, if discovery ran and found it busy.
+        string? notFreeNotice = null;
 
         // When no reason is given, try to reuse an existing standby console
         if (!forceNew)
         {
             var discoveryResult = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken, includeUnowned);
+            notFreeNotice = NotFreeNotice(discoveryResult.ActiveNotFree);
             if (discoveryResult.ReadyPipeName != null)
             {
                 // Set console window title if this was a newly claimed (unowned) console
@@ -1449,6 +1473,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                     reuseBusyStatusInfo,
                     reuseCompletedOutput,
                     "ℹ️ Did not launch a new console. An existing standby console is available and will be reused. To force a new console, provide the reason parameter.",
+                    notFreeNotice,
                     reuseLocationResult));
             }
             // No standby console found, fall through to create a new one
@@ -1486,6 +1511,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             completedOutput,
             warningMessage,
             "PowerShell console started successfully with PowerShell.MCP module imported.",
+            notFreeNotice,
             startResult));
     }
 

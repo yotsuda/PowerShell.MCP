@@ -106,6 +106,20 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         if (activePipe != null)
         {
             activePipeStatus = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
+
+            // "(user command)" is not an observation but a guess from the
+            // console's heartbeat (no tick for 10 s). The engine stamps a
+            // heartbeat when a command completes, but there are still moments
+            // right after a long command when the guess is wrong, and a
+            // genuine user command is not going to finish in 150 ms. Looking
+            // once more is far cheaper than the console that would otherwise
+            // be started — and than explaining it.
+            if (activePipeStatus != null && activePipeStatus.Status == PipeStatus.Busy && activePipeStatus.Pipeline == "(user command)")
+            {
+                await Task.Delay(150, cancellationToken);
+                activePipeStatus = await _powerShellService.GetStatusFromPipeAsync(activePipe, cancellationToken);
+            }
+
             if (activePipeStatus != null && activePipeStatus.IsReady())
             {
                 if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
@@ -120,6 +134,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         // Slow path: active pipe is not ready (or doesn't exist) - full discovery
         var closedMessages = new List<string>();
         var allPipesStatus = new List<string>();
+        string? activeNotFree = null;
 
         // Detect externally closed consoles (exclude active pipe PID - it's checked separately below)
         var activePipePid = activePipe != null ? ConsoleSessionManager.GetPidFromPipeName(activePipe) : null;
@@ -144,6 +159,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 if (activePipeStatus.Pid > 0) _sessionManager.MarkPipeBusy(agentId, activePipeStatus.Pid);
                 allPipesStatus.Add($"  - {activePipe}: {activePipeStatus.Status} (pipeline: {activePipeStatus.Pipeline ?? "unknown"}, duration: {activePipeStatus.Duration:F1}s)");
+                // What the AI is told if this ends in another console: the
+                // status as it was at this moment, by display name.
+                activeNotFree = $"Console {_sessionManager.GetConsoleDisplayName(activePipe)} was not free just then ({activePipeStatus.StatusLine ?? activePipeStatus.Status})";
             }
         }
 
@@ -167,7 +185,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 if (status.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, status.Pid);
                 _sessionManager.SetActivePipeName(agentId, pipeName);
-                return new PipeDiscoveryResult(pipeName, true, closedMessages, null, status.Cwd);
+                return new PipeDiscoveryResult(pipeName, true, closedMessages, null, status.Cwd, activeNotFree);
             }
 
             if (status.Pid > 0) _sessionManager.MarkPipeBusy(agentId, status.Pid);
@@ -179,7 +197,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         // start_console's no-start_location branch for the rationale.
         if (!includeUnowned)
         {
-            return new PipeDiscoveryResult(null, false, closedMessages, null);
+            return new PipeDiscoveryResult(null, false, closedMessages, null, null, activeNotFree);
         }
 
         foreach (var pipeName in _sessionManager.EnumerateUnownedPipes())
@@ -219,7 +237,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                     if (newStatus != null)
                     {
                         _sessionManager.SetActivePipeName(agentId, newPipeName);
-                        return new PipeDiscoveryResult(newPipeName, true, closedMessages, null, newStatus.Cwd);
+                        return new PipeDiscoveryResult(newPipeName, true, closedMessages, null, newStatus.Cwd, activeNotFree);
                     }
                 }
             }
@@ -238,7 +256,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var statusInfo = allPipesStatus.Count > 0
             ? "All pipes status:\n" + string.Join("\n", allPipesStatus)
             : "No pipes found.";
-        return new PipeDiscoveryResult(null, false, closedMessages, statusInfo);
+        return new PipeDiscoveryResult(null, false, closedMessages, statusInfo, null, activeNotFree);
     }
 
     /// <inheritdoc />

@@ -12,12 +12,24 @@ namespace PowerShell.MCP.Proxy.Services;
 /// preamble when the user has typed <c>cd</c> in the visible console
 /// between AI calls.
 /// </param>
+/// <param name="ActiveNotFree">
+/// Why the console the AI was using was passed over, when it was: one
+/// sentence naming it and quoting its status at discovery time (e.g.
+/// "Console PID #20888 Hallway was not free just then (⧗ User command
+/// running | … | Duration: 11.06s)"). Null when the active console was
+/// used, or when there was none, or when it was dead (that is a closed-
+/// console message instead). The tools put it next to their "started a new
+/// console" / "switched" notice: the AI otherwise sees a new console appear
+/// with no word on the one it was working in — and the status that caused
+/// it is gone by the time the response's busy list is collected.
+/// </param>
 public record PipeDiscoveryResult(
     string? ReadyPipeName,
     bool ConsoleSwitched,
     IReadOnlyList<string> ClosedConsoleMessages,
     string? AllPipesStatusInfo,
-    string? LiveCwd = null
+    string? LiveCwd = null,
+    string? ActiveNotFree = null
 );
 
 /// <summary>

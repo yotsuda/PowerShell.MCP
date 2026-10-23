@@ -690,6 +690,35 @@ public class PowerShellToolsTests
         Assert.DoesNotContain("Pipeline NOT executed", result);
     }
 
+    [Fact]
+    public async Task ExecuteCommand_ConsoleSwitched_SaysWhyThePreviousConsoleWasPassedOver()
+    {
+        // A new console appearing with no word on the one the AI was using
+        // left it guessing (dead? busy? taken?). Discovery's reason rides
+        // along with the switch notice, and says the old console is still its.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, true, new List<string>(), null, null,
+                "Console PID #20888 Hallway was not free just then (⧗ User command running | Duration: 11.06s)"));
+        _mockPowerShellService
+            .Setup(s => s.SetWindowTitleAsync(TestPipeName, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var headerJson = JsonSerializer.Serialize(new { pid = 2000, status = "success", pipeline = "Get-Date", duration = 0.01 });
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(TestPipeName, "Get-Date", It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(headerJson + "\n\n✓ done");
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-Date", agent_id: TestAgentId);
+
+        Assert.Contains("Switched to existing console", result);
+        Assert.Contains("ℹ️ Console PID #20888 Hallway was not free just then (⧗ User command running | Duration: 11.06s). It stays with this session", result);
+        Assert.Contains("wait_for_completion", result);
+    }
+
     // ExecuteCommand_TimeoutClamped_To170 lived here. It pinned the dispatched
     // timeout to the old fixed 170 and, once the ceiling became client-derived,
     // could only be kept by loosening its Verify to It.IsAny<int>() — which

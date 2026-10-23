@@ -149,6 +149,55 @@ public class PipeDiscoveryServiceTests
         sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
     }
 
+    [Fact]
+    public async Task FindReadyPipeAsync_ActiveSaysUserCommand_IsAskedOnceMore_BeforeBeingPassedOver()
+    {
+        // "(user command)" is the console's heartbeat guess, wrong for a moment
+        // after a long command. A second look 150 ms later finds it free, so
+        // the AI keeps its console instead of getting a new one.
+        var sessionManager = ConsoleSessionManager.Instance;
+        var testPipeName = $"PSMCP.{sessionManager.ProxyPid}.{DefaultAgentId}.99960";
+        sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
+
+        _mockPowerShellService
+            .SetupSequence(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GetStatusResponse { Status = "busy", Pipeline = "(user command)", Pid = 99960, Duration = 11.06 })
+            .ReturnsAsync(new GetStatusResponse { Status = "standby", Pid = 99960 });
+
+        var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
+
+        Assert.Equal(testPipeName, result.ReadyPipeName);
+        Assert.Null(result.ActiveNotFree);
+        _mockPowerShellService.Verify(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()), Times.Exactly(2));
+
+        sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
+    }
+
+    [Fact]
+    public async Task FindReadyPipeAsync_ActiveBusy_SaysSoInActiveNotFree_ByDisplayName()
+    {
+        // The AI's own command is still running there: no second look (that
+        // is an observation, not a guess), and the result carries the reason
+        // the tools put next to their "started a new console" notice.
+        var sessionManager = ConsoleSessionManager.Instance;
+        var testPipeName = $"PSMCP.{sessionManager.ProxyPid}.{DefaultAgentId}.99961";
+        sessionManager.SetActivePipeName(DefaultAgentId, testPipeName);
+        sessionManager.TryAssignNameToPid(99961);
+        var displayName = sessionManager.GetConsoleDisplayName(99961);
+
+        _mockPowerShellService
+            .Setup(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GetStatusResponse { Status = "busy", Pipeline = "Start-Sleep 60", Pid = 99961, Duration = 3.2, StatusLine = "⧗ Pipeline is running | Status: Busy | Pipeline: Start-Sleep 60 | Duration: 3.20s" });
+
+        var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
+
+        Assert.Null(result.ReadyPipeName);
+        Assert.Equal($"Console {displayName} was not free just then (⧗ Pipeline is running | Status: Busy | Pipeline: Start-Sleep 60 | Duration: 3.20s)", result.ActiveNotFree);
+        _mockPowerShellService.Verify(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()), Times.Once());
+
+        sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
+    }
+
     #endregion
 
     #region CollectAllCachedOutputsAsync Tests

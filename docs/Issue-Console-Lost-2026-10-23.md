@@ -131,5 +131,9 @@ MCP のログ（Claude Code 側、ツール呼び出しだけが残る）:
   完了処理は runspace のホームスレッドで動くので、runspace が空いている最も確かな証拠になる。
   10 秒以上かかるコマンドの直後に次を送ると必ず起きていた再現性の高い不具合で、Claude Code が 1 ターンに 2 つのツール呼び出しを
   連続実行する使い方では毎回踏む。
+- 合わせて 2 つ。(1) 新しいコンソールを起こした／切り替えたとき、素通りした元のコンソールの名前とその瞬間の状態を応答に 1 行添える
+  （`ℹ️ Console PID #20888 Hallway was not free just then (⧗ User command running | Duration: 11.06s). It stays with this session: …`）。
+  今回この行があれば、2 本目の応答を見た時点で原因が分かった。(2) `(user command)` はハートビートによる推定なので、proxy はそれを
+  見たら 150 ms 後に 1 回だけ確かめ直してから新しいコンソールを起こす。
 - インストール済みモジュール（`C:\PSModules\PowerShell.MCP`）への反映は `.\Build-AllPlatforms.ps1`。反映後に始めた会話から有効
   （動いている proxy は古い exe のまま）。
