@@ -19,11 +19,16 @@ namespace PowerShell.MCP.Proxy.Services;
 ///   overridden it aborts at 60s. 50 leaves room for the pre-command
 ///   overhead the ceiling does not cover (console claim or spawn, measured
 ///   at ~3s) plus response assembly afterwards.
-/// - <b>170s</b> for Claude Code, which was measured not to abort at all in
-///   its default configuration (it moves a long call to a background task at
-///   120s and still delivers the result), and which does send
-///   notifications/cancelled when it does abort — so the re-cache path
-///   catches what the ceiling would otherwise have to prevent.
+/// - <b>170s</b> for Claude Code. The number comes from the MCP timeout of
+///   the Claude Code versions this was built against, 180s: a server cannot
+///   see the client's timeout, so the ceiling sits a little under it. Later
+///   versions were measured not to abort at all in their default
+///   configuration (a long call is moved to a background task at 120s and
+///   its result is still delivered — seen in the client logs as "still
+///   running (120s elapsed)" followed by "completed successfully in 2m 50s"),
+///   and they send notifications/cancelled when they do abort, so the
+///   re-cache path catches what the ceiling would otherwise have to prevent.
+///   170 stays right for both.
 ///
 /// An unrecognised or absent client name falls to 50: the failure direction
 /// is one extra round trip, never a lost result.
