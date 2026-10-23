@@ -85,6 +85,23 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     }
 
     /// <summary>
+    /// The one clause an AI needs about a console it was using that was not
+    /// free: its name, what it was doing (its own pipeline, already shortened
+    /// by the console; "user command"; a host prompt) and for how long.
+    /// Not the full status line: the name would repeat, "Status: Busy" says
+    /// nothing "not free" did not, and the same console's fresh status is
+    /// usually listed in the response anyway.
+    /// </summary>
+    internal static string DescribeNotFree(string displayName, GetStatusResponse status)
+    {
+        var seconds = status.Duration is > 0 ? $", {status.Duration:F1}s" : "";
+        if (status.Status == PipeStatus.AwaitingInput)
+            return $"{displayName} was waiting for input" + (string.IsNullOrEmpty(status.Message) ? "" : $" ({status.Message})");
+        var doing = status.Pipeline == "(user command)" ? "user command" : status.Pipeline ?? status.Status ?? "busy";
+        return $"{displayName} was busy ({doing}{seconds})";
+    }
+
+    /// <summary>
     /// The closed-console line for a pipe that stopped answering, with the
     /// console's own reason when it left one. Reads the display name before
     /// the caller clears the pipe.
@@ -159,9 +176,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 if (activePipeStatus.Pid > 0) _sessionManager.MarkPipeBusy(agentId, activePipeStatus.Pid);
                 allPipesStatus.Add($"  - {activePipe}: {activePipeStatus.Status} (pipeline: {activePipeStatus.Pipeline ?? "unknown"}, duration: {activePipeStatus.Duration:F1}s)");
-                // What the AI is told if this ends in another console: the
-                // status as it was at this moment, by display name.
-                activeNotFree = $"Console {_sessionManager.GetConsoleDisplayName(activePipe)} was not free just then ({activePipeStatus.StatusLine ?? activePipeStatus.Status})";
+                // What the AI is told if this ends in another console: which
+                // console, and why, as of this moment — nothing more.
+                activeNotFree = DescribeNotFree(_sessionManager.GetConsoleDisplayName(activePipe), activePipeStatus);
             }
         }
 

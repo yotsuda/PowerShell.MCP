@@ -14,12 +14,12 @@ namespace PowerShell.MCP.Proxy.Services;
 /// </param>
 /// <param name="ActiveNotFree">
 /// Why the console the AI was using was passed over, when it was: one
-/// sentence naming it and quoting its status at discovery time (e.g.
-/// "Console PID #20888 Hallway was not free just then (⧗ User command
-/// running | … | Duration: 11.06s)"). Null when the active console was
-/// used, or when there was none, or when it was dead (that is a closed-
-/// console message instead). The tools put it next to their "started a new
-/// console" / "switched" notice: the AI otherwise sees a new console appear
+/// clause naming it and what it was doing at discovery time (e.g.
+/// "PID #20888 Hallway was busy (user command, 11.1s)"; see
+/// <c>PipeDiscoveryService.DescribeNotFree</c>). Null when the active console
+/// was used, or when there was none, or when it was dead (that is a closed-
+/// console message instead). The tools fold it into their "started a new
+/// console" / "switched" line: the AI otherwise sees a new console appear
 /// with no word on the one it was working in — and the status that caused
 /// it is gone by the time the response's busy list is collected.
 /// </param>

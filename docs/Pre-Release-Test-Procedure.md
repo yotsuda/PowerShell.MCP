@@ -86,15 +86,15 @@ Repeat 1.1, but after console B's command type `Get-` (no Enter) in console A's 
 
 ### 2.1 Two tool calls in one turn
 🤖 Ask: *"Run these as two separate execute_command calls in the same response: first `Start-Sleep 12; "slow"`, then `"fast"`."*
-✅ Both run in the **same** console. The second response has **no** `Started new console` and **no** `was not free just then`.
+✅ Both run in the **same** console. The second response has **no** `Started new console` and **no** `was busy`.
 (Before this release the second call always started a new console: the first console's heartbeat was 12 s old and it answered "busy (user command)".)
 
 ### 2.2 Variation with a user command
 👤 In the AI's console window, type `Start-Sleep 20` and press Enter.
 🤖 `execute_command('"during user command"')`
-✅ A new console starts (or an existing standby one is used), and the response says why:
-`ℹ️ Console PID #<A> <name> was not free just then (⧗ User command running | … | Pipeline: (user command) | Duration: …s). It stays with this session: a result of your own command there comes with wait_for_completion or your next call, and it is used again when this console is busy.`
-The duration shown is a few seconds, not 0 (the proxy looked twice, 150 ms apart, before giving up on it).
+✅ A new console starts (or an existing standby one is used), and the same line says why:
+`ℹ️ Started new console PID #<B> <name> with PowerShell.MCP module imported. PID #<A> <name> was busy (user command, …s) and stays with this session.`
+The seconds shown are a few, not 0 (the proxy looked twice, 150 ms apart, before giving up on it).
 
 ---
 
@@ -104,13 +104,13 @@ The duration shown is a few seconds, not 0 (the proxy looked twice, 150 ms apart
 🤖 `execute_command('Start-Sleep 25; "long one done"', timeout_seconds=5)`
 ✅ `⧗ Pipeline is running | … | Duration: 5.0…s` and the wait_for_completion hint.
 🤖 `execute_command('"second"')`
-✅ Response, in this order: the busy block for the first console marked `[other console]`; `ℹ️ Started new console PID #<B> <name> …`; `ℹ️ Console PID #<A> <name> was not free just then (⧗ Pipeline is running | … Start-Sleep 25 … ). It stays with this session: …`; then the result `second` from B.
+✅ Response, in this order: the busy block for the first console marked `[other console]`; `ℹ️ Started new console PID #<B> <name> with PowerShell.MCP module imported. PID #<A> <name> was busy (Start-Sleep 25; "long one d..., …s) and stays with this session.`; then the result `second` from B.
 🤖 `wait_for_completion(timeout_seconds=30)` ✅ `long one done` from A.
 
 ### 3.2 start_console and get_current_location say it too
 With console A busy (`Start-Sleep 25`, timeout 5) and no other console:
-🤖 `get_current_location()` ✅ the location JSON comes from a new console, preceded by the `was not free just then` line.
-Repeat with 🤖 `start_console()` (no reason) ✅ `PowerShell console started successfully …` followed by the `was not free just then` line.
+🤖 `get_current_location()` ✅ the location JSON comes from a new console, preceded by `ℹ️ PID #<A> <name> was busy (Start-Sleep 25; …, …s) and stays with this session.`
+Repeat with 🤖 `start_console()` (no reason) ✅ `PowerShell console started successfully …` followed by the same `ℹ️ … was busy … and stays with this session.` line.
 
 ---
 

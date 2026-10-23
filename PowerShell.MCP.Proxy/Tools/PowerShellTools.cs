@@ -25,17 +25,19 @@ public class PowerShellTools
     }
 
     /// <summary>
-    /// The line that goes with a "started a new console" / "switched" notice
-    /// when the console the AI was using was passed over: which console, what
-    /// it reported at that moment (<see cref="PipeDiscoveryResult.ActiveNotFree"/>),
-    /// and what that means for the AI — nothing is lost, the console is still
-    /// this session's, and a result of the AI's own command there arrives the
-    /// usual way. Without it a new console simply appeared, and the AI had to
-    /// guess whether its previous one was dead, busy, or taken.
+    /// The clause that goes with a "started a new console" / "switched" notice
+    /// when the console the AI was using was passed over: which console and
+    /// why (<see cref="PipeDiscoveryResult.ActiveNotFree"/>), plus the one
+    /// thing a new console appearing does not say — the old one is still this
+    /// session's. Kept to a clause: the AI reads it on every such call, and
+    /// what to do about a busy console of its own it already knows.
     /// </summary>
+    private static string NotFreeClause(string activeNotFree)
+        => $"{activeNotFree} and stays with this session.";
+
+    /// <summary>Standalone form, for responses that have no start / switch line to attach it to.</summary>
     private static string? NotFreeNotice(string? activeNotFree)
-        => activeNotFree == null ? null
-            : $"ℹ️ {activeNotFree}. It stays with this session: a result of your own command there comes with wait_for_completion or your next call, and it is used again when this console is busy.";
+        => activeNotFree == null ? null : "ℹ️ " + NotFreeClause(activeNotFree);
 
     /// <summary>
     /// Records a console location the AI was just given (start_console,
@@ -749,9 +751,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             var newStatus = await powerShellService.GetStatusFromPipeAsync(readyPipeName, cancellationToken);
             liveCwd = newStatus?.Cwd;
 
-            startupNotice = PipelineHelper.JoinBlocks(
-                $"ℹ️ Started new console {GetConsoleName(readyPipeName)} with PowerShell.MCP module imported.",
-                NotFreeNotice(activeNotFree));
+            startupNotice = $"ℹ️ Started new console {GetConsoleName(readyPipeName)} with PowerShell.MCP module imported."
+                + (activeNotFree != null ? " " + NotFreeClause(activeNotFree) : "");
             newConsole = true;
         }
         else if (consoleSwitched)
@@ -761,9 +762,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             // location check below decides whether the pipeline runs there.
             await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
             await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
-            startupNotice = PipelineHelper.JoinBlocks(
-                $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}.",
-                NotFreeNotice(activeNotFree));
+            startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}."
+                + (activeNotFree != null ? " " + NotFreeClause(activeNotFree) : "");
             newConsole = true;
         }
 

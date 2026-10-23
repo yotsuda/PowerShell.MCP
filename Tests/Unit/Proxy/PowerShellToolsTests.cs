@@ -699,7 +699,7 @@ public class PowerShellToolsTests
         _mockPipeDiscoveryService
             .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, true, new List<string>(), null, null,
-                "Console PID #20888 Hallway was not free just then (⧗ User command running | Duration: 11.06s)"));
+                "PID #20888 Hallway was busy (user command, 11.1s)"));
         _mockPowerShellService
             .Setup(s => s.SetWindowTitleAsync(TestPipeName, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -714,9 +714,8 @@ public class PowerShellToolsTests
         var result = await PowerShellTools.ExecuteCommand(
             _mockPowerShellService.Object, _mockPipeDiscoveryService.Object, null!, "Get-Date", agent_id: TestAgentId);
 
-        Assert.Contains("Switched to existing console", result);
-        Assert.Contains("ℹ️ Console PID #20888 Hallway was not free just then (⧗ User command running | Duration: 11.06s). It stays with this session", result);
-        Assert.Contains("wait_for_completion", result);
+        // One line, one clause: the switch, the console, the reason, and that it is still ours.
+        Assert.Contains($"ℹ️ Switched to existing console {ConsoleSessionManager.Instance.GetConsoleDisplayName(TestPipeName)}. PID #20888 Hallway was busy (user command, 11.1s) and stays with this session.", result);
     }
 
     // ExecuteCommand_TimeoutClamped_To170 lived here. It pinned the dispatched

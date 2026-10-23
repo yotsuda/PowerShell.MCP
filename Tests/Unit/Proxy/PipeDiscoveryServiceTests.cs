@@ -192,10 +192,23 @@ public class PipeDiscoveryServiceTests
         var result = await _service.FindReadyPipeAsync(DefaultAgentId, CancellationToken.None);
 
         Assert.Null(result.ReadyPipeName);
-        Assert.Equal($"Console {displayName} was not free just then (⧗ Pipeline is running | Status: Busy | Pipeline: Start-Sleep 60 | Duration: 3.20s)", result.ActiveNotFree);
+        Assert.Equal($"{displayName} was busy (Start-Sleep 60, 3.2s)", result.ActiveNotFree);
         _mockPowerShellService.Verify(s => s.GetStatusFromPipeAsync(testPipeName, It.IsAny<CancellationToken>()), Times.Once());
 
         sessionManager.ClearDeadPipe(DefaultAgentId, testPipeName);
+    }
+
+    [Fact]
+    public void DescribeNotFree_SaysWhatTheConsoleWasDoing_InOneClause()
+    {
+        Assert.Equal("PID #1 Oak was busy (user command, 11.1s)",
+            PipeDiscoveryService.DescribeNotFree("PID #1 Oak", new GetStatusResponse { Status = "busy", Pipeline = "(user command)", Duration = 11.06 }));
+        Assert.Equal("PID #1 Oak was busy (Start-Sleep 25; \"long one d..., 9.5s)",
+            PipeDiscoveryService.DescribeNotFree("PID #1 Oak", new GetStatusResponse { Status = "busy", Pipeline = "Start-Sleep 25; \"long one d...", Duration = 9.5 }));
+        Assert.Equal("PID #1 Oak was waiting for input (Enter your name)",
+            PipeDiscoveryService.DescribeNotFree("PID #1 Oak", new GetStatusResponse { Status = "awaiting_input", Message = "Enter your name", Duration = 4 }));
+        Assert.Equal("PID #1 Oak was busy (busy)",
+            PipeDiscoveryService.DescribeNotFree("PID #1 Oak", new GetStatusResponse { Status = "busy" }));
     }
 
     #endregion
