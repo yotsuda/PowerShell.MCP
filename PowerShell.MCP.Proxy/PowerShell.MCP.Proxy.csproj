@@ -3,8 +3,11 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
-    <!-- Pin bundled runtime pack to patched version (Dependabot CVE-2026-62899/62901) -->
-    <RuntimeFrameworkVersion>9.0.19</RuntimeFrameworkVersion>
+    <!-- Pin the bundled runtime pack to the latest patched 9.0.x. Dependabot
+         flags this file for every .NET / ASP.NET Core advisory against the
+         pinned pack (9.0.19/9.0.20: 14 alerts, CVE-2026-58280 … 96236);
+         raising this to the first patched version closes them. -->
+    <RuntimeFrameworkVersion>9.0.21</RuntimeFrameworkVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>1.16.0.0</Version>
