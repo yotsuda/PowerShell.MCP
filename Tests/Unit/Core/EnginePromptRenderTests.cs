@@ -96,6 +96,7 @@ public class EnginePromptRenderTests
         {
             var body = wrapper.Body.Extent.Text;
             Assert.Contains("MarkFirstPromptRendered", body);
+            Assert.Contains("RecordHostPrompt", body);
             Assert.Contains("McpEngineRenderingPrompt", body);
             Assert.DoesNotContain("Status -ne 'busy'", body);
         }

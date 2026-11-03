@@ -217,6 +217,19 @@ Set the user environment variables `POWERSHELL_MCP_STANDBY_REAP_MINUTES=1` and `
 👤 Let session 1's console idle past the threshold while session 2 keeps working
 ✅ Session 1's console is the only console of its session, so it is the keeper and stays open
 
+### 7.5 A console left behind by its session closes
+🤖 `execute_command('Write-Output "A"')` → console A, started by the proxy
+👤 End the MCP client session
+✅ Console A shows `AI session disconnected at <time>. Waiting for next connection.` and that it closes in 1 min
+👤 Wait about 70 seconds without touching it (no other session running)
+✅ Console A prints the idle warning after 50 seconds and closes 1 minute after the disconnect
+
+### 7.6 A left-behind console the user has used, and a window the user opened, stay open
+👤 As in 7.5, but run `Get-Date` in console A after the notice
+👤 Open PowerShell 7 and run `Import-Module PowerShell.MCP`; let a new session claim it, then end that session
+👤 Wait 2 minutes
+✅ Both windows are still open, with no warning
+
 ---
 
 ## Recommended Execution Order

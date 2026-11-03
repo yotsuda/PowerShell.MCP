@@ -167,6 +167,10 @@ namespace PowerShell.MCP
                 if (proxyPid.HasValue)
                 {
                     WatchProxyExit(proxyPid.Value);
+                    // Only the proxy's launch command sets the proxy PID global
+                    // before this import (a claim does not), so this tells a
+                    // console a proxy started from a window the user opened.
+                    ConsoleLiveness.MarkLaunchedByProxy();
                     // Publish this owned console's liveness marker so idle
                     // standby siblings can elect a single survivor and reap
                     // themselves. Unowned consoles never participate.
@@ -338,8 +342,8 @@ namespace PowerShell.MCP
                     StopWatchingProxyExitInternal();
 
                     // Drop this console's liveness marker: once unowned it must
-                    // not participate in idle-standby reaping (and a stale
-                    // marker must not linger for the group).
+                    // not take part in its old group's keeper election (and a
+                    // stale marker must not linger for the group).
                     ConsoleLiveness.SetUnowned();
 
                     // Create new server without proxy PID (unowned: 2-segment pipe name)

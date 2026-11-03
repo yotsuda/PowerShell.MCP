@@ -111,9 +111,142 @@ public class ConsoleLivenessTests : IDisposable
     [Fact]
     public void Reap_None_WhenNotOwned()
     {
-        // No Own() call: an unowned (user-started / released) console never reaps.
+        // No Own() call: a window the user opened and no AI ever used never reaps.
         Advance(Warn + Grace + 100);
         Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, runspaceAvailable: true, statusStandby: true));
+    }
+
+    // ── A console its session left behind ────────────────────────────────────
+
+    // The owned import path, then the proxy exits.
+    private void LaunchAndAbandon()
+    {
+        ConsoleLiveness.MarkLaunchedByProxy();
+        Own();
+        ConsoleLiveness.SetUnowned();
+    }
+
+    [Fact]
+    public void Abandoned_WarnsThenCloses()
+    {
+        // The only console of a session is its keeper while the session lives;
+        // once the proxy is gone nothing else would ever close it.
+        LaunchAndAbandon();
+        Assert.True(ConsoleLiveness.IsAbandoned);
+
+        // Closes at Warn after the disconnect, as the notice says: the warning
+        // comes one grace period before that, not at Warn.
+        Advance(Warn - Grace - 1);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Advance(1);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Advance(Grace - 1);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Advance(1);
+        Assert.Equal(ReapAction.Close, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+    }
+
+    [Fact]
+    public void Abandoned_GraceLongerThanThreshold_StillWarnsBeforeClosing()
+    {
+        LaunchAndAbandon();
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(60, 120, true, true));
+        Advance(119);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(60, 120, true, true));
+        Advance(1);
+        Assert.Equal(ReapAction.Close, ConsoleLiveness.EvaluateReap(60, 120, true, true));
+    }
+
+    [Fact]
+    public void Abandoned_IdleClockStartsAtTheDisconnect()
+    {
+        // Idle for hours under its session: the disconnect still gets a full period.
+        ConsoleLiveness.MarkLaunchedByProxy();
+        Own();
+        Advance(Warn * 10);
+        ConsoleLiveness.SetUnowned();
+
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Advance(Warn - Grace);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+    }
+
+    [Fact]
+    public void Released_WindowTheUserOpened_NeverCloses()
+    {
+        // Own() without MarkLaunchedByProxy is a claim: the window is the user's.
+        Own();
+        ConsoleLiveness.SetUnowned();
+        Assert.False(ConsoleLiveness.IsAbandoned);
+
+        Advance(Warn + Grace + 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+    }
+
+    [Fact]
+    public void Abandoned_UserRanACommand_NeverCloses()
+    {
+        LaunchAndAbandon();
+        Advance(Warn + 1);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+
+        ConsoleLiveness.RecordHostPrompt();
+        Assert.False(ConsoleLiveness.IsAbandoned);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Assert.False(ConsoleLiveness.IsReapPending, "the pending close is withdrawn");
+
+        Advance(Warn * 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+    }
+
+    [Fact]
+    public void Abandoned_HostPromptBeforeTheDisconnect_DoesNotCount()
+    {
+        // Every console renders a first prompt at startup, under its session.
+        ConsoleLiveness.MarkLaunchedByProxy();
+        Own();
+        ConsoleLiveness.RecordHostPrompt();
+        ConsoleLiveness.SetUnowned();
+        Assert.True(ConsoleLiveness.IsAbandoned);
+    }
+
+    [Fact]
+    public void Abandoned_ClaimedByANewSession_FollowsOwnedRulesAgain()
+    {
+        LaunchAndAbandon();
+        Advance(Warn + 1);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+
+        Own();
+        Assert.False(ConsoleLiveness.IsAbandoned);
+        Assert.False(ConsoleLiveness.IsReapPending);
+        Advance(Warn + Grace + 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true)); // keeper
+
+        // ...and that session leaving abandons it again.
+        ConsoleLiveness.SetUnowned();
+        Assert.True(ConsoleLiveness.IsAbandoned);
+    }
+
+    [Fact]
+    public void Abandoned_GuardsStillApply()
+    {
+        LaunchAndAbandon();
+        Advance(Warn + Grace + 100);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(0, Grace, true, true));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, runspaceAvailable: false, statusStandby: true));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, runspaceAvailable: true, statusStandby: false));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, jobsRunning: true));
+    }
+
+    [Fact]
+    public void Abandoned_CloseLeavesNoNote()
+    {
+        // No proxy is left to read it, and no group dir to put it in.
+        LaunchAndAbandon();
+        ConsoleLiveness.RecordSelfClose("whatever");
+        Assert.False(File.Exists(Path.Combine(_groupDir!, _ownPid + ConsoleLiveness.ClosedNoteSuffix)));
     }
 
     [Fact]

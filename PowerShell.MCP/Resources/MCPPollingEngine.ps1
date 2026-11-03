@@ -113,7 +113,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             # count. Checking for a busy Status instead missed the host's first
             # prompt whenever a command had been accepted but not yet started,
             # which is exactly what a stalled startup leaves behind.
-            try { if (-not $global:McpEngineRenderingPrompt) { [PowerShell.MCP.Services.ExecutionState]::MarkFirstPromptRendered() } } catch {}
+            # The same render tells a console left behind by its session that the
+            # user has taken it over (ConsoleLiveness.RecordHostPrompt).
+            try { if (-not $global:McpEngineRenderingPrompt) { [PowerShell.MCP.Services.ExecutionState]::MarkFirstPromptRendered(); [PowerShell.MCP.Services.ConsoleLiveness]::RecordHostPrompt() } } catch {}
             $rendered
         }
     }
@@ -157,7 +159,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     $Host.UI.RawUI.WindowTitle = [PowerShell.MCP.Services.ConsoleTitle]::Decorate("#$PID ____")
                     [Console]::WriteLine()
                     [Console]::WriteLine()
-                    Write-Host 'AI session disconnected. Waiting for next connection.' -ForegroundColor Yellow
+                    Write-Host "AI session disconnected at $([DateTime]::Now.ToString('HH:mm:ss')). Waiting for next connection." -ForegroundColor Yellow
+                    # Say it now: the window was started for the session, not by the
+                    # user, and it will not be here for good.
+                    if ($global:McpReapWarnSec -gt 0 -and [PowerShell.MCP.Services.ConsoleLiveness]::IsAbandoned) {
+                        $mcpCloseMin = [int]($global:McpReapWarnSec / 60)
+                        Write-Host "This window closes in $mcpCloseMin min unless another AI session connects or you run a command in it." -ForegroundColor Yellow
+                    }
                     [Console]::WriteLine()
                     try { $global:McpEngineRenderingPrompt = $true; try { $p = & { prompt } } finally { $global:McpEngineRenderingPrompt = $false }; [Console]::Write($p.TrimEnd(' ').TrimEnd('>') + '> ') } catch { [Console]::Write("PS $((Get-Location).Path)> ") }
                 }
@@ -192,7 +200,8 @@ if (-not (Test-Path Variable:global:McpTimer)) {
             } catch {}
 
             # Close an OWNED standby console that neither the AI nor the user has
-            # used for a while, keeping only the most-recently-active one alive.
+            # used for a while, keeping only the most-recently-active one alive,
+            # and a console its session left behind (ConsoleLiveness.IsAbandoned).
             # Every decision is local — a shared per-session marker directory is
             # the only channel, no proxy round-trip — and the proxy rediscovers a
             # closed console as a dead pipe and self-heals (same path as a killed
@@ -228,7 +237,7 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                                 try { [PowerShell.MCP.Services.ConsoleLiveness]::RecordActivity() } catch {}
                                 $rendered = if ($global:McpPriorPrompt) { & $global:McpPriorPrompt } else { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " }
                                 try { $mcpTag = [PowerShell.MCP.Services.RemoteControl]::PromptTag; if ($mcpTag) { $rendered = $mcpTag + ($rendered -join '') } } catch {}
-                                try { if (-not $global:McpEngineRenderingPrompt) { [PowerShell.MCP.Services.ExecutionState]::MarkFirstPromptRendered() } } catch {}
+                                try { if (-not $global:McpEngineRenderingPrompt) { [PowerShell.MCP.Services.ExecutionState]::MarkFirstPromptRendered(); [PowerShell.MCP.Services.ConsoleLiveness]::RecordHostPrompt() } } catch {}
                                 $rendered
                             }
                         }

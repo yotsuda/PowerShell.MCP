@@ -320,6 +320,8 @@ From then on `Register-PwshToClaudeCode` keeps the flag, including when you re-r
 
 When consoles pile up, an owned console that neither the AI nor you have used for 10 minutes prints a warning and closes itself 60 seconds later. The most recently used console of each session is always kept, and a console that is busy, waiting at a prompt, still holding output that has not been collected, has text typed at its prompt, or has an unfinished background job (`Start-Job`, `&`) is never closed. Typing anything, or any AI command, cancels a pending close. A console started by a sub-agent (`is_subagent=true`) is not kept: once idle it closes like any other, since a finished sub-agent never comes back for it.
 
+A console an AI session started and then left behind (the client exited, the session ended) shows `AI session disconnected` and waits for the next session to claim it. If none does, it closes 10 minutes after the disconnect, with the warning 60 seconds before that, under the same guards. It stays open for good once you run a command in it, and a window you opened yourself is never closed, even if an AI used it for a while.
+
 A console that closes itself leaves a note, and the AI's next tool call reports it: `Console #N was closed: it closed itself after 10 min without use …`. A console that disappeared any other way (its window closed, its process ended) is reported too, without the reason. Either way the line says what else went with it: jobs the console was running end with the console, while a process started with `Start-Process` keeps running.
 
 ### Several AI sessions on one machine

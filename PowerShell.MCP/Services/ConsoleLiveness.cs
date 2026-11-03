@@ -59,10 +59,18 @@ public static class ConsoleLiveness
 
     // Identity of the owning session; null when this console is unowned.
     // Unowned consoles (user-started, or released after a disconnect) never
-    // publish a marker and are never reaped.
+    // publish a marker and take no part in any keeper election.
     private static int? _proxyPid;
     private static string? _agentId;
     private static string? _markerPath;
+
+    // A console a proxy started and whose session has gone away has nobody left
+    // to close it: no AI remembers it and the user did not open it, so it would
+    // otherwise sit there for good. It closes once idle, unless the user has run
+    // a command in it since (then it is theirs). A window the user opened and an
+    // AI merely claimed goes back to being the user's on release, and stays.
+    private static bool _launchedByProxy;
+    private static bool _hostPromptSinceRelease;
 
     // Whether the one-minute close warning has already been shown for the
     // current idle stretch, and when it was shown. Single console per process,
@@ -127,6 +135,7 @@ public static class ConsoleLiveness
             _agentId = agentId;
             _lastActivityTicks = ticks;
             _warned = false;
+            _hostPromptSinceRelease = false;
             try
             {
                 var dir = GroupDir(proxyPid, agentId);
@@ -144,9 +153,40 @@ public static class ConsoleLiveness
     }
 
     /// <summary>
-    /// Marks this console unowned (released after a disconnect, or never
-    /// owned): deletes its marker and takes it out of reaping entirely.
+    /// Records that a proxy started this console (the owned import path), as
+    /// opposed to a user importing the module into a window of their own. A claim
+    /// does not count: a claimed window is still the user's.
     /// </summary>
+    public static void MarkLaunchedByProxy()
+    {
+        lock (_lock) { _launchedByProxy = true; }
+    }
+
+    /// <summary>
+    /// The host rendered a prompt, which means a command the user entered has
+    /// finished (AI commands and the engine's own notices render it flagged, and
+    /// do not get here). Once the session is gone that makes the window the
+    /// user's: it is not closed for being idle after that, since closing it would
+    /// take their session state with it.
+    /// </summary>
+    public static void RecordHostPrompt()
+    {
+        lock (_lock)
+        {
+            if (!_proxyPid.HasValue) _hostPromptSinceRelease = true;
+        }
+    }
+
+    /// <summary>
+    /// True for a console left behind by its session: released, started by a
+    /// proxy, and not used by the user since. Only this kind of unowned console
+    /// closes when idle.
+    /// </summary>
+    public static bool IsAbandoned
+    {
+        get { lock (_lock) { return !_proxyPid.HasValue && _launchedByProxy && !_hostPromptSinceRelease; } }
+    }
+
     // ── Human-presence sampling (close_console's guard) ──────────────────────
     // Only PowerShell can read the readline buffer; only C# is reachable from
     // the pipe thread. These fields are the hand-off between them: the polling
@@ -195,6 +235,13 @@ public static class ConsoleLiveness
         }
     }
 
+    /// <summary>
+    /// Marks this console unowned (released after a disconnect, or never owned):
+    /// deletes its marker and takes it out of the session's keeper election. The
+    /// idle clock restarts here, so a console left behind closes a full idle
+    /// period after the disconnect, not on the next tick because its session had
+    /// not used it for a while.
+    /// </summary>
     public static void SetUnowned()
     {
         string? path;
@@ -205,6 +252,8 @@ public static class ConsoleLiveness
             _agentId = null;
             _markerPath = null;
             _warned = false;
+            _hostPromptSinceRelease = false;
+            _lastActivityTicks = NowTicks();
         }
         TryDelete(path);
     }
@@ -224,7 +273,9 @@ public static class ConsoleLiveness
     ///
     /// <para>A console owned by a sub-agent has no keeper: see the class remarks.
     /// Every other guard (busy, not standby, typed text, running jobs, idle below
-    /// threshold, the warn-then-grace sequence) applies to it unchanged.</para>
+    /// threshold, the warn-then-grace sequence) applies to it unchanged. The same
+    /// goes for a console its session left behind (<see cref="IsAbandoned"/>):
+    /// with the session gone, no keeper is left to elect.</para>
     /// </summary>
     /// <param name="warnSeconds">Idle seconds before warning (0 disables reaping).</param>
     /// <param name="graceSeconds">Seconds after the warning before closing.</param>
@@ -254,17 +305,22 @@ public static class ConsoleLiveness
         bool owned;
         lock (_lock) { owned = _markerPath != null; }
 
-        // Only reap an owned console that is idle AND truly standby: a running
-        // user command (runspace unavailable), a busy AI pipeline, awaiting
-        // input, undrained completed output, text half-typed at the prompt, or
-        // a background job still running all keep it alive.
-        if (!owned || !runspaceAvailable || !statusStandby || typedTextPresent || jobsRunning)
+        // Only reap an owned or abandoned console that is idle AND truly standby:
+        // a running user command (runspace unavailable), a busy AI pipeline,
+        // awaiting input, undrained completed output, text half-typed at the
+        // prompt, or a background job still running all keep it alive.
+        if ((!owned && !IsAbandoned) || !runspaceAvailable || !statusStandby || typedTextPresent || jobsRunning)
         {
             lock (_lock) { _warned = false; }
             return ReapAction.None;
         }
 
-        if (IdleSeconds < warnSeconds)
+        // An abandoned console closes warnSeconds after the disconnect, as its
+        // disconnect notice says, so its warning comes one grace period earlier.
+        // An owned console warns at warnSeconds and closes one grace period later.
+        // (A grace longer than warnSeconds warns at once and closes after the grace.)
+        int warnAfter = owned ? warnSeconds : Math.Max(0, warnSeconds - graceSeconds);
+        if (IdleSeconds < warnAfter)
         {
             lock (_lock) { _warned = false; }
             return ReapAction.None;
@@ -274,8 +330,9 @@ public static class ConsoleLiveness
         // console (or the only one, or any console when the marker dir can't be
         // read) is the keeper and never reaps. A sub-agent's console is exempt
         // from nothing: its group would otherwise keep one window alive per
-        // sub-agent, long after the sub-agent itself is gone.
-        if (!IsSubAgentOwned() && IsKeeper())
+        // sub-agent, long after the sub-agent itself is gone. An abandoned console
+        // is not in any group, and its session is gone as well.
+        if (owned && !IsSubAgentOwned() && IsKeeper())
         {
             lock (_lock) { _warned = false; }
             return ReapAction.None;
@@ -503,6 +560,8 @@ public static class ConsoleLiveness
             _warnedAtTicks = 0;
             _typedTextPresent = false;
             _typedTextSampledAtTicks = 0;
+            _launchedByProxy = false;
+            _hostPromptSinceRelease = false;
         }
         UtcNow = () => DateTime.UtcNow;
         lock (_lock) { _lastActivityTicks = NowTicks(); }
