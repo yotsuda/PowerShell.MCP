@@ -117,9 +117,13 @@ public class PowerShellTools
     }
 
     /// <summary>
-    /// Sets the console window title if not already set
+    /// Sets the console window title if not already set. A console gets its name
+    /// here exactly once: when this proxy started it (<paramref name="launched"/>,
+    /// from StartConsoleInternal) or when it took over an unnamed console (a
+    /// user's Import-Module, a prior session's). Either way the user is told,
+    /// through the AI, which console it now works in (see TakeUserReportBlock).
     /// </summary>
-    private static async Task SetConsoleTitleAsync(IPowerShellService powerShellService, string pipeName, CancellationToken cancellationToken)
+    private static async Task SetConsoleTitleAsync(IPowerShellService powerShellService, string pipeName, string agentId, CancellationToken cancellationToken, bool launched = false)
     {
         var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
         if (pid == null) return;
@@ -127,6 +131,22 @@ public class PowerShellTools
         var title = ConsoleSessionManager.Instance.TryAssignNameToPid(pid.Value);
         if (title == null) return;
         await powerShellService.SetWindowTitleAsync(pipeName, title, cancellationToken);
+        ConsoleSessionManager.Instance.QueueUserReport(agentId, launched
+            ? $"Started a new console {title}."
+            : $"Named an existing console {title} and attached to it.");
+    }
+
+    /// <summary>
+    /// The 📣 block for the agent's queued reports, or null when there are none.
+    /// The user watches the consoles but cannot tell from them which one the AI
+    /// is working in, so passing these on is required, not optional.
+    /// </summary>
+    internal static string? TakeUserReportBlock(string agentId)
+    {
+        var reports = ConsoleSessionManager.Instance.TakeUserReports(agentId);
+        if (reports.Count == 0) return null;
+        return "📣 Required: tell the user this in your reply, in their language (they cannot otherwise tell which console you work in): "
+            + string.Join(" ", reports);
     }
 
     /// <summary>
@@ -184,6 +204,10 @@ public class PowerShellTools
     /// </summary>
     private static string PrependAgentIdNoticeIfNew(string body, bool isNewlyAllocated, string agentId)
     {
+        // Every return path of a console tool comes through here, so this is also
+        // where the queued 📣 console reports are guaranteed to reach the AI.
+        var report = TakeUserReportBlock(agentId);
+        if (report != null) body = $"{report}\n\n{body}";
         if (!isNewlyAllocated) return body;
         return $"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.\n\n{body}";
     }
@@ -232,7 +256,7 @@ public class PowerShellTools
             // "#PID ____" until some other tool that handles consoleSwitched runs.
             if (consoleSwitched)
             {
-                await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+                await SetConsoleTitleAsync(powerShellService, readyPipeName, agentId, cancellationToken);
                 await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
             }
 
@@ -746,7 +770,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 return Wrap("Failed to acquire newly-started console pipe.");
             }
 
-            await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, readyPipeName, agentId, cancellationToken);
 
             // Probe the new console for its live cwd — fresh pwsh starts at
             // home, but a future StartConsoleInternal might honor an explicit
@@ -763,7 +787,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             // Console switched (active died → sibling owned pipe, or
             // unowned pipe claimed). Set the title and fall through; the
             // location check below decides whether the pipeline runs there.
-            await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, readyPipeName, agentId, cancellationToken);
             await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
             startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}."
                 + (activeNotFree != null ? " " + NotFreeClause(activeNotFree) : "");
@@ -922,7 +946,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                     var activeAfterBusy = sessionManager.GetActivePipeName(agentId);
                                     if (activeAfterBusy != null)
                                     {
-                                        await SetConsoleTitleAsync(powerShellService, activeAfterBusy, cancellationToken);
+                                        await SetConsoleTitleAsync(powerShellService, activeAfterBusy, agentId, cancellationToken);
                                     }
 
                                     var newConsoleName = GetConsoleName(activeAfterBusy);
@@ -1445,7 +1469,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 // Set console window title if this was a newly claimed (unowned) console
                 if (discoveryResult.ConsoleSwitched)
                 {
-                    await SetConsoleTitleAsync(powerShellService, discoveryResult.ReadyPipeName, cancellationToken);
+                    await SetConsoleTitleAsync(powerShellService, discoveryResult.ReadyPipeName, agentId, cancellationToken);
                     // Newly claimed: show the caller's banner, or the default
                     // "AI session connected." notice when none was given.
                     await ShowClaimNoticeAsync(powerShellService, discoveryResult.ReadyPipeName, banner, cancellationToken);
@@ -1506,7 +1530,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         var newPipeName = ConsoleSessionManager.Instance.GetActivePipeName(agentId);
         if (newPipeName != null)
         {
-            await SetConsoleTitleAsync(powerShellService, newPipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, newPipeName, agentId, cancellationToken);
         }
         // Started where the AI asked (or $HOME): its place on this console.
         RecordToldLocation(agentId, newPipeName, resolvedPath);
@@ -1603,7 +1627,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), setting title and getting current location...");
 
             // Set console title before getting location (so title appears in status line)
-            await SetConsoleTitleAsync(powerShellService, pipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, pipeName, agentId, cancellationToken, launched: true);
 
             // Get current location from new console
             var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);
