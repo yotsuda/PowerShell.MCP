@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace PowerShell.MCP.Services;
 
 /// <summary>
@@ -47,7 +45,7 @@ public static class SshSession
         if (!OperatingSystem.IsWindows()) return false;
         try
         {
-            var parents = Snapshot();
+            var parents = ProcessTree.Snapshot();
             var pid = (uint)Environment.ProcessId;
             for (var depth = 0; depth < MaxDepth && parents.TryGetValue(pid, out var entry); depth++)
             {
@@ -59,52 +57,4 @@ public static class SshSession
         catch { }
         return false;
     }
-
-    /// <summary>pid → (parent pid, image name) for every process, from one Toolhelp snapshot.</summary>
-    private static Dictionary<uint, (uint Parent, string Name)> Snapshot()
-    {
-        var map = new Dictionary<uint, (uint, string)>();
-        var snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if (snap == InvalidHandle) return map;
-        try
-        {
-            var e = new PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32W>() };
-            if (!Process32FirstW(snap, ref e)) return map;
-            do { map[e.th32ProcessID] = (e.th32ParentProcessID, e.szExeFile); }
-            while (Process32NextW(snap, ref e));
-        }
-        finally { CloseHandle(snap); }
-        return map;
-    }
-
-    private const uint TH32CS_SNAPPROCESS = 0x00000002;
-    private static readonly IntPtr InvalidHandle = new(-1);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct PROCESSENTRY32W
-    {
-        public uint dwSize;
-        public uint cntUsage;
-        public uint th32ProcessID;
-        public IntPtr th32DefaultHeapID;
-        public uint th32ModuleID;
-        public uint cntThreads;
-        public uint th32ParentProcessID;
-        public int pcPriClassBase;
-        public uint dwFlags;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string szExeFile;
-    }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
-
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern bool Process32FirstW(IntPtr hSnapshot, ref PROCESSENTRY32W lppe);
-
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern bool Process32NextW(IntPtr hSnapshot, ref PROCESSENTRY32W lppe);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool CloseHandle(IntPtr hObject);
 }
