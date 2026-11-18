@@ -87,7 +87,7 @@ public sealed class RemoteConsoleRegistry : IDisposable
         {
             Prune();
             // One console waiting to dial in at a time: called again, it
-            // repeats that one's instructions, as it always has.
+            // repeats that one's instructions (rebuilt for a new install choice).
             RemoteConsoleClient? waiting;
             lock (_lock) waiting = _consoles.FirstOrDefault(c => c.IsWaitingForDialIn);
             if (waiting != null)

@@ -349,12 +349,21 @@ public class RemoteConsoleTests
         Assert.DoesNotContain("-OutFile", script);
         // As Administrator: an admins-only folder, signed PowerShell, no install=user.
         Assert.Contains("S-1-5-32-544", script);
-        Assert.Contains("Test-MicrosoftSigned $msiPath", script);
         Assert.Contains("$Install -eq 'user' -and $elevated", script);
+        // PowerShell 7 is the zip this server hands out, for every scope: no
+        // installer package, nothing fetched from anywhere else.
+        Assert.DoesNotContain("msiexec", script);
+        Assert.DoesNotContain("Add-AppxPackage", script);
+        Assert.Contains("Expand-Verified 'pwsh.zip' $PwshZipHash $installDir", script);
+        Assert.Contains("Add-ToPath $installDir $scope", script);
+        Assert.Contains("New-StartMenuShortcut $pwsh $scope", script);
+        // Never unpacked over a folder that already holds a PowerShell.
+        Assert.Contains("$installDir -and -not $pwsh -and (Test-Path -LiteralPath $installDir)", script);
         // Installing is confirmed by the person at the console.
         Assert.Contains("Read-Host 'Continue? [y/N]'", script);
-        foreach (var placeholder in new[] { "__INSTALL__", "__MODULE_VERSION__", "__MODULE_DLL_HASH__", "__MODULE_ZIP_HASH__", "__MODULE_NUPKG_HASH__", "__PWSH_VERSION__", "__PWSH_ZIP_HASH__", "__PWSH_MSI_HASH__" })
+        foreach (var placeholder in new[] { "__INSTALL__", "__MODULE_VERSION__", "__MODULE_DLL_HASH__", "__MODULE_ZIP_HASH__", "__MODULE_NUPKG_HASH__", "__PWSH_VERSION__", "__PWSH_ZIP_HASH__" })
             Assert.Contains(placeholder, script);
+        Assert.DoesNotContain("__PWSH_MSI_HASH__", script);
     }
 
     [Fact]
@@ -826,6 +835,54 @@ public class RemoteConsoleTests
         finally
         {
             RemoteConsoleClient.SessionWait = wait;
+        }
+    }
+
+    [Fact]
+    public async Task AcceptAgain_WithAnotherInstall_RebuildsTheLine_SamePortAndCode_AndSaysWhenItCannot()
+    {
+        var prepare = RemoteConsoleClient.PrepareBootstrap;
+        Func<string, CancellationToken, Task<RemoteBootstrap?>> fake = (scope, _) =>
+            Task.FromResult<RemoteBootstrap?>(RemoteBootstrap.ForTests(scope, $"# bootstrap for {scope}"));
+        RemoteConsoleClient.PrepareBootstrap = fake;
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            var none = await client.AcceptAsync(0, "none", CancellationToken.None);
+            var port = client.AcceptPort;
+            var code = client.AcceptCode;
+            var noneHash = RemoteBootstrap.ForTests("none", "# bootstrap for none").ScriptHash;
+            var userHash = RemoteBootstrap.ForTests("user", "# bootstrap for user").ScriptHash;
+            Assert.Contains(noneHash, none);
+
+            // The same choice again: the same line, nothing rebuilt.
+            var again = await client.AcceptAsync(0, "none", CancellationToken.None);
+            Assert.DoesNotContain("install changed", again);
+            Assert.Contains(noneHash, again);
+
+            // Another choice: the line for it, on the same port and code; the old one is said to be dead.
+            var user = await client.AcceptAsync(0, "user", CancellationToken.None);
+            Assert.Contains("install changed from none to user", user);
+            Assert.Contains(userHash, user);
+            Assert.DoesNotContain(noneHash, user);
+            Assert.Equal(port, client.AcceptPort);
+            Assert.Equal(code, client.AcceptCode);
+
+            // Cannot be prepared (null, or an exception): the earlier line stands, and the reply says so.
+            RemoteConsoleClient.PrepareBootstrap = (_, _) => Task.FromResult<RemoteBootstrap?>(null);
+            var failed = await client.AcceptAsync(0, "machine", CancellationToken.None);
+            Assert.Contains("install=machine could not be prepared", failed);
+            Assert.Contains("install=user, still stands", failed);
+            Assert.Contains(userHash, failed);
+
+            RemoteConsoleClient.PrepareBootstrap = (_, _) => throw new HttpRequestException("offline");
+            var threw = await client.AcceptAsync(0, "machine", CancellationToken.None);
+            Assert.Contains("install=machine could not be prepared", threw);
+            Assert.Contains(userHash, threw);
+        }
+        finally
+        {
+            RemoteConsoleClient.PrepareBootstrap = prepare;
         }
     }
 

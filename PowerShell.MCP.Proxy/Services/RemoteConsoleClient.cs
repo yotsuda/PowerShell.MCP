@@ -51,6 +51,9 @@ public sealed class RemoteConsoleClient : IDisposable
     /// <summary>How long a pairing code (or, after a drop, the resume key) stays good. Settable for tests.</summary>
     internal static TimeSpan CodeLifetime { get; set; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>Builds the bootstrap an accept hands out. Settable for tests.</summary>
+    internal static Func<string, CancellationToken, Task<RemoteBootstrap?>> PrepareBootstrap { get; set; } = RemoteBootstrap.PrepareAsync;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
     private TcpClient? _tcp;
     private SslStream? _ssl;
@@ -650,7 +653,9 @@ public sealed class RemoteConsoleClient : IDisposable
     /// <summary>
     /// Waits for a console to dial in: binds a port (0 = any free one), makes
     /// the pairing code, and returns what the user must run on the remote
-    /// machine. Called again while waiting, it repeats the instructions.
+    /// machine. Called again while waiting, it repeats the instructions — with
+    /// the bootstrap rebuilt first when the install choice changed, so the
+    /// line handed out always does what this call asked for.
     /// </summary>
     public async Task<string> AcceptAsync(int port, string install, CancellationToken ct)
     {
@@ -661,14 +666,30 @@ public sealed class RemoteConsoleClient : IDisposable
             if (_ssl != null || _host != null)
                 throw new InvalidOperationException($"Already connected to {Target}. Call disconnect_remote_console first.");
             if (_acceptListener != null)
-                return _peer == null
-                    ? AcceptInstructions()
-                    : $"A console from {_peer} already paired with this MCP server (its code is spent); it redials by itself after a drop. To start over with another console, disconnect_remote_console first.";
+            {
+                if (_peer != null)
+                    return $"A console from {_peer} already paired with this MCP server (its code is spent); it redials by itself after a drop. To start over with another console, disconnect_remote_console first.";
+                if (_bootstrap == null || _bootstrap.InstallScope == install)
+                    return AcceptInstructions();
+                // Same port and code; only the script (and so the hash in the
+                // line) changes. The line handed out before stops working: its
+                // hash no longer matches what is served.
+                var previous = _bootstrap.InstallScope;
+                RemoteBootstrap? rebuilt = null;
+                try { rebuilt = await PrepareBootstrap(install, ct); }
+                catch (Exception ex) when (ex is not OperationCanceledException and not ArgumentException) { Console.Error.WriteLine($"[WARN] Bootstrap not rebuilt: {ex.Message}"); }
+                // Nothing to serve for the new choice: the earlier line still
+                // works, and the AI must not hand it out as the one it asked for.
+                if (rebuilt == null)
+                    return $"install={install} could not be prepared; the line given before, install={previous}, still stands and is repeated below. disconnect_remote_console and accept_remote_console again to retry.\n\n" + AcceptInstructions();
+                _bootstrap = rebuilt;
+                return $"install changed from {previous} to {install}: the line given before no longer works; give the user the new one below.\n\n" + AcceptInstructions();
+            }
 
             // What a bare machine needs, served on the same port. Prepared
             // before binding: it may ask GitHub for the latest PowerShell.
             RemoteBootstrap? bootstrap = null;
-            try { bootstrap = await RemoteBootstrap.PrepareAsync(install, ct); }
+            try { bootstrap = await PrepareBootstrap(install, ct); }
             catch (Exception ex) when (ex is not OperationCanceledException and not ArgumentException) { Console.Error.WriteLine($"[WARN] Bootstrap not prepared: {ex.Message}"); }
 
             var code = NewPairingCode();
