@@ -213,6 +213,22 @@ public static class ExecutionState
     }
 
     /// <summary>
+    /// Test hook: back to "no heartbeat yet", as in a console whose engine has
+    /// not ticked. Once any test has stamped a heartbeat, every later test in
+    /// the process sees a runspace that went quiet for as long as it has been
+    /// since then, and after 10 s a free console answers "busy (user command)"
+    /// — which a slow run reaches and a fast one does not.
+    /// </summary>
+    internal static void ResetHeartbeatForTests()
+    {
+        lock (_lock)
+        {
+            _lastHeartbeat = default;
+            _firstHeartbeatReceived = false;
+        }
+    }
+
+    /// <summary>
     /// Records the runspace's PSDrive cwd ($PWD.Path). Called from the
     /// MCPPollingEngine timer tick on the runspace's home thread, where
     /// $PWD reflects every Set-Location (process cwd does not). Pass null

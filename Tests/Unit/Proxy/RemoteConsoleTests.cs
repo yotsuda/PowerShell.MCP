@@ -20,6 +20,13 @@ namespace PowerShell.MCP.Tests.Unit.Proxy;
 [Collection("McpServerState")]
 public class RemoteConsoleTests
 {
+    // The console in this process has no engine ticking, so its heartbeat is
+    // whatever an earlier test left: once that is 10 s old, get_status calls
+    // the free console "busy (user command)" and a wait never collects. Seen
+    // as a flaky WaitForCompletion_CollectsAPendingRemoteResult on a loaded
+    // machine. xUnit builds the class anew for every test.
+    public RemoteConsoleTests() => ExecutionState.ResetHeartbeatForTests();
+
     [Fact]
     public void Goodbye_FromTheProxy_IsRecognizedByTheDialer_AndPingIsNot()
     {
