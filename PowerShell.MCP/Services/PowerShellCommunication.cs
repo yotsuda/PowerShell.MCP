@@ -48,7 +48,9 @@ public static class PowerShellCommunication
         // started a new one. An AI that sends its next command the moment
         // the previous one returns — Claude Code with two tool calls in one
         // turn, 22 ms apart — hit this every time the first took 10 s.
-        ExecutionState.Heartbeat();
+        // Not Heartbeat(): the console is not back at its prompt until the
+        // next tick, and a cancelled command is reported until then.
+        ExecutionState.CompletionHeartbeat();
 
         lock (_lock)
         {

@@ -93,6 +93,10 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var seconds = status.Duration is > 0 ? $", {status.Duration:F1}s" : "";
         if (status.Status == PipeStatus.AwaitingInput)
             return $"{displayName} was waiting for input" + (string.IsNullOrEmpty(status.Message) ? "" : $" ({status.Message})");
+        if (status.CancelledSecondsAgo is double cancelled)
+            return status.Reason == PipeStatus.CancelledCommand
+                ? $"{displayName} was not back at its prompt yet after the cancelled command ({status.Pipeline}, cancelled {cancelled:F1}s ago)"
+                : $"{displayName} was still stopping the cancelled command ({status.Pipeline}, cancelled {cancelled:F1}s ago)";
         var doing = status.Pipeline == "(user command)" ? "user command" : status.Pipeline ?? status.Status ?? "busy";
         return $"{displayName} was busy ({doing}{seconds})";
     }

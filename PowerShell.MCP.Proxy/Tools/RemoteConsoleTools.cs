@@ -273,7 +273,9 @@ public class RemoteConsoleTools
                 status.StatusLine ?? $"⧗ Remote console busy | Pipeline: {status.Pipeline} | Duration: {status.Duration:F2}s",
                 status.Reason == "user_command"
                     ? "The user at the remote console is running a command there."
-                    : "Still running. wait_for_completion waits for it; cancel_remote_command interrupts it."));
+                    : status.CancelledSecondsAgo != null
+                        ? "Still stopping the cancelled command. wait_for_completion waits for it."
+                        : "Still running. wait_for_completion waits for it; cancel_remote_command interrupts it."));
         if (status.Status == PipeStatus.AwaitingInput)
             return (null, PipelineHelper.JoinBlocks(tag, status.StatusLine, AwaitingInputAdvice(status)));
 
@@ -299,12 +301,15 @@ public class RemoteConsoleTools
             case "busy":
                 // Our earlier command still running: its result stays pending.
                 // The user's own command: nothing of ours to collect.
-                if (status.Reason == "mcp_command") client.ResultPending = true;
+                // A cancelled one's interrupted result is cached there too.
+                if (status.Reason is "mcp_command" or PipeStatus.CancelledCommand) client.ResultPending = true;
                 return PipelineHelper.JoinBlocks(tag,
                     status.StatusLine ?? $"⧗ Remote console busy | Pipeline: {status.Pipeline} | Duration: {status.Duration:F2}s",
                     status.Reason == "user_command"
                         ? "The user at the remote console is running a command there. wait_for_completion polls until the console is free; or ask them."
-                        : "A previous remote command is still running. wait_for_completion waits for its result; cancel_remote_command interrupts it.");
+                        : status.CancelledSecondsAgo is double cancelledAgo
+                            ? $"The remote command cancelled {cancelledAgo:F1}s ago is still stopping (or the console is not back at its prompt yet); this one was not run. wait_for_completion waits until the console is free."
+                            : "A previous remote command is still running. wait_for_completion waits for its result; cancel_remote_command interrupts it.");
 
             case "timeout":
             {

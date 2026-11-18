@@ -881,7 +881,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                 // Mark this pipe as busy for tracking
                                 if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(agentId, jsonResponse.Pid);
 
-                                if (jsonResponse.Reason == "user_command" || jsonResponse.Reason == "mcp_command")
+                                if (jsonResponse.Reason is "user_command" or "mcp_command" or PipeStatus.CancelledCommand)
                                 {
                                     // Auto-route: spawn a new console at AI's intended cwd and
                                     // re-run the pipeline there in the same tool call. Pre-fix
@@ -968,13 +968,21 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                     // recursive call delivers the actual pipeline output and
                                     // the AI no longer needs the OS / drive-list block to
                                     // verify cwd because we already preserved it.
+                                    // What the source console was doing, said as it
+                                    // is: a cancelled command is neither "user_command"
+                                    // nor one still running as such.
+                                    var busyWith = jsonResponse.CancelledSecondsAgo is double cancelledAgo
+                                        ? jsonResponse.Reason == PipeStatus.CancelledCommand
+                                            ? $"not back at its prompt yet after the command cancelled {cancelledAgo:F1}s ago"
+                                            : $"still stopping the command cancelled {cancelledAgo:F1}s ago"
+                                        : $"busy with {jsonResponse.Reason}";
                                     return Wrap(PipelineHelper.JoinBlocks(
                                         string.Join("\n", closedConsoleMessages),
                                         // The source console the pipeline did NOT run on.
                                         PipelineHelper.MarkOtherConsole(FormatBusyStatus(jsonResponse)),
                                         retryOutcome.NotExecuted
-                                            ? $"ℹ️ Source console busy with {jsonResponse.Reason}; started {newConsoleName} at {startLoc}."
-                                            : $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.",
+                                            ? $"ℹ️ Source console {busyWith}; started {newConsoleName} at {startLoc}."
+                                            : $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console {busyWith}). Pipeline executed automatically — no re-send needed.",
                                         retryResult));
                                 }
                                 break;

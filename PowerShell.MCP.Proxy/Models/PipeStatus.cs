@@ -18,6 +18,14 @@ public static class PipeStatus
     public const string AwaitingInput = "awaiting_input";
 
     /// <summary>
+    /// A busy console's reason (beside user_command / mcp_command): no
+    /// heartbeat, but the console has not been back at its prompt since a
+    /// cancelled AI command, so it is not a user command — the engine has
+    /// not resumed yet. Routed around like the other two.
+    /// </summary>
+    public const string CancelledCommand = "cancelled_command";
+
+    /// <summary>
     /// Returns true if a raw status string means the console is "ready" — i.e.
     /// not busy, so the proxy may route to it now. Standby is idle; Completed
     /// has undrained output but is still routable. This is the single
