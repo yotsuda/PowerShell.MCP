@@ -51,6 +51,10 @@ Rules:
             // (The headless/CI launcher always uses -NoProfile, independent of this flag.)
             PwshLauncherShared.SuppressProfileOnInteractive =
                 Array.Exists(args, a => string.Equals(a, "--no-profile", StringComparison.OrdinalIgnoreCase));
+            // `--console-launch auto|handoff|minimized`: how Windows consoles open (#59).
+            PwshLauncherShared.ConsoleLaunchMode = PwshLauncherShared.ParseConsoleLaunch(args, out var consoleLaunchError);
+            if (consoleLaunchError != null)
+                Console.Error.WriteLine($"[WARN] {consoleLaunchError}");
 
             var builder = Host.CreateApplicationBuilder(args);
 

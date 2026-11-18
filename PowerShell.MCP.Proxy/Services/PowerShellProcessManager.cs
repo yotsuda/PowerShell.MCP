@@ -211,6 +211,46 @@ internal static class PwshLauncherShared
     // BuildHeadlessPwshArguments.
     internal static bool SuppressProfileOnInteractive { get; set; }
 
+    // How the Windows launcher opens a console. Set once at startup from the
+    // proxy's `--console-launch <auto|handoff|minimized>` (see LaunchPwsh):
+    //  auto      — through wt.exe without activating it when Windows Terminal is the
+    //              default terminal (#59), otherwise the plain launch;
+    //  handoff   — the plain CREATE_NEW_CONSOLE launch, as before 1.17.0;
+    //  minimized — CREATE_NEW_CONSOLE + SW_SHOWMINNOACTIVE: a minimized classic
+    //              console (conhost) that never takes the focus, even from a
+    //              Windows Terminal window, and is not one of Windows Terminal's
+    //              windows (no tabs, not pulled across virtual desktops with them).
+    // Ignored on macOS/Linux.
+    internal enum ConsoleLaunch { Auto, Handoff, Minimized }
+
+    internal static ConsoleLaunch ConsoleLaunchMode { get; set; }
+
+    internal const string ConsoleLaunchOption = "--console-launch";
+
+    // Accepts `--console-launch <mode>` and `--console-launch=<mode>`, any case.
+    // Absent: Auto. A missing or unknown value: Auto plus an error to report.
+    internal static ConsoleLaunch ParseConsoleLaunch(string[] args, out string? error)
+    {
+        error = null;
+        for (int i = 0; i < args.Length; i++)
+        {
+            string? value;
+            if (string.Equals(args[i], ConsoleLaunchOption, StringComparison.OrdinalIgnoreCase))
+                value = i + 1 < args.Length ? args[i + 1] : null;
+            else if (args[i].StartsWith(ConsoleLaunchOption + "=", StringComparison.OrdinalIgnoreCase))
+                value = args[i][(ConsoleLaunchOption.Length + 1)..];
+            else
+                continue;
+
+            if (Enum.TryParse<ConsoleLaunch>(value, ignoreCase: true, out var mode)
+                && Enum.IsDefined(mode) && !int.TryParse(value, out _))
+                return mode;
+            error = $"{ConsoleLaunchOption}: expected auto, handoff or minimized, got '{value}'. Using auto.";
+            return ConsoleLaunch.Auto;
+        }
+        return ConsoleLaunch.Auto;
+    }
+
     private static string InteractiveProfileArg(bool noProfile) =>
         noProfile ? $"{NoProfileArgument} " : string.Empty;
 
@@ -327,6 +367,7 @@ public static class PwshLauncherWindows
     private const uint CREATE_NEW_CONSOLE = 0x00000010;
     private const uint STARTF_USESHOWWINDOW = 0x00000001;
     private const ushort SW_SHOWNOACTIVATE = 4;
+    private const ushort SW_SHOWMINNOACTIVE = 7;
 
     // Class IDs Windows Terminal registers for console delegation (its AppxManifest).
     private const string WindowsTerminalDelegationTerminal = "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}";
@@ -342,7 +383,6 @@ public static class PwshLauncherWindows
     internal static string? FindWindowsTerminalForDelegation()
     {
         if (!OperatingSystem.IsWindows()) return null;
-        if (Environment.GetEnvironmentVariable("POWERSHELL_MCP_NO_WT") == "1") return null;
 
         var wt = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Microsoft", "WindowsApps", "wt.exe");
@@ -416,7 +456,8 @@ public static class PwshLauncherWindows
             // mojibake. See PwshLauncherShared.EncodingPrelude for the rationale.
             var proxyPid = Process.GetCurrentProcess().Id;
             string command = PwshLauncherShared.BuildWindowsInitCommand(proxyPid, agentId, startupCommands);
-            var wtPath = FindWindowsTerminalForDelegation();
+            var mode = PwshLauncherShared.ConsoleLaunchMode;
+            var wtPath = mode == PwshLauncherShared.ConsoleLaunch.Auto ? FindWindowsTerminalForDelegation() : null;
             string commandLine;
             uint creationFlags;
             if (wtPath != null)
@@ -430,6 +471,13 @@ public static class PwshLauncherWindows
             {
                 commandLine = PwshLauncherShared.BuildWindowsCommandLine(command, PwshLauncherShared.SuppressProfileOnInteractive);
                 creationFlags = CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE;
+                if (mode == PwshLauncherShared.ConsoleLaunch.Minimized)
+                {
+                    // Honored by conhost, and it keeps the console out of the Windows
+                    // Terminal handoff altogether: a minimized classic console window.
+                    si.dwFlags = STARTF_USESHOWWINDOW;
+                    si.wShowWindow = SW_SHOWMINNOACTIVE;
+                }
             }
 
             bool ok = CreateProcessW(

@@ -122,6 +122,23 @@ public class PwshLauncherSharedTests
         Assert.DoesNotContain("-NoProfile", commandLine);
     }
 
+    [Theory]
+    [InlineData(new string[0], "Auto", false)]
+    [InlineData(new[] { "--no-profile" }, "Auto", false)]
+    [InlineData(new[] { "--console-launch", "minimized" }, "Minimized", false)]
+    [InlineData(new[] { "--no-profile", "--Console-Launch", "HANDOFF" }, "Handoff", false)]
+    [InlineData(new[] { "--console-launch=minimized" }, "Minimized", false)]
+    [InlineData(new[] { "--console-launch", "auto" }, "Auto", false)]
+    [InlineData(new[] { "--console-launch" }, "Auto", true)]
+    [InlineData(new[] { "--console-launch", "hidden" }, "Auto", true)]
+    [InlineData(new[] { "--console-launch", "2" }, "Auto", true)]
+    public void ParseConsoleLaunch_ReadsTheOption(string[] args, string expected, bool expectError)
+    {
+        var mode = PwshLauncherShared.ParseConsoleLaunch(args, out var error);
+        Assert.Equal(expected, mode.ToString());
+        Assert.Equal(expectError, error != null);
+    }
+
     // Free text a banner or reason can carry (it sits in a single-quoted PowerShell string).
     private const string NastyBanner = "a; b \"c\" d''e p\\\"q x\\;y \\x\\ 日本 $HOME `t ;; \"unbalanced end\\";
 
