@@ -284,11 +284,20 @@ public class PowerShellTools
             // Collect completed outputs and busy status info from other pipes
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-            // Build response: closedConsoles + busyStatusInfo + completedOutputs + agentId info + result
+            // The active console was passed over for another of the agent's
+            // consoles: say so, as execute_command does. Only the branch that
+            // starts a new console said it (seen 2026-11-19: the location came
+            // from another console with no word on why).
+            var switchNotice = activeNotFree != null && newSessionNotice == null
+                ? $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}. {NotFreeClause(activeNotFree)}"
+                : null;
+
+            // Build response: closedConsoles + busyStatusInfo + switch notice + completedOutputs + agentId info + result
             return Wrap(PipelineHelper.JoinBlocks(
                 string.Join("\n", closedConsoleMessages),
                 newSessionNotice,
                 busyStatusInfo,
+                switchNotice,
                 completedOutputs,
                 result));
         }

@@ -1703,10 +1703,13 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                     # Execute command with stream capture in silent
                     # mode so the result lands in $streamResults but
                     # nothing goes to the user's terminal.
+                    # Timed here: ExecutionState's stopwatch is the last AI
+                    # command's (SetBusy starts it; a silent command never
+                    # does), so get_current_location reported that command's
+                    # duration (seen 2026-11-19: 25.28s after a Start-Sleep 25).
+                    $silentWatch = [System.Diagnostics.Stopwatch]::StartNew()
                     $streamResults = Invoke-CommandWithAllStreams -Command $silentCmd -Silent
-
-                    # Get duration from C# ExecutionState (managed by WaitForResult)
-                    $duration = [PowerShell.MCP.Services.ExecutionState]::ElapsedSeconds
+                    $duration = $silentWatch.Elapsed.TotalSeconds
 
                     # Get current location info
                     $currentLocation = @{
