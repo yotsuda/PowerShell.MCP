@@ -6,35 +6,28 @@
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/PowerShell.MCP)](https://www.powershellgallery.com/packages/PowerShell.MCP)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Security Warning:** This module provides complete PowerShell access to your system. Malicious use could result in severe damage. Use responsibly and only in trusted environments.
+**Security Warning:** This module gives AI full PowerShell access to your system. Use it only in trusted environments.
 
 ## Overview
 
-*The universal MCP server—one installation gives AI access to 10,000+ PowerShell modules and any CLI tool.*
+*One MCP server that gives AI access to 10,000+ PowerShell modules and any CLI tool — in a console you can see, with you in control.*
 
-PowerShell.MCP connects AI assistants to the entire PowerShell ecosystem through a single MCP server. You and AI collaborate in the same PowerShell console—every command the AI runs appears there as it runs, and a transcript can record all of it (see [Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
+The AI works in PowerShell consoles on your desktop. You watch every command as it runs, answer its prompts, type its passwords yourself, and close the window to stop it — without ending the conversation. Give it admin rights when a task needs them and take them back after; point it at other machines and it works on them from the same conversation. A transcript can record all of it ([Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/6ebec366-832f-484a-ae74-285bc754c437" alt="social-image" width="640" />
 </div>
 
-**Need bash, a language REPL, a SQL console, or a debugger instead?** If you can't install PowerShell 7, or you'd rather drive another shell (bash, cmd, zsh), a language REPL (python, node, racket, lua, …), a SQL console (sqlite3, …), or a language debugger (pdb, jdb, perldb), check out **[ripple](https://github.com/yotsuda/ripple)** — the same shared-console concept generalized to any REPL, with unified ConPTY-based consoles running side by side.
+Need bash, cmd, zsh, a language REPL (python, node, …), a SQL console or a debugger instead of PowerShell? See **[ripple](https://github.com/yotsuda/ripple)** — the same shared-console idea for any REPL.
 
 ## Why PowerShell.MCP?
 
-**A universal gateway to the PowerShell ecosystem.**
+Instead of one curated MCP server per service, the AI uses the same modules and CLI tools professionals use:
 
-PowerShell.MCP takes a different approach from service-specific MCP servers. Rather than providing curated tools for individual services, it gives AI assistants direct access to PowerShell—letting them use the same modules and CLI tools that professionals use every day.
-
-This means:
-- **One MCP server replaces many** — no need for separate servers for each service
-- **Immediate access** to 10,000+ modules on [PowerShell Gallery](https://www.powershellgallery.com/) without waiting for dedicated MCP servers
-- **Cross-service workflows** combining multiple services in a single pipeline
-- **API exploration** — prototype and verify API behavior with immediate feedback before writing production code
-- **Self-evolving capabilities** — AI writes PowerShell scripts that both AI and users can execute, continuously extending what's possible
-- **Industry-standard skills** — commands you learn transfer directly to your own work
-
-**Examples: PowerShell pipeline processing**
+- **One server replaces many** — [PowerShell Gallery](https://www.powershellgallery.com/) modules (Az, AWS.Tools, Microsoft.Graph, …) and any CLI (git, docker, kubectl, gh, …), learned through `Get-Help`
+- **Cross-service pipelines** — describe the result, the AI builds the pipeline
+- **Persistent sessions** — authenticate once; modules, variables and functions stay loaded; no startup cost per command
+- **Nothing to unlearn** — what the AI runs is ordinary PowerShell: you can rerun it, save it as a script, and learn from it
 
 *"Show me bug issues from the PowerShell repo with their authors"*
 
@@ -52,416 +45,178 @@ Get-AzVM -Status | Where-Object PowerState -eq "VM running" |
     Select-Object Name, @{N='Size';E={$_.HardwareProfile.VmSize}}, Location
 ```
 
-*"Check if GitHub's API returns rate limit info"*
+## Features
 
-```powershell
-Invoke-RestMethod https://api.github.com/rate_limit |
-    Select-Object -ExpandProperty rate
-```
+- **🤝 Shared console** — watch every command in real time and answer interactive prompts yourself. On Windows, short AI commands go into the console history.
+- **🔒 Secrets stay with you** — `Read-Host -AsSecureString`, `Get-Credential`, MFA codes, `sudo`, `gpg`, `ssh-add` passphrases are typed into the console and never reach the AI. Stdin-piped MCP shells cannot do this.
+- **🖥️ Consoles of its own, as many as needed** — each AI session can start several consoles (a long build in one, other work in another) and owns them; parallel sessions never touch each other's (window titles like `#12345 Taxi`, `Get-MCPOwner` shows the owner).
+- **📝 File editing in the console** — `Show-TextFiles`, `Add-LinesToFile`, `Update-LinesInFile`, `Update-MatchInFile` and `Remove-LinesFromFile` let the AI read, search and edit text files where you can see each step. They are ordinary cmdlets, for your own use too.
+- **🔐 Local by default** — named pipes only; a TCP port opens only while [remote control](#remote-console-another-machine) is on ([SECURITY.md](SECURITY.md#remote-control)).
 
-*"Get the current user's Windows username via Win32 API"*
+**Control without ending the conversation** — most useful for auditing and managing network settings:
 
-```powershell
-Add-Type -MemberDefinition '[DllImport("advapi32.dll")] public static extern bool GetUserName(System.Text.StringBuilder sb, ref int len);' -Name Win32 -Namespace API
-$sb = [System.Text.StringBuilder]::new(256); $len = 256
-[API.Win32]::GetUserName($sb, [ref]$len); $sb.ToString()
-```
-
-PowerShell.MCP complements your existing MCP setup by providing a flexible, general-purpose foundation.
+- **🛡️ Grant and revoke admin rights at any time** — open an Administrator (or root) console for the AI when a task needs it ([how](#admin-work-on-this-machine)); close it and the AI is back to unprivileged consoles.
+- **✋ Stop a command the moment you see it** — if one looks dangerous, close the console window: the command dies with it, the conversation goes on, and you can ask the AI what it was trying to do.
+- **🌐 Several remote machines in one conversation** — the AI drives up to four [remote consoles](#remote-console-another-machine) directly, side by side, with no new session per machine.
 
 ## Defend with AI: network security audits
 
-Attacks that use AI to find and work through weak spots are now reported week after week, and they are not aimed only at large companies. An attacker needs one opening; a defender has to close all of them — the careful, repetitive checking that usually gets postponed. Put the same kind of help on the defending side.
+AI-assisted attacks are no longer aimed only at large companies, and defense is the careful, repetitive checking that gets postponed. **[powershell-mcp-security](https://github.com/yotsuda/powershell-mcp-security)** is a Claude Code plugin that has the AI audit and harden a Windows, Linux or macOS machine — this one, or one reached through [remote control](#remote-console-another-machine) — with you watching:
 
-**[powershell-mcp-security](https://github.com/yotsuda/powershell-mcp-security)** is a Claude Code plugin that has the AI audit and harden a Windows, Linux or macOS machine through PowerShell.MCP — this one, or a server or VM reached through [remote control](#remote-console-another-machine) — with you watching every command:
+- **Read-only first**: the settings actually in effect, checked against what is visible from outside.
+- **Fixes only with your approval**, in an order that cannot lock you out, verified from outside and again after a reboot.
+- **No keys or passwords for the AI**: a person at that machine starts remote control and types `sudo` passwords.
 
-- **Read-only first**: the settings that are actually in effect, not only config files, checked against what the network sees from outside.
-- **Fixes only with your approval**, in an order that cannot lock you out, verified from outside and again after a reboot, where settings quietly revert.
-- **No keys or passwords for the AI**: a person at that machine starts remote control, and `sudo` passwords are typed at its console.
-
-Its helper module **[NetworkSecurityAudit](https://www.powershellgallery.com/packages/NetworkSecurityAudit)** holds the checks that are easy to get wrong by hand: TCP probes that tell closed from filtered (`Test-NsaTcpPort`), listening ports with their process and service (`Get-NsaListeningPort`), Windows firewall rules open to any address (`Find-NsaPermissiveFirewallRule`), effective Linux `sysctl` values and SSH logins. It only reads, and works on its own too (`Install-Module NetworkSecurityAudit`); the AI asks before installing it on a machine it audits.
+Its read-only helper module **[NetworkSecurityAudit](https://github.com/yotsuda/powershell-mcp-security/tree/main/module/NetworkSecurityAudit)** (`Test-NsaTcpPort`, `Get-NsaListeningPort`, `Find-NsaPermissiveFirewallRule`, …) also works on its own (`Install-Module NetworkSecurityAudit`).
 
 ```text
 /plugin marketplace add yotsuda/powershell-mcp-plugins
 /plugin install powershell-mcp-security@powershell-mcp
 ```
 
-Then ask: *"Audit the network security of this server. Read-only first, and check what is visible from outside."* A walkthrough, in Japanese: [リモート PC のセキュリティ監査と対策を、AI に任せる方法](https://qiita.com/ytsuda/items/4c0dddb76bd462f987df).
+Then ask: *"Audit the network security of this server. Read-only first, and check what is visible from outside."*
 
-**Help collect what defenders know.** The repository is meant to gather network-audit know-how in one place: checks that catch real misconfigurations, fixes that cannot lock anyone out, settings that are silently overridden. When an audit shows the skill was wrong or missing something, the AI offers to draft an issue for it — you review the text, with real addresses and names left out, before anything is posted. Pull requests for a new check or another OS are welcome as well ([CONTRIBUTING](https://github.com/yotsuda/powershell-mcp-security/blob/main/CONTRIBUTING.md)).
+When an audit shows the skill was wrong or incomplete, the AI offers to draft an issue for you to review. Pull requests are welcome ([CONTRIBUTING](https://github.com/yotsuda/powershell-mcp-security/blob/main/CONTRIBUTING.md)).
 
-## What Makes It Powerful
-
-**🖥️ Multi-Client Architecture**
-- Each client instance gets its own exclusive console—run multiple Claude Code sessions in parallel
-- Safe parallel operation with no resource conflicts
-- Unique window titles (e.g., "#12345 Taxi") for easy identification
-- `Get-MCPOwner` cmdlet shows which client owns the current console
-
-**🤝 Shared Console Experience**
-- You and AI collaborate in the same PowerShell session with full transparency
-- Every command AI executes appears in your console in real-time
-- You can respond to interactive prompts directly in the console
-- Short commands are added to the console history on Windows—learn by watching AI work
-
-**🔄 Persistent Session State**
-- Authenticate once, stay authenticated: Azure, AWS, Microsoft 365, and more
-- Modules, variables, and functions persist across commands
-- No re-initialization overhead
-
-**🌐 Universal Access**
-- [PowerShell Gallery](https://www.powershellgallery.com/): 10,000+ modules including [Az](https://www.powershellgallery.com/packages/Az), [AWS.Tools](https://www.powershellgallery.com/packages/AWS.Tools.Common), [Microsoft.Graph](https://www.powershellgallery.com/packages/Microsoft.Graph)
-- Any CLI tool: git, docker, kubectl, terraform, gh, az cli, aws cli
-- AI learns syntax automatically via `Get-Help`
-
-**🔗 Pipeline Composability**
-- Describe what you want in natural language—AI constructs the optimal pipeline
-- "Top 5 largest logs" → `Get-ChildItem *.log | Sort-Object Length -Descending | Select-Object -First 5`
-- Chain any commands across any services
-
-**⚡ Instant Execution**
-- Commands execute immediately in an existing console
-- No process startup overhead per command
-- Real-time streaming output
-
-**🔐 Enterprise-Ready Security**
-- Local named pipes by default; a TCP port only while remote control is on — on the remote machine (`Enable-MCPRemoteControl`), or on this one while the AI waits for a console to dial in (`accept_remote_console`) ([Remote Control](SECURITY.md#remote-control))
-- Every command visible, and recordable with `Start-Transcript` or Script Block Logging ([Auditing an AI Session](SECURITY.md#auditing-an-ai-session))
-- Integrates with existing security policies
-
-**🔒 Secrets stay with you, not the AI**
-- Interactive prompts (`Read-Host -AsSecureString`, `Get-Credential`, MFA codes) hide input from the AI
-- Enter passphrases for code-signing, `gpg`, `ssh-add`, `sudo`, cloud CLI MFA — keystrokes go to the program, never to AI's output stream
-- AI orchestrates the workflow ("build, sign, push the tag"); you supply the secret at the right moment
-- Impossible with stdin-piped MCP shells, where the AI must somehow feed the secret in
-
-## Architecture
-
-Eleven tools — six for consoles on this machine, five for a console on another machine; waiting is shared:
+## Tools
 
 | Tool | Purpose |
 |------|---------|
 | **This machine** | |
 | `start_console` | Reuse a standby console, or launch a new one |
-| `get_current_location` | Get the current directory, available drives, and system info (OS, PowerShell version, user, culture) |
-| `execute_command` | Execute any PowerShell command or CLI tool (literal text via `var1`–`var8`) |
-| `wait_for_completion` | Wait for busy consoles — here or on a remote machine — to finish and collect their cached output |
-| `cancel` | Interrupt the command currently running in the console (stops the pipeline and sends Ctrl+C) |
-| `close_console` | Kill a console by PID (e.g. one paused at an interactive prompt), returning any output it still holds |
+| `get_current_location` | Current directory, drives, and system info |
+| `execute_command` | Run any PowerShell command or CLI tool (literal text via `var1`–`var8`) |
+| `wait_for_completion` | Wait for busy consoles, local or remote, and collect their output |
+| `cancel` | Stop the running command (pipeline stop + Ctrl+C) |
+| `close_console` | Kill a console by PID, returning any output it still holds |
 | **Another machine** ([Remote console](#remote-console-another-machine)) | |
-| `connect_remote_console` | Connect to a console that is listening (`Enable-MCPRemoteControl`) with its pairing code |
-| `accept_remote_console` | Let a console dial in (for machines behind NAT or a firewall) — returns the `Enable-MCPRemoteControl -ConnectTo` line to run there, or, where nothing can be installed, one line to paste |
-| `execute_remote_command` | Execute a command in the remote console (a result that outran its timeout comes back with `wait_for_completion`, or with the next tool call of any kind) |
+| `connect_remote_console` | Connect to a listening console with its pairing code |
+| `accept_remote_console` | Let a console dial in (behind NAT or a firewall) |
+| `execute_remote_command` | Run a command in the remote console |
 | `cancel_remote_command` | Send Ctrl+C to the remote console |
-| `disconnect_remote_console` | Disconnect from one remote console (or stop accepting) |
+| `disconnect_remote_console` | Disconnect one remote console (or stop accepting) |
 
 ## Quick Start
 
 ### Prerequisites
 
-**All platforms require:**
 - PowerShell 7.4+ ([installation guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell))
-- Claude Desktop, Claude Code, or any MCP client
+- Claude Code, Claude Desktop, or any MCP client
+- Windows 10/11 or Server 2016+; Ubuntu 22.04+, Debian 11+, RHEL 8+ (a GUI desktop to see the console); macOS 12+ (Intel or Apple Silicon)
 
-| Platform | OS Requirements |
-|----------|-----------------|
-| Windows | Windows 10/11 or Windows Server 2016+ |
-| Linux | Ubuntu 22.04+, Debian 11+, RHEL 8+, or another distribution PowerShell 7.4 supports; a GUI desktop to see the console |
-| macOS | macOS 12 (Monterey)+, Intel or Apple Silicon |
+### Install
 
----
+**1. Install PowerShell 7** — Windows: `winget install Microsoft.PowerShell`; macOS: `brew install --cask powershell`; Linux: see the [installation guide](https://learn.microsoft.com/powershell/scripting/install/install-ubuntu).
 
-<details>
-<summary><b>Windows Setup</b></summary>
+**2. In PowerShell 7 (`pwsh`):**
 
-#### 1. Open PowerShell 7
-Press `Win + R`, type `pwsh`, press `Enter`
-
-#### 2. Install PowerShell.MCP
 ```powershell
 Install-PSResource PowerShell.MCP
+chmod +x "$(Get-MCPProxyPath)"     # Linux / macOS only
+
+Register-PwshToClaudeCode          # Claude Code
+Register-PwshToClaudeDesktop       # Claude Desktop
 ```
 
-#### 3. Configure your MCP client
+`Register-PwshToClaudeCode` asks whether to disable Claude Code's built-in Bash and PowerShell tools so every command runs in the visible console (recommended; `-DisableBuiltInShellTools` / `-KeepBuiltInShellTools` skip the question). For other clients, put the output of `Get-MCPProxyPath -Escape` in the client's configuration.
 
-**For Claude Code:**
-```powershell
-Register-PwshToClaudeCode
-```
-It then asks whether to disable Claude Code's built-in Bash and PowerShell tools, so that every command runs in the console you can see (recommended, and the default answer). `-DisableBuiltInShellTools` or `-KeepBuiltInShellTools` answers without asking.
-
-**For Claude Desktop:**
-```powershell
-Register-PwshToClaudeDesktop
-```
-
-**For other MCP clients:** Run `Get-MCPProxyPath -Escape` to get the JSON-escaped executable path, then add it to your client's configuration file manually.
-
-#### 4. Restart your MCP client
-
-</details>
-
-<details>
-<summary><b>Linux Setup</b></summary>
-
-#### 1. Install PowerShell 7
-```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install -y wget apt-transport-https software-properties-common
-source /etc/os-release
-wget -q https://packages.microsoft.com/config/ubuntu/$VERSION_ID/packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb
-sudo apt-get update
-sudo apt-get install -y powershell
-```
-
-#### 2. Install PowerShell.MCP, set permissions, and configure your MCP client
-
-```powershell
-# Run in PowerShell (pwsh)
-Install-PSResource PowerShell.MCP
-chmod +x "$(Get-MCPProxyPath)"
-```
-
-**For Claude Code:**
-```powershell
-Register-PwshToClaudeCode
-```
-It then asks whether to disable Claude Code's built-in Bash and PowerShell tools, so that every command runs in the console you can see (recommended, and the default answer). `-DisableBuiltInShellTools` or `-KeepBuiltInShellTools` answers without asking.
-
-**For Claude Desktop:**
-```powershell
-Register-PwshToClaudeDesktop
-```
-
-**For other MCP clients:** Run `Get-MCPProxyPath -Escape` to get the JSON-escaped executable path, then add it to your client's configuration file manually.
-
-#### 3. Restart your MCP client
-
-</details>
-
-<details>
-<summary><b>macOS Setup</b></summary>
-
-#### 1. Install PowerShell 7
-```bash
-brew install --cask powershell
-# If the cask is unavailable, install from GitHub Release (on an Intel Mac, use osx-x64 instead of osx-arm64):
-# curl -sSL -o /tmp/powershell.tar.gz https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-osx-arm64.tar.gz
-# sudo mkdir -p /usr/local/microsoft/powershell/7
-# sudo tar zxf /tmp/powershell.tar.gz -C /usr/local/microsoft/powershell/7
-# sudo chmod +x /usr/local/microsoft/powershell/7/pwsh
-# sudo ln -sf /usr/local/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
-```
-
-#### 2. Install PowerShell.MCP, set permissions, and configure your MCP client
-
-```powershell
-# Run in PowerShell (pwsh)
-Install-PSResource PowerShell.MCP
-chmod +x "$(Get-MCPProxyPath)"
-```
-
-**For Claude Code:**
-```powershell
-Register-PwshToClaudeCode
-```
-It then asks whether to disable Claude Code's built-in Bash and PowerShell tools, so that every command runs in the console you can see (recommended, and the default answer). `-DisableBuiltInShellTools` or `-KeepBuiltInShellTools` answers without asking.
-
-**For Claude Desktop:**
-```powershell
-Register-PwshToClaudeDesktop
-```
-
-**For other MCP clients:** Run `Get-MCPProxyPath -Escape` to get the JSON-escaped executable path, then add it to your client's configuration file manually.
-
-#### 3. Restart your MCP client
-
-</details>
+**3. Restart your MCP client.**
 
 ### Updating
 
-Every installed version lives in its own folder, so the proxy path your MCP client launches changes with each update. Re-register after updating: otherwise the client keeps starting the previous version's proxy, and commands fail with *"PowerShell.MCP.Proxy version is outdated"*.
+Each version installs into its own folder, so re-register after updating, or commands fail with *"PowerShell.MCP.Proxy version is outdated"*.
 
-#### 1. Update the module
-Open a **new** PowerShell 7 window (not one of the PowerShell.MCP consoles) and run:
-```powershell
-Update-PSResource PowerShell.MCP
-```
+1. In a **new** PowerShell 7 window (not a PowerShell.MCP console): `Update-PSResource PowerShell.MCP`
+2. In **another new** window (so it loads the new version): run `chmod +x` (Linux/macOS) and `Register-PwshToClaudeCode` / `Register-PwshToClaudeDesktop` again. Existing arguments and environment variables are kept. Other clients: update the path from `Get-MCPProxyPath -Escape`.
+3. Close the old console windows (`#12345 Taxi`) and restart your MCP client.
 
-#### 2. Re-register from another new window
-A window that has already loaded PowerShell.MCP keeps the old version, so open one more new window, which loads the version just installed:
-```powershell
-chmod +x "$(Get-MCPProxyPath)"   # Linux / macOS only: the new proxy needs the execute bit again
-
-Register-PwshToClaudeCode        # Claude Code
-Register-PwshToClaudeDesktop     # Claude Desktop
-```
-Both replace the existing `pwsh` entry and keep the arguments and environment variables already set on it, such as `--no-profile`; `-NoProfile` and `-ConsoleLaunch` change those two flags. **For other MCP clients:** replace the path in your configuration with the output of `Get-MCPProxyPath -Escape`.
-
-#### 3. Close the old consoles and restart your MCP client
-Close the PowerShell.MCP console windows (titled like `#12345 Taxi`) — each keeps running the version it was started with — then quit and restart your MCP client.
-
-To see what is installed, and remove a version no console is using any more:
-```powershell
-Get-InstalledPSResource PowerShell.MCP
-Uninstall-PSResource PowerShell.MCP -Version <old version>
-```
-
----
+Old versions can be removed with `Uninstall-PSResource PowerShell.MCP -Version <old version>`.
 
 ## Configuration
 
-### Lean consoles (`--no-profile`)
+`Register-PwshToClaudeCode` and `Register-PwshToClaudeDesktop` take these options and keep them on later re-registrations. In other clients, add the flag to the `pwsh` entry's `args`.
 
-By default, every console the proxy launches loads your PowerShell `$PROFILE` (prompt, aliases, PSReadLine, theme) — these are real interactive shells, not just automation targets. Pass `--no-profile` to start them with `-NoProfile` instead, for faster startup and a clean, deterministic environment.
-
-**Claude Code / Claude Desktop:**
-```powershell
-Register-PwshToClaudeCode -NoProfile      # Claude Code
-Register-PwshToClaudeDesktop -NoProfile   # Claude Desktop
-```
-From then on both keep the flag, including when you re-register after an update without it. `-NoProfile:$false` removes it.
-
-**Other MCP clients:** add an `args` array with `--no-profile` to the `pwsh` entry in your config:
+| Option | Flag | Effect |
+|--------|------|--------|
+| `-NoProfile` | `--no-profile` | Start consoles without `$PROFILE`: faster, deterministic. `-NoProfile:$false` removes it. (Headless/CI always uses `-NoProfile`.) |
+| `-ConsoleLaunch <mode>` | `--console-launch <mode>` | Windows only — how new consoles open (below). `-ConsoleLaunch Auto` removes it. |
 
 ```json
 "mcpServers": {
   "pwsh": {
     "command": "...PowerShell.MCP.Proxy.exe",
-    "args": ["--no-profile"]
+    "args": ["--no-profile", "--console-launch", "minimized"]
   }
 }
 ```
-
-> The headless / CI launcher always uses `-NoProfile` regardless of this flag.
 
 ### How consoles open on Windows (`--console-launch`)
 
-A console the proxy opens should not take the keyboard focus from what you are typing in. On Windows, `--console-launch` chooses how it opens:
+- `auto` (default) — a Windows Terminal window opened without activation when Windows Terminal is your default terminal, otherwise a console window. Some systems (seen on Windows 11 build 26200, Windows Terminal 1.24–1.25) activate it anyway, and it always takes focus when a Windows Terminal window is in front.
+- `minimized` — a minimized classic console (conhost); never takes focus. Also avoids Windows Terminal pulling windows across virtual desktops.
+- `handoff` — the behavior before 1.17.0: Windows decides, focus is taken.
 
-| Value | Window | Focus |
-|---|---|---|
-| `auto` (default) | When Windows Terminal is your default terminal (the default on Windows 11), a new Windows Terminal window opened through `wt.exe` without activating it; otherwise a console window as before | Kept while another application is in front, on many systems but not all: on some (reported on Windows 11 build 26200 with Windows Terminal 1.24 and 1.25) Windows Terminal activates the new window anyway. When a Windows Terminal window is in front — for example when your AI client runs in Windows Terminal — the new window always takes it. If either bothers you, use `minimized`. |
-| `minimized` | A minimized classic console window (conhost), not a Windows Terminal window: no tabs, no Windows Terminal settings | Never taken, whatever is in front. Click the console on the taskbar to watch it. |
-| `handoff` | Exactly as before 1.17.0: Windows decides, usually a Windows Terminal window | Taken when the window opens |
+### Idle consoles and multiple sessions
 
-`minimized` may also suit agents working on another virtual desktop: Windows Terminal runs all its windows in one process, and users have seen a new window bring the others to the desktop they were on; separate conhost windows do not share a process.
-
-Set it with `Register-PwshToClaudeCode -ConsoleLaunch Minimized` or `Register-PwshToClaudeDesktop -ConsoleLaunch Minimized`; both keep it on later re-registrations, and `-ConsoleLaunch Auto` removes it. In other clients, add `"args": ["--console-launch", "minimized"]` to the `pwsh` entry. It has no effect on macOS and Linux.
-
-### Idle consoles close themselves
-
-When consoles pile up, an owned console that neither the AI nor you have used for 10 minutes prints a warning and closes itself 60 seconds later. The most recently used console of each session is always kept, and a console that is busy, waiting at a prompt, still holding output that has not been collected, has text typed at its prompt, or has an unfinished background job (`Start-Job`, `&`) is never closed. Typing anything, or any AI command, cancels a pending close. A console started by a sub-agent (`is_subagent=true`) is not kept: once idle it closes like any other, since a finished sub-agent never comes back for it.
-
-A console an AI session started and then left behind (the client exited, the session ended) shows `AI session disconnected` and waits for the next session to claim it. If none does, it closes 10 minutes after the disconnect, with the warning 60 seconds before that, under the same guards. It stays open for good once you run a command in it, and a window you opened yourself is never closed, even if an AI used it for a while.
-
-A console that closes itself leaves a note, and the AI's next tool call reports it: `Console #N was closed: it closed itself after 10 min without use …`. A console that disappeared any other way (its window closed, its process ended) is reported too, without the reason. Either way the line says what else went with it: jobs the console was running end with the console, while a process started with `Start-Process` keeps running.
-
-### Several AI sessions on one machine
-
-Each MCP client session runs its own proxy, and a proxy sees only the consoles it started or claimed: a console's pipe is named after the proxy that owns it, so two sessions (say two Claude Code windows) never share, borrow or close each other's consoles, even on the same server registration. The only consoles up for grabs are *unowned* ones — a window you opened yourself and ran `Import-Module PowerShell.MCP` in, or one whose proxy has exited — and the first session that needs a console claims it (the window says so). Idle closing is per session as well: each session keeps its own most recently used console, and a session's consoles are never counted against another's.
+- Each MCP session sees only its own consoles; sessions never share or close each other's. Unowned consoles (one you opened with `Import-Module PowerShell.MCP`, or one whose proxy exited) are claimed by the first session that needs one.
+- When consoles pile up, one unused for 10 minutes warns and closes 60 seconds later. Never closed: each session's most recently used console, and a console that is busy, at a prompt, holding uncollected output or typed text, or running a background job. A console you opened yourself, or ran a command in, is never closed.
+- A console left behind by an ended session waits 10 minutes to be claimed. The next tool call reports any console that closed or disappeared, and what went with it.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `POWERSHELL_MCP_STANDBY_REAP_MINUTES` | `10` | Idle minutes before the warning; `0` turns closing off |
-| `POWERSHELL_MCP_STANDBY_REAP_GRACE_SECONDS` | `60` | Seconds between the warning and the close |
+| `POWERSHELL_MCP_STANDBY_REAP_MINUTES` | `10` | Idle minutes before the warning; `0` disables closing |
+| `POWERSHELL_MCP_STANDBY_REAP_GRACE_SECONDS` | `60` | Seconds from warning to close |
 
-Set these as **user or system environment variables** (Windows: System Properties → Environment Variables, or `setx`; macOS / Linux: your login shell's profile), not in your MCP client's `env` block. Each console is a new terminal window rather than a child of the proxy, so a variable set only for the proxy generally does not reach it.
+Set these as user or system environment variables, not in the MCP client's `env` block: consoles are separate terminal windows and do not inherit the proxy's environment.
 
 ### Timeout ceiling
 
-A blocking call is capped to what your MCP client will actually wait for: **170 seconds for Claude Code** and **50 seconds for any other client**. Nothing is lost when the cap is reached: the command keeps running, and its result arrives with the next tool call. If your client waits longer than 50 seconds, raise the cap with `POWERSHELL_MCP_TIMEOUT_CEILING` (seconds, at most 170). This one is read by the proxy, so set it in your MCP client's `env` block:
+A blocking call waits at most **170 s in Claude Code** and **50 s elsewhere**; past that the command keeps running and its result arrives with the next tool call. If your client waits longer, set `POWERSHELL_MCP_TIMEOUT_CEILING` (seconds, max 170) in the client's `env` block (Claude Code CLI: `claude mcp add -e POWERSHELL_MCP_TIMEOUT_CEILING=120 …`).
 
-```json
-"mcpServers": {
-  "pwsh": {
-    "command": "...PowerShell.MCP.Proxy.exe",
-    "env": { "POWERSHELL_MCP_TIMEOUT_CEILING": "120" }
-  }
-}
-```
+## Admin work on this machine
 
-With the Claude Code CLI, pass it as `-e POWERSHELL_MCP_TIMEOUT_CEILING=120` to `claude mcp add`; `Register-PwshToClaudeCode` and `Register-PwshToClaudeDesktop` keep it when they re-register.
+AI-started consoles are not elevated. For admin work:
 
----
+1. Close all PowerShell.MCP consoles (or ask the AI to close them with `close_console`).
+2. Open PowerShell 7 **as Administrator** (Linux / macOS: `sudo pwsh` in a terminal) and run `Import-Module PowerShell.MCP`.
 
-### Admin work on this machine
+The AI's next command goes to that console (on Windows, its title shows `Administrator:`). The first command stops once to say where the console is, and the AI re-issues it.
 
-The consoles the AI starts are not elevated. For admin work, open PowerShell 7 **as Administrator** and run `Import-Module PowerShell.MCP`; then close the AI's own consoles (or let the AI close them with `close_console`). With none of its own left, the next command goes to your elevated console, whose title shows `Administrator:`. That first command stops once to say where the console is; the AI re-issues it there. No remote control is involved.
+## Remote console (another machine)
 
-### Remote console (another machine)
+The AI can drive a console on another machine — a VM, a build box, a colleague's PC — with the person there watching. If that console is elevated, so is the AI: useful for auditing and hardening servers (see [Defend with AI](#defend-with-ai-network-security-audits)).
 
-The AI can also drive a console on **another machine** — a test VM, a build box, a colleague's PC with that colleague watching (they run `Enable-MCPRemoteControl` and read you the code, below). If that console is elevated, so is the AI, which makes it a practical tool for **defensive work**: auditing a server, reading its event logs, checking what it exposes, hardening it, with the person responsible watching every command.
-
-*"Audit this VM's security, read-only"* — against a lab VM in Azure, reached through a port its owner had opened to one address, one session went from the Security log (2,015 failed RDP logons in three hours, no account lockout configured) to the local accounts and password policy, the listening ports checked against what is reachable from outside, SQL Server's version and login mode, Defender, TLS settings and persistence points, and ended with a report the team that owns the VM template could act on, in about ten minutes. That kind of review is usually postponed; attackers' tooling is already automated, and the gap is on the defenders' side. For a guided audit with fixes that cannot lock you out, see [Defend with AI](#defend-with-ai-network-security-audits).
-
-On the remote machine, install PowerShell 7.4+ (`winget install Microsoft.PowerShell` on Windows; [other platforms](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)), then in PowerShell 7:
+On the remote machine, in PowerShell 7.4+:
 
 ```powershell
-Install-Module PowerShell.MCP -RequiredVersion <version>   # once; the version your own machine runs — ask the AI
+Install-Module PowerShell.MCP -RequiredVersion <version>   # once; must match your machine's version
 Import-Module PowerShell.MCP
-Enable-MCPRemoteControl -AllowFrom 192.168.0.10           # the AI's machine; TCP port 42777 by default, -Port to change
+Enable-MCPRemoteControl -AllowFrom 192.168.0.10           # the AI's machine; TCP 42777 (-Port to change)
 ```
 
-On Linux and macOS the remote console can be a plain SSH session — no desktop is needed on that side.
+After a confirmation, it prints a one-time pairing code (valid 10 minutes) and its addresses. Tell the AI: *"connect to the remote console at 192.168.0.20 with code 7Q4K-M2XP-H9RT"*. Remote commands behave like local ones (persistent session, `var1`–`var8`, `wait_for_completion`); prompts there show `[AI from <your host>]`. On Linux and macOS a plain SSH session works — no desktop needed.
 
-It asks you to confirm — saying which user the AI will act as, and whether elevated — then prints a pairing code (`XXXX-XXXX-XXXX`, good for one connection within 10 minutes), its host name and IP addresses. Give those to the AI on your machine — *"connect to the remote console at 192.168.0.20 with code 7Q4K-M2XP-H9RT"*. It calls `connect_remote_console`, then runs commands there with `execute_remote_command`: the same semantics as `execute_command` (a persistent session, `var1`–`var8`, the text-file cmdlets, `cancel_remote_command`; a command that outruns its timeout is collected by the same `wait_for_completion` as a local one, or arrives with the AI's next tool call), with that machine's paths, in a window the person there can see. A `Read-Host` is answered by that person. While the AI is connected, every prompt there starts with `[AI from <your host>]`.
+- **Behind NAT or a firewall:** the AI calls `accept_remote_console` and gives you `Enable-MCPRemoteControl -ConnectTo <your-host>:<port> -Code <code>` to run there. Only outbound is needed there; Windows asks once to allow the proxy through *your* firewall (a local VM's Hyper-V switch usually counts as public).
+- **Nothing installable (Windows, no internet):** the AI can give one line to paste into PowerShell 7 or Windows PowerShell. It fetches PowerShell.MCP — and a portable PowerShell 7 if needed — from your machine with hash checks; no admin rights or install required. It can optionally install them for later use, after asking. Needs a shared clipboard.
+- **Firewall:** listening mode needs inbound TCP 42777 on the remote machine; the AI can give a scoped `New-NetFirewallRule` line and its removal.
+- **Limits:** up to four remote consoles at once, one per machine; with more than one, each call names its console. Dropped connections reconnect. Codes work once; remote control stops after 10 minutes without a connection, or with `Disable-MCPRemoteControl`.
+- **Versions:** both machines must run the same PowerShell.MCP version — `Update-Module PowerShell.MCP` (or `Install-Module … -RequiredVersion <v> -Force`) on the older one, then restart the MCP client if it was yours.
+- **Security:** TLS with a per-session certificate and a handshake bound to the code; five forged attempts end remote control. Meant for a LAN or VPN, never the open Internet. Details: [SECURITY.md](SECURITY.md#remote-control).
 
-If the remote machine cannot take an inbound connection (NAT, a cloud NSG, a firewall you cannot open), turn it around: the AI calls `accept_remote_console` on **your** machine and gives you `Enable-MCPRemoteControl -ConnectTo <your-host>:<port> -Code <code>` to run there. Only an outbound connection is needed there; the inbound port is on your machine — Windows asks once whether to allow `PowerShell.MCP.Proxy.exe` through the firewall (private networks is enough for a machine on your LAN; a VM or Windows Sandbox on your own machine comes through a Hyper-V virtual switch, which Windows usually counts as public). Same pairing, roles swapped.
+**Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` (or pastes the line) and confirms; it refuses to start without an interactive console, and stays visible (`[AI from <host>]`, `Administrator:` in the title). **Paste a line only if you asked an AI for it yourself** — "paste this into PowerShell" is how lures start. For a colleague's PC, use listening mode so no line is handed over.
 
-If PowerShell 7 and PowerShell.MCP cannot be installed there the usual way — a Windows machine with no internet access, say — the same answer gives **one line to paste** there instead, into PowerShell 7 if it is installed, otherwise into Windows PowerShell. It fetches PowerShell.MCP (the same build as yours) and, if PowerShell 7.4+ is not installed, a portable PowerShell 7 from your machine, and checks their hashes — nothing to install, no admin right, no internet access needed on the remote side. Pasted into PowerShell 7.4+, remote control starts in that same window, so a console you opened as Administrator is the one the AI drives; pasted into Windows PowerShell (or an older PowerShell 7), it opens a PowerShell 7 window that dials in. Either way the console asks you to confirm before it dials. If you let the AI install PowerShell 7 and PowerShell.MCP there for later use (it asks you first: for this user, or for all users), the script lists what it will install and asks again; from then on the short `Enable-MCPRemoteControl` line is enough. The line is too long to type, so it needs a clipboard that reaches that machine.
+**Remote data can be attacker-written.** Event logs, file contents and web pages may contain text crafted as instructions, read by an AI that also has access to your machine. Pair only with machines you trust that far, ask for read-only work first, and run `Start-Transcript` there to keep a record.
 
-- Inbound TCP 42777 must be allowed through the remote machine's firewall (listening mode); if connecting fails, the AI gives you a `New-NetFirewallRule` line scoped to its address, and the line that removes it. In dial-out mode the port to open is on your machine instead.
-- One proxy at a time per console. One proxy drives up to four remote consoles at once, one per machine — say, to compare servers or to work on both ends of a connection. With more than one, every remote tool call names its console (`remote`: the host it was connected with, or `port N` for one that dialed in); a call that does not is refused, never sent to a guessed one. A dropped connection reconnects by itself. A pairing code works once: after `disconnect_remote_console` the console shows a new one, and remote control stops by itself if nobody connects within 10 minutes. `Disable-MCPRemoteControl` (or `Remove-Module`) ends it at any time.
-- A listening console ends remote control after five forged pairing attempts (a mistyped code does not count). A connection that takes the console's proof of the code and hangs up — a mistyped code on the AI's side, or someone collecting it to guess codes offline — is not counted, but the console shows its address (once per address and code; after three addresses, one line for the rest).
-- Security: TLS with a certificate made for the session and a handshake bound to that certificate and to the code. The code is short-lived on purpose: anyone who reaches the port can try codes offline. Meant for a LAN or VPN — do not expose the port to the Internet. What an attacker on the network can and cannot do: [SECURITY.md](SECURITY.md#remote-control).
-- Both machines must run the same PowerShell.MCP version. If they differ — and neither may be the latest — run `Update-Module PowerShell.MCP` on both, or on the older one with `-RequiredVersion <the newer one's version>`. If `Update-Module` refuses (a module not installed with `Install-Module`, such as one the one-line bootstrap installed), use `Install-Module PowerShell.MCP -RequiredVersion <that version> -Force`. After updating your own machine, restart the MCP client.
-
-**Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` or pastes the line and answers Yes. It refuses to start where nobody could answer (a service or scheduled task, a script without a console, `-NonInteractive`; the prompt of your own SSH login counts as a console, for machines with no desktop), shows `[AI from <host>]` on every prompt and `Administrator:` in the title of an elevated window, and ends with `Disable-MCPRemoteControl` or by itself once no AI has been connected for 10 minutes (what the AI changed meanwhile stays, as with any admin work). Intrusion tooling is built to be the opposite: hidden and persistent. Like any tool, it cannot stop code already running on a machine from starting it out of sight — but it gives such code nothing it did not have, and [SECURITY.md](SECURITY.md#remote-control) lists how to spot it. **Paste a line only if you asked an AI for it yourself**: "paste this into PowerShell" is also how lures begin, and the console's question names the machine it will connect to. To help on a colleague's PC, use the listening mode, so no line is handed over.
-
-**Data on the remote machine can be written by an attacker.** Event logs, user names in failed-logon records, file contents, web pages: when the AI reads them, it reads text that someone else chose, possibly crafted to look like instructions — with whatever rights that console has, and with the AI's access to *your* machine as well. The server tells the AI to treat it as data and to connect only to hosts and codes you typed. Pair only with machines you trust that far; for audits and incident response, ask for **read-only** work first and have the AI confirm before any change; to keep a record, run `Start-Transcript` in the remote console before pairing (see [Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
-
-## First-Time Demo
-
-Experience PowerShell.MCP's capabilities:
+## Try it
 
 - "Open pwsh and show what it can do in a colorful, dynamic, and fun demo"
 - "Try out different styles of notifications using the BurntToast module"
 - "Automate Notepad: type text and smoothly move the window in a circle"
-- "How does it feel now that you have a tool like PowerShell.MCP?"
 
-After trying these demos, try the built-in prompts below or ask AI to explain any command.
+Two built-in prompts (slash commands in Claude Code; the argument is optional):
 
-## Built-in Prompts
-
-PowerShell.MCP includes 2 prompts that teach AI workflows it does not otherwise know (a companion module, and the built-in speech synthesizer). In Claude Code, run them as slash commands, with what you want as the argument:
-
-```text
-/pwsh:show_interactive_map hot springs in Kanto
-/pwsh:foreign_language_dictation English, short sentences, normal speed
-```
-
-The argument is optional; without it, AI asks what you want. Other MCP clients offer them in their prompt list, if the client shows MCP prompts.
-
----
-
-### 🗣️ Foreign Language Dictation Training
-**Best for:** Improving listening skills in foreign languages
-
-Plays sentences aloud from the PowerShell console and checks what you type back. Windows only (uses the built-in speech synthesizer).
-
-**Examples:** `/pwsh:foreign_language_dictation English dictation at beginner level` • `/pwsh:foreign_language_dictation Japanese conversation at the zoo`
-
----
-
-### 🗺️ Show Interactive Map
-**Best for:** Visualizing geographic data or locations
-
-Generates interactive HTML maps with markers, descriptions, and optional 3D display using [PowerShell.Map](https://github.com/yotsuda/PowerShell.Map) module.
-
-**Examples:** `/pwsh:show_interactive_map major Roman battles in chronological order` • `/pwsh:show_interactive_map hot springs in Japan`
+- `/pwsh:foreign_language_dictation English, short sentences, normal speed` — reads sentences aloud and checks what you type (Windows only).
+- `/pwsh:show_interactive_map major Roman battles in chronological order` — interactive HTML maps with [PowerShell.Map](https://github.com/yotsuda/PowerShell.Map).
 
 <div align="center">
   <table cellspacing="0" cellpadding="0" border="0" width="100%">
@@ -481,56 +236,27 @@ Generates interactive HTML maps with markers, descriptions, and optional 3D disp
   </table>
 </div>
 
----
+## Platform notes and limitations
 
-## Platform Notes
+- **Linux:** needs a GUI desktop and a supported terminal (gnome-terminal, konsole, xfce4-terminal, xterm, lxterminal, mate-terminal, terminator, tilix, alacritty, kitty); without one the console runs headless.
+- **Linux / macOS:** PSReadLine is replaced by a simpler built-in line editor (PSReadLine blocks the timer that runs AI commands), and AI commands are not added to history. macOS uses Terminal.app.
+- **Cancellation:** `cancel` stops pipelines and sends Ctrl+C; a command stuck in a non-interruptible call or at an interactive prompt needs `close_console`.
+- **Privacy:** commands you type yourself are not visible to the AI.
+- **Colors:** some CLI tools lose color output (git keeps it).
+- **Programs that read the console at startup (Windows):** rare (LilyPond is one) — they hang until a key is pressed. Run them as `cmd /d /s /c "<command> < NUL > out.log 2>&1"`. See [docs/Console-Input-Starvation.md](docs/Console-Input-Starvation.md).
 
-### Windows
-- PSReadLine module is automatically loaded for enhanced console experience
-- Full color support for PowerShell output
+## Enterprise deployment (WDAC / Device Guard)
 
-### Linux
-- A GUI desktop environment (GNOME, KDE, XFCE, etc.) is needed to see and type into the console. Without a supported terminal emulator the console still starts, headless: the AI can run commands, but there is no window to watch or type into.
-- Supported terminal emulators: gnome-terminal, konsole, xfce4-terminal, xterm, lxterminal, mate-terminal, terminator, tilix, alacritty, kitty
-- PSReadLine is replaced by a simpler line editor of the module's own: on Linux, PSReadLine keeps the timer that runs AI commands from firing while the prompt waits for input
-
-### macOS
-- Works with Terminal.app (default)
-- PSReadLine is replaced by a simpler line editor of the module's own, for the same reason as on Linux
-- Both Apple Silicon (M1/M2/M3/M4) and Intel Macs are supported
-
----
-
-## Limitations
-
-- **AI Command Cancellation**: AI can interrupt a running command with the `cancel` tool — it stops a runaway/long-running PowerShell pipeline and sends Ctrl+C to a native CLI. A command stuck in a non-interruptible blocking call, or a console paused at an interactive prompt, can't be stopped that way — abandon it with the `close_console` tool.
-- **User Command Privacy**: Commands you execute are not visible to AI assistants.
-- **External Command Colors**: Color output from some CLI tools may not be preserved (git colors are supported).
-- **Command History**: On Windows, AI-executed commands of one or two lines are added to the console's PSReadLine history; longer multi-line commands are intentionally excluded to avoid history bloat. On Linux and macOS, AI-executed commands are not added to history.
-- **Programs that read the console at startup (Windows)**: Windows lets only one reader at a time take from a console's input buffer, and the prompt holds one for as long as an AI command runs. A program that probes console input while starting up therefore queues behind the prompt and does not return until a key is pressed. It is rare — common CLIs (git, node, npm, python, dotnet, curl, ssh) are unaffected; LilyPond is a known case. Run such a program detached with its standard input from `NUL`: `cmd /d /s /c "<command> < NUL > out.log 2>&1"`. On a timeout the console names the stalled process and repeats this form. See [docs/Console-Input-Starvation.md](docs/Console-Input-Starvation.md).
-
-## Enterprise Deployment (WDAC / Device Guard)
-
-Starting with v1.7.7, `PowerShell.MCP.dll` and `PowerShell.MCP.Proxy.exe`
-(win-x64) are Authenticode-signed with the **yotsuda code-signing
-certificate**, shared across all yotsuda OSS projects.
-
-For installation instructions (personal PC, AD GPO deployment, WDAC policy
-configuration) and the public certificate file itself, see:
-
-**→ [github.com/yotsuda/code-signing](https://github.com/yotsuda/code-signing)**
-
-The certificate thumbprint is also published in each GitHub release's notes.
+Since v1.7.7, `PowerShell.MCP.dll` and `PowerShell.MCP.Proxy.exe` (win-x64) are Authenticode-signed with the yotsuda code-signing certificate. Certificate, GPO and WDAC instructions: **[github.com/yotsuda/code-signing](https://github.com/yotsuda/code-signing)**; the thumbprint is in each release's notes.
 
 ```powershell
-# Quick verify on installed binaries
-Get-AuthenticodeSignature (Get-MCPProxyPath)   # the proxy of the version this window loaded
+Get-AuthenticodeSignature (Get-MCPProxyPath)
 ```
 
 ## Disclaimer
 
 This software is provided "AS IS" without warranty of any kind, either expressed or implied.
-The author assumes no responsibility for any damages arising from the use of this software.
+The author assumes no responsibility for any damages arising from the use of this software. For enterprise use, ensure compliance with your organization's security policies.
 
 ## License
 
@@ -539,7 +265,3 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Author
 
 Yoshifumi Tsuda
-
----
-
-**For enterprise use, ensure compliance with your organization's security policies.**
