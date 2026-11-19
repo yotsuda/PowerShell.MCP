@@ -75,7 +75,10 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     {
         var name = _sessionManager.GetConsoleDisplayName(pid);
         _sessionManager.ClearDeadPipe(agentId, ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pid));
-        return "  - " + ClosedConsoleNotices.Describe(name, reason, reason == null && IsProcessAlive(pid));
+        // No "  - ": these lines are joined with no heading above them, so a
+        // list marker only pushed the ⚠ off the start of the response (seen
+        // 2026-11-19); wait_for_completion's own line never had one.
+        return ClosedConsoleNotices.Describe(name, reason, reason == null && IsProcessAlive(pid));
     }
 
     private static bool IsProcessAlive(int pid) => ClosedConsoleNotices.IsProcessAlive(pid);
@@ -113,7 +116,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
         var reason = pid.HasValue ? ClosedConsoleNotices.TakeReason(_sessionManager.ProxyPid, agentId, pid.Value) : null;
         var alive = reason == null && pid.HasValue && IsProcessAlive(pid.Value);
-        return "  - " + ClosedConsoleNotices.Describe(name, reason, alive);
+        return ClosedConsoleNotices.Describe(name, reason, alive);
     }
 
     /// <inheritdoc />

@@ -299,7 +299,13 @@ public class RemoteConsoleTools
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            return (null, PipelineHelper.JoinBlocks(tag, $"⧗ Not reachable right now: {ex.Message} A command that was running continues there; its result is collected once the console is back."));
+            // The error may already say what becomes of the running command
+            // (a console that has not redialed yet does): said twice, it read
+            // as two different promises (seen 2026-11-19).
+            var note = ex.Message.Contains(RemoteConsoleClient.CommandContinuesNote, StringComparison.Ordinal)
+                ? ""
+                : $" {RemoteConsoleClient.CommandContinuesNote}; its result is collected once the console is back.";
+            return (null, PipelineHelper.JoinBlocks(tag, $"⧗ Not reachable right now: {ex.Message}{note}"));
         }
         if (status == null)
             return (null, PipelineHelper.JoinBlocks(tag, "The remote console sent no status; its result is collected on a later call."));

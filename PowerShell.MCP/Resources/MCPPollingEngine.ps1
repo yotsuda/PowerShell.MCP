@@ -360,7 +360,9 @@ if (-not (Test-Path Variable:global:McpTimer)) {
                             # window and its farewell line are about to vanish, and
                             # the AI otherwise learns nothing — it kept waiting for
                             # a job this console had taken down with it.
-                            $idleMin = [int][Math]::Round([PowerShell.MCP.Services.ConsoleLiveness]::IdleSeconds / 60)
+                            # The same clock the close was decided on (it restarts
+                            # at text last seen half-typed at the prompt).
+                            $idleMin = [int][Math]::Round([PowerShell.MCP.Services.ConsoleLiveness]::ReapIdleSeconds / 60)
                             [PowerShell.MCP.Services.ConsoleLiveness]::RecordSelfClose("closed itself after $idleMin min without use (idle standby, not this session's most recently used console; a ${global:McpReapGraceSec}s warning was shown in its window)")
                             [Environment]::Exit(0)
                         }

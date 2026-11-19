@@ -715,7 +715,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         AgentIdBox? agentIdBox,
         System.Diagnostics.Stopwatch callClock,
         CancellationToken cancellationToken,
-        CallOutcome? outcome = null)
+        CallOutcome? outcome = null,
+        bool autoRouteRetry = false)
     {
         // Clamp to the ceiling in force for the connected client (see
         // TimeoutCeiling): blocking past what the client will wait for turns
@@ -736,12 +737,16 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // puts in front, once, the earlier result drained from this console
         // before the location check (see below): that result is older than
         // anything this call produces, so it comes first, whichever branch returns.
+        // The busy auto-route's retry (autoRouteRetry) leaves the 📣 reports to
+        // the outer call, which puts its own blocks in front of this answer: taken
+        // here, the 📣 line landed in the middle of the response (seen 2026-11-19).
         string? drainedBeforeRun = null;
         string Wrap(string r)
         {
             var earlier = drainedBeforeRun;
             drainedBeforeRun = null;
-            return PrependAgentIdNoticeIfNew(PipelineHelper.JoinBlocks(earlier, r), isNewlyAllocated, agentId);
+            var body = PipelineHelper.JoinBlocks(earlier, r);
+            return autoRouteRetry ? body : PrependAgentIdNoticeIfNew(body, isNewlyAllocated, agentId);
         }
         if (resolveError != null)
             return Wrap(resolveError);
@@ -1021,7 +1026,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                         agentIdBox: null,
                                         callClock: callClock,
                                         cancellationToken: cancellationToken,
-                                        outcome: retryOutcome);
+                                        outcome: retryOutcome,
+                                        autoRouteRetry: true);
                                     if (outcome != null && retryOutcome.NotExecuted) outcome.NotExecuted = true;
 
                                     // Surface the auto-route notice + closed-console
@@ -1216,7 +1222,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         {
             Console.Error.WriteLine($"[ERROR] ExecuteCommand failed: {ex.Message}");
             // Detect and report closed consoles (the failed pipe + any others)
-            var failedLine = "  - " + DescribeClosedPipe(agentId, readyPipeName);
+            var failedLine = DescribeClosedPipe(agentId, readyPipeName);
             sessionManager.ClearDeadPipe(agentId, readyPipeName);
             var otherClosed = pipeDiscoveryService.DetectClosedConsoles(agentId);
             var closedMessages = new List<string> { failedLine };

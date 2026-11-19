@@ -171,6 +171,13 @@ public sealed class RemoteConsoleClient : IDisposable
     private static string Minutes => $"{CodeLifetime.TotalMinutes:0} minutes";
 
     /// <summary>
+    /// What a message about a lost connection says of the command that was
+    /// running. The result harvest adds the same note to a "not reachable"
+    /// status unless the error already carries it.
+    /// </summary>
+    internal const string CommandContinuesNote = "A command that was running continues there";
+
+    /// <summary>
     /// A call to a console that has not dialed in yet. It used to repeat all of
     /// accept_remote_console's instructions, the line to paste included, in an
     /// answer to what was only "is it there yet?" (seen 2026-11-19); the line is
@@ -341,7 +348,7 @@ public sealed class RemoteConsoleClient : IDisposable
                             // code it used is spent, so the instructions would only
                             // mislead); one that never came needs the line.
                             throw new InvalidOperationException(_peer != null
-                                ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. A command that was running continues there; wait_for_completion collects its output once it is back."
+                                ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. {CommandContinuesNote}; wait_for_completion collects its output once it is back."
                                 : NotDialedInYet());
                         }
                     }

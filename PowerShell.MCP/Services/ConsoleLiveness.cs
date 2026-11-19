@@ -114,6 +114,31 @@ public static class ConsoleLiveness
         }
     }
 
+    // When EvaluateReap last saw text half-typed at the prompt. Someone was at
+    // this window then, so the idle clock for closing it restarts there: the
+    // console closes a full warn period after the text is gone, not at once
+    // because the last command was long ago (seen 2026-11-19: Esc on "Get-" left
+    // 3 min after the last command, and the console closed within ~10 s).
+    // Local only, like the typed-text veto itself: the keeper election
+    // (IsKeeper, the markers) keeps using _lastActivityTicks, or a console with
+    // text once typed in it would count itself the newest and never close.
+    private static long _typedTextLastSeenTicks;
+
+    /// <summary>
+    /// Seconds the console has gone unused for closing it: since the last
+    /// recorded activity or the last time text was seen half-typed at its prompt,
+    /// whichever is later.
+    /// </summary>
+    public static double ReapIdleSeconds
+    {
+        get
+        {
+            long ticks;
+            lock (_lock) { ticks = Math.Max(_lastActivityTicks, _typedTextLastSeenTicks); }
+            return (NowTicks() - ticks) / (double)TimeSpan.TicksPerSecond;
+        }
+    }
+
     /// <summary>True while a proxy session owns this console.</summary>
     public static bool IsOwned { get { lock (_lock) { return _proxyPid.HasValue; } } }
 
@@ -311,7 +336,11 @@ public static class ConsoleLiveness
         // prompt, or a background job still running all keep it alive.
         if ((!owned && !IsAbandoned) || !runspaceAvailable || !statusStandby || typedTextPresent || jobsRunning)
         {
-            lock (_lock) { _warned = false; }
+            lock (_lock)
+            {
+                _warned = false;
+                if (typedTextPresent) _typedTextLastSeenTicks = NowTicks();
+            }
             return ReapAction.None;
         }
 
@@ -320,7 +349,7 @@ public static class ConsoleLiveness
         // An owned console warns at warnSeconds and closes one grace period later.
         // (A grace longer than warnSeconds warns at once and closes after the grace.)
         int warnAfter = owned ? warnSeconds : Math.Max(0, warnSeconds - graceSeconds);
-        if (IdleSeconds < warnAfter)
+        if (ReapIdleSeconds < warnAfter)
         {
             lock (_lock) { _warned = false; }
             return ReapAction.None;
@@ -560,6 +589,7 @@ public static class ConsoleLiveness
             _warnedAtTicks = 0;
             _typedTextPresent = false;
             _typedTextSampledAtTicks = 0;
+            _typedTextLastSeenTicks = 0;
             _launchedByProxy = false;
             _hostPromptSinceRelease = false;
         }

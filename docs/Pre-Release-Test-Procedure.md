@@ -93,7 +93,7 @@ Repeat 1.1, but after console B's command type `Get-` (no Enter) in console A's 
 (Before this release the second call always started a new console: the first console's heartbeat was 12 s old and it answered "busy (user command)".)
 
 ### 2.2 Variation with a user command
-👤 In the AI's console window, type `Start-Sleep 20` and press Enter.
+👤 In the AI's console window, type `Start-Sleep 20` and press Enter. **Wait at least 10 seconds** before asking for the next step: the proxy reads a console as running a user command only once its heartbeat is 10 s old. Asked sooner, the console still looks free, the command is sent to it, and the call waits out those 10 s before it auto-routes (`ℹ️ Auto-routed to PID #<B> <name> … (source console busy with user_command). Pipeline executed automatically`) — a correct result by the other path, seen 2026-11-19; the 📣 line for the new console must then still come first.
 🤖 `execute_command('"during user command"')`
 ✅ A new console starts (or an existing standby one is used), and the same line says why:
 `ℹ️ Started new console PID #<B> <name> with PowerShell.MCP module imported. PID #<A> <name> was busy (user command, …s) and stays with this session.`
