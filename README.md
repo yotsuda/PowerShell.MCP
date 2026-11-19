@@ -322,7 +322,7 @@ A console the proxy opens should not take the keyboard focus from what you are t
 
 | Value | Window | Focus |
 |---|---|---|
-| `auto` (default) | When Windows Terminal is your default terminal (the default on Windows 11), a new Windows Terminal window opened through `wt.exe` without activating it; otherwise a console window as before | Kept while another application is in front. When a Windows Terminal window is in front — for example when your AI client runs in Windows Terminal — the new window still takes it. |
+| `auto` (default) | When Windows Terminal is your default terminal (the default on Windows 11), a new Windows Terminal window opened through `wt.exe` without activating it; otherwise a console window as before | Kept while another application is in front, on many systems but not all: on some (reported on Windows 11 build 26200 with Windows Terminal 1.24 and 1.25) Windows Terminal activates the new window anyway. When a Windows Terminal window is in front — for example when your AI client runs in Windows Terminal — the new window always takes it. If either bothers you, use `minimized`. |
 | `minimized` | A minimized classic console window (conhost), not a Windows Terminal window: no tabs, no Windows Terminal settings | Never taken, whatever is in front. Click the console on the taskbar to watch it. |
 | `handoff` | Exactly as before 1.17.0: Windows decides, usually a Windows Terminal window | Taken when the window opens |
 
