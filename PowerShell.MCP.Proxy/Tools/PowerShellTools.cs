@@ -1491,7 +1491,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
 
 📌 Calling this first is optional — execute_command auto-starts or reuses a console as needed. Call it explicitly to pre-warm a console at a specific start_location, to show a startup banner, or (with reason) to force an additional console.
 
-🔐 Consoles started here are never elevated. For admin work on this machine, ask the user to open PowerShell 7 as Administrator and run Import-Module PowerShell.MCP, then close_console your own consoles: with none of yours free, the next execute_command goes to that console (its title shows 'Administrator:').")]
+🔐 Consoles started here are never elevated. For admin work on this machine, first close_console all your own consoles, then ask the user to open PowerShell 7 as Administrator and run Import-Module PowerShell.MCP: with none of yours free, the next execute_command goes to that console (its title shows 'Administrator:').")]
     public static async Task<string> StartConsole(
         IPowerShellService powerShellService,
         IPipeDiscoveryService pipeDiscoveryService,
