@@ -9,6 +9,13 @@ on:
   # nothing: the PSGallery and GitHub Release steps run only for a tag.
   workflow_dispatch:
 
+# Read-only by default (CodeQL actions/missing-workflow-permissions): the
+# proxy job only checks out, builds and uploads an artifact, which needs no
+# token write. The release job, which creates the GitHub Release, asks for
+# contents: write itself.
+permissions:
+  contents: read
+
 jobs:
   # The proxy is Native AOT, which does not compile across operating systems:
   # each RID is published on its own OS and handed to the release job.
