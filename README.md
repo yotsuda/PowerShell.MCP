@@ -69,6 +69,27 @@ $sb = [System.Text.StringBuilder]::new(256); $len = 256
 
 PowerShell.MCP complements your existing MCP setup by providing a flexible, general-purpose foundation.
 
+## Defend with AI: network security audits
+
+Attacks that use AI to find and work through weak spots are now reported week after week, and they are not aimed only at large companies. An attacker needs one opening; a defender has to close all of them — the careful, repetitive checking that usually gets postponed. Put the same kind of help on the defending side.
+
+**[powershell-mcp-security](https://github.com/yotsuda/powershell-mcp-security)** is a Claude Code plugin that has the AI audit and harden a Windows, Linux or macOS machine through PowerShell.MCP — this one, or a server or VM reached through [remote control](#remote-console-another-machine) — with you watching every command:
+
+- **Read-only first**: the settings that are actually in effect, not only config files, checked against what the network sees from outside.
+- **Fixes only with your approval**, in an order that cannot lock you out, verified from outside and again after a reboot, where settings quietly revert.
+- **No keys or passwords for the AI**: a person at that machine starts remote control, and `sudo` passwords are typed at its console.
+
+Its helper module **[NetworkSecurityAudit](https://www.powershellgallery.com/packages/NetworkSecurityAudit)** holds the checks that are easy to get wrong by hand: TCP probes that tell closed from filtered (`Test-NsaTcpPort`), listening ports with their process and service (`Get-NsaListeningPort`), Windows firewall rules open to any address (`Find-NsaPermissiveFirewallRule`), effective Linux `sysctl` values and SSH logins. It only reads, and works on its own too (`Install-Module NetworkSecurityAudit`); the AI asks before installing it on a machine it audits.
+
+```text
+/plugin marketplace add yotsuda/powershell-mcp-plugins
+/plugin install powershell-mcp-security@powershell-mcp
+```
+
+Then ask: *"Audit the network security of this server. Read-only first, and check what is visible from outside."* A walkthrough, in Japanese: [リモート PC のセキュリティ監査と対策を、AI に任せる方法](https://qiita.com/ytsuda/items/4c0dddb76bd462f987df).
+
+**Help collect what defenders know.** The repository is meant to gather network-audit know-how in one place: checks that catch real misconfigurations, fixes that cannot lock anyone out, settings that are silently overridden. When an audit shows the skill was wrong or missing something, the AI offers to draft an issue for it — you review the text, with real addresses and names left out, before anything is posted. Pull requests for a new check or another OS are welcome as well ([CONTRIBUTING](https://github.com/yotsuda/powershell-mcp-security/blob/main/CONTRIBUTING.md)).
+
 ## What Makes It Powerful
 
 **🖥️ Multi-Client Architecture**
@@ -374,7 +395,7 @@ The consoles the AI starts are not elevated. For admin work, open PowerShell 7 *
 
 The AI can also drive a console on **another machine** — a test VM, a build box, a colleague's PC with that colleague watching (they run `Enable-MCPRemoteControl` and read you the code, below). If that console is elevated, so is the AI, which makes it a practical tool for **defensive work**: auditing a server, reading its event logs, checking what it exposes, hardening it, with the person responsible watching every command.
 
-*"Audit this VM's security, read-only"* — against a lab VM in Azure, reached through a port its owner had opened to one address, one session went from the Security log (2,015 failed RDP logons in three hours, no account lockout configured) to the local accounts and password policy, the listening ports checked against what is reachable from outside, SQL Server's version and login mode, Defender, TLS settings and persistence points, and ended with a report the team that owns the VM template could act on, in about ten minutes. That kind of review is usually postponed; attackers' tooling is already automated, and the gap is on the defenders' side.
+*"Audit this VM's security, read-only"* — against a lab VM in Azure, reached through a port its owner had opened to one address, one session went from the Security log (2,015 failed RDP logons in three hours, no account lockout configured) to the local accounts and password policy, the listening ports checked against what is reachable from outside, SQL Server's version and login mode, Defender, TLS settings and persistence points, and ended with a report the team that owns the VM template could act on, in about ten minutes. That kind of review is usually postponed; attackers' tooling is already automated, and the gap is on the defenders' side. For a guided audit with fixes that cannot lock you out, see [Defend with AI](#defend-with-ai-network-security-audits).
 
 On the remote machine, install PowerShell 7.4+ (`winget install Microsoft.PowerShell` on Windows; [other platforms](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)), then in PowerShell 7:
 
