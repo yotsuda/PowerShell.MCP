@@ -17,6 +17,11 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.18.0
+
+## New Features
+- **`Register-PwshToClaudeCode` and `Register-PwshToClaudeDesktop` set the proxy flags: `-ConsoleLaunch` and `-NoProfile`.** Both cmdlets already kept the arguments an entry had when they repointed it at a new proxy, but adding one meant writing it by hand — `claude mcp remove` and `claude mcp add` again (which drops any `-e` settings unless retyped), or editing the JSON. Now `Register-PwshToClaudeCode -ConsoleLaunch Minimized` (or `Register-PwshToClaudeDesktop -ConsoleLaunch Minimized`) sets `--console-launch minimized` ([#59](https://github.com/yotsuda/PowerShell.MCP/issues/59)) and keeps the entry's other arguments and environment variables; `-ConsoleLaunch Auto` removes the option, and `-NoProfile` / `-NoProfile:$false` add and remove `--no-profile`. A parameter not given leaves its flag as it is, so a plain re-registration after an update keeps what was set.
+
 # Version: 1.17.0
 
 ## Highlights

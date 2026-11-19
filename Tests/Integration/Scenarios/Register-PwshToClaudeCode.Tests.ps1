@@ -32,7 +32,16 @@ Describe "Register-PwshToClaudeCode" {
 
         if (-not $functionAst) { throw 'Register-PwshToClaudeCode was not found in the module.' }
 
+        # The module-private helper that applies -ConsoleLaunch / -NoProfile.
+        $helperAst = $moduleAst.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -eq 'Set-ProxyArgument'
+        }, $true) | Select-Object -First 1
+        if (-not $helperAst) { throw 'Set-ProxyArgument was not found in the module.' }
+
         . ([scriptblock]::Create($functionAst.Extent.Text))
+        . ([scriptblock]::Create($helperAst.Extent.Text))
         function Get-MCPProxyPath { 'C:\NEW\PowerShell.MCP.Proxy.exe' }
 
         # Stands in for the prompt about the built-in shell tools: answers with
@@ -215,6 +224,73 @@ Describe "Register-PwshToClaudeCode" {
 
             (Get-McpEntry User pwsh).Env['POWERSHELL_MCP_TIMEOUT_CEILING'] | Should -BeExactly '120'
             (Get-McpEntry User pwsh).Env['FOO'] | Should -BeExactly 'bar'
+        }
+    }
+
+    Context "proxy flags given as parameters" {
+        It "adds --console-launch to a new entry" {
+            Register-PwshToClaudeCode -ConsoleLaunch Minimized -KeepBuiltInShellTools 6>$null
+
+            (Get-McpEntry User pwsh).Args | Should -Be @('--console-launch', 'minimized')
+        }
+
+        It "adds it to an existing entry and keeps the other flags and environment" {
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe' -ProxyArgs '--no-profile' -Env @{ KEEP = '1' }
+
+            Register-PwshToClaudeCode -ConsoleLaunch Minimized -KeepBuiltInShellTools 6>$null
+
+            $entry = Get-McpEntry User pwsh
+            $entry.Command | Should -BeExactly 'C:\NEW\PowerShell.MCP.Proxy.exe'
+            $entry.Args | Should -Be @('--no-profile', '--console-launch', 'minimized')
+            $entry.Env['KEEP'] | Should -BeExactly '1'
+        }
+
+        It "replaces a value already set, in either form" {
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe' -ProxyArgs '--console-launch', 'handoff', '--console-launch=auto'
+
+            Register-PwshToClaudeCode -ConsoleLaunch Minimized -KeepBuiltInShellTools 6>$null
+
+            (Get-McpEntry User pwsh).Args | Should -Be @('--console-launch', 'minimized')
+        }
+
+        It "-ConsoleLaunch Auto removes the option" {
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe' -ProxyArgs '--console-launch', 'minimized', '--no-profile'
+
+            Register-PwshToClaudeCode -ConsoleLaunch Auto -KeepBuiltInShellTools 6>$null
+
+            (Get-McpEntry User pwsh).Args | Should -Be @('--no-profile')
+        }
+
+        It "-NoProfile adds --no-profile once, and -NoProfile:`$false removes it" {
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe' -ProxyArgs '--no-profile'
+            Register-PwshToClaudeCode -NoProfile -KeepBuiltInShellTools 6>$null
+            (Get-McpEntry User pwsh).Args | Should -Be @('--no-profile')
+
+            Register-PwshToClaudeCode -NoProfile:$false -KeepBuiltInShellTools 6>$null
+            @((Get-McpEntry User pwsh).Args).Count | Should -Be 0
+        }
+
+        It "a later plain re-registration keeps the option" {
+            Register-PwshToClaudeCode -ConsoleLaunch Minimized -KeepBuiltInShellTools 6>$null
+
+            Register-PwshToClaudeCode -KeepBuiltInShellTools 6>$null
+
+            (Get-McpEntry User pwsh).Args | Should -Be @('--console-launch', 'minimized')
+        }
+
+        It "rejects an unknown value" {
+            { Register-PwshToClaudeCode -ConsoleLaunch Hidden 6>$null } | Should -Throw
+        }
+
+        It "restores the previous entry with its own flags when the add fails" {
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe' -ProxyArgs '--no-profile'
+            $global:ShimFailAddCommand = 'C:\NEW\PowerShell.MCP.Proxy.exe'
+
+            Register-PwshToClaudeCode -ConsoleLaunch Minimized -ErrorAction SilentlyContinue 6>$null
+
+            $entry = Get-McpEntry User pwsh
+            $entry.Command | Should -BeExactly 'C:\OLD\PowerShell.MCP.Proxy.exe'
+            $entry.Args | Should -Be @('--no-profile')
         }
     }
 

@@ -20,19 +20,19 @@ Registers PowerShell.MCP as an MCP server in Claude Code.
 ### Ask (Default)
 
 ```
-Register-PwshToClaudeCode [<CommonParameters>]
+Register-PwshToClaudeCode [-ConsoleLaunch <string>] [-NoProfile] [<CommonParameters>]
 ```
 
 ### Disable
 
 ```
-Register-PwshToClaudeCode -DisableBuiltInShellTools [<CommonParameters>]
+Register-PwshToClaudeCode -DisableBuiltInShellTools [-ConsoleLaunch <string>] [-NoProfile] [<CommonParameters>]
 ```
 
 ### Keep
 
 ```
-Register-PwshToClaudeCode -KeepBuiltInShellTools [<CommonParameters>]
+Register-PwshToClaudeCode -KeepBuiltInShellTools [-ConsoleLaunch <string>] [-NoProfile] [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -49,6 +49,8 @@ already registered.
 The arguments and environment variables the old entry carried (proxy flags such as --no-profile,
 settings such as POWERSHELL_MCP_TIMEOUT_CEILING) are carried over to the new one, and if the new
 entry cannot be added the old one is put back.
+-ConsoleLaunch and -NoProfile set those two proxy flags on the new entry; a parameter that is not
+given leaves its flag as it is.
 
 An entry at local or project scope for the current directory takes precedence over the user-scope
 entry there. It is left alone, and a warning names it.
@@ -85,7 +87,41 @@ Register-PwshToClaudeCode
 
 Points Claude Code at the proxy of the version just installed.
 
+### EXAMPLE 4
+
+Register-PwshToClaudeCode -ConsoleLaunch Minimized
+
+Registers the server with consoles opening minimized on Windows, without taking the keyboard focus.
+Later re-registrations keep the option.
+
 ## PARAMETERS
+
+### -ConsoleLaunch
+
+Sets the proxy's --console-launch option: how consoles open on Windows.
+Minimized opens a minimized classic console window that never takes the keyboard focus; Handoff is
+the launch before 1.17.0; Auto, the default, removes the option.
+Not given, the entry keeps what it has. No effect on macOS and Linux.
+
+```yaml
+Type: System.String
+DefaultValue: ''
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: (All)
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues:
+- Auto
+- Handoff
+- Minimized
+HelpMessage: ''
+```
 
 ### -DisableBuiltInShellTools
 
@@ -122,6 +158,28 @@ SupportsWildcards: false
 Aliases: []
 ParameterSets:
 - Name: Keep
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
+
+### -NoProfile
+
+Adds the proxy's --no-profile option, so consoles start without your $PROFILE.
+-NoProfile:$false removes it. Not given, the entry keeps what it has.
+
+```yaml
+Type: System.Management.Automation.SwitchParameter
+DefaultValue: False
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: (All)
   Position: Named
   IsRequired: false
   ValueFromPipeline: false
