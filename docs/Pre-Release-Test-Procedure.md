@@ -180,7 +180,7 @@ its start and end in UTC, since the machines' time zones differ:
 ✅ The starts are about 2 s apart (the timeout), not at the same instant: Claude Code makes a turn's calls to one server one after another — its MCP log (`%LOCALAPPDATA%\claude-cli-nodejs\Cache\<project>\mcp-logs-pwsh\*.jsonl`) shows each `Calling MCP tool` only after the previous `completed` (seen 2026-11-19). The commands still run at the same time, because each call returns at its timeout. Not a proxy fault; judge the order by the end times.
 🤖 `wait_for_completion(timeout_seconds=60)` four times.
 ✅ They come back in the order they end — A, local, B, C — each exactly once, under its own tag (the local one untagged), with the consoles not yet done listed as still running and their elapsed time.
-✅ A completed result is not followed by `Use wait_for_completion tool to wait and retrieve the result.` (Seen 2026-11-19 after every result but the last, while other consoles were still running: a stale hint, to fix.)
+✅ The consoles still running come first, the results after them: a local one is followed by `The consoles above are still running; wait_for_completion again returns as soon as the next one finishes.`, a remote one by its own `Still running. …`. Nothing follows the last result. (Before the fix, `Use wait_for_completion tool to wait and retrieve the result.` closed every answer that still had a console running, after the result, where it read as being about it — seen 2026-11-19.)
 🤖 `wait_for_completion` a fifth time ✅ "No commands to wait for completion …".
 
 🤖 `disconnect_remote_console(remote=…)` for each when done.
