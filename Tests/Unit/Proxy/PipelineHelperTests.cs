@@ -355,6 +355,19 @@ public class PipelineHelperTests
     }
 
     [Fact]
+    public void CheckRedundantLeadingCd_NewConsole_DoesNotClaimTheLocationPersisted()
+    {
+        // The console was replaced in this call (the old one was closed), so
+        // "the location persists" would be a wrong reason: name the location
+        // check that made the cd redundant instead.
+        var pipeline = $"Set-Location -LiteralPath '{CdDir.Replace("'", "''")}'; dotnet build";
+        var result = PipelineHelper.CheckRedundantLeadingCd(pipeline, CdDir, CdDir, newConsole: true);
+        Assert.NotNull(result);
+        Assert.StartsWith("💡 Unnecessary leading `Set-Location`: even when a console is replaced", result);
+        Assert.DoesNotContain("persists", result);
+    }
+
+    [Fact]
     public void CheckRedundantLeadingCd_TrailingSeparatorAndDot_ReturnsHint()
     {
         var pipeline = $"cd '{CdDir.Replace("'", "''")}{Path.DirectorySeparatorChar}'; Get-Date";

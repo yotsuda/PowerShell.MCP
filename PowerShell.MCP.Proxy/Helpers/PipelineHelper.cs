@@ -148,8 +148,13 @@ public static partial class PipelineHelper
     /// target equals the pre-execution cwd AND the pipeline left the console
     /// at that same cwd — i.e. the prefix did nothing. Returns null otherwise
     /// (including when either cwd is unknown or not a filesystem path).
+    /// <paramref name="newConsole"/>: this call started, switched to or first
+    /// attached to a console. "The location persists" would then be a wrong
+    /// reason — the console is not the one the AI's last command ran in — so
+    /// the hint names the right one: a replacement console runs a pipeline
+    /// only where the AI's last command ended, and holds it back otherwise.
     /// </summary>
-    public static string? CheckRedundantLeadingCd(string pipeline, string? preCwd, string? postCwd)
+    public static string? CheckRedundantLeadingCd(string pipeline, string? preCwd, string? postCwd, bool newConsole = false)
     {
         if (string.IsNullOrEmpty(preCwd) || string.IsNullOrEmpty(postCwd)) return null;
         var match = LeadingSetLocationRegex().Match(pipeline);
@@ -173,7 +178,10 @@ public static partial class PipelineHelper
             var normTarget = Path.TrimEndingDirectorySeparator(Path.GetFullPath(arg, normPre));
             if (!string.Equals(normPre, normTarget, comparison) || !string.Equals(normPre, normPost, comparison))
                 return null;
-            return $"💡 Unnecessary leading `{match.Groups["verb"].Value}`: the location persists across execute_command calls. Omit it next time.";
+            var verb = match.Groups["verb"].Value;
+            return newConsole
+                ? $"💡 Unnecessary leading `{verb}`: even when a console is replaced, a pipeline runs only where your last command ended — otherwise it is held back and you are told where the console is. Omit it next time."
+                : $"💡 Unnecessary leading `{verb}`: the location persists across execute_command calls. Omit it next time.";
         }
         catch
         {

@@ -935,7 +935,9 @@ public class PowerShellToolsTests
         // Assert: both the failed console and the other closed console appear
         Assert.Contains("PID #2000", result); // the console that threw
         Assert.Contains("PID #9999 was closed", result); // additional closed console
-        Assert.Contains("Please try again", result);
+        // A console the user closed may have been closed to stop this very command.
+        Assert.Contains("do not run it again", result);
+        Assert.Contains("try again", result);
 
         // Cleanup
         ConsoleSessionManager.Instance.ClearDeadPipe(TestAgentId, TestPipeName);

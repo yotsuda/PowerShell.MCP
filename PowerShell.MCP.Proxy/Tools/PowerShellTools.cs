@@ -1186,7 +1186,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                 // pre-execution cwd (the location check guarantees it
                                 // matches the AI's last cwd), jsonResponse.Cwd
                                 // the post-execution one.
-                                var redundantCdHint = PipelineHelper.CheckRedundantLeadingCd(pipeline, liveCwd, jsonResponse.Cwd);
+                                var redundantCdHint = PipelineHelper.CheckRedundantLeadingCd(pipeline, liveCwd, jsonResponse.Cwd, newConsole);
                                 // Nested `pwsh -Command` / `-File` hint: judged on
                                 // the AI's own pipeline as well, deduped per agent.
                                 var nestedPwshHint = PipelineHelper.CheckNestedPwsh(pipeline, agentId);
@@ -1233,7 +1233,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             var otherClosed = pipeDiscoveryService.DetectClosedConsoles(agentId);
             var closedMessages = new List<string> { failedLine };
             closedMessages.AddRange(otherClosed);
-            return Wrap($"Command execution failed: {ex.Message}\n{string.Join("\n", closedMessages)}\nPlease try again. A new console will be started automatically if needed.");
+            return Wrap($"Command execution failed: {ex.Message}\n{string.Join("\n", closedMessages)}\nIf the user closed the console while this command ran, they may have done it to stop this command: do not run it again before asking the user. Otherwise, try again; a new console will be started automatically if needed.");
         }
     }
 
