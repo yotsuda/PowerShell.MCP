@@ -322,7 +322,10 @@ public class PowerShellTools
         if (ack == null || ack.Status != "success")
             return Wrap($"Cancel request to console {GetConsoleName(pipeName)} failed or was not acknowledged. The console may have already finished or been closed.");
 
-        return Wrap($"✓ Interrupt sent to console {GetConsoleName(pipeName)} (Ctrl+C + pipeline stop). A running PowerShell pipeline or native CLI should now be stopped and the console back to ready; a command stuck in a non-cooperative blocking call may still be running (use close_console). Call execute_command (or get_current_location) to confirm and to drain any output the cancelled command produced.");
+        var endedNote = ack.Ended is { Count: > 0 }
+            ? $" Still running 2 s after the Ctrl+C, so ended: {string.Join(", ", ack.Ended)} — anything it was writing may be incomplete."
+            : "";
+        return Wrap($"✓ Interrupt sent to console {GetConsoleName(pipeName)} (Ctrl+C + pipeline stop).{endedNote} A running PowerShell pipeline or native CLI should now be stopped and the console back to ready; a command stuck in a non-cooperative blocking call may still be running (use close_console). Call execute_command (or get_current_location) to confirm and to drain any output the cancelled command produced.");
     }
 
     /// <summary>

@@ -980,18 +980,27 @@ public class NamedPipeServer : IDisposable
                 // stop ends the direct child, and a grandchild it orphans
                 // (bash -c '… sleep') is then no longer found under pwsh — yet
                 // still holds the output pipe the pipeline waits on.
+                // On Windows the command's processes are listed too: a native
+                // command can outlive the CTRL_C_EVENT, and PowerShell waits for
+                // it, so those still running 2 s later are ended (EndSurvivors)
+                // and named in the reply.
                 var busy = ExecutionState.Status == "busy";
                 var ctrlC = false;
                 var stoppedPipeline = false;
-                var natives = OperatingSystem.IsWindows() || !busy ? null : ConsoleControl.CommandProcesses();
+                var natives = !busy ? null : ConsoleControl.CommandProcesses();
+                IReadOnlyList<string> ended = [];
                 if (OperatingSystem.IsWindows()) ctrlC = ConsoleControl.SendCtrlC();
                 if (busy)
                 {
                     stoppedPipeline = ConsoleControl.StopRunningPipeline();
                     ConsoleControl.EnsurePollTimerArmed();
                 }
-                if (natives != null) ctrlC = ConsoleControl.Interrupt(natives);
-                var resp = JsonSerializer.Serialize(new { pid, status = (ctrlC || stoppedPipeline) ? "success" : "error" });
+                if (natives != null)
+                {
+                    if (OperatingSystem.IsWindows()) ended = ConsoleControl.EndSurvivors(natives);
+                    else ctrlC = ConsoleControl.Interrupt(natives);
+                }
+                var resp = JsonSerializer.Serialize(new { pid, status = (ctrlC || stoppedPipeline) ? "success" : "error", ended });
                 await SendMessageAsync(pipeServer, resp, cancellationToken);
                 return;
             }

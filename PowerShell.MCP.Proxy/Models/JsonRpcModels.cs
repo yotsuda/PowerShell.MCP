@@ -196,6 +196,14 @@ public class CommandAckResponse
 
     [JsonPropertyName("status")]
     public string? Status { get; set; }
+
+    /// <summary>
+    /// cancel only: processes the command had started that were still running
+    /// 2 s after the Ctrl+C and were ended ("name (pid N)"). Windows; null or
+    /// empty otherwise.
+    /// </summary>
+    [JsonPropertyName("ended")]
+    public List<string>? Ended { get; set; }
 }
 
 [JsonSerializable(typeof(CommandAckResponse))]
