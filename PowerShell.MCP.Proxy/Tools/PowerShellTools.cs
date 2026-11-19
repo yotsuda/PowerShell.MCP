@@ -1046,10 +1046,16 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                             ? $"not back at its prompt yet after the command cancelled {cancelledAgo:F1}s ago"
                                             : $"still stopping the command cancelled {cancelledAgo:F1}s ago"
                                         : $"busy with {jsonResponse.Reason}";
+                                    // The source console the pipeline did NOT run on. The
+                                    // retry's own harvest lists it too (another console
+                                    // there), with a fresher status: added here as well,
+                                    // it showed twice, 10 s and 14 s old (seen 2026-11-19).
+                                    var sourceBlock = jsonResponse.Pid > 0 && retryResult.Contains($"#{jsonResponse.Pid} ", StringComparison.Ordinal)
+                                        ? null
+                                        : PipelineHelper.MarkOtherConsole(FormatBusyStatus(jsonResponse));
                                     return Wrap(PipelineHelper.JoinBlocks(
                                         string.Join("\n", closedConsoleMessages),
-                                        // The source console the pipeline did NOT run on.
-                                        PipelineHelper.MarkOtherConsole(FormatBusyStatus(jsonResponse)),
+                                        sourceBlock,
                                         retryOutcome.NotExecuted
                                             ? $"ℹ️ Source console {busyWith}; started {newConsoleName} at {startLoc}."
                                             : $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console {busyWith}). Pipeline executed automatically — no re-send needed.",

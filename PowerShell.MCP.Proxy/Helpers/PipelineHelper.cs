@@ -61,14 +61,21 @@ public static partial class PipelineHelper
     public const string OtherConsoleMarker = "[other console] ";
 
     /// <summary>
-    /// Prefixes every status line (✓ / ✗ / ⧗ Pipeline ...) in a block with
-    /// <see cref="OtherConsoleMarker"/>. A single console's drained output can
-    /// hold several joined results, hence every line rather than just the first.
+    /// Prefixes every status line in a block with <see cref="OtherConsoleMarker"/>.
+    /// A single console's drained output can hold several joined results, hence
+    /// every line rather than just the first.
     /// </summary>
+    /// <remarks>
+    /// A status line is "icon text | Window: …" (the console's BuildStatusLine)
+    /// or the proxy's fallback "⧗ | PID #…". Only "✓/✗/⧗ Pipeline …" used to be
+    /// matched, so "⧗ User command running | Window: …" and the fallback went
+    /// unmarked (seen 2026-11-19). An output line rarely holds "| Window: " or
+    /// "| PID #" right after an icon at its start.
+    /// </remarks>
     public static string MarkOtherConsole(string block)
         => StatusLineStartRegex().Replace(block, OtherConsoleMarker);
 
-    [GeneratedRegex(@"^(?=[✓✗⧗] Pipeline )", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^(?=[✓✗⧗⚠⌨⊘●] [^\r\n|]*\| (?:Window: |PID #))", RegexOptions.Multiline)]
     private static partial Regex StatusLineStartRegex();
 
     /// <summary>
