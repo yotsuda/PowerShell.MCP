@@ -14,16 +14,17 @@
     <Version>1.16.0.0</Version>
     <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
 
-    <!-- Single-file deployment settings -->
-    <PublishSingleFile>true</PublishSingleFile>
-
-    <!-- File-size optimization settings -->
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>full</TrimMode>
-    <PublishReadyToRun>false</PublishReadyToRun>
-
-    <!-- Performance optimization -->
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Native AOT. An MCP client starts a proxy for every session and gives it
+         a time limit (Claude Code: 30 s), and the trimmed single-file build spent
+         its start-up JIT-compiling: trimming rewrites the runtime's assemblies
+         and drops their precompiled code. Measured on Windows (2026-11-19):
+         initialize answered in 0.35-0.67 s with tools/list, 0.2-0.3 s CPU,
+         against 1.6-2.0 s and 1.5-1.7 s CPU (ReadyToRun: 0.9 s, 22.6 MB).
+         Native AOT does not compile across operating systems, so each RID is
+         published on its own OS: release.yml builds them; Build-AllPlatforms.ps1
+         builds win-x64 only. -->
+    <PublishAot>true</PublishAot>
+    <OptimizationPreference>Size</OptimizationPreference>
     <DebugType>embedded</DebugType>
 
     <!-- Suppress warnings (trimming-related) -->
@@ -42,7 +43,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
   </ItemGroup>
 
-  <!-- Trimming settings: protect required assemblies -->
+  <!-- Trimming settings (Native AOT trims too): protect required assemblies -->
   <ItemGroup>
     <TrimmerRootAssembly Include="PowerShell.MCP.Proxy" />
     <TrimmerRootAssembly Include="ModelContextProtocol" />

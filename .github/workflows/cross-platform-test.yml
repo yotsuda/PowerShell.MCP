@@ -191,6 +191,8 @@ jobs:
         rm packages-microsoft-prod.deb
         sudo apt-get update
         sudo apt-get install -y powershell
+        # The proxy is published with Native AOT, which links with clang and zlib.
+        sudo apt-get install -y clang zlib1g-dev
 
     - name: Verify PowerShell
       shell: pwsh
@@ -209,6 +211,7 @@ jobs:
 
     - name: Build Proxy
       run: |
+        # Native AOT (the csproj's PublishAot), built on this OS for this OS.
         dotnet publish PowerShell.MCP.Proxy -c Release -r ${{ matrix.rid }} --self-contained
 
     - name: Run unit tests

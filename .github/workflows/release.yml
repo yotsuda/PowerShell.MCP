@@ -4,9 +4,115 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # A dry run: builds, checks, signs (when the secret is there) and stages the
+  # module exactly as a release does, and uploads it as an artifact. Publishes
+  # nothing: the PSGallery and GitHub Release steps run only for a tag.
+  workflow_dispatch:
 
 jobs:
+  # The proxy is Native AOT, which does not compile across operating systems:
+  # each RID is published on its own OS and handed to the release job.
+  proxy:
+    name: Proxy ${{ matrix.rid }} (Native AOT)
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            exe: PowerShell.MCP.Proxy.exe
+          # Linked against the Ubuntu 18.04 sysroot (glibc 2.27) that Microsoft's
+          # own .NET 10 Linux builds use, so the binary runs where .NET does,
+          # not only where the runner's newer glibc is.
+          - rid: linux-x64
+            os: ubuntu-latest
+            container: mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64
+            exe: PowerShell.MCP.Proxy
+            aot_args: -p:SysRoot=/crossrootfs/x64 -p:LinkerFlavor=lld
+            max_glibc: '2.27'
+          # Native AOT compiles across architectures on macOS (Xcode has both).
+          - rid: osx-arm64
+            os: macos-latest
+            exe: PowerShell.MCP.Proxy
+          - rid: osx-x64
+            os: macos-latest
+            exe: PowerShell.MCP.Proxy
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    timeout-minutes: 30
+    env:
+      # The build image has no ICU; nothing here needs culture data.
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish (Native AOT)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish PowerShell.MCP.Proxy/PowerShell.MCP.Proxy.csproj \
+            -c Release -r ${{ matrix.rid }} -o proxy-out \
+            --source https://api.nuget.org/v3/index.json ${{ matrix.aot_args }}
+          ls -la proxy-out
+
+      - name: Check — the binary is Native AOT
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ILCompiler's input (obj/.../native/*.ilc.rsp) and the executable it
+          # links (bin/.../native/); a single-file or JIT publish creates neither.
+          rsp="PowerShell.MCP.Proxy/obj/Release/net9.0/${{ matrix.rid }}/native/PowerShell.MCP.Proxy.ilc.rsp"
+          native="PowerShell.MCP.Proxy/bin/Release/net9.0/${{ matrix.rid }}/native/${{ matrix.exe }}"
+          for f in "$rsp" "$native"; do
+            test -f "$f" || { echo "::error::Not a Native AOT build: $f is missing"; exit 1; }
+          done
+          echo "Native AOT: $native"
+
+      - name: Check — glibc versions the Linux binary needs
+        if: matrix.max_glibc != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          objdump=$(command -v objdump || command -v llvm-objdump)
+          needed=$("$objdump" -T "proxy-out/${{ matrix.exe }}" | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -n 1)
+          echo "Highest glibc symbol version needed: $needed (allowed: ${{ matrix.max_glibc }})"
+          highest=$(printf '%s\n%s\n' "$needed" "${{ matrix.max_glibc }}" | sort -V | tail -n 1)
+          if [ "$highest" != "${{ matrix.max_glibc }}" ]; then
+            echo "::error::The Linux proxy needs glibc $needed, newer than ${{ matrix.max_glibc }}"; exit 1
+          fi
+
+      - name: Smoke test — the proxy answers initialize
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="proxy-out/${{ matrix.exe }}"
+          run=("$exe")
+          if [ "${{ matrix.rid }}" = "osx-x64" ] && [ "$(uname -m)" = "arm64" ]; then
+            if arch -x86_64 /usr/bin/true 2>/dev/null; then run=(arch -x86_64 "$exe")
+            else echo "::warning::Rosetta is not available: osx-x64 is built but not run"; exit 0; fi
+          fi
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"release-ci","version":"1"}}}'
+          # stdin stays open a while: the proxy shuts down at end of input.
+          reply=$({ printf '%s\n' "$init"; sleep 20; } | "${run[@]}" 2>proxy-stderr.log | head -n 1 || true)
+          echo "Reply: ${reply:0:200}"
+          if ! printf '%s' "$reply" | grep -q '"serverInfo"'; then
+            echo "::error::The proxy did not answer initialize"; cat proxy-stderr.log; exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proxy-${{ matrix.rid }}
+          path: proxy-out/${{ matrix.exe }}
+          if-no-files-found: error
+
   release:
+    needs: proxy
     runs-on: windows-latest
     permissions:
       contents: write
@@ -24,7 +130,14 @@ jobs:
         id: ver
         shell: pwsh
         run: |
-          $tag = "${env:GITHUB_REF_NAME}"
+          # A dry run (workflow_dispatch) has no tag: it checks the version the
+          # manifest carries, as the tag for it would.
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = "${env:GITHUB_REF_NAME}"
+          } else {
+            $tag = 'v' + (Import-PowerShellDataFile Staging/PowerShell.MCP.psd1).ModuleVersion
+            Write-Host "Dry run: no tag, checking as $tag"
+          }
           $v = $tag.TrimStart('v')
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "tag=$tag"   | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -134,25 +247,11 @@ jobs:
           dotnet test Tests/PowerShell.MCP.Tests.csproj -c Release
           if ($LASTEXITCODE -ne 0) { throw 'Unit tests failed — aborting release before publish.' }
 
-      - name: Publish PowerShell.MCP.Proxy for all RIDs
-        shell: pwsh
-        run: |
-          # Each `dotnet publish -r <rid>` does its OWN RID-specific
-          # restore (the project.assets.json from the upstream Restore
-          # step has no per-RID targets, so passing --no-restore here
-          # would fail with "Assets file ... doesn't have a target for
-          # 'net9.0/<rid>'"). Letting publish restore is the simplest
-          # path to a self-contained per-RID build; the time cost
-          # (4 restores instead of 1) is small relative to the publish
-          # itself.
-          foreach ($rid in 'win-x64','linux-x64','osx-x64','osx-arm64') {
-            $outDir = "PowerShell.MCP.Proxy/bin/Release/net9.0/$rid/publish"
-            Write-Host "=== Publishing Proxy for $rid ==="
-            dotnet publish PowerShell.MCP.Proxy/PowerShell.MCP.Proxy.csproj `
-              -c Release -r $rid -o $outDir `
-              --self-contained
-            if ($LASTEXITCODE -ne 0) { throw "Proxy publish failed for $rid" }
-          }
+      - name: Download the Native AOT proxies (built by the proxy job, one per OS)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: proxy-*
+          path: proxy-artifacts
 
       - name: Build help XML (PlatyPS v2)
         shell: pwsh
@@ -192,12 +291,12 @@ jobs:
           Copy-Item 'THIRD_PARTY_NOTICES.md' $stage
           Copy-Item 'licenses/*' (Join-Path $stage 'licenses') -Recurse
 
-          # Proxy binaries (multi-RID)
+          # Proxy binaries (multi-RID), from the proxy job's artifacts
           foreach ($rid in 'win-x64','linux-x64','osx-x64','osx-arm64') {
             $ridDir = Join-Path $stage "bin/$rid"
             New-Item -ItemType Directory -Path $ridDir -Force | Out-Null
             $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
-            Copy-Item "PowerShell.MCP.Proxy/bin/Release/net9.0/$rid/publish/$exeName" $ridDir
+            Copy-Item "proxy-artifacts/proxy-$rid/$exeName" $ridDir -ErrorAction Stop
           }
 
           # Help XML
@@ -259,12 +358,14 @@ jobs:
           }
 
       - name: Guard — Windows binaries must be signed for a tagged release
-        if: steps.sign_probe.outputs.present != 'true'
+        if: steps.sign_probe.outputs.present != 'true' && github.ref_type == 'tag'
         shell: pwsh
         run: |
           throw 'CODE_SIGNING_PFX_BASE64 is not configured. Tagged releases must be signed. Add the secret and re-run, or delete the tag.'
 
       - name: Assert signing distribution (only DLL + win-x64 Proxy.exe)
+        # Unsigned only on a dry run without the secret (a tag stops at the guard).
+        if: steps.sign_probe.outputs.present == 'true'
         shell: pwsh
         run: |
           $stage = '${{ steps.stage.outputs.stage }}'
@@ -321,7 +422,16 @@ jobs:
           Write-Host "Proxy resolves: $proxy"
           Write-Host 'Assembled-module smoke test passed.'
 
+      - name: Upload the staged module (dry run)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PowerShell.MCP-${{ steps.ver.outputs.version }}-dry-run
+          path: ${{ steps.stage.outputs.stage }}
+          if-no-files-found: error
+
       - name: Publish to PSGallery
+        if: github.ref_type == 'tag'
         shell: pwsh
         env:
           PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
@@ -329,6 +439,7 @@ jobs:
           Publish-Module -Path '${{ steps.stage.outputs.stage }}' -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
 
       - name: Create GitHub Release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "${{ steps.ver.outputs.tag }}" --title "${{ steps.ver.outputs.tag }}" --notes-file "${{ steps.notes.outputs.notes_path }}"

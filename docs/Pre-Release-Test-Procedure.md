@@ -19,10 +19,13 @@ failure blocks the tag.
 
 1. On the test machine, in PowerShell 7, from a clone at the release commit:
    ```powershell
-   .\Build-AllPlatforms.ps1          # builds all RIDs into the installed module path
+   .\Build-AllPlatforms.ps1          # Windows: builds the DLL + win-x64 proxy into the installed module path
    .\Tests\Run-AllTests.ps1          # must be green here too
    Get-Module PowerShell.MCP -ListAvailable | Select-Object Version, ModuleBase
    ```
+   On Linux or macOS, install the staged module from a hand-run `Release`
+   workflow instead (see RELEASE.md, step 3): the proxy is Native AOT and is
+   built only on its own OS.
    `Get-MCPProxyPath` must point into that module folder, and
    `(Get-Item (Get-MCPProxyPath)).VersionInfo.ProductVersion` must carry the
    release commit's hash.
