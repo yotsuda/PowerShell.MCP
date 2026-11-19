@@ -929,6 +929,29 @@ public class RemoteConsoleTests
             Assert.False(waiting.IsConnected);
             Assert.Equal("pong", StatusOf(await first.SendRequestAsync(Ping(), CancellationToken.None)));
 
+            // The one still waiting is listed apart, by its name, not as a
+            // connected console with an empty name (seen 2026-11-19:
+            // "Also connected: …, (waiting on port 60227) (remote: …)").
+            Assert.Contains($"; waiting to dial in: \"port {secondPort}\"", ex.Message);
+            Assert.DoesNotContain("(waiting on port", ex.Message);
+
+            // A call to it says, in one line, that nothing has dialed in yet
+            // and how long the code lasts — not the whole accept instructions.
+            var sessionWait = RemoteConsoleClient.SessionWait;
+            RemoteConsoleClient.SessionWait = TimeSpan.FromMilliseconds(200);
+            try
+            {
+                var notYet = await Assert.ThrowsAsync<InvalidOperationException>(() => waiting.SendRequestAsync(Ping(), CancellationToken.None));
+                Assert.StartsWith($"Nothing has dialed in on port {secondPort} yet (", notYet.Message);
+                Assert.Contains("min left on the code", notYet.Message);
+                Assert.DoesNotContain("Enable-MCPRemoteControl -ConnectTo", notYet.Message);
+                Assert.DoesNotContain("bootstrap.ps1", notYet.Message);
+            }
+            finally
+            {
+                RemoteConsoleClient.SessionWait = sessionWait;
+            }
+
             var max = RemoteConsoleRegistry.MaxConsoles;
             RemoteConsoleRegistry.MaxConsoles = 2;
             try
@@ -1085,7 +1108,7 @@ public class RemoteConsoleTests
             // process would deliver a real Ctrl+C to the test host.)
 
             client.ResultPending = true; // as a timeout or an acknowledged cancel leaves it
-            var response = await RemoteConsoleTools.ExecuteRemoteCommand(consoles, null!, "'hello'", null, 30, null, null, null, null, null, null, null, null, CancellationToken.None);
+            var response = await RemoteConsoleTools.ExecuteRemoteCommand(consoles, null!, null, "'hello'", null, 30, null, null, null, null, null, null, null, null, CancellationToken.None);
             Assert.Contains("(no pending output)", response); // the earlier result's block came first
             Assert.False(client.ResultPending);
         }
@@ -1093,5 +1116,54 @@ public class RemoteConsoleTests
         {
             RemoteConsoleListener.Stop("test", fromConsoleThread: true);
         }
+    }
+
+    [Fact]
+    public async Task ExecuteRemoteCommand_BringsTheOtherConsolesReadyResults_BeforeItsOwn()
+    {
+        // Seen 2026-11-19: a result ready on another console during a remote
+        // command stayed behind until wait_for_completion, although a pending
+        // result is promised "with your next tool call of any kind".
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        using var consoles = new RemoteConsoleRegistry();
+        try
+        {
+            await consoles.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            var discovery = new Mock<IPipeDiscoveryService>();
+            discovery.Setup(d => d.CollectAllCachedOutputsAsync("default", string.Empty, It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(new CachedOutputResult("[other console] ✓ local done", "[other console] ⧗ local still running"));
+
+            var response = await RemoteConsoleTools.ExecuteRemoteCommand(consoles, null!, discovery.Object, "'remote hello'", null, 30, null, null, null, null, null, null, null, null, CancellationToken.None);
+
+            var running = response.IndexOf("local still running", StringComparison.Ordinal);
+            var done = response.IndexOf("local done", StringComparison.Ordinal);
+            // This command's own block (the console in this process has no engine to run it).
+            var own = response.IndexOf($"[remote console: 127.0.0.1:{port}]", StringComparison.Ordinal);
+            Assert.True(running >= 0 && running < done && done < own, response);
+            // Collected with the main agent's id and nothing excluded (every local console is another one here).
+            discovery.Verify(d => d.CollectAllCachedOutputsAsync("default", string.Empty, It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public void DialFailure_SaysWhatHappened_NotTheOperationWasCanceled()
+    {
+        // The connect timeout is a cancellation: its message was all the user saw (seen 2026-11-19).
+        var timeout = RemoteConsoleDialer.DescribeDialFailure(new OperationCanceledException(), "36.12.238.164", handshaking: false);
+        Assert.StartsWith("no answer within 15 s", timeout);
+        Assert.DoesNotContain("canceled", timeout);
+
+        Assert.Contains("handshake did not finish",
+            RemoteConsoleDialer.DescribeDialFailure(new TaskCanceledException(), "h", handshaking: true));
+        Assert.StartsWith("nothing is listening on that port: the MCP server may have restarted",
+            RemoteConsoleDialer.DescribeDialFailure(new SocketException((int)SocketError.ConnectionRefused), "h", handshaking: false));
+        Assert.Equal("the name yt-laptop4 does not resolve here; use one of the IP addresses the AI listed instead",
+            RemoteConsoleDialer.DescribeDialFailure(new SocketException((int)SocketError.HostNotFound), "yt-laptop4", handshaking: false));
+        Assert.Equal("Something else", RemoteConsoleDialer.DescribeDialFailure(new IOException("Something else."), "h", handshaking: false));
     }
 }

@@ -131,6 +131,7 @@ public static class RemoteConsoleDialer
                 StopOwn(ct, $"the MCP server at {host}:{port} could not be reached for {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes");
                 return;
             }
+            var handshaking = false;
             try
             {
                 using var tcp = new TcpClient { NoDelay = true };
@@ -139,6 +140,7 @@ public static class RemoteConsoleDialer
                     connecting.CancelAfter(ConnectTimeout);
                     await tcp.ConnectAsync(host, port, connecting.Token);
                 }
+                handshaking = true;
 
                 byte[]? thumbprint = null;
                 using var ssl = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false, (_, certificate, _, _) =>
@@ -228,7 +230,7 @@ public static class RemoteConsoleDialer
                 if (ct.IsCancellationRequested) return;
                 if (!announcedWaiting)
                 {
-                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({ex.Message.TrimEnd('.')}); retrying for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "Gray");
+                    RemoteConsoleListener.Notify($"Cannot reach {host}:{port} yet ({DescribeDialFailure(ex, host, handshaking)}); retrying for up to {RemoteConsoleListener.CodeLifetime.TotalMinutes:0} minutes.", "Gray");
                     announcedWaiting = true;
                 }
             }
@@ -236,6 +238,27 @@ public static class RemoteConsoleDialer
             try { await Task.Delay(backoff, ct); } catch (OperationCanceledException) { return; }
             backoff = backoff * 2 > MaxBackoff ? MaxBackoff : backoff * 2;
         }
+    }
+
+    /// <summary>
+    /// Why a dial failed, for the person at this console. The connect timeout is
+    /// a cancellation, whose own message is "The operation was canceled": seen
+    /// 2026-11-19 from a cloud VM dialing a NATed machine, where it said nothing
+    /// about what to do. A refusal means nothing listens on that port any more,
+    /// typically because the MCP server restarted (its new accept port differs).
+    /// </summary>
+    internal static string DescribeDialFailure(Exception ex, string host, bool handshaking)
+    {
+        var socket = ex as SocketException ?? ex.InnerException as SocketException;
+        if (ex is OperationCanceledException)
+            return handshaking
+                ? $"connected, but the handshake did not finish within {HandshakeTimeout.TotalSeconds:0} s"
+                : $"no answer within {ConnectTimeout.TotalSeconds:0} s: a firewall or NAT on the way drops the connection, or the machine is off";
+        if (socket?.SocketErrorCode == SocketError.ConnectionRefused)
+            return "nothing is listening on that port: the MCP server may have restarted or stopped accepting; if so, ask the AI for a new line";
+        if (socket?.SocketErrorCode is SocketError.HostNotFound or SocketError.NoData or SocketError.TryAgain)
+            return $"the name {host} does not resolve here; use one of the IP addresses the AI listed instead";
+        return ex.Message.TrimEnd('.');
     }
 
     /// <summary>

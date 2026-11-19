@@ -170,6 +170,22 @@ public sealed class RemoteConsoleClient : IDisposable
 
     private static string Minutes => $"{CodeLifetime.TotalMinutes:0} minutes";
 
+    /// <summary>
+    /// A call to a console that has not dialed in yet. It used to repeat all of
+    /// accept_remote_console's instructions, the line to paste included, in an
+    /// answer to what was only "is it there yet?" (seen 2026-11-19); the line is
+    /// one accept_remote_console call away.
+    /// </summary>
+    internal string NotDialedInYet()
+    {
+        var left = _acceptDeadline - DateTime.UtcNow;
+        var remaining = left <= TimeSpan.Zero ? "the code is about to expire"
+            : left.TotalMinutes >= 1 ? $"{Math.Ceiling(left.TotalMinutes):0} min left on the code"
+            : $"{Math.Ceiling(left.TotalSeconds):0} s left on the code";
+        return $"Nothing has dialed in on port {_acceptPort} yet ({remaining}); nothing was sent. " +
+               "It does once the user has run the line from accept_remote_console there and confirmed it; accept_remote_console again repeats that line.";
+    }
+
     /// <summary>host, host:port, [v6], [v6]:port.</summary>
     public static (string host, int port) ParseTarget(string target)
     {
@@ -326,7 +342,7 @@ public sealed class RemoteConsoleClient : IDisposable
                             // mislead); one that never came needs the line.
                             throw new InvalidOperationException(_peer != null
                                 ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. A command that was running continues there; wait_for_completion collects its output once it is back."
-                                : $"The remote console has not dialed in on port {_acceptPort}. It does once Enable-MCPRemoteControl -ConnectTo is running there and the user has confirmed it; " + AcceptInstructions());
+                                : NotDialedInYet());
                         }
                     }
                 }
