@@ -1259,6 +1259,104 @@ public class PowerShellToolsTests
     }
 
     [Fact]
+    public async Task ExecuteCommand_CachedAiResultMovedTheConsole_RunsAndReturnsBothInOrder()
+    {
+        // Arrange: the AI's previous pipeline (`cd sub; <native>`) outran its
+        // timeout and was cancelled; its result is still cached on the console
+        // (status "completed"), and its status line says it ended in `sub`,
+        // where the console still is. That move is the AI's own, so the next
+        // command runs, and the response carries the earlier result first.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88812;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var aiCwd = Path.Combine(Path.GetTempPath(), "ai-base");
+        var liveCwd = Path.Combine(Path.GetTempPath(), "ai-base", "sub");
+        var cached = $"⚠ Pipeline interrupted before completion (cancel, Ctrl+C, or exit) | Window: #{testPid} Iron | Pipeline: cd sub; & lilypond... | Location [FileSystem]: {liveCwd}";
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, aiCwd);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, liveCwd, AiResultCached: true));
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", ""));
+        _mockPowerShellService
+            .Setup(s => s.ConsumeOutputFromPipeAsync(pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cached);
+
+        var executed = false;
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback(() => executed = true)
+            .ReturnsAsync("CURRENT-RESULT");
+
+        // Act
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            null!,
+            "Get-Location",
+            agent_id: TestAgentId);
+
+        // Assert
+        Assert.True(executed, "The AI's own cached pipeline moved the console; the next command must run");
+        Assert.DoesNotContain("Pipeline NOT executed", result);
+        var cachedAt = result.IndexOf("Pipeline interrupted before completion", StringComparison.Ordinal);
+        var currentAt = result.IndexOf("CURRENT-RESULT", StringComparison.Ordinal);
+        Assert.True(cachedAt >= 0 && currentAt > cachedAt, "the earlier (drained) result must come before this command's result");
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_CdTypedAfterTheCachedAiResult_RefusesButStillReturnsTheResultFirst()
+    {
+        // Arrange: the cached AI pipeline ended in `sub`, but the console is now
+        // somewhere else — a `cd` typed in the console after that pipeline. The
+        // check must still refuse, and the drained result must not be held back.
+        var sessionManager = ConsoleSessionManager.Instance;
+        const int testPid = 88813;
+        var pipeName = $"PSMCP.{sessionManager.ProxyPid}.{TestAgentId}.{testPid}";
+        var aiCwd = Path.Combine(Path.GetTempPath(), "ai-base");
+        var endedAt = Path.Combine(Path.GetTempPath(), "ai-base", "sub");
+        var liveCwd = Path.Combine(Path.GetTempPath(), "user-typed-cd");
+        var cached = $"✓ Pipeline executed successfully | Window: #{testPid} Iron | Pipeline: cd sub; dir | Duration: 3.00s | Location [FileSystem]: {endedAt}\n\nfile.txt";
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, aiCwd);
+
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(pipeName, false, new List<string>(), null, liveCwd, AiResultCached: true));
+        _mockPowerShellService
+            .Setup(s => s.ConsumeOutputFromPipeAsync(pipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cached);
+
+        var executed = false;
+        _mockPowerShellService
+            .Setup(s => s.ExecuteCommandToPipeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback(() => executed = true)
+            .ReturnsAsync("");
+
+        // Act
+        var result = await PowerShellTools.ExecuteCommand(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            null!,
+            "Remove-Item *.tmp",
+            agent_id: TestAgentId);
+
+        // Assert
+        Assert.False(executed, "A cd typed after the cached pipeline ended must still stop the command");
+        Assert.Contains($"changed from '{endedAt}' to '{liveCwd}'", result);
+        var cachedAt = result.IndexOf("file.txt", StringComparison.Ordinal);
+        var noticeAt = result.IndexOf("Pipeline NOT executed", StringComparison.Ordinal);
+        Assert.True(cachedAt >= 0 && noticeAt > cachedAt, "the drained result must come before the refusal");
+
+        sessionManager.SetLastAiCwd(TestAgentId, testPid, null);
+    }
+
+    [Fact]
     public async Task ExecuteCommand_NoCwdDrift_ExecutesPipelineVerbatim()
     {
         // Arrange: live cwd == LastAiCwd → no drift, pipeline runs as sent

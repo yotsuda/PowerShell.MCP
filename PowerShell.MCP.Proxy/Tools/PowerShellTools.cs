@@ -15,13 +15,13 @@ public class PowerShellTools
     /// <summary>
     /// Finds a ready pipe. Delegates to PipeDiscoveryService.
     /// </summary>
-    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo, string? liveCwd, string? activeNotFree)> FindReadyPipeAsync(
+    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo, string? liveCwd, string? activeNotFree, bool aiResultCached)> FindReadyPipeAsync(
         IPipeDiscoveryService pipeDiscoveryService,
         string agentId,
         CancellationToken cancellationToken)
     {
         var result = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
-        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo, result.LiveCwd, result.ActiveNotFree);
+        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo, result.LiveCwd, result.ActiveNotFree, result.AiResultCached);
     }
 
     /// <summary>
@@ -231,7 +231,7 @@ public class PowerShellTools
             return Wrap(error);
 
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree, _) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -720,14 +720,23 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // console that an undelivered response gets stashed on.
         if (agentIdBox != null) agentIdBox.Value = agentId;
         // Wrap every return so the 🔑 notice can never be dropped on a sub-agent's
-        // first call regardless of which branch builds the response.
-        string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
+        // first call regardless of which branch builds the response. It also
+        // puts in front, once, the earlier result drained from this console
+        // before the location check (see below): that result is older than
+        // anything this call produces, so it comes first, whichever branch returns.
+        string? drainedBeforeRun = null;
+        string Wrap(string r)
+        {
+            var earlier = drainedBeforeRun;
+            drainedBeforeRun = null;
+            return PrependAgentIdNoticeIfNew(PipelineHelper.JoinBlocks(earlier, r), isNewlyAllocated, agentId);
+        }
         if (resolveError != null)
             return Wrap(resolveError);
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree, aiResultCached) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         // The startup notice surfaces "spawned a new console" / "switched
         // to a sibling" context to the AI. A spawn or switch runs the
@@ -838,6 +847,25 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // switched to or attached to: an older console's record is where the AI
         // was before it moved on, not where it is now.
         var cwdPid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
+        // The console still holds the result of an AI pipeline that outran its
+        // timeout and finished (or was cancelled) since. Drain it now, before
+        // the check: where that pipeline ended — its status line's Location —
+        // is the AI's place, so a `cd` inside it is not taken for one typed in
+        // the console (the check used to refuse the next command over it). A
+        // `cd` typed after that pipeline ended is still caught. The drained
+        // result goes out in front of whatever this call returns (Wrap), so it
+        // is never held back by a refusal and stays in time order.
+        if (aiResultCached && !newConsole && readyPipeName != null)
+        {
+            var drained = await powerShellService.ConsumeOutputFromPipeAsync(readyPipeName, cancellationToken);
+            if (!string.IsNullOrEmpty(drained))
+            {
+                drainedBeforeRun = drained;
+                var endedAt = PipelineHelper.LastResultLocation(drained);
+                if (endedAt != null && cwdPid.HasValue)
+                    sessionManager.SetLastAiCwd(agentId, cwdPid.Value, endedAt);
+            }
+        }
         var consoleAiCwd = cwdPid.HasValue ? sessionManager.GetLastAiCwd(cwdPid.Value) : null;
         var agentAiCwd = sessionManager.GetSessionLastAiCwd(agentId);
         var expectedCwd = newConsole ? agentAiCwd ?? consoleAiCwd : consoleAiCwd ?? agentAiCwd;

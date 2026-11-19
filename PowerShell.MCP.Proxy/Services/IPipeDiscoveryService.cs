@@ -23,13 +23,21 @@ namespace PowerShell.MCP.Proxy.Services;
 /// with no word on the one it was working in — and the status that caused
 /// it is gone by the time the response's busy list is collected.
 /// </param>
+/// <param name="AiResultCached">
+/// True when the chosen pipe is the agent's active console and it holds an AI
+/// pipeline's result not yet collected (status "completed": a command that
+/// outran its timeout and finished later, or one that was cancelled). That
+/// pipeline is the AI's own, so a cwd it changed is the AI's, not a `cd` typed
+/// in the console — execute_command's location check must not refuse over it.
+/// </param>
 public record PipeDiscoveryResult(
     string? ReadyPipeName,
     bool ConsoleSwitched,
     IReadOnlyList<string> ClosedConsoleMessages,
     string? AllPipesStatusInfo,
     string? LiveCwd = null,
-    string? ActiveNotFree = null
+    string? ActiveNotFree = null,
+    bool AiResultCached = false
 );
 
 /// <summary>
