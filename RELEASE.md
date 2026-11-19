@@ -111,7 +111,7 @@ The workflow extracts the section matching the pushed tag; tagging without a mat
 Verify the module builds cleanly and loads on the dev machine:
 
 ```powershell
-.\Build-AllPlatforms.ps1              # Builds all 4 RIDs, writes to installed module path
+.\Build-AllPlatforms.ps1              # Builds the DLL + win-x64 proxy, writes to installed module path
 Import-Module PowerShell.MCP -Force
 Get-Module PowerShell.MCP             # Should show the new version
 Get-Command -Module PowerShell.MCP    # All expected cmdlets present
@@ -122,6 +122,8 @@ Run the test suite:
 ```powershell
 .\Tests\Run-AllTests.ps1
 ```
+
+The proxy is published with Native AOT, which does not compile across operating systems, so a local build makes the Windows proxy only. To build all four the way the release does — each on its own OS, with the AOT, glibc and start-up checks — run the `Release` workflow by hand (Actions → Release → Run workflow, or `gh workflow run release.yml --ref main`). Run by hand it publishes nothing and uploads the staged module as an artifact; use it to get the Linux and macOS binaries for the second-machine test below.
 
 Then run the manual procedure in [docs/Pre-Release-Test-Procedure.md](docs/Pre-Release-Test-Procedure.md) on a **second machine** with this build installed: it covers what the unit suite cannot — the tool list the client receives, consoles that outlive a conversation, the idle close, and remote control against a real second machine.
 
@@ -159,7 +161,7 @@ That tag push starts `release.yml`, which:
 2. Syntax-checks the PowerShell sources and enforces the AMSI #50 IEX guard
 3. Extracts the matching `CHANGELOG.md` section **up front** — a missing section fails here, before any build or publish
 4. Runs the **full unit suite** (`dotnet test`, net8.0 + net9.0) — a red test aborts the release
-5. Builds DLL (net8.0) + Proxy for all 4 RIDs (`win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`, self-contained)
+5. Builds DLL (net8.0) + Proxy for all 4 RIDs with Native AOT, each on its own OS in a separate `proxy` job: `win-x64` on Windows, `linux-x64` in Microsoft's .NET 10 cross-build image against its Ubuntu 18.04 sysroot (the job fails if the binary needs a glibc newer than 2.27), `osx-arm64` and `osx-x64` on macOS; each must be an AOT build and answer `initialize`
 6. Generates Get-Help XML via PlatyPS
 7. Assembles the module directory (DLL, psd1, psm1, Ude.NetStandard.dll, bin/\*/Proxy, en-US/\*.xml, licenses/\*, THIRD_PARTY_NOTICES.md)
 8. **Signs exactly two files**: `PowerShell.MCP.dll` + `bin/win-x64/PowerShell.MCP.Proxy.exe` with timestamp from DigiCert
@@ -288,23 +290,16 @@ Never force-push a release tag — create a new tag instead.
 
 Use only if the GHA workflow is broken and a release cannot wait.
 
+A local build makes only the Windows proxy, so take all four from a hand-run `Release` workflow (it publishes nothing and uploads the staged module, signed when the secret is set). Download that artifact and publish it:
+
 ```powershell
-# Build + sign locally (writes to installed module path by default)
-.\Build-AllPlatforms.ps1 -Sign
-
 $ver = '1.7.8'
-$modulePath = 'C:\Program Files\PowerShell\7\Modules\PowerShell.MCP'
 
-# Stage a CLEAN copy to publish. The installed path accumulates build
-# leftovers (*.bak, *.stash-*, *.new-*) that Publish-Module would otherwise
-# package into the .nupkg. The GHA path doesn't hit this because it assembles
-# the module from scratch in a fresh RUNNER_TEMP dir.
-$stage = Join-Path $env:TEMP 'PowerShell.MCP-publish'
-Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
-Copy-Item $modulePath $stage -Recurse
-Get-ChildItem $stage -Recurse -File |
-    Where-Object { $_.Name -like '*.bak' -or $_.Name -like '*.stash-*' -or $_.Name -like '*.new-*' } |
-    Remove-Item -Force
+# The staged module from a hand-run Release workflow (workflow_dispatch).
+# Publish-Module wants the folder named after the module.
+$stage = Join-Path $env:TEMP 'PowerShell.MCP-publish\PowerShell.MCP'
+Remove-Item (Split-Path $stage) -Recurse -Force -ErrorAction SilentlyContinue
+gh run download <run-id> --name "PowerShell.MCP-$ver-dry-run" --dir $stage
 
 # Verify signatures on the staged copy
 Get-ChildItem $stage -Recurse -File |
@@ -340,6 +335,7 @@ Prefer fixing the workflow over using this path — manual publishes bypass the 
 - [ ] Version bumped in all 3 files (psd1 / 2 csproj) to matching value
 - [ ] `CHANGELOG.md` has a new `# Version: X.Y.Z` section at the top
 - [ ] `.\Build-AllPlatforms.ps1` clean
+- [ ] `Release` workflow run by hand (dry run) green — the four Native AOT proxies build and start
 - [ ] `.\Tests\Run-AllTests.ps1` green
 - [ ] `docs/Pre-Release-Test-Procedure.md` passed on a second machine
 - [ ] Bump commit pushed to `main`

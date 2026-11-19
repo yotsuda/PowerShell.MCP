@@ -20,6 +20,13 @@ namespace PowerShell.MCP.Tests.Unit.Proxy;
 [Collection("McpServerState")]
 public class RemoteConsoleTests
 {
+    // The console in this process has no engine ticking, so its heartbeat is
+    // whatever an earlier test left: once that is 10 s old, get_status calls
+    // the free console "busy (user command)" and a wait never collects. Seen
+    // as a flaky WaitForCompletion_CollectsAPendingRemoteResult on a loaded
+    // machine. xUnit builds the class anew for every test.
+    public RemoteConsoleTests() => ExecutionState.ResetHeartbeatForTests();
+
     [Fact]
     public void Goodbye_FromTheProxy_IsRecognizedByTheDialer_AndPingIsNot()
     {
@@ -349,12 +356,21 @@ public class RemoteConsoleTests
         Assert.DoesNotContain("-OutFile", script);
         // As Administrator: an admins-only folder, signed PowerShell, no install=user.
         Assert.Contains("S-1-5-32-544", script);
-        Assert.Contains("Test-MicrosoftSigned $msiPath", script);
         Assert.Contains("$Install -eq 'user' -and $elevated", script);
+        // PowerShell 7 is the zip this server hands out, for every scope: no
+        // installer package, nothing fetched from anywhere else.
+        Assert.DoesNotContain("msiexec", script);
+        Assert.DoesNotContain("Add-AppxPackage", script);
+        Assert.Contains("Expand-Verified 'pwsh.zip' $PwshZipHash $installDir", script);
+        Assert.Contains("Add-ToPath $installDir $scope", script);
+        Assert.Contains("New-StartMenuShortcut $pwsh $scope", script);
+        // Never unpacked over a folder that already holds a PowerShell.
+        Assert.Contains("$installDir -and -not $pwsh -and (Test-Path -LiteralPath $installDir)", script);
         // Installing is confirmed by the person at the console.
         Assert.Contains("Read-Host 'Continue? [y/N]'", script);
-        foreach (var placeholder in new[] { "__INSTALL__", "__MODULE_VERSION__", "__MODULE_DLL_HASH__", "__MODULE_ZIP_HASH__", "__MODULE_NUPKG_HASH__", "__PWSH_VERSION__", "__PWSH_ZIP_HASH__", "__PWSH_MSI_HASH__" })
+        foreach (var placeholder in new[] { "__INSTALL__", "__MODULE_VERSION__", "__MODULE_DLL_HASH__", "__MODULE_ZIP_HASH__", "__MODULE_NUPKG_HASH__", "__PWSH_VERSION__", "__PWSH_ZIP_HASH__" })
             Assert.Contains(placeholder, script);
+        Assert.DoesNotContain("__PWSH_MSI_HASH__", script);
     }
 
     [Fact]
@@ -830,6 +846,54 @@ public class RemoteConsoleTests
     }
 
     [Fact]
+    public async Task AcceptAgain_WithAnotherInstall_RebuildsTheLine_SamePortAndCode_AndSaysWhenItCannot()
+    {
+        var prepare = RemoteConsoleClient.PrepareBootstrap;
+        Func<string, CancellationToken, Task<RemoteBootstrap?>> fake = (scope, _) =>
+            Task.FromResult<RemoteBootstrap?>(RemoteBootstrap.ForTests(scope, $"# bootstrap for {scope}"));
+        RemoteConsoleClient.PrepareBootstrap = fake;
+        using var client = new RemoteConsoleClient();
+        try
+        {
+            var none = await client.AcceptAsync(0, "none", CancellationToken.None);
+            var port = client.AcceptPort;
+            var code = client.AcceptCode;
+            var noneHash = RemoteBootstrap.ForTests("none", "# bootstrap for none").ScriptHash;
+            var userHash = RemoteBootstrap.ForTests("user", "# bootstrap for user").ScriptHash;
+            Assert.Contains(noneHash, none);
+
+            // The same choice again: the same line, nothing rebuilt.
+            var again = await client.AcceptAsync(0, "none", CancellationToken.None);
+            Assert.DoesNotContain("install changed", again);
+            Assert.Contains(noneHash, again);
+
+            // Another choice: the line for it, on the same port and code; the old one is said to be dead.
+            var user = await client.AcceptAsync(0, "user", CancellationToken.None);
+            Assert.Contains("install changed from none to user", user);
+            Assert.Contains(userHash, user);
+            Assert.DoesNotContain(noneHash, user);
+            Assert.Equal(port, client.AcceptPort);
+            Assert.Equal(code, client.AcceptCode);
+
+            // Cannot be prepared (null, or an exception): the earlier line stands, and the reply says so.
+            RemoteConsoleClient.PrepareBootstrap = (_, _) => Task.FromResult<RemoteBootstrap?>(null);
+            var failed = await client.AcceptAsync(0, "machine", CancellationToken.None);
+            Assert.Contains("install=machine could not be prepared", failed);
+            Assert.Contains("install=user, still stands", failed);
+            Assert.Contains(userHash, failed);
+
+            RemoteConsoleClient.PrepareBootstrap = (_, _) => throw new HttpRequestException("offline");
+            var threw = await client.AcceptAsync(0, "machine", CancellationToken.None);
+            Assert.Contains("install=machine could not be prepared", threw);
+            Assert.Contains(userHash, threw);
+        }
+        finally
+        {
+            RemoteConsoleClient.PrepareBootstrap = prepare;
+        }
+    }
+
+    [Fact]
     public async Task Registry_TwoConsoles_EachCallNamesOne_AndTheLimitHolds()
     {
         // This process can be only one console, so the second one is still
@@ -864,6 +928,29 @@ public class RemoteConsoleTests
             Assert.NotSame(first, waiting);
             Assert.False(waiting.IsConnected);
             Assert.Equal("pong", StatusOf(await first.SendRequestAsync(Ping(), CancellationToken.None)));
+
+            // The one still waiting is listed apart, by its name, not as a
+            // connected console with an empty name (seen 2026-11-19:
+            // "Also connected: …, (waiting on port 60227) (remote: …)").
+            Assert.Contains($"; waiting to dial in: \"port {secondPort}\"", ex.Message);
+            Assert.DoesNotContain("(waiting on port", ex.Message);
+
+            // A call to it says, in one line, that nothing has dialed in yet
+            // and how long the code lasts — not the whole accept instructions.
+            var sessionWait = RemoteConsoleClient.SessionWait;
+            RemoteConsoleClient.SessionWait = TimeSpan.FromMilliseconds(200);
+            try
+            {
+                var notYet = await Assert.ThrowsAsync<InvalidOperationException>(() => waiting.SendRequestAsync(Ping(), CancellationToken.None));
+                Assert.StartsWith($"Nothing has dialed in on port {secondPort} yet (", notYet.Message);
+                Assert.Contains("min left on the code", notYet.Message);
+                Assert.DoesNotContain("Enable-MCPRemoteControl -ConnectTo", notYet.Message);
+                Assert.DoesNotContain("bootstrap.ps1", notYet.Message);
+            }
+            finally
+            {
+                RemoteConsoleClient.SessionWait = sessionWait;
+            }
 
             var max = RemoteConsoleRegistry.MaxConsoles;
             RemoteConsoleRegistry.MaxConsoles = 2;
@@ -1021,7 +1108,7 @@ public class RemoteConsoleTests
             // process would deliver a real Ctrl+C to the test host.)
 
             client.ResultPending = true; // as a timeout or an acknowledged cancel leaves it
-            var response = await RemoteConsoleTools.ExecuteRemoteCommand(consoles, null!, "'hello'", null, 30, null, null, null, null, null, null, null, null, CancellationToken.None);
+            var response = await RemoteConsoleTools.ExecuteRemoteCommand(consoles, null!, null, "'hello'", null, 30, null, null, null, null, null, null, null, null, CancellationToken.None);
             Assert.Contains("(no pending output)", response); // the earlier result's block came first
             Assert.False(client.ResultPending);
         }
@@ -1029,5 +1116,54 @@ public class RemoteConsoleTests
         {
             RemoteConsoleListener.Stop("test", fromConsoleThread: true);
         }
+    }
+
+    [Fact]
+    public async Task ExecuteRemoteCommand_BringsTheOtherConsolesReadyResults_BeforeItsOwn()
+    {
+        // Seen 2026-11-19: a result ready on another console during a remote
+        // command stayed behind until wait_for_completion, although a pending
+        // result is promised "with your next tool call of any kind".
+        var port = FreePort();
+        var code = RemoteConsoleListener.Start(port, IPAddress.Loopback);
+        using var consoles = new RemoteConsoleRegistry();
+        try
+        {
+            await consoles.ConnectAsync($"127.0.0.1:{port}", code, CancellationToken.None);
+            var discovery = new Mock<IPipeDiscoveryService>();
+            discovery.Setup(d => d.CollectAllCachedOutputsAsync("default", string.Empty, It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(new CachedOutputResult("[other console] ✓ local done", "[other console] ⧗ local still running"));
+
+            var response = await RemoteConsoleTools.ExecuteRemoteCommand(consoles, null!, discovery.Object, "'remote hello'", null, 30, null, null, null, null, null, null, null, null, CancellationToken.None);
+
+            var running = response.IndexOf("local still running", StringComparison.Ordinal);
+            var done = response.IndexOf("local done", StringComparison.Ordinal);
+            // This command's own block (the console in this process has no engine to run it).
+            var own = response.IndexOf($"[remote console: 127.0.0.1:{port}]", StringComparison.Ordinal);
+            Assert.True(running >= 0 && running < done && done < own, response);
+            // Collected with the main agent's id and nothing excluded (every local console is another one here).
+            discovery.Verify(d => d.CollectAllCachedOutputsAsync("default", string.Empty, It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally
+        {
+            RemoteConsoleListener.Stop("test", fromConsoleThread: true);
+        }
+    }
+
+    [Fact]
+    public void DialFailure_SaysWhatHappened_NotTheOperationWasCanceled()
+    {
+        // The connect timeout is a cancellation: its message was all the user saw (seen 2026-11-19).
+        var timeout = RemoteConsoleDialer.DescribeDialFailure(new OperationCanceledException(), "36.12.238.164", handshaking: false);
+        Assert.StartsWith("no answer within 15 s", timeout);
+        Assert.DoesNotContain("canceled", timeout);
+
+        Assert.Contains("handshake did not finish",
+            RemoteConsoleDialer.DescribeDialFailure(new TaskCanceledException(), "h", handshaking: true));
+        Assert.StartsWith("nothing is listening on that port: the MCP server may have restarted",
+            RemoteConsoleDialer.DescribeDialFailure(new SocketException((int)SocketError.ConnectionRefused), "h", handshaking: false));
+        Assert.Equal("the name yt-laptop4 does not resolve here; use one of the IP addresses the AI listed instead",
+            RemoteConsoleDialer.DescribeDialFailure(new SocketException((int)SocketError.HostNotFound), "yt-laptop4", handshaking: false));
+        Assert.Equal("Something else", RemoteConsoleDialer.DescribeDialFailure(new IOException("Something else."), "h", handshaking: false));
     }
 }

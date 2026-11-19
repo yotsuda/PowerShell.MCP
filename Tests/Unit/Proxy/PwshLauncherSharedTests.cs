@@ -164,25 +164,27 @@ public class PwshLauncherSharedTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void BuildWindowsTerminalCommandLine_SurvivesWtReparse(bool noProfile)
+    [InlineData(false, @"C:\MyProj\PowerShell.MCP")]
+    [InlineData(true, @"C:\My Proj\a;b")]
+    [InlineData(false, @"C:\")]
+    public void BuildWindowsTerminalCommandLine_SurvivesWtReparse(bool noProfile, string startDirectory)
     {
         if (!OperatingSystem.IsWindows()) return;
         const string wt = @"C:\Users\u\AppData\Local\Microsoft\WindowsApps\wt.exe";
         const string pwsh = @"C:\Program Files\PowerShell\7\pwsh.exe";
         var command = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, "sa-1'2", $"Write-Host '{NastyBanner}'");
-        var commandLine = PwshLauncherShared.BuildWindowsTerminalCommandLine(wt, pwsh, command, noProfile);
+        var commandLine = PwshLauncherShared.BuildWindowsTerminalCommandLine(wt, pwsh, command, noProfile, startDirectory);
 
         // No bare ';' may reach wt.exe: it would start a new wt subcommand.
         Assert.DoesNotMatch(@"(?<!\\);", commandLine);
 
         // What wt.exe does (measured on Windows Terminal 1.25): split with CommandLineToArgvW,
         // turn \; back into ;, then join the shell's arguments, quoting those with a space
-        // but without re-escaping anything inside them.
+        // but without re-escaping anything inside them. The tab's directory is passed as -d:
+        // without it the tab starts in its profile's startingDirectory (%USERPROFILE% when unset).
         var wtArgv = SplitArgs(commandLine).Select(a => a.Replace("\\;", ";")).ToArray();
-        Assert.Equal(new[] { wt, "-w", "new", "new-tab", pwsh }, wtArgv[..5]);
-        var shellLine = string.Join(' ', wtArgv[4..].Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+        Assert.Equal(new[] { wt, "-w", "new", "new-tab", "-d", startDirectory, pwsh }, wtArgv[..7]);
+        var shellLine = string.Join(' ', wtArgv[6..].Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
 
         var expected = new List<string> { pwsh };
         if (noProfile) expected.Add("-NoProfile");

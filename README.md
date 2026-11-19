@@ -69,6 +69,27 @@ $sb = [System.Text.StringBuilder]::new(256); $len = 256
 
 PowerShell.MCP complements your existing MCP setup by providing a flexible, general-purpose foundation.
 
+## Defend with AI: network security audits
+
+Attacks that use AI to find and work through weak spots are now reported week after week, and they are not aimed only at large companies. An attacker needs one opening; a defender has to close all of them — the careful, repetitive checking that usually gets postponed. Put the same kind of help on the defending side.
+
+**[powershell-mcp-security](https://github.com/yotsuda/powershell-mcp-security)** is a Claude Code plugin that has the AI audit and harden a Windows, Linux or macOS machine through PowerShell.MCP — this one, or a server or VM reached through [remote control](#remote-console-another-machine) — with you watching every command:
+
+- **Read-only first**: the settings that are actually in effect, not only config files, checked against what the network sees from outside.
+- **Fixes only with your approval**, in an order that cannot lock you out, verified from outside and again after a reboot, where settings quietly revert.
+- **No keys or passwords for the AI**: a person at that machine starts remote control, and `sudo` passwords are typed at its console.
+
+Its helper module **[NetworkSecurityAudit](https://www.powershellgallery.com/packages/NetworkSecurityAudit)** holds the checks that are easy to get wrong by hand: TCP probes that tell closed from filtered (`Test-NsaTcpPort`), listening ports with their process and service (`Get-NsaListeningPort`), Windows firewall rules open to any address (`Find-NsaPermissiveFirewallRule`), effective Linux `sysctl` values and SSH logins. It only reads, and works on its own too (`Install-Module NetworkSecurityAudit`); the AI asks before installing it on a machine it audits.
+
+```text
+/plugin marketplace add yotsuda/powershell-mcp-plugins
+/plugin install powershell-mcp-security@powershell-mcp
+```
+
+Then ask: *"Audit the network security of this server. Read-only first, and check what is visible from outside."* A walkthrough, in Japanese: [リモート PC のセキュリティ監査と対策を、AI に任せる方法](https://qiita.com/ytsuda/items/4c0dddb76bd462f987df).
+
+**Help collect what defenders know.** The repository is meant to gather network-audit know-how in one place: checks that catch real misconfigurations, fixes that cannot lock anyone out, settings that are silently overridden. When an audit shows the skill was wrong or missing something, the AI offers to draft an issue for it — you review the text, with real addresses and names left out, before anything is posted. Pull requests for a new check or another OS are welcome as well ([CONTRIBUTING](https://github.com/yotsuda/powershell-mcp-security/blob/main/CONTRIBUTING.md)).
+
 ## What Makes It Powerful
 
 **🖥️ Multi-Client Architecture**
@@ -374,7 +395,7 @@ The consoles the AI starts are not elevated. For admin work, open PowerShell 7 *
 
 The AI can also drive a console on **another machine** — a test VM, a build box, a colleague's PC with that colleague watching (they run `Enable-MCPRemoteControl` and read you the code, below). If that console is elevated, so is the AI, which makes it a practical tool for **defensive work**: auditing a server, reading its event logs, checking what it exposes, hardening it, with the person responsible watching every command.
 
-*"Audit this VM's security, read-only"* — against a lab VM in Azure, reached through a port its owner had opened to one address, one session went from the Security log (2,015 failed RDP logons in three hours, no account lockout configured) to the local accounts and password policy, the listening ports checked against what is reachable from outside, SQL Server's version and login mode, Defender, TLS settings and persistence points, and ended with a report the team that owns the VM template could act on, in about ten minutes. That kind of review is usually postponed; attackers' tooling is already automated, and the gap is on the defenders' side.
+*"Audit this VM's security, read-only"* — against a lab VM in Azure, reached through a port its owner had opened to one address, one session went from the Security log (2,015 failed RDP logons in three hours, no account lockout configured) to the local accounts and password policy, the listening ports checked against what is reachable from outside, SQL Server's version and login mode, Defender, TLS settings and persistence points, and ended with a report the team that owns the VM template could act on, in about ten minutes. That kind of review is usually postponed; attackers' tooling is already automated, and the gap is on the defenders' side. For a guided audit with fixes that cannot lock you out, see [Defend with AI](#defend-with-ai-network-security-audits).
 
 On the remote machine, install PowerShell 7.4+ (`winget install Microsoft.PowerShell` on Windows; [other platforms](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)), then in PowerShell 7:
 
@@ -398,7 +419,7 @@ If PowerShell 7 and PowerShell.MCP cannot be installed there the usual way — a
 - Security: TLS with a certificate made for the session and a handshake bound to that certificate and to the code. The code is short-lived on purpose: anyone who reaches the port can try codes offline. Meant for a LAN or VPN — do not expose the port to the Internet. What an attacker on the network can and cannot do: [SECURITY.md](SECURITY.md#remote-control).
 - Both machines must run the same PowerShell.MCP version. If they differ — and neither may be the latest — run `Update-Module PowerShell.MCP` on both, or on the older one with `-RequiredVersion <the newer one's version>`. If `Update-Module` refuses (a module not installed with `Install-Module`, such as one the one-line bootstrap installed), use `Install-Module PowerShell.MCP -RequiredVersion <that version> -Force`. After updating your own machine, restart the MCP client.
 
-**Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` or pastes the line and answers Yes. It refuses to start where nobody could answer (a service, a script without a console, `-NonInteractive`), shows `[AI from <host>]` on every prompt and `Administrator:` in the title of an elevated window, and ends with `Disable-MCPRemoteControl` or by itself once no AI has been connected for 10 minutes (what the AI changed meanwhile stays, as with any admin work). Intrusion tooling is built to be the opposite: hidden and persistent. Like any tool, it cannot stop code already running on a machine from starting it out of sight — but it gives such code nothing it did not have, and [SECURITY.md](SECURITY.md#remote-control) lists how to spot it. **Paste a line only if you asked an AI for it yourself**: "paste this into PowerShell" is also how lures begin, and the console's question names the machine it will connect to. To help on a colleague's PC, use the listening mode, so no line is handed over.
+**Granted, not taken.** Remote control starts only when a person at that machine runs `Enable-MCPRemoteControl` or pastes the line and answers Yes. It refuses to start where nobody could answer (a service or scheduled task, a script without a console, `-NonInteractive`; the prompt of your own SSH login counts as a console, for machines with no desktop), shows `[AI from <host>]` on every prompt and `Administrator:` in the title of an elevated window, and ends with `Disable-MCPRemoteControl` or by itself once no AI has been connected for 10 minutes (what the AI changed meanwhile stays, as with any admin work). Intrusion tooling is built to be the opposite: hidden and persistent. Like any tool, it cannot stop code already running on a machine from starting it out of sight — but it gives such code nothing it did not have, and [SECURITY.md](SECURITY.md#remote-control) lists how to spot it. **Paste a line only if you asked an AI for it yourself**: "paste this into PowerShell" is also how lures begin, and the console's question names the machine it will connect to. To help on a colleague's PC, use the listening mode, so no line is handed over.
 
 **Data on the remote machine can be written by an attacker.** Event logs, user names in failed-logon records, file contents, web pages: when the AI reads them, it reads text that someone else chose, possibly crafted to look like instructions — with whatever rights that console has, and with the AI's access to *your* machine as well. The server tells the AI to treat it as data and to connect only to hosts and codes you typed. Pair only with machines you trust that far; for audits and incident response, ask for **read-only** work first and have the AI confirm before any change; to keep a record, run `Start-Transcript` in the remote console before pairing (see [Auditing an AI Session](SECURITY.md#auditing-an-ai-session)).
 

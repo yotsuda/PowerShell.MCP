@@ -15,8 +15,9 @@ namespace PowerShell.MCP.Cmdlets;
 /// </summary>
 /// <remarks>
 /// Remote control is something a person at this machine grants, in a console
-/// they can see: the cmdlet refuses to run where nobody could answer (a
-/// service, redirected input, -NonInteractive, a host that is not a console)
+/// they can see — a window, or the terminal of their SSH login: the cmdlet
+/// refuses to run where nobody could answer (a service or scheduled task,
+/// redirected input, -NonInteractive, a host that is not a console)
 /// and asks for a yes before it listens or dials. There is deliberately no
 /// switch to skip the question — that would make it a background agent. This
 /// stops accidents and scripts, not code already running as the user, which
@@ -71,7 +72,7 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
         if (WhyNobodyCanWatch() is { } reason)
         {
             ThrowTerminatingError(new ErrorRecord(
-                new InvalidOperationException($"Remote control needs a console a person can see and answer, and {reason}. Run Enable-MCPRemoteControl in an interactive PowerShell 7 window."),
+                new InvalidOperationException($"Remote control needs a console a person can see and answer, and {reason}. Run Enable-MCPRemoteControl in an interactive PowerShell 7 window, or at the prompt of an SSH login."),
                 "NotInteractive", ErrorCategory.InvalidOperation, null));
         }
 
@@ -212,10 +213,21 @@ public class EnableMCPRemoteControlCmdlet : PSCmdlet
     /// The point is that remote control cannot be switched on quietly from a
     /// script, a scheduled task or a hidden window.
     /// </summary>
+    /// <remarks>
+    /// An SSH login with a terminal counts as a console a person can see: on
+    /// Linux and macOS .NET reports every process as interactive, and on
+    /// Windows <see cref="SshSession"/> makes the same exception for a process
+    /// under sshd — which still needs a terminal, since the input check below
+    /// turns away ssh host 'command'.
+    /// </remarks>
     private string? WhyNobodyCanWatch()
     {
-        if (!Environment.UserInteractive) return "this process is not interactive (a service or a scheduled task)";
-        if (Console.IsInputRedirected) return "its input is redirected";
+        var overSsh = !Environment.UserInteractive && SshSession.IsAncestor();
+        if (!Environment.UserInteractive && !overSsh) return "this process is not interactive (a service or a scheduled task)";
+        if (Console.IsInputRedirected)
+            return overSsh
+                ? "its input is redirected (an SSH session without a terminal: log in with ssh, or use ssh -t, and run it at the prompt)"
+                : "its input is redirected";
         if (StartedNonInteractive()) return "PowerShell was started with -NonInteractive";
         if (Host.Name != "ConsoleHost") return $"the host is '{Host.Name}', not a console";
         return null;

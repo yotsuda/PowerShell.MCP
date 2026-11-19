@@ -283,13 +283,18 @@ internal static class PwshLauncherShared
     // Not -EncodedCommand: Defender reported a long `pwsh -EncodedCommand` as
     // Trojan:Win32/Commando.C!ml and killed it. Not -File: execution policy (AllSigned)
     // would block the unsigned temp script, while -Command is not subject to it.
-    // `-w new` keeps today's one window per console. No `-d`: wt.exe passes on the
-    // lpCurrentDirectory it was started with.
-    internal static string BuildWindowsTerminalCommandLine(string wtPath, string pwshPath, string command, bool noProfile)
+    // `-w new` keeps today's one window per console. `-d` is required: the tab starts in
+    // its profile's startingDirectory, %USERPROFILE% when the profile sets none, not in
+    // the directory wt.exe was started in — seen 2026-11-19 on Windows Terminal 1.25,
+    // where start_console's start_location was ignored and the proxy then took the
+    // console's real cwd for a `cd` typed by the user. The path is one wt.exe argument,
+    // so it is quoted once and its ';' sent as \; like the rest.
+    internal static string BuildWindowsTerminalCommandLine(string wtPath, string pwshPath, string command, bool noProfile, string startDirectory)
     {
         var once = QuoteWindowsArgument(command);
         var twice = QuoteWindowsArgument(once[1..^1]).Replace(";", "\\;");
-        return $"\"{wtPath}\" -w new new-tab \"{pwshPath}\" {InteractiveProfileArg(noProfile)}-NoExit -Command {twice}";
+        var directory = QuoteWindowsArgument(startDirectory).Replace(";", "\\;");
+        return $"\"{wtPath}\" -w new new-tab -d {directory} \"{pwshPath}\" {InteractiveProfileArg(noProfile)}-NoExit -Command {twice}";
     }
 
     internal static string BuildMacOSDoScriptCommand(string tempFile, bool noProfile) =>
@@ -462,9 +467,10 @@ public static class PwshLauncherWindows
             var wtPath = mode == PwshLauncherShared.ConsoleLaunch.Auto ? FindWindowsTerminalForDelegation() : null;
             string commandLine;
             uint creationFlags;
+            var workingDirectory = startLocation ?? userProfile;
             if (wtPath != null)
             {
-                commandLine = PwshLauncherShared.BuildWindowsTerminalCommandLine(wtPath, ResolvePwshPath(), command, PwshLauncherShared.SuppressProfileOnInteractive);
+                commandLine = PwshLauncherShared.BuildWindowsTerminalCommandLine(wtPath, ResolvePwshPath(), command, PwshLauncherShared.SuppressProfileOnInteractive, workingDirectory);
                 creationFlags = CREATE_UNICODE_ENVIRONMENT;
                 si.dwFlags = STARTF_USESHOWWINDOW;
                 si.wShowWindow = SW_SHOWNOACTIVATE;
@@ -490,7 +496,7 @@ public static class PwshLauncherWindows
                 false,
                 creationFlags,
                 env,
-                startLocation ?? userProfile,
+                workingDirectory,
                 ref si,
                 out pi);
 
@@ -498,8 +504,8 @@ public static class PwshLauncherWindows
 
             // Via wt.exe the shell is a child of the running Windows Terminal, not of the
             // process we started, so its PID is unknown here: 0 makes the caller look for
-            // the console's new pipe instead. wt.exe passes on our environment block and
-            // working directory to the shell.
+            // the console's new pipe instead. wt.exe passes on our environment block to
+            // the shell; the working directory goes as -d (see BuildWindowsTerminalCommandLine).
             pid = wtPath != null ? 0 : (int)pi.dwProcessId;
             hProcess = pi.hProcess;
             hThread = pi.hThread;

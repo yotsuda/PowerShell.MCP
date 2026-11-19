@@ -211,6 +211,19 @@ public class PipeDiscoveryServiceTests
             PipeDiscoveryService.DescribeNotFree("PID #1 Oak", new GetStatusResponse { Status = "busy" }));
     }
 
+    [Fact]
+    public void DescribeNotFree_ACancelledCommand_IsNeitherRunningNorAUserCommand()
+    {
+        // Seen 2026-11-18: right after cancel, a dotnet test still shutting its
+        // MSBuild nodes down read "busy (dotnet test ..., 15.8s)", as if it ran
+        // on; and a console not yet back at its prompt read "(user command)"
+        // though nobody had typed anything.
+        Assert.Equal("PID #1 Oak was still stopping the cancelled command (dotnet test Tests ..., cancelled 1.2s ago)",
+            PipeDiscoveryService.DescribeNotFree("PID #1 Oak", new GetStatusResponse { Status = "busy", Pipeline = "dotnet test Tests ...", Duration = 15.8, CancelledSecondsAgo = 1.2 }));
+        Assert.Equal("PID #1 Oak was not back at its prompt yet after the cancelled command (dotnet test Tests ..., cancelled 3.0s ago)",
+            PipeDiscoveryService.DescribeNotFree("PID #1 Oak", new GetStatusResponse { Status = "busy", Reason = "cancelled_command", Pipeline = "dotnet test Tests ...", Duration = 10.01, CancelledSecondsAgo = 3.0 }));
+    }
+
     #endregion
 
     #region CollectAllCachedOutputsAsync Tests

@@ -74,6 +74,35 @@ public class PowerShellToolsTests
     }
 
     [Fact]
+    public async Task GetCurrentLocation_FromAnotherConsole_SaysWhichWasPassedOverAndWhy()
+    {
+        // Seen 2026-11-19: with the active console busy, the location came from
+        // another of the agent's consoles and nothing said why; execute_command
+        // and start_console both say it.
+        _mockPipeDiscoveryService
+            .Setup(s => s.FindReadyPipeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PipeDiscoveryResult(TestPipeName, false, new List<string>(), null,
+                ActiveNotFree: "PID #139364 Zanzibar was busy (Start-Sleep 25, 5.1s)"));
+        _mockPowerShellService
+            .Setup(s => s.GetCurrentLocationFromPipeAsync(TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Location [FileSystem]: C:\\Users\\test");
+        _mockPipeDiscoveryService
+            .Setup(s => s.CollectAllCachedOutputsAsync(It.IsAny<string>(), TestPipeName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CachedOutputResult("", "[other console] ⧗ Pipeline is running | Window: #139364 Zanzibar"));
+
+        var result = await PowerShellTools.GetCurrentLocation(
+            _mockPowerShellService.Object,
+            _mockPipeDiscoveryService.Object,
+            agent_id: TestAgentId);
+
+        var busy = result.IndexOf("[other console] ⧗", StringComparison.Ordinal);
+        var notice = result.IndexOf("ℹ️ Switched to existing console", StringComparison.Ordinal);
+        var location = result.IndexOf("Location [FileSystem]", StringComparison.Ordinal);
+        Assert.True(busy >= 0 && busy < notice && notice < location, result);
+        Assert.Contains("PID #139364 Zanzibar was busy (Start-Sleep 25, 5.1s) and stays with this session.", result);
+    }
+
+    [Fact]
     public async Task GetCurrentLocation_ReadyPipe_IncludesCachedOutputs()
     {
         // Arrange: pipe is ready with cached outputs from other pipes

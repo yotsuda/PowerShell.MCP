@@ -74,6 +74,8 @@ public class PipeDiscoveryClosedConsoleTests : IDisposable
         var line = Assert.Single(first.ClosedConsoleMessages);
         Assert.Contains($"Console PID #{GonePid} was closed", line);
         Assert.Contains("outside this server", line);
+        // It opens the response: no list marker in front (seen 2026-11-19 as "  - ⚠ …").
+        Assert.StartsWith("⚠", line);
         Assert.DoesNotContain(GonePid, _sm.GetKnownOwnedPids(_agentId));
 
         var second = await _service.FindReadyPipeAsync(_agentId, CancellationToken.None);

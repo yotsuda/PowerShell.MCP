@@ -75,7 +75,10 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     {
         var name = _sessionManager.GetConsoleDisplayName(pid);
         _sessionManager.ClearDeadPipe(agentId, ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pid));
-        return "  - " + ClosedConsoleNotices.Describe(name, reason, reason == null && IsProcessAlive(pid));
+        // No "  - ": these lines are joined with no heading above them, so a
+        // list marker only pushed the ⚠ off the start of the response (seen
+        // 2026-11-19); wait_for_completion's own line never had one.
+        return ClosedConsoleNotices.Describe(name, reason, reason == null && IsProcessAlive(pid));
     }
 
     private static bool IsProcessAlive(int pid) => ClosedConsoleNotices.IsProcessAlive(pid);
@@ -93,6 +96,10 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var seconds = status.Duration is > 0 ? $", {status.Duration:F1}s" : "";
         if (status.Status == PipeStatus.AwaitingInput)
             return $"{displayName} was waiting for input" + (string.IsNullOrEmpty(status.Message) ? "" : $" ({status.Message})");
+        if (status.CancelledSecondsAgo is double cancelled)
+            return status.Reason == PipeStatus.CancelledCommand
+                ? $"{displayName} was not back at its prompt yet after the cancelled command ({status.Pipeline}, cancelled {cancelled:F1}s ago)"
+                : $"{displayName} was still stopping the cancelled command ({status.Pipeline}, cancelled {cancelled:F1}s ago)";
         var doing = status.Pipeline == "(user command)" ? "user command" : status.Pipeline ?? status.Status ?? "busy";
         return $"{displayName} was busy ({doing}{seconds})";
     }
@@ -109,7 +116,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
         var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
         var reason = pid.HasValue ? ClosedConsoleNotices.TakeReason(_sessionManager.ProxyPid, agentId, pid.Value) : null;
         var alive = reason == null && pid.HasValue && IsProcessAlive(pid.Value);
-        return "  - " + ClosedConsoleNotices.Describe(name, reason, alive);
+        return ClosedConsoleNotices.Describe(name, reason, alive);
     }
 
     /// <inheritdoc />

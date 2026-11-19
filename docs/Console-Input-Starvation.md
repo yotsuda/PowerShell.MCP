@@ -176,3 +176,12 @@ So put the knowledge where it does not have to be looked up:
   near-zero CPU with threads in `EventPairLow`, say so and name the
   `cmd /d /s /c "... < NUL"` form. This changes no behaviour and requires the
   reader to know nothing in advance.
+
+  Only while nothing else under the console is working. The fingerprint alone
+  also fits a process that is merely waiting on another: on 2026-11-18 a build
+  slowed by a loaded machine (`dotnet test`, stdin from NUL) was reported as
+  stalled, naming an MSBuild node — and later `dotnet test` itself — while the
+  compiler server below them compiled. So the diagnostic samples the CPU of the
+  whole tree under the console (console hosts aside), and says nothing while any
+  of it moves. A real stall beside a still-busy sibling is then reported on a
+  later timeout, once the rest has gone quiet.

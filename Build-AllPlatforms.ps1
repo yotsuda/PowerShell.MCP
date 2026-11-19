@@ -1,10 +1,17 @@
 # Build-AllPlatforms.ps1
-# Builds PowerShell.MCP module and PowerShell.MCP.Proxy for all supported platforms
+# Builds PowerShell.MCP.dll and the win-x64 PowerShell.MCP.Proxy.exe on this
+# Windows machine and deploys them into the installed module.
+#
+# Windows only. The proxy is published with Native AOT, which does not compile
+# across operating systems, so the linux-x64 / osx-x64 / osx-arm64 proxies are
+# built on their own OS by .github/workflows/release.yml (run it by hand with
+# workflow_dispatch for a build that publishes nothing). The installed module's
+# bin\<other rid> folders are left as they are.
 
 [CmdletBinding(DefaultParameterSetName = 'Target')]
 param(
     [Parameter(Position = 0, ParameterSetName = 'Target')]
-    [ValidateSet('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')]
+    [ValidateSet('Dll', 'WinX64')]
     [string[]]$Target,
     # Shortcut for fast iteration on the in-pwsh module: equivalent to
     # -Target Dll (no proxy rebuild for any platform). Useful while
@@ -68,7 +75,7 @@ function Install-FileWithStash([string]$Source, [string]$Destination) {
 }
 
 # If no target specified, build all
-$allTargets = @('Dll', 'WinX64', 'LinuxX64', 'OsxX64', 'OsxArm64')
+$allTargets = @('Dll', 'WinX64')
 if (-not $Target) {
     $Target = $allTargets
 }
@@ -76,9 +83,6 @@ if (-not $Target) {
 # Map target names to RIDs
 $ridMap = @{
     'WinX64'   = 'win-x64'
-    'LinuxX64' = 'linux-x64'
-    'OsxX64'   = 'osx-x64'
-    'OsxArm64' = 'osx-arm64'
 }
 
 # Determine output base from the installed module if not specified. A machine
@@ -240,13 +244,12 @@ if ($proxyTargets) {
             exit 1
         }
 
-        # Single-file publish: normally just the exe.
-        Get-ChildItem -LiteralPath $publishDir -File | ForEach-Object {
-            Install-FileWithStash $_.FullName (Join-Path $outputDir $_.Name)
-        }
+        # Native AOT publishes the exe plus its native symbols (.pdb); only the
+        # exe is shipped.
+        $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
+        Install-FileWithStash (Join-Path $publishDir $exeName) (Join-Path $outputDir $exeName)
         Remove-Item -LiteralPath $publishDir -Recurse -Force -ErrorAction SilentlyContinue
 
-        $exeName = if ($rid -like 'win-*') { 'PowerShell.MCP.Proxy.exe' } else { 'PowerShell.MCP.Proxy' }
         $exePath = Join-Path $outputDir $exeName
 
         if (Test-Path $exePath) {

@@ -87,7 +87,7 @@ public sealed class RemoteConsoleRegistry : IDisposable
         {
             Prune();
             // One console waiting to dial in at a time: called again, it
-            // repeats that one's instructions, as it always has.
+            // repeats that one's instructions (rebuilt for a new install choice).
             RemoteConsoleClient? waiting;
             lock (_lock) waiting = _consoles.FirstOrDefault(c => c.IsWaitingForDialIn);
             if (waiting != null)
@@ -124,12 +124,11 @@ public sealed class RemoteConsoleRegistry : IDisposable
             client.Dispose();
             List<RemoteConsoleClient> left;
             lock (_lock) left = [.. _consoles];
-            return left.Count switch
-            {
-                0 => result,
-                1 => result + $"\n\nStill connected: {left[0].Target}; remote tool calls go there without naming it.",
-                _ => result + $"\n\nStill connected: {string.Join(", ", left.Select(c => $"{c.Target} (remote: \"{c.Handle}\")"))}; remote tool calls must name one in the remote parameter.",
-            };
+            if (left.Count == 0) return result;
+            var note = left.Count == 1
+                ? "remote tool calls go there without naming it."
+                : "remote tool calls must name one in the remote parameter.";
+            return result + $"\n\n{Listing(left, "Still connected")}; {note}";
         }
         finally
         {
@@ -173,7 +172,25 @@ public sealed class RemoteConsoleRegistry : IDisposable
 
     /// <summary>The consoles as the AI names them, for messages.</summary>
     private static string List(IEnumerable<RemoteConsoleClient> consoles) =>
-        "Remote consoles: " + string.Join(", ", consoles.Select(c => $"{c.Target} (remote: \"{c.Handle}\")")) + ".";
+        Listing(consoles, "Remote consoles") + ".";
+
+    /// <summary>
+    /// "{label}: A (remote: "a"), B (remote: "b")", with a console still waiting
+    /// to dial in kept apart: "…; waiting to dial in: "port N"". It used to be
+    /// listed among the connected ones as " (waiting on port N)", a name with
+    /// nothing before it (seen 2026-11-19, "Also connected: …, (waiting on port
+    /// 60227) (remote: "port 60227")").
+    /// </summary>
+    internal static string Listing(IEnumerable<RemoteConsoleClient> consoles, string label)
+    {
+        var all = consoles.ToList();
+        var connected = string.Join(", ", all.Where(c => !c.IsWaitingForDialIn).Select(c => $"{c.Target} (remote: \"{c.Handle}\")"));
+        var waiting = string.Join(", ", all.Where(c => c.IsWaitingForDialIn).Select(c => $"\"{c.Handle}\""));
+        if (waiting.Length == 0) return $"{label}: {connected}";
+        return connected.Length == 0
+            ? $"{label}: none connected; waiting to dial in: {waiting}"
+            : $"{label}: {connected}; waiting to dial in: {waiting}";
+    }
 
     private void Add(RemoteConsoleClient client)
     {
@@ -191,7 +208,12 @@ public sealed class RemoteConsoleRegistry : IDisposable
         lock (_lock) others = _consoles.Where(c => c != self).ToList();
         if (others.Count == 0) return "";
         var note = self != null ? $" (this one: \"{self.Handle}\")" : "";
-        return $"\n\nAlso connected: {string.Join(", ", others.Select(c => $"{c.Target} (remote: \"{c.Handle}\")"))}. " +
+        // Only waiting ones: "Also: none connected; waiting to dial in: …" reads
+        // badly, so say that directly.
+        var listing = others.All(c => c.IsWaitingForDialIn)
+            ? $"Also waiting to dial in: {string.Join(", ", others.Select(c => $"\"{c.Handle}\""))}"
+            : Listing(others, "Also connected");
+        return $"\n\n{listing}. " +
                $"While more than one remote console is connected, every remote tool call must name its console in the remote parameter{note}.";
     }
 

@@ -304,6 +304,27 @@ public class PipelineHelperTests
             PipelineHelper.MarkOtherConsole("⧗ Pipeline is running | Window: #2 B"));
     }
 
+    [Theory]
+    [InlineData("⧗ User command running | Window: #5664 Zinc | Status: Busy | Pipeline: (user command) | Duration: 13.86s")]
+    [InlineData("⧗ | PID #5664 Zinc | Status: Busy | Pipeline: (user command) | Duration: 10.06s")]
+    [InlineData("⧗ Stopping the cancelled command (cancelled 1.2s ago) | Window: #2 B | Status: Busy")]
+    [InlineData("⌨ Console is waiting for input (Name) | Window: #2 B | Status: AwaitingInput")]
+    [InlineData("⚠ Pipeline interrupted before completion (cancel, Ctrl+C, or exit) | Window: #2 B")]
+    public void MarkOtherConsole_EveryKindOfStatusLine_IsPrefixed(string line)
+    {
+        // Seen 2026-11-19: a user command's status line and the proxy's fallback
+        // were left unmarked beside another console's result.
+        Assert.Equal(PipelineHelper.OtherConsoleMarker + line, PipelineHelper.MarkOtherConsole(line));
+    }
+
+    [Theory]
+    [InlineData("✓ 12 tests passed")]
+    [InlineData("⚠ deprecated: use Foo | Bar instead")]
+    public void MarkOtherConsole_OutputLinesWithAnIcon_AreLeftAlone(string line)
+    {
+        Assert.Equal(line, PipelineHelper.MarkOtherConsole(line));
+    }
+
     [Fact]
     public void MarkOtherConsole_LeavesOutputLinesAndMarkedLinesAlone()
     {

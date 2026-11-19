@@ -19,10 +19,13 @@ failure blocks the tag.
 
 1. On the test machine, in PowerShell 7, from a clone at the release commit:
    ```powershell
-   .\Build-AllPlatforms.ps1          # builds all RIDs into the installed module path
+   .\Build-AllPlatforms.ps1          # Windows: builds the DLL + win-x64 proxy into the installed module path
    .\Tests\Run-AllTests.ps1          # must be green here too
    Get-Module PowerShell.MCP -ListAvailable | Select-Object Version, ModuleBase
    ```
+   On Linux or macOS, install the staged module from a hand-run `Release`
+   workflow instead (see RELEASE.md, step 3): the proxy is Native AOT and is
+   built only on its own OS.
    `Get-MCPProxyPath` must point into that module folder, and
    `(Get-Item (Get-MCPProxyPath)).VersionInfo.ProductVersion` must carry the
    release commit's hash.
@@ -90,7 +93,7 @@ Repeat 1.1, but after console B's command type `Get-` (no Enter) in console A's 
 (Before this release the second call always started a new console: the first console's heartbeat was 12 s old and it answered "busy (user command)".)
 
 ### 2.2 Variation with a user command
-👤 In the AI's console window, type `Start-Sleep 20` and press Enter.
+👤 In the AI's console window, type `Start-Sleep 20` and press Enter. **Wait at least 10 seconds** before asking for the next step: the proxy reads a console as running a user command only once its heartbeat is 10 s old. Asked sooner, the console still looks free, the command is sent to it, and the call waits out those 10 s before it auto-routes (`ℹ️ Auto-routed to PID #<B> <name> … (source console busy with user_command). Pipeline executed automatically`) — a correct result by the other path, seen 2026-11-19; the 📣 line for the new console must then still come first.
 🤖 `execute_command('"during user command"')`
 ✅ A new console starts (or an existing standby one is used), and the same line says why:
 `ℹ️ Started new console PID #<B> <name> with PowerShell.MCP module imported. PID #<A> <name> was busy (user command, …s) and stays with this session.`
@@ -165,7 +168,27 @@ confirm, and read the code to the AI. (For a NAT'd VM use
 👤 On the remote machine, disable and re-enable the network adapter (or pause the VM) while a remote command runs.
 ✅ Any error from the proxy about the dropped connection says `wait_for_completion`, not `wait_for_remote_completion`; once the console is back, `wait_for_completion` collects the output.
 
-🤖 `disconnect_remote_console()` when done.
+### 4.8 Several consoles at once: each result comes back when its command ends
+Connect two or three remote consoles (each named `A`, `B`, `C` below by its
+`remote` value: the host given to `connect_remote_console`, or `port N` for one
+that dialed in); the agent's local console takes part too. Each command stamps
+its start and end in UTC, since the machines' time zones differ:
+`$s = [DateTime]::UtcNow; Start-Sleep <n>; "<name>: started $($s.ToString('HH:mm:ss.fff'))Z ended $([DateTime]::UtcNow.ToString('HH:mm:ss.fff'))Z"`
+
+🤖 In one turn, each with `timeout_seconds=2`: `execute_remote_command(remote=A, …8 s…)`, `execute_command(…14 s…)`, `execute_remote_command(remote=B, …20 s…)`, `execute_remote_command(remote=C, …35 s…)`.
+✅ Each times out with its running status line, the remote ones under their own `[remote console: …]`. A later call's response may also carry an earlier remote console's `Still running` block (as in 4.1).
+✅ The starts are about 2 s apart (the timeout), not at the same instant: Claude Code makes a turn's calls to one server one after another — its MCP log (`%LOCALAPPDATA%\claude-cli-nodejs\Cache\<project>\mcp-logs-pwsh\*.jsonl`) shows each `Calling MCP tool` only after the previous `completed` (seen 2026-11-19). The commands still run at the same time, because each call returns at its timeout. Not a proxy fault; judge the order by the end times.
+🤖 `wait_for_completion(timeout_seconds=60)` four times.
+✅ They come back in the order they end — A, local, B, C — each exactly once, under its own tag (the local one untagged), with the consoles not yet done listed as still running and their elapsed time.
+✅ The consoles still running come first, the results after them: a local one is followed by `The consoles above are still running; wait_for_completion again returns as soon as the next one finishes.`, a remote one by its own `Still running. …`. Nothing follows the last result. (Before the fix, `Use wait_for_completion tool to wait and retrieve the result.` closed every answer that still had a console running, after the result, where it read as being about it — seen 2026-11-19.)
+🤖 `wait_for_completion` a fifth time ✅ "No commands to wait for completion …".
+
+### 4.9 Another console's result arrives with a remote call too
+🤖 `execute_remote_command(remote=A, 'Start-Sleep 4; "A later"', timeout_seconds=2)` ✅ timeout.
+🤖 `execute_remote_command(remote=B, 'Start-Sleep 6; "B filler"')` (A is done before it returns)
+✅ The response carries A's block with `A later` **before** B's own `B filler`; a later `wait_for_completion` finds nothing. The same with a local console in A's place (`execute_command('Start-Sleep 4; "local later"', timeout_seconds=2)`): its block, marked `[other console]`, comes first. (Seen 2026-11-19 before the fix: A's result stayed behind until `wait_for_completion`.)
+
+🤖 `disconnect_remote_console(remote=…)` for each when done.
 
 ---
 

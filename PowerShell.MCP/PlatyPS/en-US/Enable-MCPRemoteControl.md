@@ -57,8 +57,10 @@ and whether elevated, and listing your other PowerShell.MCP consoles (a remote s
 can reach those too); the default answer is No, and there is no switch to skip the
 question. It refuses to run where nobody could answer: a service or scheduled task,
 redirected input, PowerShell started with -NonInteractive, or a host that is not a
-console. The console must be one you opened (Import-Module PowerShell.MCP), not one a
-local MCP server is using.
+console. The prompt of your own SSH login counts as a console you can see (on a
+machine with no desktop, log in with ssh and run it there); ssh host 'command',
+which has no terminal, does not. The console must be one you opened
+(Import-Module PowerShell.MCP), not one a local MCP server is using.
 
 The pairing code is 12 characters (case, dashes and full-width characters do not
 matter) and works for one connection, within 10 minutes. A dropped connection

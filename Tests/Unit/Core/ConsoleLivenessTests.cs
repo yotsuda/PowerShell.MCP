@@ -313,19 +313,36 @@ public class ConsoleLivenessTests : IDisposable
         Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
         Assert.True(ConsoleLiveness.IdleSeconds >= Warn,
             "typed text must not reset the idle clock — that is what would steal the keeper election");
+        // Only the closing clock restarts at the text (ReapIdleSeconds); the
+        // election's (IdleSeconds, the marker) does not, as asserted above.
+        Assert.True(ConsoleLiveness.ReapIdleSeconds < 1);
     }
 
     [Fact]
-    public void Reap_ResumesOnceTypedTextIsCleared()
+    public void Reap_ResumesOnceTypedTextIsCleared_AFullWarnPeriodLater()
     {
         // The veto is a live condition, not a latch: clearing the line (Esc,
-        // Ctrl+C, backspace) makes the console reapable again on the next tick.
+        // Ctrl+C, backspace) makes the console reapable again. But someone was
+        // at the window until then, so the idle clock for closing restarts at
+        // the text last seen: it warns a full warn period later, not on the next
+        // tick (seen 2026-11-19: it closed ~10 s after Esc, 3 min after the last
+        // command, where the test procedure expects about warn + grace).
         Own();
         MakeReapableByNewerSibling();
         Advance(Warn + 5);
 
         Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: true));
-        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: false));
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true, typedTextPresent: false));
+        Assert.True(ConsoleLiveness.ReapIdleSeconds < 1);
+
+        Advance(Warn - 1);
+        Assert.Equal(ReapAction.None, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Advance(2);
+        Assert.Equal(ReapAction.Warn, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        Advance(Grace);
+        Assert.Equal(ReapAction.Close, ConsoleLiveness.EvaluateReap(Warn, Grace, true, true));
+        // The close note's minutes come from the same clock: the text, not the last command.
+        Assert.True(ConsoleLiveness.ReapIdleSeconds < ConsoleLiveness.IdleSeconds);
     }
 
     [Fact]

@@ -194,6 +194,39 @@ public class ExecutionStateTests
     }
 
     [Fact]
+    public void ACancelledCommand_IsReported_UntilTheConsoleIsBackAtItsPrompt()
+    {
+        Reset();
+        ExecutionState.Heartbeat(); // clears any note an earlier test left
+
+        // A cancel with nothing running notes nothing.
+        ExecutionState.NoteCancelRequested();
+        Assert.Null(ExecutionState.CancelledCommand);
+
+        // Cancelled while running: reported as stopping...
+        ExecutionState.SetBusy("dotnet test Tests");
+        ExecutionState.NoteCancelRequested();
+        Assert.Equal("dotnet test Tests", ExecutionState.CancelledCommand?.Pipeline);
+
+        // ...and after it ended, until the first tick: completion is a
+        // heartbeat, but not the console back at its prompt.
+        PowerShellCommunication.NotifyResultReady("⚠ Pipeline interrupted");
+        Assert.Equal("dotnet test Tests", ExecutionState.CancelledCommand?.Pipeline);
+        Assert.True(ExecutionState.IsRunspaceAvailable);
+
+        ExecutionState.Heartbeat();
+        Assert.Null(ExecutionState.CancelledCommand);
+
+        // The next AI command starting ends it as well.
+        ExecutionState.SetBusy("dotnet test Tests");
+        ExecutionState.NoteCancelRequested();
+        ExecutionState.SetBusy("Get-Date");
+        Assert.Null(ExecutionState.CancelledCommand);
+        ExecutionState.CompleteExecution();
+        Reset();
+    }
+
+    [Fact]
     public void SetCurrentAiCwd_RoundTrips()
     {
         ExecutionState.SetCurrentAiCwd(@"C:\Work\Proj");

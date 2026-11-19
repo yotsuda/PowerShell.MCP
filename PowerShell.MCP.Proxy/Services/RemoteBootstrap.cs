@@ -52,7 +52,6 @@ public sealed class RemoteBootstrap
     public string? PwshVersion { get; private init; }
     private ModuleArtifacts _moduleArtifacts = null!;
     private Task<string?>? _pwshZip;
-    private Task<string?>? _pwshMsi;
 
     private sealed record ModuleArtifacts(
         string Version, string DllHash,
@@ -94,15 +93,10 @@ public sealed class RemoteBootstrap
         if (module == null) return null;
 
         var release = await LatestReleaseAsync(ct);
+        // The zip serves every install scope. PowerShell 7.7 stopped
+        // publishing an MSI, and an installer package would tie this to how
+        // Microsoft ships it; the zip is the one asset every release has.
         var (pwshVersion, zipHash, zip) = await ResolveAssetAsync(release, "zip", ct);
-        string? msiHash = null;
-        Task<string?> msi = Task.FromResult<string?>(null);
-        if (installScope == "machine")
-        {
-            string? msiVersion;
-            (msiVersion, msiHash, msi) = await ResolveAssetAsync(release, "msi", ct);
-            if (msiVersion != pwshVersion) { msiHash = null; msi = Task.FromResult<string?>(null); }
-        }
 
         var fromGallery = installScope != "none" && module.NupkgHash != null;
         var script = BootstrapTemplate
@@ -113,7 +107,6 @@ public sealed class RemoteBootstrap
             .Replace("__MODULE_NUPKG_HASH__", fromGallery ? module.NupkgHash! : "")
             .Replace("__PWSH_VERSION__", pwshVersion ?? "")
             .Replace("__PWSH_ZIP_HASH__", zipHash ?? "")
-            .Replace("__PWSH_MSI_HASH__", msiHash ?? "")
             .Replace("\r\n", "\n").Replace("\n", "\r\n");
         var bytes = Encoding.ASCII.GetBytes(script);
         return new RemoteBootstrap
@@ -126,7 +119,19 @@ public sealed class RemoteBootstrap
             PwshVersion = pwshVersion,
             _moduleArtifacts = module,
             _pwshZip = zip,
-            _pwshMsi = msi,
+        };
+    }
+
+    /// <summary>For tests: a bootstrap with just a script, for the given scope; it serves nothing else.</summary>
+    internal static RemoteBootstrap ForTests(string installScope, string script)
+    {
+        var bytes = Encoding.ASCII.GetBytes(script);
+        return new RemoteBootstrap
+        {
+            Script = bytes,
+            ScriptHash = Convert.ToHexString(SHA256.HashData(bytes)),
+            ModuleVersion = "0.0.0",
+            InstallScope = installScope,
         };
     }
 
@@ -154,8 +159,8 @@ public sealed class RemoteBootstrap
             : "copied from this machine (it runs a build that is not the PowerShell Gallery package, or the Gallery was unreachable)";
         return InstallScope switch
         {
-            "user" => $"install = user (no admin needed; refused in a console run as Administrator, which must not run programs from folders non-admin processes can change): if missing, {pwsh} goes to %LOCALAPPDATA%\\Programs\\PowerShell\\7 and onto the user's PATH, and {module} into the user's PowerShell modules folder, {source}. The script lists what it will install and asks before doing it.",
-            "machine" => $"install = machine (PowerShell must be opened as Administrator): if missing, {pwsh} is installed with its MSI into Program Files (on PATH, updated by Microsoft Update), and {module} into Program Files\\PowerShell\\Modules for all users, {source}. The script lists what it will install and asks before doing it.",
+            "user" => $"install = user (no admin needed; refused in a console run as Administrator, which must not run programs from folders non-admin processes can change): if missing, {pwsh} goes to %LOCALAPPDATA%\\Programs\\PowerShell\\7, onto the user's PATH and Start menu, and {module} into the user's PowerShell modules folder, {source}. PowerShell comes from this machine as a zip, so Microsoft Update does not update it. The script lists what it will install and asks before doing it.",
+            "machine" => $"install = machine (PowerShell must be opened as Administrator): if missing, {pwsh} goes to Program Files\\PowerShell\\7, onto the system PATH and every user's Start menu, and {module} into Program Files\\PowerShell\\Modules for all users, {source}. PowerShell comes from this machine as a zip, so Microsoft Update does not update it. The script lists what it will install and asks before doing it.",
             _ => $"install = none: nothing is installed. Missing pieces ({pwsh}, {module}) are unpacked into %LOCALAPPDATA%\\PowerShell.MCP-remote (in a console run as Administrator: %ProgramData%\\PowerShell.MCP-remote, which only administrators can change), reused next time, and removed by deleting that folder.",
         };
     }
@@ -295,8 +300,8 @@ public sealed class RemoteBootstrap
     }
 
     /// <summary>
-    /// The version and SHA-256 to promise in the bootstrap for one asset (zip
-    /// or msi), and a task for the file to serve. The GitHub digest gives the
+    /// The version and SHA-256 to promise in the bootstrap for one asset
+    /// (the zip), and a task for the file to serve. The GitHub digest gives the
     /// hash before any download; offline, the newest cached file is used;
     /// nulls when there is neither.
     /// </summary>
@@ -402,9 +407,6 @@ public sealed class RemoteBootstrap
                 case "/pwsh.zip":
                     await WriteFileAsync(stream, _pwshZip == null ? null : await _pwshZip.WaitAsync(TimeSpan.FromMinutes(10), ct), headOnly, ct);
                     break;
-                case "/pwsh.msi":
-                    await WriteFileAsync(stream, _pwshMsi == null ? null : await _pwshMsi.WaitAsync(TimeSpan.FromMinutes(10), ct), headOnly, ct);
-                    break;
                 default:
                     await WriteStatusAsync(stream, "404 Not Found", ct);
                     break;
@@ -467,9 +469,12 @@ public sealed class RemoteBootstrap
         # here, a new PowerShell 7 window opens and dials the MCP server.
         #   none    : nothing installed; unpacked under %LOCALAPPDATA%\PowerShell.MCP-remote
         #             (as Administrator: %ProgramData%\PowerShell.MCP-remote, admins only)
-        #   user    : PowerShell 7 in %LOCALAPPDATA%\Programs\PowerShell\7 (+ user PATH),
-        #             PowerShell.MCP for this user (refused as Administrator)
-        #   machine : PowerShell 7 by its MSI, PowerShell.MCP for all users (needs admin)
+        #   user    : PowerShell 7 in %LOCALAPPDATA%\Programs\PowerShell\7 (+ user PATH,
+        #             Start menu), PowerShell.MCP for this user (refused as Administrator)
+        #   machine : PowerShell 7 in Program Files\PowerShell\7 (+ system PATH, every
+        #             user's Start menu), PowerShell.MCP for all users (needs admin)
+        # PowerShell 7 is always the zip the MCP server hands out: nothing here is
+        # fetched from anywhere else.
         # Anything to install is listed and confirmed first. In a console run as
         # Administrator this script takes no PowerShell or PowerShell.MCP from,
         # checks nothing in, and unpacks nothing to a folder that non-admin
@@ -494,7 +499,6 @@ public sealed class RemoteBootstrap
         $ModuleNupkgHash = '__MODULE_NUPKG_HASH__'
         $PwshVersion = '__PWSH_VERSION__'
         $PwshZipHash = '__PWSH_ZIP_HASH__'
-        $PwshMsiHash = '__PWSH_MSI_HASH__'
 
         $Base = $Base.TrimEnd('/')
         $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -505,7 +509,8 @@ public sealed class RemoteBootstrap
         # that an elevated console inherits.
         $programFiles = [Environment]::GetFolderPath('ProgramFiles')
         $programData = [Environment]::GetFolderPath('CommonApplicationData')
-        $machinePwsh = Join-Path $programFiles 'PowerShell\7\pwsh.exe'
+        $machinePwshDir = Join-Path $programFiles 'PowerShell\7'
+        $machinePwsh = Join-Path $machinePwshDir 'pwsh.exe'
 
         # Everything this prints goes through Say: a blank line before the first
         # line and after the last, like the module's own remote control notices.
@@ -616,6 +621,40 @@ public sealed class RemoteBootstrap
             finally { $chain.Dispose() }
         }
 
+        # A folder onto PATH, the stored value kept as it is (entries like
+        # %USERPROFILE%\... stay unexpanded; a fresh account has none at all).
+        # Then any variable of that scope is set, which broadcasts the change so
+        # new windows see the new PATH; this removes one that does not exist.
+        function Add-ToPath([string]$Dir, [string]$Scope) {
+            $hive = if ($Scope -eq 'Machine') { [Microsoft.Win32.Registry]::LocalMachine } else { [Microsoft.Win32.Registry]::CurrentUser }
+            $keyPath = if ($Scope -eq 'Machine') { 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment' } else { 'Environment' }
+            $key = $hive.CreateSubKey($keyPath)
+            try {
+                $path = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                if (($path -split ';') -contains $Dir) { return }
+                $key.SetValue('Path', ($path.TrimEnd(';') + ';' + $Dir).TrimStart(';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+            }
+            finally { $key.Dispose() }
+            [Environment]::SetEnvironmentVariable('PSMCP_PATH_REFRESH', $null, $Scope)
+        }
+
+        # A Start menu entry, as the PowerShell installer makes one: this
+        # user's, or every user's (the common Programs folder, admins only).
+        function New-StartMenuShortcut([string]$Pwsh, [string]$Scope) {
+            $folder = [Environment]::GetFolderPath($(if ($Scope -eq 'Machine') { 'CommonPrograms' } else { 'Programs' }))
+            $shell = New-Object -ComObject WScript.Shell
+            try {
+                $link = $shell.CreateShortcut((Join-Path $folder 'PowerShell 7.lnk'))
+                $link.TargetPath = $Pwsh
+                # Started from the Start menu, a program's directory would be
+                # System32; the home folder, as PowerShell's own entry does.
+                $link.Arguments = '-WorkingDirectory ~'
+                $link.Description = "PowerShell $PwshVersion"
+                $link.Save()
+            }
+            finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
+        }
+
         # PowerShell.MCP of exactly this build already installed for PowerShell 7
         # (all users, this user, or unpacked by an earlier run). Another build is
         # left alone. As Administrator, not the user's own folders: the DLL hash
@@ -713,11 +752,14 @@ public sealed class RemoteBootstrap
             if ($Install -eq 'machine' -and -not $elevated -and (-not $psd1 -or -not $pwsh)) {
                 throw 'Installing for all users needs PowerShell opened as Administrator. Open it that way and paste the same line again.'
             }
-            if ($Install -eq 'machine' -and -not $pwsh -and -not $PwshMsiHash) {
-                throw 'PowerShell 7 is missing here, and the MCP server has no PowerShell installer to hand out, so it cannot be installed for all users. Install PowerShell 7, or ask the AI for install=none.'
+            if (-not $pwsh -and -not $PwshZipHash) {
+                throw 'PowerShell 7.4 or later is not installed here, and the MCP server has no PowerShell to hand out (it could not reach GitHub and has none cached). Install PowerShell 7 and run this again.'
             }
-            if ($Install -eq 'user' -and -not $pwsh -and (Test-Path -LiteralPath $userPwshDir)) {
-                throw "$userPwshDir holds a PowerShell older than 7.4 (or one not signed by Microsoft); it is left as is. Update it, or ask the AI for install=none."
+            # Never unpacked over a folder that already holds something (an
+            # older PowerShell, one from an installer): it is left as it is.
+            $installDir = if ($Install -eq 'machine') { $machinePwshDir } elseif ($Install -eq 'user') { $userPwshDir } else { $null }
+            if ($installDir -and -not $pwsh -and (Test-Path -LiteralPath $installDir)) {
+                throw "$installDir holds a PowerShell older than 7.4 (or one not signed by Microsoft); it is left as is. Update it, or ask the AI for install=none."
             }
 
             # Installing is the user's choice, made with the AI; this is where
@@ -725,7 +767,7 @@ public sealed class RemoteBootstrap
             if ($Install -ne 'none' -and (-not $pwsh -or -not $psd1)) {
                 Say 'This installs, for later use:'
                 if (-not $pwsh) {
-                    Say ("  PowerShell $PwshVersion " + $(if ($Install -eq 'machine') { 'for all users (its MSI, into Program Files)' } else { "for this user (into $userPwshDir, added to your PATH)" }))
+                    Say ("  PowerShell $PwshVersion " + $(if ($Install -eq 'machine') { "for all users (into $machinePwshDir, added to the system PATH and the Start menu)" } else { "for this user (into $userPwshDir, added to your PATH and Start menu)" }))
                 }
                 if (-not $psd1) {
                     Say ("  PowerShell.MCP $ModuleVersion " + $(if ($Install -eq 'machine') { 'for all users (Program Files\PowerShell\Modules)' } else { "for this user ($documents\PowerShell\Modules)" }))
@@ -737,49 +779,22 @@ public sealed class RemoteBootstrap
 
             # PowerShell 7
             if (-not $pwsh) {
-                if ($Install -eq 'machine') {
-                    $msi = Get-Verified 'pwsh.msi' $PwshMsiHash "PowerShell $PwshVersion installer"
-                    $msiPath = [IO.Path]::ChangeExtension($msi, '.msi')
-                    Move-Item -LiteralPath $msi -Destination $msiPath -Force
-                    if (-not (Test-MicrosoftSigned $msiPath)) { Remove-Item -LiteralPath $msiPath -Force; throw 'The PowerShell installer is not signed by Microsoft; not run.' }
-                    Say "Installing PowerShell $PwshVersion for all users ..."
-                    # msiexec from the system folder, not whatever PATH finds first.
-                    $msiexec = Join-Path ([Environment]::SystemDirectory) 'msiexec.exe'
-                    $p = Start-Process $msiexec -ArgumentList '/i', ('"' + $msiPath + '"'), '/qn', 'ADD_PATH=1', 'USE_MU=1', 'ENABLE_MU=1', 'REGISTER_MANIFEST=1' -Wait -PassThru
-                    Remove-Item -LiteralPath $msiPath -Force
-                    if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "The PowerShell installer failed (exit code $($p.ExitCode))." }
-                    $pwsh = $machinePwsh
-                    if (-not (Test-Pwsh $pwsh)) { throw "After the installer, $pwsh is not a PowerShell 7.4+ signed by Microsoft; not run." }
-                }
-                elseif ($PwshZipHash) {
-                    if ($Install -eq 'user') {
-                        Expand-Verified 'pwsh.zip' $PwshZipHash $userPwshDir "PowerShell $PwshVersion (about 100 MB)"
-                        # The user PATH as stored (entries like %USERPROFILE%\... stay
-                        # unexpanded), or nothing at all on a fresh account.
-                        $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
-                        try {
-                            $userPath = [string]$environmentKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-                            if (($userPath -split ';') -notcontains $userPwshDir) {
-                                $environmentKey.SetValue('Path', ($userPath.TrimEnd(';') + ';' + $userPwshDir).TrimStart(';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
-                                # Setting any user variable broadcasts the change, so new
-                                # windows see the new PATH; this one removes a value that
-                                # does not exist.
-                                [Environment]::SetEnvironmentVariable('PSMCP_PATH_REFRESH', $null, 'User')
-                            }
-                        }
-                        finally { $environmentKey.Dispose() }
-                        Say "Installed PowerShell $PwshVersion for this user."
-                        $pwsh = Join-Path $userPwshDir 'pwsh.exe'
-                    }
-                    else {
-                        $dir = Join-Path $root "pwsh-$PwshVersion"
-                        Expand-Verified 'pwsh.zip' $PwshZipHash $dir "PowerShell $PwshVersion (portable, about 100 MB)"
-                        $pwsh = Join-Path $dir 'pwsh.exe'
-                    }
+                if ($installDir) {
+                    # Program Files inherits its admins-only ACL to what is
+                    # unpacked there; the user's folder is the user's own.
+                    $scope = if ($Install -eq 'machine') { 'Machine' } else { 'User' }
+                    Expand-Verified 'pwsh.zip' $PwshZipHash $installDir "PowerShell $PwshVersion (about 100 MB)"
+                    $pwsh = Join-Path $installDir 'pwsh.exe'
                     if (-not (Test-Pwsh $pwsh)) { throw "$pwsh is not a PowerShell 7.4+ signed by Microsoft; not run." }
+                    Add-ToPath $installDir $scope
+                    New-StartMenuShortcut $pwsh $scope
+                    Say ("Installed PowerShell $PwshVersion " + $(if ($scope -eq 'Machine') { 'for all users.' } else { 'for this user.' }))
                 }
                 else {
-                    throw 'PowerShell 7.4 or later is not installed here, and the MCP server has no PowerShell to hand out (it could not reach GitHub). Install PowerShell 7 and run this again.'
+                    $dir = Join-Path $root "pwsh-$PwshVersion"
+                    Expand-Verified 'pwsh.zip' $PwshZipHash $dir "PowerShell $PwshVersion (portable, about 100 MB)"
+                    $pwsh = Join-Path $dir 'pwsh.exe'
+                    if (-not (Test-Pwsh $pwsh)) { throw "$pwsh is not a PowerShell 7.4+ signed by Microsoft; not run." }
                 }
             }
 

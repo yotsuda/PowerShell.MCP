@@ -284,11 +284,20 @@ public class PowerShellTools
             // Collect completed outputs and busy status info from other pipes
             var (completedOutputs, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, readyPipeName, cancellationToken);
 
-            // Build response: closedConsoles + busyStatusInfo + completedOutputs + agentId info + result
+            // The active console was passed over for another of the agent's
+            // consoles: say so, as execute_command does. Only the branch that
+            // starts a new console said it (seen 2026-11-19: the location came
+            // from another console with no word on why).
+            var switchNotice = activeNotFree != null && newSessionNotice == null
+                ? $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}. {NotFreeClause(activeNotFree)}"
+                : null;
+
+            // Build response: closedConsoles + busyStatusInfo + switch notice + completedOutputs + agentId info + result
             return Wrap(PipelineHelper.JoinBlocks(
                 string.Join("\n", closedConsoleMessages),
                 newSessionNotice,
                 busyStatusInfo,
+                switchNotice,
                 completedOutputs,
                 result));
         }
@@ -706,7 +715,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         AgentIdBox? agentIdBox,
         System.Diagnostics.Stopwatch callClock,
         CancellationToken cancellationToken,
-        CallOutcome? outcome = null)
+        CallOutcome? outcome = null,
+        bool autoRouteRetry = false)
     {
         // Clamp to the ceiling in force for the connected client (see
         // TimeoutCeiling): blocking past what the client will wait for turns
@@ -727,12 +737,16 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // puts in front, once, the earlier result drained from this console
         // before the location check (see below): that result is older than
         // anything this call produces, so it comes first, whichever branch returns.
+        // The busy auto-route's retry (autoRouteRetry) leaves the 📣 reports to
+        // the outer call, which puts its own blocks in front of this answer: taken
+        // here, the 📣 line landed in the middle of the response (seen 2026-11-19).
         string? drainedBeforeRun = null;
         string Wrap(string r)
         {
             var earlier = drainedBeforeRun;
             drainedBeforeRun = null;
-            return PrependAgentIdNoticeIfNew(PipelineHelper.JoinBlocks(earlier, r), isNewlyAllocated, agentId);
+            var body = PipelineHelper.JoinBlocks(earlier, r);
+            return autoRouteRetry ? body : PrependAgentIdNoticeIfNew(body, isNewlyAllocated, agentId);
         }
         if (resolveError != null)
             return Wrap(resolveError);
@@ -936,7 +950,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                 // Mark this pipe as busy for tracking
                                 if (jsonResponse.Pid > 0) sessionManager.MarkPipeBusy(agentId, jsonResponse.Pid);
 
-                                if (jsonResponse.Reason == "user_command" || jsonResponse.Reason == "mcp_command")
+                                if (jsonResponse.Reason is "user_command" or "mcp_command" or PipeStatus.CancelledCommand)
                                 {
                                     // Auto-route: spawn a new console at AI's intended cwd and
                                     // re-run the pipeline there in the same tool call. Pre-fix
@@ -1012,7 +1026,8 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                         agentIdBox: null,
                                         callClock: callClock,
                                         cancellationToken: cancellationToken,
-                                        outcome: retryOutcome);
+                                        outcome: retryOutcome,
+                                        autoRouteRetry: true);
                                     if (outcome != null && retryOutcome.NotExecuted) outcome.NotExecuted = true;
 
                                     // Surface the auto-route notice + closed-console
@@ -1023,13 +1038,27 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                     // recursive call delivers the actual pipeline output and
                                     // the AI no longer needs the OS / drive-list block to
                                     // verify cwd because we already preserved it.
+                                    // What the source console was doing, said as it
+                                    // is: a cancelled command is neither "user_command"
+                                    // nor one still running as such.
+                                    var busyWith = jsonResponse.CancelledSecondsAgo is double cancelledAgo
+                                        ? jsonResponse.Reason == PipeStatus.CancelledCommand
+                                            ? $"not back at its prompt yet after the command cancelled {cancelledAgo:F1}s ago"
+                                            : $"still stopping the command cancelled {cancelledAgo:F1}s ago"
+                                        : $"busy with {jsonResponse.Reason}";
+                                    // The source console the pipeline did NOT run on. The
+                                    // retry's own harvest lists it too (another console
+                                    // there), with a fresher status: added here as well,
+                                    // it showed twice, 10 s and 14 s old (seen 2026-11-19).
+                                    var sourceBlock = jsonResponse.Pid > 0 && retryResult.Contains($"#{jsonResponse.Pid} ", StringComparison.Ordinal)
+                                        ? null
+                                        : PipelineHelper.MarkOtherConsole(FormatBusyStatus(jsonResponse));
                                     return Wrap(PipelineHelper.JoinBlocks(
                                         string.Join("\n", closedConsoleMessages),
-                                        // The source console the pipeline did NOT run on.
-                                        PipelineHelper.MarkOtherConsole(FormatBusyStatus(jsonResponse)),
+                                        sourceBlock,
                                         retryOutcome.NotExecuted
-                                            ? $"ℹ️ Source console busy with {jsonResponse.Reason}; started {newConsoleName} at {startLoc}."
-                                            : $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console busy with {jsonResponse.Reason}). Pipeline executed automatically — no re-send needed.",
+                                            ? $"ℹ️ Source console {busyWith}; started {newConsoleName} at {startLoc}."
+                                            : $"ℹ️ Auto-routed to {newConsoleName} at {startLoc} (source console {busyWith}). Pipeline executed automatically — no re-send needed.",
                                         retryResult));
                                 }
                                 break;
@@ -1199,7 +1228,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         {
             Console.Error.WriteLine($"[ERROR] ExecuteCommand failed: {ex.Message}");
             // Detect and report closed consoles (the failed pipe + any others)
-            var failedLine = "  - " + DescribeClosedPipe(agentId, readyPipeName);
+            var failedLine = DescribeClosedPipe(agentId, readyPipeName);
             sessionManager.ClearDeadPipe(agentId, readyPipeName);
             var otherClosed = pipeDiscoveryService.DetectClosedConsoles(agentId);
             var closedMessages = new List<string> { failedLine };
@@ -1283,8 +1312,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // If any previously busy pipe was closed, collect all cached outputs and return
         if (closedConsoleMessages.Count > 0)
         {
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-            return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+            return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
         }
 
 
@@ -1302,15 +1330,13 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 sessionManager.ClearDeadPipe(agentId, pipeName);
                 closedConsoleMessages.Add(line);
 
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-                return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+                return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
             }
 
             if (status.Status == PipeStatus.Completed)
             {
                 // Completed - collect all cached outputs (including this one) and return
-                var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-                return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+                return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
             }
 
             // IsBusy covers AwaitingInput (a command parked at a host prompt)
@@ -1342,22 +1368,14 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         var (busyRemotes, remoteReady) = await RemoteConsoleTools.PartitionPendingAsync(agentId, cancellationToken);
         if (remoteReady)
         {
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-            return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+            return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
         }
 
         // No MCP-initiated busy pipes, nothing running remotely - collect any cached outputs and return
         if (busyPipes.Count == 0 && busyRemotes.Count == 0)
         {
-            var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-
-            // Nothing running, nothing cached, nothing closed.
-            if (completedOutput.Length == 0 && busyStatusInfo.Length == 0 && closedConsoleMessages.Count == 0)
-            {
-                return NothingToWaitForMessage;
-            }
-
-            return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+            // Nothing running, nothing cached, nothing closed: NothingToWaitForMessage.
+            return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
         }
 
 
@@ -1381,15 +1399,13 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                     busyPipes.Remove(pipeName);
                     closedConsoleMessages.Add(line);
 
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-                    return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+                    return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
                 }
 
                 if (status.Status == PipeStatus.Completed)
                 {
                     // Completed - collect all cached outputs (including this one) and return
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-                    return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+                    return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
                 }
 
 
@@ -1411,8 +1427,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             {
                 if (await RemoteConsoleTools.IsFreeAsync(client, cancellationToken))
                 {
-                    var (completedOutput, busyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-                    return BuildWaitResponse(closedConsoleMessages, completedOutput, busyStatusInfo);
+                    return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
                 }
             }
 
@@ -1424,8 +1439,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         }
 
         // Timeout - collect final status
-        var (finalCompletedOutput, finalBusyStatusInfo) = await CollectAllCachedOutputsAsync(pipeDiscoveryService, agentId, null, cancellationToken);
-        return BuildWaitResponse(closedConsoleMessages, finalCompletedOutput, finalBusyStatusInfo);
+        return await CollectWaitResponseAsync(pipeDiscoveryService, agentId, closedConsoleMessages, cancellationToken);
     }
 
     // wait_for_completion's answer when nothing is running and nothing is cached.
@@ -1437,13 +1451,37 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         "No commands to wait for completion. Nothing is running in this session's consoles and no results are waiting to be collected. " +
         "If your MCP client moved an earlier call to the background, that call receives the result itself when the command finishes.";
 
-    private static string BuildWaitResponse(List<string> closedConsoleMessages, string completedOutput, string busyStatusInfo)
+    // Follows the local consoles still running in a wait_for_completion answer.
+    // A remote console's block carries its own "Still running. wait_for_completion
+    // waits for it …" (RemoteConsoleTools.HarvestAsync); a local one's status line
+    // does not, so this line speaks for them.
+    internal const string LocalStillRunningHint =
+        "The consoles above are still running; wait_for_completion again returns as soon as the next one finishes.";
+
+    // Collects what every console of the agent has (local and remote) and builds
+    // wait_for_completion's answer from it.
+    private static async Task<string> CollectWaitResponseAsync(
+        IPipeDiscoveryService pipeDiscoveryService, string agentId, List<string> closedConsoleMessages, CancellationToken cancellationToken)
+    {
+        var local = await pipeDiscoveryService.CollectAllCachedOutputsAsync(agentId, null, cancellationToken);
+        var (remoteCompleted, remoteBusy) = await RemoteConsoleTools.CollectPendingAsync(agentId, cancellationToken);
+        return BuildWaitResponse(closedConsoleMessages,
+            PipelineHelper.JoinBlocks(local.ClosedConsoles, local.CompletedOutput, remoteCompleted),
+            local.BusyStatusInfo, remoteBusy);
+    }
+
+    // The consoles still running come first, each followed by what to do about it,
+    // and only then the closed consoles and the results. The hint used to close the
+    // whole answer, after the results, where it read as being about the result just
+    // above it (seen 2026-11-19 with four consoles: after every result but the last).
+    internal static string BuildWaitResponse(List<string> closedConsoleMessages, string completedOutput, string localBusy, string remoteBusy)
     {
         var response = PipelineHelper.JoinBlocks(
-            busyStatusInfo,
+            localBusy,
+            localBusy.Length > 0 ? LocalStillRunningHint : null,
+            remoteBusy,
             string.Join("\n", closedConsoleMessages),
-            completedOutput,
-            busyStatusInfo.Length > 0 ? "Use wait_for_completion tool to wait and retrieve the result." : null);
+            completedOutput);
 
         return response.Length == 0 ? NothingToWaitForMessage : response;
     }

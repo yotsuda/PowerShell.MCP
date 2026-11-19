@@ -30,9 +30,11 @@ namespace PowerShell.MCP.Services;
 /// nothing and requires the reader to know nothing in advance.
 /// </para>
 /// <para>
-/// The fingerprint is distinctive: a process attached to this console, alive
-/// for a while, burning no CPU, with threads parked in EventPairLow (the wait
-/// an LPC call to the console host shows up as).
+/// The fingerprint: a process attached to this console, alive for a while,
+/// burning no CPU, with threads parked in EventPairLow (the wait an LPC call to
+/// the console host shows up as) — while nothing else under this console moves
+/// either. That last part is what tells a stall from a wait: an MSBuild node
+/// idle while the compiler it waits on works looks the same on its own.
 /// </para>
 /// </remarks>
 public static class StalledChild
@@ -64,15 +66,30 @@ public static class StalledChild
         {
             var candidates = Candidates();
             if (candidates.Count == 0) return null;
+            var tree = CommandTree(candidates);
 
             // Sample twice: a process that is working will move its CPU here.
             var before = new Dictionary<int, double>();
-            foreach (var p in candidates)
+            foreach (var p in tree)
             {
                 try { before[p.Id] = p.TotalProcessorTime.TotalSeconds; } catch { }
             }
 
             Thread.Sleep(SampleMilliseconds);
+
+            // Anything in the command's process tree still working means the
+            // command is progressing, whatever one of its processes looks
+            // like: an MSBuild node waiting on the compiler server (its own
+            // child, or another node's) has the same parked threads and flat
+            // CPU as a child stuck on console input. Measured 2026-11-18: a
+            // build slowed by a loaded machine, under `dotnet test` with stdin
+            // from NUL, was reported as stalled while VBCSCompiler compiled.
+            // A stall the rest of the tree is still busy around is reported on
+            // a later timeout, once the rest has gone quiet.
+            foreach (var p in tree)
+            {
+                if (Moved(p, before)) return null;
+            }
 
             foreach (var p in candidates)
             {
@@ -97,6 +114,57 @@ public static class StalledChild
         catch { }
 
         return null;
+    }
+
+    private static bool Moved(Process p, Dictionary<int, double> before)
+    {
+        try
+        {
+            if (p.HasExited || !before.TryGetValue(p.Id, out var cpuBefore)) return false;
+            p.Refresh();
+            return p.TotalProcessorTime.TotalSeconds - cpuBefore > CpuMovementSeconds;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// The candidates and every process below this console's own process —
+    /// the command's children and theirs, including ones with consoles of
+    /// their own (a compiler server is not attached to this one). Console
+    /// hosts are left out: one redraws a window, which says nothing about the
+    /// command.
+    /// </summary>
+    private static List<Process> CommandTree(List<Process> candidates)
+    {
+        var tree = new List<Process>(candidates);
+        try
+        {
+            var have = new HashSet<int>(candidates.Select(p => p.Id));
+            var snapshot = ProcessTree.Snapshot();
+            var processes = new Dictionary<uint, Process?>();
+            Process? Open(uint pid)
+            {
+                if (!processes.TryGetValue(pid, out var p))
+                {
+                    try { p = Process.GetProcessById((int)pid); } catch { p = null; }
+                    processes[pid] = p;
+                }
+                return p;
+            }
+            DateTime? Start(uint pid)
+            {
+                try { return Open(pid)?.StartTime; } catch { return null; }
+            }
+
+            foreach (var pid in ProcessTree.Descendants((uint)Environment.ProcessId, snapshot, Start))
+            {
+                if (have.Contains((int)pid)) continue;
+                if (snapshot.TryGetValue(pid, out var entry) && entry.Name.Equals("conhost.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Open(pid) is { } p) tree.Add(p);
+            }
+        }
+        catch { }
+        return tree;
     }
 
     /// <summary>

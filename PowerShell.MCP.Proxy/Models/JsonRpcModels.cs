@@ -73,6 +73,15 @@ public class GetStatusResponse
     [JsonPropertyName("reason")]
     public string? Reason { get; set; }
 
+    /// <summary>
+    /// Seconds since a cancel reached the AI command this busy console is
+    /// still on: stopping it (reason mcp_command, or a get_status "busy"), or
+    /// not yet back at its prompt after it (reason cancelled_command). Null
+    /// when no cancel is involved.
+    /// </summary>
+    [JsonPropertyName("cancelledSecondsAgo")]
+    public double? CancelledSecondsAgo { get; set; }
+
     [JsonPropertyName("result")]
     public string? Result { get; set; }
 

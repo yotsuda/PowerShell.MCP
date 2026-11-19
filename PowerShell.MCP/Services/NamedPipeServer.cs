@@ -144,6 +144,62 @@ public static class ExecutionState
             {
                 _startupPending = false;
             }
+
+            // A tick with no command running is the console back at its
+            // prompt: a cancelled command, if any, is over.
+            if (!_isBusy) _cancelledPipeline = null;
+        }
+    }
+
+    /// <summary>
+    /// The heartbeat a finished AI command gives (see
+    /// PowerShellCommunication.NotifyResultReady): the runspace is alive, but
+    /// the console is not yet back at its prompt — that is the next tick — so
+    /// a cancelled command is not yet over.
+    /// </summary>
+    public static void CompletionHeartbeat()
+    {
+        lock (_lock)
+        {
+            _lastHeartbeat = DateTime.UtcNow;
+            _firstHeartbeatReceived = true;
+        }
+    }
+
+    // A cancel sent while an AI command was running: that command, and when.
+    // Kept until the console is back at its prompt (the first tick with no
+    // command running) or the next AI command starts. Until then a busy
+    // console is stopping that command, not running it, and a heartbeat gap is
+    // the engine not back yet, not a user command: nobody can have started one
+    // at a prompt the console has not returned to.
+    private static string? _cancelledPipeline;
+    private static DateTime _cancelledAtUtc;
+
+    /// <summary>A cancel reached a running AI command (called by the cancel request).</summary>
+    public static void NoteCancelRequested()
+    {
+        lock (_lock)
+        {
+            if (!_isBusy) return;
+            _cancelledPipeline = _currentPipeline;
+            _cancelledAtUtc = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>
+    /// The cancelled AI command the console has not yet come back from (still
+    /// stopping while <see cref="Status"/> is busy, not back at the prompt
+    /// after it), with the seconds since the cancel; null otherwise.
+    /// </summary>
+    public static (string Pipeline, double SecondsAgo)? CancelledCommand
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _cancelledPipeline == null ? null
+                    : (_cancelledPipeline, (DateTime.UtcNow - _cancelledAtUtc).TotalSeconds);
+            }
         }
     }
 
@@ -209,6 +265,23 @@ public static class ExecutionState
         {
             _lastHeartbeat = utc;
             _firstHeartbeatReceived = true;
+        }
+    }
+
+    /// <summary>
+    /// Test hook: back to "no heartbeat yet", as in a console whose engine has
+    /// not ticked. Once any test has stamped a heartbeat, every later test in
+    /// the process sees a runspace that went quiet for as long as it has been
+    /// since then, and after 10 s a free console answers "busy (user command)"
+    /// — which a slow run reaches and a fast one does not.
+    /// </summary>
+    internal static void ResetHeartbeatForTests()
+    {
+        lock (_lock)
+        {
+            _lastHeartbeat = default;
+            _firstHeartbeatReceived = false;
+            _cancelledPipeline = null;
         }
     }
 
@@ -329,6 +402,7 @@ public static class ExecutionState
             _currentPipeline = pipeline;
             _shouldCacheOutput = false;
             _isBusy = true;
+            _cancelledPipeline = null;
             _runningForRemote = remoteEpoch != null;
             _runningEpoch = remoteEpoch ?? _remoteEpoch;
         }
@@ -834,13 +908,19 @@ public class NamedPipeServer : IDisposable
                     }
                     else
                     {
-                        var statusLine = BuildStatusLine("⧗", "Pipeline is running", "Busy", truncatedPipeline, roundedDuration);
+                        // A cancelled command unwinding (a native child still
+                        // shutting down) is busy too, but not "running".
+                        var cancelled = ExecutionState.CancelledCommand;
+                        var statusLine = cancelled is { } c
+                            ? BuildStatusLine("⧗", $"Stopping the cancelled command (cancelled {c.SecondsAgo:F1}s ago)", "Busy", truncatedPipeline, roundedDuration)
+                            : BuildStatusLine("⧗", "Pipeline is running", "Busy", truncatedPipeline, roundedDuration);
                         statusResponse = JsonSerializer.Serialize(new
                         {
                             pid,
                             status = "busy",
                             pipeline = truncatedPipeline,
                             duration = roundedDuration,
+                            cancelledSecondsAgo = cancelled is { } cs ? Math.Round(cs.SecondsAgo, 1) : (double?)null,
                             statusLine,
                             cwd,
                             typedText,
@@ -893,6 +973,27 @@ public class NamedPipeServer : IDisposable
                     {
                         var statusLine = BuildStatusLine("●", "Console ready", "Standby");
                         statusResponse = JsonSerializer.Serialize(new { pid, status = "standby", statusLine, cwd, typedText, typedTextAgeSeconds = typedTextAge });
+                    }
+                    else if (ExecutionState.CancelledCommand is { } cancelled)
+                    {
+                        // No heartbeat, but the console has not been back at its
+                        // prompt since a cancelled command: not a user command.
+                        var quietFor = Math.Round(ExecutionState.UserCommandElapsedSeconds, 2);
+                        var cancelledPipeline = TruncatePipeline(cancelled.Pipeline);
+                        var statusLine = BuildStatusLine("⧗", $"Not back at its prompt since the cancelled command (cancelled {cancelled.SecondsAgo:F1}s ago)", "Busy", cancelledPipeline, quietFor);
+                        statusResponse = JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "busy",
+                            reason = "cancelled_command",
+                            pipeline = cancelledPipeline,
+                            duration = quietFor,
+                            cancelledSecondsAgo = Math.Round(cancelled.SecondsAgo, 1),
+                            statusLine,
+                            cwd,
+                            typedText,
+                            typedTextAgeSeconds = typedTextAge
+                        });
                     }
                     else
                     {
@@ -989,6 +1090,7 @@ public class NamedPipeServer : IDisposable
                 var stoppedPipeline = false;
                 var natives = !busy ? null : ConsoleControl.CommandProcesses();
                 IReadOnlyList<string> ended = [];
+                if (busy) ExecutionState.NoteCancelRequested();
                 if (OperatingSystem.IsWindows()) ctrlC = ConsoleControl.SendCtrlC();
                 if (busy)
                 {
@@ -1094,6 +1196,7 @@ Please provide how to update the MCP client configuration to the user.";
                 string? cwd;
                 try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
                 catch { cwd = null; }
+                var cancelled = ExecutionState.CancelledCommand;
                 var busyResponse = JsonSerializer.Serialize(new
                 {
                     pid,
@@ -1101,6 +1204,7 @@ Please provide how to update the MCP client configuration to the user.";
                     reason = "mcp_command",
                     pipeline = runningPipeline,
                     duration = Math.Round(elapsed, 2),
+                    cancelledSecondsAgo = cancelled is { } c ? Math.Round(c.SecondsAgo, 1) : (double?)null,
                     cwd
                 });
 
@@ -1148,15 +1252,30 @@ Please provide how to update the MCP client configuration to the user.";
                     string? cwd;
                     try { cwd = ExecutionState.CurrentAiCwd ?? System.IO.Directory.GetCurrentDirectory(); }
                     catch { cwd = null; }
-                    var busyResponse = JsonSerializer.Serialize(new
-                    {
-                        pid,
-                        status = "busy",
-                        reason = "user_command",
-                        pipeline = "(user command)",
-                        duration = Math.Round(userCmdElapsed, 2),
-                        cwd
-                    });
+                    // Not back at its prompt since a cancelled command: the
+                    // engine has not resumed, and no user can have started a
+                    // command (see ExecutionState.CancelledCommand).
+                    var cancelled = ExecutionState.CancelledCommand;
+                    var busyResponse = cancelled is { } c
+                        ? JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "busy",
+                            reason = "cancelled_command",
+                            pipeline = TruncatePipeline(c.Pipeline),
+                            duration = Math.Round(userCmdElapsed, 2),
+                            cancelledSecondsAgo = Math.Round(c.SecondsAgo, 1),
+                            cwd
+                        })
+                        : JsonSerializer.Serialize(new
+                        {
+                            pid,
+                            status = "busy",
+                            reason = "user_command",
+                            pipeline = "(user command)",
+                            duration = Math.Round(userCmdElapsed, 2),
+                            cwd
+                        });
                     await SendMessageAsync(pipeServer, busyResponse, cancellationToken);
                     return;
                 }

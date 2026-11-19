@@ -51,6 +51,9 @@ public sealed class RemoteConsoleClient : IDisposable
     /// <summary>How long a pairing code (or, after a drop, the resume key) stays good. Settable for tests.</summary>
     internal static TimeSpan CodeLifetime { get; set; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>Builds the bootstrap an accept hands out. Settable for tests.</summary>
+    internal static Func<string, CancellationToken, Task<RemoteBootstrap?>> PrepareBootstrap { get; set; } = RemoteBootstrap.PrepareAsync;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
     private TcpClient? _tcp;
     private SslStream? _ssl;
@@ -166,6 +169,29 @@ public sealed class RemoteConsoleClient : IDisposable
     }
 
     private static string Minutes => $"{CodeLifetime.TotalMinutes:0} minutes";
+
+    /// <summary>
+    /// What a message about a lost connection says of the command that was
+    /// running. The result harvest adds the same note to a "not reachable"
+    /// status unless the error already carries it.
+    /// </summary>
+    internal const string CommandContinuesNote = "A command that was running continues there";
+
+    /// <summary>
+    /// A call to a console that has not dialed in yet. It used to repeat all of
+    /// accept_remote_console's instructions, the line to paste included, in an
+    /// answer to what was only "is it there yet?" (seen 2026-11-19); the line is
+    /// one accept_remote_console call away.
+    /// </summary>
+    internal string NotDialedInYet()
+    {
+        var left = _acceptDeadline - DateTime.UtcNow;
+        var remaining = left <= TimeSpan.Zero ? "the code is about to expire"
+            : left.TotalMinutes >= 1 ? $"{Math.Ceiling(left.TotalMinutes):0} min left on the code"
+            : $"{Math.Ceiling(left.TotalSeconds):0} s left on the code";
+        return $"Nothing has dialed in on port {_acceptPort} yet ({remaining}); nothing was sent. " +
+               "It does once the user has run the line from accept_remote_console there and confirmed it; accept_remote_console again repeats that line.";
+    }
 
     /// <summary>host, host:port, [v6], [v6]:port.</summary>
     public static (string host, int port) ParseTarget(string target)
@@ -322,8 +348,8 @@ public sealed class RemoteConsoleClient : IDisposable
                             // code it used is spent, so the instructions would only
                             // mislead); one that never came needs the line.
                             throw new InvalidOperationException(_peer != null
-                                ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. A command that was running continues there; wait_for_completion collects its output once it is back."
-                                : $"The remote console has not dialed in on port {_acceptPort}. It does once Enable-MCPRemoteControl -ConnectTo is running there and the user has confirmed it; " + AcceptInstructions());
+                                ? $"The console that dialed in from {_peer} has not reconnected yet. It redials by itself for up to {Minutes}; try again in a moment. {CommandContinuesNote}; wait_for_completion collects its output once it is back."
+                                : NotDialedInYet());
                         }
                     }
                 }
@@ -650,7 +676,9 @@ public sealed class RemoteConsoleClient : IDisposable
     /// <summary>
     /// Waits for a console to dial in: binds a port (0 = any free one), makes
     /// the pairing code, and returns what the user must run on the remote
-    /// machine. Called again while waiting, it repeats the instructions.
+    /// machine. Called again while waiting, it repeats the instructions — with
+    /// the bootstrap rebuilt first when the install choice changed, so the
+    /// line handed out always does what this call asked for.
     /// </summary>
     public async Task<string> AcceptAsync(int port, string install, CancellationToken ct)
     {
@@ -661,14 +689,30 @@ public sealed class RemoteConsoleClient : IDisposable
             if (_ssl != null || _host != null)
                 throw new InvalidOperationException($"Already connected to {Target}. Call disconnect_remote_console first.");
             if (_acceptListener != null)
-                return _peer == null
-                    ? AcceptInstructions()
-                    : $"A console from {_peer} already paired with this MCP server (its code is spent); it redials by itself after a drop. To start over with another console, disconnect_remote_console first.";
+            {
+                if (_peer != null)
+                    return $"A console from {_peer} already paired with this MCP server (its code is spent); it redials by itself after a drop. To start over with another console, disconnect_remote_console first.";
+                if (_bootstrap == null || _bootstrap.InstallScope == install)
+                    return AcceptInstructions();
+                // Same port and code; only the script (and so the hash in the
+                // line) changes. The line handed out before stops working: its
+                // hash no longer matches what is served.
+                var previous = _bootstrap.InstallScope;
+                RemoteBootstrap? rebuilt = null;
+                try { rebuilt = await PrepareBootstrap(install, ct); }
+                catch (Exception ex) when (ex is not OperationCanceledException and not ArgumentException) { Console.Error.WriteLine($"[WARN] Bootstrap not rebuilt: {ex.Message}"); }
+                // Nothing to serve for the new choice: the earlier line still
+                // works, and the AI must not hand it out as the one it asked for.
+                if (rebuilt == null)
+                    return $"install={install} could not be prepared; the line given before, install={previous}, still stands and is repeated below. disconnect_remote_console and accept_remote_console again to retry.\n\n" + AcceptInstructions();
+                _bootstrap = rebuilt;
+                return $"install changed from {previous} to {install}: the line given before no longer works; give the user the new one below.\n\n" + AcceptInstructions();
+            }
 
             // What a bare machine needs, served on the same port. Prepared
             // before binding: it may ask GitHub for the latest PowerShell.
             RemoteBootstrap? bootstrap = null;
-            try { bootstrap = await RemoteBootstrap.PrepareAsync(install, ct); }
+            try { bootstrap = await PrepareBootstrap(install, ct); }
             catch (Exception ex) when (ex is not OperationCanceledException and not ArgumentException) { Console.Error.WriteLine($"[WARN] Bootstrap not prepared: {ex.Message}"); }
 
             var code = NewPairingCode();
