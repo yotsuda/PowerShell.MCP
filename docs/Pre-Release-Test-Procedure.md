@@ -168,7 +168,22 @@ confirm, and read the code to the AI. (For a NAT'd VM use
 👤 On the remote machine, disable and re-enable the network adapter (or pause the VM) while a remote command runs.
 ✅ Any error from the proxy about the dropped connection says `wait_for_completion`, not `wait_for_remote_completion`; once the console is back, `wait_for_completion` collects the output.
 
-🤖 `disconnect_remote_console()` when done.
+### 4.8 Several consoles at once: each result comes back when its command ends
+Connect two or three remote consoles (each named `A`, `B`, `C` below by its
+`remote` value: the host given to `connect_remote_console`, or `port N` for one
+that dialed in); the agent's local console takes part too. Each command stamps
+its start and end in UTC, since the machines' time zones differ:
+`$s = [DateTime]::UtcNow; Start-Sleep <n>; "<name>: started $($s.ToString('HH:mm:ss.fff'))Z ended $([DateTime]::UtcNow.ToString('HH:mm:ss.fff'))Z"`
+
+🤖 In one turn, each with `timeout_seconds=2`: `execute_remote_command(remote=A, …8 s…)`, `execute_command(…14 s…)`, `execute_remote_command(remote=B, …20 s…)`, `execute_remote_command(remote=C, …35 s…)`.
+✅ Each times out with its running status line, the remote ones under their own `[remote console: …]`. A later call's response may also carry an earlier remote console's `Still running` block (as in 4.1).
+✅ The starts are about 2 s apart (the timeout), not at the same instant: Claude Code makes a turn's calls to one server one after another — its MCP log (`%LOCALAPPDATA%\claude-cli-nodejs\Cache\<project>\mcp-logs-pwsh\*.jsonl`) shows each `Calling MCP tool` only after the previous `completed` (seen 2026-11-19). The commands still run at the same time, because each call returns at its timeout. Not a proxy fault; judge the order by the end times.
+🤖 `wait_for_completion(timeout_seconds=60)` four times.
+✅ They come back in the order they end — A, local, B, C — each exactly once, under its own tag (the local one untagged), with the consoles not yet done listed as still running and their elapsed time.
+✅ A completed result is not followed by `Use wait_for_completion tool to wait and retrieve the result.` (Seen 2026-11-19 after every result but the last, while other consoles were still running: a stale hint, to fix.)
+🤖 `wait_for_completion` a fifth time ✅ "No commands to wait for completion …".
+
+🤖 `disconnect_remote_console(remote=…)` for each when done.
 
 ---
 
