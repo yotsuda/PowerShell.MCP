@@ -298,7 +298,7 @@ chmod +x "$(Get-MCPProxyPath)"   # Linux / macOS only: the new proxy needs the e
 Register-PwshToClaudeCode        # Claude Code
 Register-PwshToClaudeDesktop     # Claude Desktop
 ```
-Both replace the existing `pwsh` entry and keep the arguments and environment variables already set on it, such as `--no-profile`. **For other MCP clients:** replace the path in your configuration with the output of `Get-MCPProxyPath -Escape`.
+Both replace the existing `pwsh` entry and keep the arguments and environment variables already set on it, such as `--no-profile`; `-NoProfile` and `-ConsoleLaunch` change those two flags. **For other MCP clients:** replace the path in your configuration with the output of `Get-MCPProxyPath -Escape`.
 
 #### 3. Close the old consoles and restart your MCP client
 Close the PowerShell.MCP console windows (titled like `#12345 Taxi`) — each keeps running the version it was started with — then quit and restart your MCP client.
@@ -317,14 +317,14 @@ Uninstall-PSResource PowerShell.MCP -Version <old version>
 
 By default, every console the proxy launches loads your PowerShell `$PROFILE` (prompt, aliases, PSReadLine, theme) — these are real interactive shells, not just automation targets. Pass `--no-profile` to start them with `-NoProfile` instead, for faster startup and a clean, deterministic environment.
 
-**Claude Code:**
+**Claude Code / Claude Desktop:**
 ```powershell
-claude mcp remove pwsh -s user   # if pwsh is already registered: 'claude mcp add' refuses an existing name
-claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --no-profile
+Register-PwshToClaudeCode -NoProfile      # Claude Code
+Register-PwshToClaudeDesktop -NoProfile   # Claude Desktop
 ```
-From then on `Register-PwshToClaudeCode` keeps the flag, including when you re-register after an update.
+From then on both keep the flag, including when you re-register after an update without it. `-NoProfile:$false` removes it.
 
-**Claude Desktop / other MCP clients:** add an `args` array with `--no-profile` to the `pwsh` entry in your config (`Register-PwshToClaudeDesktop` keeps it when it re-registers):
+**Other MCP clients:** add an `args` array with `--no-profile` to the `pwsh` entry in your config:
 
 ```json
 "mcpServers": {
@@ -343,13 +343,13 @@ A console the proxy opens should not take the keyboard focus from what you are t
 
 | Value | Window | Focus |
 |---|---|---|
-| `auto` (default) | When Windows Terminal is your default terminal (the default on Windows 11), a new Windows Terminal window opened through `wt.exe` without activating it; otherwise a console window as before | Kept while another application is in front. When a Windows Terminal window is in front — for example when your AI client runs in Windows Terminal — the new window still takes it. |
+| `auto` (default) | When Windows Terminal is your default terminal (the default on Windows 11), a new Windows Terminal window opened through `wt.exe` without activating it; otherwise a console window as before | Kept while another application is in front, on many systems but not all: on some (reported on Windows 11 build 26200 with Windows Terminal 1.24 and 1.25) Windows Terminal activates the new window anyway. When a Windows Terminal window is in front — for example when your AI client runs in Windows Terminal — the new window always takes it. If either bothers you, use `minimized`. |
 | `minimized` | A minimized classic console window (conhost), not a Windows Terminal window: no tabs, no Windows Terminal settings | Never taken, whatever is in front. Click the console on the taskbar to watch it. |
 | `handoff` | Exactly as before 1.17.0: Windows decides, usually a Windows Terminal window | Taken when the window opens |
 
 `minimized` may also suit agents working on another virtual desktop: Windows Terminal runs all its windows in one process, and users have seen a new window bring the others to the desktop they were on; separate conhost windows do not share a process.
 
-Add it the same way as `--no-profile`, for example `claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --console-launch minimized`, or `"args": ["--console-launch", "minimized"]` in other clients. It has no effect on macOS and Linux.
+Set it with `Register-PwshToClaudeCode -ConsoleLaunch Minimized` or `Register-PwshToClaudeDesktop -ConsoleLaunch Minimized`; both keep it on later re-registrations, and `-ConsoleLaunch Auto` removes it. In other clients, add `"args": ["--console-launch", "minimized"]` to the `pwsh` entry. It has no effect on macOS and Linux.
 
 ### Idle consoles close themselves
 

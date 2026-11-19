@@ -60,6 +60,49 @@ if (-not $IsWindows) {
     }
 }
 
+# Applies the proxy-flag parameters of the Register-PwshTo* cmdlets to the
+# arguments an entry already has. A parameter that was not given leaves its
+# flag as it is, so a re-registration after an update keeps what the user set
+# earlier. -ConsoleLaunch Auto removes the option (auto is the default), and
+# -NoProfile:$false removes --no-profile. Other arguments are kept in order.
+# Module-private; the tests dot-source it alongside the cmdlets.
+function Set-ProxyArgument {
+    param(
+        [string[]]$Arguments,
+        [System.Collections.IDictionary]$BoundParameters
+    )
+
+    $result = [System.Collections.Generic.List[string]]::new()
+    foreach ($argument in @($Arguments)) { if ($argument) { $result.Add($argument) } }
+
+    if ($BoundParameters.Keys -contains 'ConsoleLaunch') {
+        for ($i = $result.Count - 1; $i -ge 0; $i--) {
+            if ($result[$i] -like '--console-launch=*') {
+                $result.RemoveAt($i)
+            }
+            elseif ($result[$i] -eq '--console-launch') {
+                # Its value, when there is one, follows it.
+                if ($i + 1 -lt $result.Count -and $result[$i + 1] -notlike '--*') { $result.RemoveAt($i + 1) }
+                $result.RemoveAt($i)
+            }
+        }
+        $mode = ([string]$BoundParameters['ConsoleLaunch']).ToLowerInvariant()
+        if ($mode -ne 'auto') {
+            $result.Add('--console-launch')
+            $result.Add($mode)
+        }
+    }
+
+    if ($BoundParameters.Keys -contains 'NoProfile') {
+        $present = $result.Contains('--no-profile')
+        if ($BoundParameters['NoProfile'] -and -not $present) { $result.Add('--no-profile') }
+        elseif (-not $BoundParameters['NoProfile']) { [void]$result.RemoveAll({ param($a) $a -eq '--no-profile' }) }
+    }
+
+    # The comma keeps a one-element or empty list an array for the caller.
+    return , [string[]]$result.ToArray()
+}
+
 # Set OnRemove script block to execute cleanup automatically
 <#
 .SYNOPSIS
@@ -74,16 +117,38 @@ if (-not $IsWindows) {
     If a legacy "PowerShell" entry pointing to PowerShell.MCP.Proxy exists,
     it is removed and replaced with the new "pwsh" entry.
 
+.PARAMETER ConsoleLaunch
+    Sets the proxy's --console-launch option: how consoles open on Windows.
+    Minimized opens a minimized classic console window that never takes the
+    keyboard focus; Handoff is the launch before 1.17.0; Auto, the default,
+    removes the option. Not given, the entry keeps what it has. No effect on
+    macOS and Linux.
+
+.PARAMETER NoProfile
+    Adds the proxy's --no-profile option, so consoles start without your
+    $PROFILE. -NoProfile:$false removes it. Not given, the entry keeps what it
+    has.
+
 .EXAMPLE
     Register-PwshToClaudeDesktop
     Registers PowerShell.MCP in Claude Desktop configuration.
+
+.EXAMPLE
+    Register-PwshToClaudeDesktop -ConsoleLaunch Minimized
+    Registers it with consoles opening minimized, without taking the focus.
+    Later re-registrations keep the option.
 
 .OUTPUTS
     None. Writes status messages to the host.
 #>
 function Register-PwshToClaudeDesktop {
     [CmdletBinding()]
-    param()
+    param(
+        [ValidateSet('Auto', 'Handoff', 'Minimized')]
+        [string]$ConsoleLaunch,
+
+        [switch]$NoProfile
+    )
 
     $serverName = 'pwsh'
     $legacyName = 'PowerShell'
@@ -147,6 +212,10 @@ function Register-PwshToClaudeDesktop {
     }
 
     $entry['command'] = $command
+    if ($PSBoundParameters.ContainsKey('ConsoleLaunch') -or $PSBoundParameters.ContainsKey('NoProfile')) {
+        $proxyArgs = Set-ProxyArgument -Arguments @($entry['args']) -BoundParameters $PSBoundParameters
+        if ($proxyArgs.Count) { $entry['args'] = $proxyArgs } else { $entry.Remove('args') }
+    }
     $config['mcpServers'][$serverName] = $entry
 
     $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath -Encoding UTF8 -NoNewline
@@ -252,6 +321,18 @@ you remove them again.
 .PARAMETER KeepBuiltInShellTools
     Leaves the built-in tools as they are, without asking.
 
+.PARAMETER ConsoleLaunch
+    Sets the proxy's --console-launch option: how consoles open on Windows.
+    Minimized opens a minimized classic console window that never takes the
+    keyboard focus; Handoff is the launch before 1.17.0; Auto, the default,
+    removes the option. Not given, the entry keeps what it has. No effect on
+    macOS and Linux.
+
+.PARAMETER NoProfile
+    Adds the proxy's --no-profile option, so consoles start without your
+    $PROFILE. -NoProfile:$false removes it. Not given, the entry keeps what it
+    has.
+
 .EXAMPLE
     Register-PwshToClaudeCode
 
@@ -268,6 +349,12 @@ you remove them again.
 
     Points Claude Code at the proxy of the version just installed.
 
+.EXAMPLE
+    Register-PwshToClaudeCode -ConsoleLaunch Minimized
+
+    Registers the server with consoles opening minimized, without taking the
+    keyboard focus. Later re-registrations keep the option.
+
 .OUTPUTS
     None. Passes through output from the claude CLI.
 #>
@@ -278,7 +365,12 @@ function Register-PwshToClaudeCode {
         [switch]$DisableBuiltInShellTools,
 
         [Parameter(ParameterSetName = 'Keep')]
-        [switch]$KeepBuiltInShellTools
+        [switch]$KeepBuiltInShellTools,
+
+        [ValidateSet('Auto', 'Handoff', 'Minimized')]
+        [string]$ConsoleLaunch,
+
+        [switch]$NoProfile
     )
 
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
@@ -369,7 +461,14 @@ function Register-PwshToClaudeCode {
         }
     }
 
-    if (-not (Add-UserScopeEntry $proxyPath $commandArgs $environment)) {
+    # The previous entry is restored with its own arguments ($commandArgs);
+    # the new one gets the flags asked for here.
+    $newArgs = $commandArgs
+    if ($PSBoundParameters.ContainsKey('ConsoleLaunch') -or $PSBoundParameters.ContainsKey('NoProfile')) {
+        $newArgs = Set-ProxyArgument -Arguments $commandArgs -BoundParameters $PSBoundParameters
+    }
+
+    if (-not (Add-UserScopeEntry $proxyPath $newArgs $environment)) {
         $exitCode = $LASTEXITCODE
         if (-not $existing) {
             Write-Error "'claude mcp add $serverName' failed with exit code $exitCode."
@@ -387,7 +486,7 @@ function Register-PwshToClaudeCode {
     $action = if ($existing) { 'Updated' } else { 'Added' }
     Write-Host "$action '$serverName' (user scope)" -ForegroundColor Green
     Write-Host "  command: $proxyPath" -ForegroundColor Gray
-    if ($commandArgs) { Write-Host "  args: $($commandArgs -join ' ')" -ForegroundColor Gray }
+    if ($newArgs) { Write-Host "  args: $($newArgs -join ' ')" -ForegroundColor Gray }
     if ($environment) { Write-Host "  env: $($environment -join ', ')" -ForegroundColor Gray }
 
     # An entry at local or project scope for this directory still wins over the

@@ -382,8 +382,10 @@ public static class PwshLauncherWindows
     // when it is the default terminal, and the new Windows Terminal window takes the keyboard
     // focus from whatever the user is typing in. STARTUPINFOW.wShowWindow does not survive that
     // handoff (#56), but wt.exe started with SW_SHOWNOACTIVATE opens its window without
-    // activating it when another application is in front. (With a Windows Terminal window in
-    // front the new window still takes focus, as it does today.)
+    // activating it when another application is in front — on many systems, not all: the
+    // reporter's (Windows 11 26200, Windows Terminal 1.24/1.25) still activates it, and there
+    // --console-launch minimized is the answer. (With a Windows Terminal window in front the
+    // new window always takes focus, as it did before.)
     // Returns wt.exe's path when consoles would end up in Windows Terminal anyway.
     internal static string? FindWindowsTerminalForDelegation()
     {

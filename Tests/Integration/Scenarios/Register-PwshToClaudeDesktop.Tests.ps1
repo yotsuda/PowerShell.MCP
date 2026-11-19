@@ -24,7 +24,16 @@ Describe "Register-PwshToClaudeDesktop" {
 
         if (-not $functionAst) { throw 'Register-PwshToClaudeDesktop was not found in the module.' }
 
+        # The module-private helper that applies -ConsoleLaunch / -NoProfile.
+        $helperAst = $moduleAst.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -eq 'Set-ProxyArgument'
+        }, $true) | Select-Object -First 1
+        if (-not $helperAst) { throw 'Set-ProxyArgument was not found in the module.' }
+
         . ([scriptblock]::Create($functionAst.Extent.Text))
+        . ([scriptblock]::Create($helperAst.Extent.Text))
         function Get-MCPProxyPath { 'C:\NEW\PowerShell.MCP.Proxy.exe' }
 
         # Helpers are defined here in BeforeAll. One defined in the Describe body
@@ -118,6 +127,52 @@ Describe "Register-PwshToClaudeDesktop" {
             Register-PwshToClaudeDesktop 6>$null
 
             (Get-Config).mcpServers.pwsh.env.POWERSHELL_MCP_TIMEOUT_CEILING | Should -BeExactly '120'
+        }
+    }
+
+    Context "proxy flags given as parameters" {
+        It "adds --console-launch to a new entry" {
+            Register-PwshToClaudeDesktop -ConsoleLaunch Minimized 6>$null
+
+            (Get-Config).mcpServers.pwsh.args | Should -Be @('--console-launch', 'minimized')
+        }
+
+        It "adds it to an existing entry and keeps the other flags and environment" {
+            Set-Config @{
+                mcpServers = @{
+                    pwsh = @{ command = 'C:\OLD\PowerShell.MCP.Proxy.exe'; args = @('--no-profile'); env = @{ KEEP = '1' } }
+                }
+            }
+
+            Register-PwshToClaudeDesktop -ConsoleLaunch Minimized 6>$null
+
+            $entry = (Get-Config).mcpServers.pwsh
+            $entry.args | Should -Be @('--no-profile', '--console-launch', 'minimized')
+            $entry.env.KEEP | Should -BeExactly '1'
+        }
+
+        It "-ConsoleLaunch Auto removes the option, and an emptied args with it" {
+            Set-Config @{
+                mcpServers = @{ pwsh = @{ command = 'C:\OLD\PowerShell.MCP.Proxy.exe'; args = @('--console-launch=handoff') } }
+            }
+
+            Register-PwshToClaudeDesktop -ConsoleLaunch Auto 6>$null
+
+            (Get-Config).mcpServers.pwsh.ContainsKey('args') | Should -BeFalse
+        }
+
+        It "-NoProfile adds --no-profile" {
+            Register-PwshToClaudeDesktop -NoProfile 6>$null
+
+            (Get-Config).mcpServers.pwsh.args | Should -Be @('--no-profile')
+        }
+
+        It "a later plain re-registration keeps the option" {
+            Register-PwshToClaudeDesktop -ConsoleLaunch Minimized 6>$null
+
+            Register-PwshToClaudeDesktop 6>$null
+
+            (Get-Config).mcpServers.pwsh.args | Should -Be @('--console-launch', 'minimized')
         }
     }
 
