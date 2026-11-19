@@ -316,6 +316,20 @@ From then on `Register-PwshToClaudeCode` keeps the flag, including when you re-r
 
 > The headless / CI launcher always uses `-NoProfile` regardless of this flag.
 
+### How consoles open on Windows (`--console-launch`)
+
+A console the proxy opens should not take the keyboard focus from what you are typing in. On Windows, `--console-launch` chooses how it opens:
+
+| Value | Window | Focus |
+|---|---|---|
+| `auto` (default) | When Windows Terminal is your default terminal (the default on Windows 11), a new Windows Terminal window opened through `wt.exe` without activating it; otherwise a console window as before | Kept while another application is in front. When a Windows Terminal window is in front — for example when your AI client runs in Windows Terminal — the new window still takes it. |
+| `minimized` | A minimized classic console window (conhost), not a Windows Terminal window: no tabs, no Windows Terminal settings | Never taken, whatever is in front. Click the console on the taskbar to watch it. |
+| `handoff` | Exactly as before 1.17.0: Windows decides, usually a Windows Terminal window | Taken when the window opens |
+
+`minimized` may also suit agents working on another virtual desktop: Windows Terminal runs all its windows in one process, and users have seen a new window bring the others to the desktop they were on; separate conhost windows do not share a process.
+
+Add it the same way as `--no-profile`, for example `claude mcp add pwsh -s user -- "$(Get-MCPProxyPath)" --console-launch minimized`, or `"args": ["--console-launch", "minimized"]` in other clients. It has no effect on macOS and Linux.
+
 ### Idle consoles close themselves
 
 When consoles pile up, an owned console that neither the AI nor you have used for 10 minutes prints a warning and closes itself 60 seconds later. The most recently used console of each session is always kept, and a console that is busy, waiting at a prompt, still holding output that has not been collected, has text typed at its prompt, or has an unfinished background job (`Start-Job`, `&`) is never closed. Typing anything, or any AI command, cancels a pending close. A console started by a sub-agent (`is_subagent=true`) is not kept: once idle it closes like any other, since a finished sub-agent never comes back for it.

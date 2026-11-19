@@ -122,6 +122,93 @@ public class PwshLauncherSharedTests
         Assert.DoesNotContain("-NoProfile", commandLine);
     }
 
+    [Theory]
+    [InlineData(new string[0], "Auto", false)]
+    [InlineData(new[] { "--no-profile" }, "Auto", false)]
+    [InlineData(new[] { "--console-launch", "minimized" }, "Minimized", false)]
+    [InlineData(new[] { "--no-profile", "--Console-Launch", "HANDOFF" }, "Handoff", false)]
+    [InlineData(new[] { "--console-launch=minimized" }, "Minimized", false)]
+    [InlineData(new[] { "--console-launch", "auto" }, "Auto", false)]
+    [InlineData(new[] { "--console-launch" }, "Auto", true)]
+    [InlineData(new[] { "--console-launch", "hidden" }, "Auto", true)]
+    [InlineData(new[] { "--console-launch", "2" }, "Auto", true)]
+    public void ParseConsoleLaunch_ReadsTheOption(string[] args, string expected, bool expectError)
+    {
+        var mode = PwshLauncherShared.ParseConsoleLaunch(args, out var error);
+        Assert.Equal(expected, mode.ToString());
+        Assert.Equal(expectError, error != null);
+    }
+
+    // Free text a banner or reason can carry (it sits in a single-quoted PowerShell string).
+    private const string NastyBanner = "a; b \"c\" d''e p\\\"q x\\;y \\x\\ 日本 $HOME `t ;; \"unbalanced end\\";
+
+    [Theory]
+    [InlineData("a b", "\"a b\"")]
+    [InlineData("a\"b", "\"a\\\"b\"")]
+    [InlineData("a\\\"b", "\"a\\\\\\\"b\"")]
+    [InlineData("a\\", "\"a\\\\\"")]
+    [InlineData("a\\b", "\"a\\b\"")]
+    [InlineData("", "\"\"")]
+    public void QuoteWindowsArgument_FollowsCommandLineToArgvWRules(string value, string expected)
+    {
+        Assert.Equal(expected, PwshLauncherShared.QuoteWindowsArgument(value));
+    }
+
+    [Fact]
+    public void BuildWindowsCommandLine_RoundTripsQuotesThroughArgv()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var command = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, DefaultAgentId, $"Write-Host '{NastyBanner}'");
+        var argv = SplitArgs(PwshLauncherShared.BuildWindowsCommandLine(command, noProfile: false));
+        Assert.Equal(new[] { "pwsh.exe", "-NoExit", "-Command", command }, argv);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildWindowsTerminalCommandLine_SurvivesWtReparse(bool noProfile)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const string wt = @"C:\Users\u\AppData\Local\Microsoft\WindowsApps\wt.exe";
+        const string pwsh = @"C:\Program Files\PowerShell\7\pwsh.exe";
+        var command = PwshLauncherShared.BuildWindowsInitCommand(DefaultPid, "sa-1'2", $"Write-Host '{NastyBanner}'");
+        var commandLine = PwshLauncherShared.BuildWindowsTerminalCommandLine(wt, pwsh, command, noProfile);
+
+        // No bare ';' may reach wt.exe: it would start a new wt subcommand.
+        Assert.DoesNotMatch(@"(?<!\\);", commandLine);
+
+        // What wt.exe does (measured on Windows Terminal 1.25): split with CommandLineToArgvW,
+        // turn \; back into ;, then join the shell's arguments, quoting those with a space
+        // but without re-escaping anything inside them.
+        var wtArgv = SplitArgs(commandLine).Select(a => a.Replace("\\;", ";")).ToArray();
+        Assert.Equal(new[] { wt, "-w", "new", "new-tab", pwsh }, wtArgv[..5]);
+        var shellLine = string.Join(' ', wtArgv[4..].Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+
+        var expected = new List<string> { pwsh };
+        if (noProfile) expected.Add("-NoProfile");
+        expected.AddRange(["-NoExit", "-Command", command]);
+        Assert.Equal(expected, SplitArgs(shellLine));
+    }
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CommandLineToArgvW(string lpCmdLine, out int pNumArgs);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr hMem);
+
+    private static string[] SplitArgs(string commandLine)
+    {
+        var p = CommandLineToArgvW(commandLine, out var n);
+        try
+        {
+            var r = new string[n];
+            for (int i = 0; i < n; i++)
+                r[i] = System.Runtime.InteropServices.Marshal.PtrToStringUni(System.Runtime.InteropServices.Marshal.ReadIntPtr(p, i * IntPtr.Size))!;
+            return r;
+        }
+        finally { LocalFree(p); }
+    }
+
     [Fact]
     public void BuildWindowsCommandLine_IncludesNoProfileWhenRequested()
     {

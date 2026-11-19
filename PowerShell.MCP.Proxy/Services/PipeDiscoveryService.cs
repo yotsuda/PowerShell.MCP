@@ -146,7 +146,8 @@ public class PipeDiscoveryService : IPipeDiscoveryService
                 // itself while this console stayed ready would otherwise never
                 // be reported — this path is the one every routine call takes.
                 var vanished = DetectVanishedConsoles(agentId, activePipeStatus.Pid > 0 ? activePipeStatus.Pid : ConsoleSessionManager.GetPidFromPipeName(activePipe));
-                return new PipeDiscoveryResult(activePipe, false, vanished, null, activePipeStatus.Cwd);
+                return new PipeDiscoveryResult(activePipe, false, vanished, null, activePipeStatus.Cwd,
+                    AiResultCached: activePipeStatus.Status == PipeStatus.Completed);
             }
         }
 
@@ -172,7 +173,8 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 // Became ready between fast path and slow path (after DetectClosedConsoles)
                 if (activePipeStatus.Pid > 0) _sessionManager.UnmarkPipeBusy(agentId, activePipeStatus.Pid);
-                return new PipeDiscoveryResult(activePipe, false, closedMessages, null, activePipeStatus.Cwd);
+                return new PipeDiscoveryResult(activePipe, false, closedMessages, null, activePipeStatus.Cwd,
+                    AiResultCached: activePipeStatus.Status == PipeStatus.Completed);
             }
             else // busy
             {

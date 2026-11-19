@@ -29,7 +29,7 @@ namespace PowerShell.MCP.Proxy
         /// and replies repeat, not what the AI must never do.
         /// </summary>
         internal static readonly string ServerInstructions =
-$@"PowerShell.MCP: persistent PowerShell 7 consoles the user can see and share. Use execute_command for shell work here.
+$@"PowerShell.MCP: persistent PowerShell 7 consoles the user can see and share. Use execute_command for shell work here. A result line starting with 📣 is for the user: always pass it on in your reply.
 Admin work on THIS machine needs no remote control: ask the user to open PowerShell 7 as Administrator and run Import-Module PowerShell.MCP. This server uses such a user-opened console only when none of its own is free, so close yours (close_console) — the next command then goes there. start_console with a reason always starts a new, non-elevated console.
 
 It can also drive a console on ANOTHER machine (a VM, a server, a colleague's PC; elevated if that console is), with the user there watching. If the user asks for work on another machine, you may mention this option; set it up only when they ask for it.
@@ -64,6 +64,10 @@ Then use the *_remote_* tools; wait_for_completion serves remote consoles too. U
             // (The headless/CI launcher always uses -NoProfile, independent of this flag.)
             PwshLauncherShared.SuppressProfileOnInteractive =
                 Array.Exists(args, a => string.Equals(a, "--no-profile", StringComparison.OrdinalIgnoreCase));
+            // `--console-launch auto|handoff|minimized`: how Windows consoles open (#59).
+            PwshLauncherShared.ConsoleLaunchMode = PwshLauncherShared.ParseConsoleLaunch(args, out var consoleLaunchError);
+            if (consoleLaunchError != null)
+                Console.Error.WriteLine($"[WARN] {consoleLaunchError}");
 
             var builder = Host.CreateApplicationBuilder(args);
 

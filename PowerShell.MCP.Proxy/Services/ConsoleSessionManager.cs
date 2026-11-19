@@ -472,6 +472,32 @@ public class ConsoleSessionManager
         }
     }
 
+    // Reports the AI must pass on to the user ("started a new console #7060 Silk"),
+    // per agent, until the next tool response carries them.
+    private readonly Dictionary<string, List<string>> _pendingUserReports = new();
+
+    /// <summary>Queues a report for the agent's next tool response.</summary>
+    public void QueueUserReport(string agentId, string report)
+    {
+        lock (_lock)
+        {
+            if (!_pendingUserReports.TryGetValue(agentId, out var list))
+                _pendingUserReports[agentId] = list = new List<string>();
+            list.Add(report);
+        }
+    }
+
+    /// <summary>Returns and clears the agent's queued reports (empty when none).</summary>
+    public List<string> TakeUserReports(string agentId)
+    {
+        lock (_lock)
+        {
+            if (!_pendingUserReports.Remove(agentId, out var list))
+                return new List<string>();
+            return list;
+        }
+    }
+
     /// <summary>
     /// Assigns a console name to the specified pwsh PID. Returns null if already assigned.
     /// </summary>

@@ -51,10 +51,13 @@ public static class ConsoleControl
     }
 
     /// <summary>
-    /// Linux/macOS: the running command's processes (see <see cref="SendCtrlC"/>).
+    /// The running command's processes: this process's descendants started
+    /// since the command began (see <see cref="CommandDescendants"/>).
     /// Listed before the pipeline is stopped, which ends the direct child and
-    /// would orphan the rest out of reach. Empty when there are none or the
-    /// process tree cannot be read.
+    /// would orphan the rest out of reach. Linux/macOS signal them
+    /// (<see cref="Interrupt"/>); Windows ends those still running 2 s after
+    /// the Ctrl+C (<see cref="EndSurvivors"/>). Empty when there are none or
+    /// the process tree cannot be read.
     /// </summary>
     public static IReadOnlyList<int> CommandProcesses()
     {
@@ -87,6 +90,47 @@ public static class ConsoleControl
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Windows: waits up to 2 s for <paramref name="targets"/> to exit after the
+    /// Ctrl+C, then ends the ones still running and returns them as
+    /// "name (pid N)". A CTRL_C_EVENT does not end every native command: a
+    /// program can handle or outlive it (lilypond 2.26.0 went on and finished
+    /// its job), and PowerShell waits for it, so the runspace stays occupied —
+    /// its heartbeat stops, the console reads as busy with "(user command)",
+    /// and when the command finally ends the console may close itself as idle
+    /// (docs/Issue-Console-Stuck-After-Cancel-2026-11-19.md). A cancel means
+    /// stop, so what is left after the grace period is ended. Only processes
+    /// the command started are listed (see <see cref="CommandProcesses"/>), so
+    /// a Start-Process server or a Start-Job worker from before is untouched.
+    /// </summary>
+    public static IReadOnlyList<string> EndSurvivors(IReadOnlyList<int> targets, int graceMs = 2000)
+    {
+        var ended = new List<string>();
+        if (targets.Count == 0) return ended;
+        var deadline = DateTime.UtcNow.AddMilliseconds(graceMs);
+        while (DateTime.UtcNow < deadline && targets.Any(IsRunning))
+            System.Threading.Thread.Sleep(100);
+        foreach (var pid in targets)
+        {
+            try
+            {
+                using var p = System.Diagnostics.Process.GetProcessById(pid);
+                if (p.HasExited) continue;
+                var name = p.ProcessName;
+                p.Kill();
+                ended.Add($"{name} (pid {pid})");
+            }
+            catch { /* exited meanwhile, or not ours to end */ }
+        }
+        return ended;
+    }
+
+    private static bool IsRunning(int pid)
+    {
+        try { using var p = System.Diagnostics.Process.GetProcessById(pid); return !p.HasExited; }
+        catch { return false; }
     }
 
     private const int SIGINT = 2;
@@ -127,9 +171,14 @@ public static class ConsoleControl
         return result;
     }
 
-    /// <summary>(pid, parent pid) of every process: /proc on Linux, ps elsewhere.</summary>
+    /// <summary>(pid, parent pid) of every process: a Toolhelp snapshot on Windows, /proc on Linux, ps elsewhere.</summary>
     private static IEnumerable<(int pid, int ppid)> ProcessParents()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            foreach (var pair in WindowsProcessParents()) yield return pair;
+            yield break;
+        }
         if (OperatingSystem.IsLinux())
         {
             foreach (var dir in Directory.EnumerateDirectories("/proc"))
@@ -159,6 +208,53 @@ public static class ConsoleControl
             if (parts.Length == 2 && int.TryParse(parts[0], out var pid) && int.TryParse(parts[1], out var ppid))
                 yield return (pid, ppid);
         }
+    }
+
+    private const uint TH32CS_SNAPPROCESS = 0x00000002;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct PROCESSENTRY32W
+    {
+        public uint dwSize;
+        public uint cntUsage;
+        public uint th32ProcessID;
+        public IntPtr th32DefaultHeapID;
+        public uint th32ModuleID;
+        public uint cntThreads;
+        public uint th32ParentProcessID;
+        public int pcPriClassBase;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szExeFile;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool Process32FirstW(IntPtr hSnapshot, ref PROCESSENTRY32W lppe);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool Process32NextW(IntPtr hSnapshot, ref PROCESSENTRY32W lppe);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    /// <summary>Windows: (pid, parent pid) of every process, from one Toolhelp snapshot.</summary>
+    private static List<(int pid, int ppid)> WindowsProcessParents()
+    {
+        var result = new List<(int, int)>();
+        var snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snap == IntPtr.Zero || snap == new IntPtr(-1)) return result;
+        try
+        {
+            var entry = new PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32W>() };
+            if (!Process32FirstW(snap, ref entry)) return result;
+            do { result.Add(((int)entry.th32ProcessID, (int)entry.th32ParentProcessID)); }
+            while (Process32NextW(snap, ref entry));
+        }
+        finally { CloseHandle(snap); }
+        return result;
     }
 
     // ===== Pipeline-level cancel (for PowerShell-side commands) =====

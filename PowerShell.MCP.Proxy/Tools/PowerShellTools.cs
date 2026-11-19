@@ -15,13 +15,13 @@ public class PowerShellTools
     /// <summary>
     /// Finds a ready pipe. Delegates to PipeDiscoveryService.
     /// </summary>
-    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo, string? liveCwd, string? activeNotFree)> FindReadyPipeAsync(
+    private static async Task<(string? readyPipeName, bool consoleSwitched, IReadOnlyList<string> closedConsoleMessages, string? allPipesStatusInfo, string? liveCwd, string? activeNotFree, bool aiResultCached)> FindReadyPipeAsync(
         IPipeDiscoveryService pipeDiscoveryService,
         string agentId,
         CancellationToken cancellationToken)
     {
         var result = await pipeDiscoveryService.FindReadyPipeAsync(agentId, cancellationToken);
-        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo, result.LiveCwd, result.ActiveNotFree);
+        return (result.ReadyPipeName, result.ConsoleSwitched, result.ClosedConsoleMessages, result.AllPipesStatusInfo, result.LiveCwd, result.ActiveNotFree, result.AiResultCached);
     }
 
     /// <summary>
@@ -117,9 +117,13 @@ public class PowerShellTools
     }
 
     /// <summary>
-    /// Sets the console window title if not already set
+    /// Sets the console window title if not already set. A console gets its name
+    /// here exactly once: when this proxy started it (<paramref name="launched"/>,
+    /// from StartConsoleInternal) or when it took over an unnamed console (a
+    /// user's Import-Module, a prior session's). Either way the user is told,
+    /// through the AI, which console it now works in (see TakeUserReportBlock).
     /// </summary>
-    private static async Task SetConsoleTitleAsync(IPowerShellService powerShellService, string pipeName, CancellationToken cancellationToken)
+    private static async Task SetConsoleTitleAsync(IPowerShellService powerShellService, string pipeName, string agentId, CancellationToken cancellationToken, bool launched = false)
     {
         var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
         if (pid == null) return;
@@ -127,6 +131,22 @@ public class PowerShellTools
         var title = ConsoleSessionManager.Instance.TryAssignNameToPid(pid.Value);
         if (title == null) return;
         await powerShellService.SetWindowTitleAsync(pipeName, title, cancellationToken);
+        ConsoleSessionManager.Instance.QueueUserReport(agentId, launched
+            ? $"Started a new console {title}."
+            : $"Named an existing console {title} and attached to it.");
+    }
+
+    /// <summary>
+    /// The 📣 block for the agent's queued reports, or null when there are none.
+    /// The user watches the consoles but cannot tell from them which one the AI
+    /// is working in, so passing these on is required, not optional.
+    /// </summary>
+    internal static string? TakeUserReportBlock(string agentId)
+    {
+        var reports = ConsoleSessionManager.Instance.TakeUserReports(agentId);
+        if (reports.Count == 0) return null;
+        return "📣 Required: tell the user this in your reply, in their language (they cannot otherwise tell which console you work in): "
+            + string.Join(" ", reports);
     }
 
     /// <summary>
@@ -184,6 +204,10 @@ public class PowerShellTools
     /// </summary>
     private static string PrependAgentIdNoticeIfNew(string body, bool isNewlyAllocated, string agentId)
     {
+        // Every return path of a console tool comes through here, so this is also
+        // where the queued 📣 console reports are guaranteed to reach the AI.
+        var report = TakeUserReportBlock(agentId);
+        if (report != null) body = $"{report}\n\n{body}";
         if (!isNewlyAllocated) return body;
         return $"🔑 Your agent_id is: {agentId} — pass this in all subsequent tool calls.\n\n{body}";
     }
@@ -207,7 +231,7 @@ public class PowerShellTools
             return Wrap(error);
 
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree, _) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         if (readyPipeName == null)
         {
@@ -232,7 +256,7 @@ public class PowerShellTools
             // "#PID ____" until some other tool that handles consoleSwitched runs.
             if (consoleSwitched)
             {
-                await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+                await SetConsoleTitleAsync(powerShellService, readyPipeName, agentId, cancellationToken);
                 await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
             }
 
@@ -298,7 +322,10 @@ public class PowerShellTools
         if (ack == null || ack.Status != "success")
             return Wrap($"Cancel request to console {GetConsoleName(pipeName)} failed or was not acknowledged. The console may have already finished or been closed.");
 
-        return Wrap($"✓ Interrupt sent to console {GetConsoleName(pipeName)} (Ctrl+C + pipeline stop). A running PowerShell pipeline or native CLI should now be stopped and the console back to ready; a command stuck in a non-cooperative blocking call may still be running (use close_console). Call execute_command (or get_current_location) to confirm and to drain any output the cancelled command produced.");
+        var endedNote = ack.Ended is { Count: > 0 }
+            ? $" Still running 2 s after the Ctrl+C, so ended: {string.Join(", ", ack.Ended)} — anything it was writing may be incomplete."
+            : "";
+        return Wrap($"✓ Interrupt sent to console {GetConsoleName(pipeName)} (Ctrl+C + pipeline stop).{endedNote} A running PowerShell pipeline or native CLI should now be stopped and the console back to ready; a command stuck in a non-cooperative blocking call may still be running (use close_console). Call execute_command (or get_current_location) to confirm and to drain any output the cancelled command produced.");
     }
 
     /// <summary>
@@ -696,14 +723,23 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // console that an undelivered response gets stashed on.
         if (agentIdBox != null) agentIdBox.Value = agentId;
         // Wrap every return so the 🔑 notice can never be dropped on a sub-agent's
-        // first call regardless of which branch builds the response.
-        string Wrap(string r) => PrependAgentIdNoticeIfNew(r, isNewlyAllocated, agentId);
+        // first call regardless of which branch builds the response. It also
+        // puts in front, once, the earlier result drained from this console
+        // before the location check (see below): that result is older than
+        // anything this call produces, so it comes first, whichever branch returns.
+        string? drainedBeforeRun = null;
+        string Wrap(string r)
+        {
+            var earlier = drainedBeforeRun;
+            drainedBeforeRun = null;
+            return PrependAgentIdNoticeIfNew(PipelineHelper.JoinBlocks(earlier, r), isNewlyAllocated, agentId);
+        }
         if (resolveError != null)
             return Wrap(resolveError);
 
         var sessionManager = ConsoleSessionManager.Instance;
         // Find a ready pipe
-        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
+        var (readyPipeName, consoleSwitched, closedConsoleMessages, allPipesStatusInfo, liveCwd, activeNotFree, aiResultCached) = await FindReadyPipeAsync(pipeDiscoveryService, agentId, cancellationToken);
 
         // The startup notice surfaces "spawned a new console" / "switched
         // to a sibling" context to the AI. A spawn or switch runs the
@@ -746,7 +782,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 return Wrap("Failed to acquire newly-started console pipe.");
             }
 
-            await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, readyPipeName, agentId, cancellationToken);
 
             // Probe the new console for its live cwd — fresh pwsh starts at
             // home, but a future StartConsoleInternal might honor an explicit
@@ -763,7 +799,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             // Console switched (active died → sibling owned pipe, or
             // unowned pipe claimed). Set the title and fall through; the
             // location check below decides whether the pipeline runs there.
-            await SetConsoleTitleAsync(powerShellService, readyPipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, readyPipeName, agentId, cancellationToken);
             await ShowClaimNoticeAsync(powerShellService, readyPipeName, null, cancellationToken);
             startupNotice = $"ℹ️ Switched to existing console {GetConsoleName(readyPipeName)}."
                 + (activeNotFree != null ? " " + NotFreeClause(activeNotFree) : "");
@@ -814,6 +850,25 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         // switched to or attached to: an older console's record is where the AI
         // was before it moved on, not where it is now.
         var cwdPid = ConsoleSessionManager.GetPidFromPipeName(readyPipeName);
+        // The console still holds the result of an AI pipeline that outran its
+        // timeout and finished (or was cancelled) since. Drain it now, before
+        // the check: where that pipeline ended — its status line's Location —
+        // is the AI's place, so a `cd` inside it is not taken for one typed in
+        // the console (the check used to refuse the next command over it). A
+        // `cd` typed after that pipeline ended is still caught. The drained
+        // result goes out in front of whatever this call returns (Wrap), so it
+        // is never held back by a refusal and stays in time order.
+        if (aiResultCached && !newConsole && readyPipeName != null)
+        {
+            var drained = await powerShellService.ConsumeOutputFromPipeAsync(readyPipeName, cancellationToken);
+            if (!string.IsNullOrEmpty(drained))
+            {
+                drainedBeforeRun = drained;
+                var endedAt = PipelineHelper.LastResultLocation(drained);
+                if (endedAt != null && cwdPid.HasValue)
+                    sessionManager.SetLastAiCwd(agentId, cwdPid.Value, endedAt);
+            }
+        }
         var consoleAiCwd = cwdPid.HasValue ? sessionManager.GetLastAiCwd(cwdPid.Value) : null;
         var agentAiCwd = sessionManager.GetSessionLastAiCwd(agentId);
         var expectedCwd = newConsole ? agentAiCwd ?? consoleAiCwd : consoleAiCwd ?? agentAiCwd;
@@ -922,7 +977,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                                     var activeAfterBusy = sessionManager.GetActivePipeName(agentId);
                                     if (activeAfterBusy != null)
                                     {
-                                        await SetConsoleTitleAsync(powerShellService, activeAfterBusy, cancellationToken);
+                                        await SetConsoleTitleAsync(powerShellService, activeAfterBusy, agentId, cancellationToken);
                                     }
 
                                     var newConsoleName = GetConsoleName(activeAfterBusy);
@@ -1453,7 +1508,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
                 // Set console window title if this was a newly claimed (unowned) console
                 if (discoveryResult.ConsoleSwitched)
                 {
-                    await SetConsoleTitleAsync(powerShellService, discoveryResult.ReadyPipeName, cancellationToken);
+                    await SetConsoleTitleAsync(powerShellService, discoveryResult.ReadyPipeName, agentId, cancellationToken);
                     // Newly claimed: show the caller's banner, or the default
                     // "AI session connected." notice when none was given.
                     await ShowClaimNoticeAsync(powerShellService, discoveryResult.ReadyPipeName, banner, cancellationToken);
@@ -1514,7 +1569,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
         var newPipeName = ConsoleSessionManager.Instance.GetActivePipeName(agentId);
         if (newPipeName != null)
         {
-            await SetConsoleTitleAsync(powerShellService, newPipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, newPipeName, agentId, cancellationToken);
         }
         // Started where the AI asked (or $HOME): its place on this console.
         RecordToldLocation(agentId, newPipeName, resolvedPath);
@@ -1611,7 +1666,7 @@ Rare: git, node, npm, python, dotnet, curl, ssh are unaffected; programs that pr
             Console.Error.WriteLine($"[INFO] PowerShell console started successfully (pipe={pipeName}), setting title and getting current location...");
 
             // Set console title before getting location (so title appears in status line)
-            await SetConsoleTitleAsync(powerShellService, pipeName, cancellationToken);
+            await SetConsoleTitleAsync(powerShellService, pipeName, agentId, cancellationToken, launched: true);
 
             // Get current location from new console
             var locationResult = await powerShellService.GetCurrentLocationFromPipeAsync(pipeName, cancellationToken);

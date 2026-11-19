@@ -126,7 +126,7 @@ jobs:
           - os: ubuntu-latest
             rid: linux-x64
             exe: PowerShell.MCP.Proxy
-          - os: macos-14
+          - os: macos-latest
             rid: osx-arm64
             exe: PowerShell.MCP.Proxy
 

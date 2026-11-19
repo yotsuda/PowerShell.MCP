@@ -17,14 +17,11 @@ public class PowerShellProcessManager
     public static async Task<(bool Success, string PipeName)> StartPowerShellWithModuleAndPipeNameAsync(string agentId, string? startupCommands = null, string? startLocation = null)
     {
         int pid = 0;
-        HashSet<string>? existingPipes = null;
-
-        // macOS/Linux: Capture existing pipes BEFORE launching
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            var sessionManager = ConsoleSessionManager.Instance;
-            existingPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid, agentId).ToHashSet();
-        }
+        // Capture existing pipes BEFORE launching. macOS/Linux always need it; Windows
+        // needs it when the console goes through Windows Terminal (wt.exe), where the
+        // launcher cannot learn pwsh's PID and returns 0.
+        var sessionManager = ConsoleSessionManager.Instance;
+        HashSet<string> existingPipes = sessionManager.EnumeratePipes(sessionManager.ProxyPid, agentId).ToHashSet();
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -53,8 +50,8 @@ public class PowerShellProcessManager
         }
         else
         {
-            // macOS/Linux: Poll for a NEW standby pipe (exclude existing pipes)
-            pipeName = await WaitForNewStandbyPipeAsync(agentId, existingPipes!, maxWaitSeconds: 30);
+            // macOS/Linux, and Windows via wt.exe: poll for a NEW standby pipe (exclude existing pipes)
+            pipeName = await WaitForNewStandbyPipeAsync(agentId, existingPipes, maxWaitSeconds: 30);
             if (pipeName == null)
             {
                 return (false, string.Empty);
@@ -214,11 +211,86 @@ internal static class PwshLauncherShared
     // BuildHeadlessPwshArguments.
     internal static bool SuppressProfileOnInteractive { get; set; }
 
+    // How the Windows launcher opens a console. Set once at startup from the
+    // proxy's `--console-launch <auto|handoff|minimized>` (see LaunchPwsh):
+    //  auto      — through wt.exe without activating it when Windows Terminal is the
+    //              default terminal (#59), otherwise the plain launch;
+    //  handoff   — the plain CREATE_NEW_CONSOLE launch, as before 1.17.0;
+    //  minimized — CREATE_NEW_CONSOLE + SW_SHOWMINNOACTIVE: a minimized classic
+    //              console (conhost) that never takes the focus, even from a
+    //              Windows Terminal window, and is not one of Windows Terminal's
+    //              windows (no tabs, not pulled across virtual desktops with them).
+    // Ignored on macOS/Linux.
+    internal enum ConsoleLaunch { Auto, Handoff, Minimized }
+
+    internal static ConsoleLaunch ConsoleLaunchMode { get; set; }
+
+    internal const string ConsoleLaunchOption = "--console-launch";
+
+    // Accepts `--console-launch <mode>` and `--console-launch=<mode>`, any case.
+    // Absent: Auto. A missing or unknown value: Auto plus an error to report.
+    internal static ConsoleLaunch ParseConsoleLaunch(string[] args, out string? error)
+    {
+        error = null;
+        for (int i = 0; i < args.Length; i++)
+        {
+            string? value;
+            if (string.Equals(args[i], ConsoleLaunchOption, StringComparison.OrdinalIgnoreCase))
+                value = i + 1 < args.Length ? args[i + 1] : null;
+            else if (args[i].StartsWith(ConsoleLaunchOption + "=", StringComparison.OrdinalIgnoreCase))
+                value = args[i][(ConsoleLaunchOption.Length + 1)..];
+            else
+                continue;
+
+            if (Enum.TryParse<ConsoleLaunch>(value, ignoreCase: true, out var mode)
+                && Enum.IsDefined(mode) && !int.TryParse(value, out _))
+                return mode;
+            error = $"{ConsoleLaunchOption}: expected auto, handoff or minimized, got '{value}'. Using auto.";
+            return ConsoleLaunch.Auto;
+        }
+        return ConsoleLaunch.Auto;
+    }
+
     private static string InteractiveProfileArg(bool noProfile) =>
         noProfile ? $"{NoProfileArgument} " : string.Empty;
 
     internal static string BuildWindowsCommandLine(string command, bool noProfile) =>
-        $"pwsh.exe {InteractiveProfileArg(noProfile)}-NoExit -Command \"{command}\"";
+        $"pwsh.exe {InteractiveProfileArg(noProfile)}-NoExit -Command {QuoteWindowsArgument(command)}";
+
+    // Quotes one argument so CommandLineToArgvW (which pwsh's argument parsing follows)
+    // gives back exactly `value`: backslashes before a quote are doubled, the quote becomes
+    // \", and trailing backslashes are doubled before the closing quote. Banners and
+    // reasons are free text, so a plain "{command}" lost every " they contained.
+    internal static string QuoteWindowsArgument(string value)
+    {
+        var sb = new System.Text.StringBuilder("\"");
+        int backslashes = 0;
+        foreach (var ch in value)
+        {
+            if (ch == '\\') { backslashes++; continue; }
+            if (ch == '"') sb.Append('\\', backslashes * 2 + 1).Append('"');
+            else sb.Append('\\', backslashes).Append(ch);
+            backslashes = 0;
+        }
+        return sb.Append('\\', backslashes * 2).Append('"').ToString();
+    }
+
+    // Windows Terminal path (see PwshLauncherWindows.LaunchPwsh). wt.exe parses its command
+    // line once (CommandLineToArgvW, then \; -> ;) and joins the shell's arguments back into
+    // a command line without re-escaping them, so the -Command argument is quoted twice and
+    // every ';' (a wt subcommand separator otherwise) is sent as \;. Measured on Windows
+    // Terminal 1.25 with ", unbalanced ", \", x\;y, ;;, ', `, $ and Japanese in the text.
+    // Not -EncodedCommand: Defender reported a long `pwsh -EncodedCommand` as
+    // Trojan:Win32/Commando.C!ml and killed it. Not -File: execution policy (AllSigned)
+    // would block the unsigned temp script, while -Command is not subject to it.
+    // `-w new` keeps today's one window per console. No `-d`: wt.exe passes on the
+    // lpCurrentDirectory it was started with.
+    internal static string BuildWindowsTerminalCommandLine(string wtPath, string pwshPath, string command, bool noProfile)
+    {
+        var once = QuoteWindowsArgument(command);
+        var twice = QuoteWindowsArgument(once[1..^1]).Replace(";", "\\;");
+        return $"\"{wtPath}\" -w new new-tab \"{pwshPath}\" {InteractiveProfileArg(noProfile)}-NoExit -Command {twice}";
+    }
 
     internal static string BuildMacOSDoScriptCommand(string tempFile, bool noProfile) =>
         $"pwsh {InteractiveProfileArg(noProfile)}-NoExit -File '{tempFile}'";
@@ -293,6 +365,66 @@ public static class PwshLauncherWindows
     private const uint TOKEN_QUERY = 0x0008;
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint CREATE_NEW_CONSOLE = 0x00000010;
+    private const uint STARTF_USESHOWWINDOW = 0x00000001;
+    private const ushort SW_SHOWNOACTIVATE = 4;
+    private const ushort SW_SHOWMINNOACTIVE = 7;
+
+    // Class IDs Windows Terminal registers for console delegation (its AppxManifest).
+    private const string WindowsTerminalDelegationTerminal = "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}";
+    private const string LetWindowsDecide = "{00000000-0000-0000-0000-000000000000}";
+
+    // Issue #59: a console created with CREATE_NEW_CONSOLE is handed off to Windows Terminal
+    // when it is the default terminal, and the new Windows Terminal window takes the keyboard
+    // focus from whatever the user is typing in. STARTUPINFOW.wShowWindow does not survive that
+    // handoff (#56), but wt.exe started with SW_SHOWNOACTIVATE opens its window without
+    // activating it when another application is in front. (With a Windows Terminal window in
+    // front the new window still takes focus, as it does today.)
+    // Returns wt.exe's path when consoles would end up in Windows Terminal anyway.
+    internal static string? FindWindowsTerminalForDelegation()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+
+        var wt = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft", "WindowsApps", "wt.exe");
+        if (!File.Exists(wt)) return null;
+
+        string? delegation;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Console\%%Startup");
+            delegation = key?.GetValue("DelegationTerminal") as string;
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (string.Equals(delegation, WindowsTerminalDelegationTerminal, StringComparison.OrdinalIgnoreCase))
+            return wt;
+
+        // "Let Windows decide" (or never set): Windows Terminal on Windows 11 22H2 and later,
+        // the classic console before that.
+        if (string.IsNullOrEmpty(delegation) || delegation == LetWindowsDecide)
+            return Environment.OSVersion.Version.Build >= 22621 ? wt : null;
+
+        return null;   // the classic console, or another terminal: keep the plain launch
+    }
+
+    // wt.exe resolves the shell itself, so hand it a full path (the proxy's PATH lookup).
+    private static string ResolvePwshPath()
+    {
+        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
+        {
+            if (string.IsNullOrWhiteSpace(dir)) continue;
+            try
+            {
+                var candidate = Path.Combine(dir.Trim().Trim('"'), "pwsh.exe");
+                if (File.Exists(candidate)) return candidate;
+            }
+            catch { }
+        }
+        return "pwsh.exe";
+    }
 
     public static int LaunchPwsh(string agentId, string? startupCommands = null, string? startLocation = null)
     {
@@ -324,7 +456,29 @@ public static class PwshLauncherWindows
             // mojibake. See PwshLauncherShared.EncodingPrelude for the rationale.
             var proxyPid = Process.GetCurrentProcess().Id;
             string command = PwshLauncherShared.BuildWindowsInitCommand(proxyPid, agentId, startupCommands);
-            string commandLine = PwshLauncherShared.BuildWindowsCommandLine(command, PwshLauncherShared.SuppressProfileOnInteractive);
+            var mode = PwshLauncherShared.ConsoleLaunchMode;
+            var wtPath = mode == PwshLauncherShared.ConsoleLaunch.Auto ? FindWindowsTerminalForDelegation() : null;
+            string commandLine;
+            uint creationFlags;
+            if (wtPath != null)
+            {
+                commandLine = PwshLauncherShared.BuildWindowsTerminalCommandLine(wtPath, ResolvePwshPath(), command, PwshLauncherShared.SuppressProfileOnInteractive);
+                creationFlags = CREATE_UNICODE_ENVIRONMENT;
+                si.dwFlags = STARTF_USESHOWWINDOW;
+                si.wShowWindow = SW_SHOWNOACTIVATE;
+            }
+            else
+            {
+                commandLine = PwshLauncherShared.BuildWindowsCommandLine(command, PwshLauncherShared.SuppressProfileOnInteractive);
+                creationFlags = CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE;
+                if (mode == PwshLauncherShared.ConsoleLaunch.Minimized)
+                {
+                    // Honored by conhost, and it keeps the console out of the Windows
+                    // Terminal handoff altogether: a minimized classic console window.
+                    si.dwFlags = STARTF_USESHOWWINDOW;
+                    si.wShowWindow = SW_SHOWMINNOACTIVE;
+                }
+            }
 
             bool ok = CreateProcessW(
                 null,
@@ -332,7 +486,7 @@ public static class PwshLauncherWindows
                 IntPtr.Zero,
                 IntPtr.Zero,
                 false,
-                CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE,
+                creationFlags,
                 env,
                 startLocation ?? userProfile,
                 ref si,
@@ -340,7 +494,11 @@ public static class PwshLauncherWindows
 
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
 
-            pid = (int)pi.dwProcessId;
+            // Via wt.exe the shell is a child of the running Windows Terminal, not of the
+            // process we started, so its PID is unknown here: 0 makes the caller look for
+            // the console's new pipe instead. wt.exe passes on our environment block and
+            // working directory to the shell.
+            pid = wtPath != null ? 0 : (int)pi.dwProcessId;
             hProcess = pi.hProcess;
             hThread = pi.hThread;
         }

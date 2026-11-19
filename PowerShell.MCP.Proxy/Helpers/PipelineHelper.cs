@@ -37,6 +37,23 @@ public static partial class PipelineHelper
             .Select(b => b!.Trim('\r', '\n')));
 
     /// <summary>
+    /// Where the last pipeline in <paramref name="output"/> ended: the path of the
+    /// last status line's <c>| Location [Provider]: path</c> (the console's
+    /// <c>(Get-Location).Path</c> when that result was made, the form get_status
+    /// reports as cwd). Null when there is no such line. Status lines carry
+    /// <c>| Window: </c> before it, which a command's own output rarely does.
+    /// </summary>
+    public static string? LastResultLocation(string? output)
+    {
+        if (string.IsNullOrEmpty(output)) return null;
+        var matches = ResultLocationRegex().Matches(output);
+        return matches.Count == 0 ? null : matches[^1].Groups["path"].Value;
+    }
+
+    [GeneratedRegex(@"^.*\| Window: .*\| Location \[[^\]\r\n]+\]: (?<path>[^\r\n]+?)[ \t]*\r?$", RegexOptions.Multiline)]
+    private static partial Regex ResultLocationRegex();
+
+    /// <summary>
     /// Prefix that marks a status line as belonging to a console other than
     /// the one this tool call ran on, so the AI can tell its own result apart
     /// from other consoles' reports without inferring it from block order.
