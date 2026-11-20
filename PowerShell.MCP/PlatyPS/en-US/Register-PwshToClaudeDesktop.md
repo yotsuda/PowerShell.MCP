@@ -20,7 +20,8 @@ Registers PowerShell.MCP as an MCP server in Claude Desktop.
 ### __AllParameterSets
 
 ```
-Register-PwshToClaudeDesktop [-ConsoleLaunch <string>] [-NoProfile] [<CommonParameters>]
+Register-PwshToClaudeDesktop [-ConsoleLaunch <string>] [-NoProfile] [-ConfigPath <string>]
+ [<CommonParameters>]
 ```
 
 ## ALIASES
@@ -36,6 +37,18 @@ POWERSHELL_MCP_TIMEOUT_CEILING) survive a re-registration.
 
 -ConsoleLaunch and -NoProfile set those two proxy flags in the entry's 'args'; a parameter that is
 not given leaves its flag as it is.
+
+This registers the server for the Claude Desktop app's chat sessions. A Code session in the app
+reads the same settings as the Claude Code CLI; register it there with Register-PwshToClaudeCode.
+
+The file is found where the installed Claude Desktop reads it. On Windows that is
+%LOCALAPPDATA%\Claude-Data\claude_<id>\ for the Microsoft Store version from 3.1623 on, the
+package's LocalCache\Roaming\Claude\ for older Store versions, and %APPDATA%\Claude\ otherwise.
+-ConfigPath names the file directly.
+
+A file that is not valid JSON is left unchanged, with an error. The new content is written to a
+temporary file first and then moved over the old one, so an interrupted write cannot leave it
+half-written.
 
 ## EXAMPLES
 
@@ -53,6 +66,28 @@ Registers it with consoles opening minimized on Windows, without taking the keyb
 re-registrations keep the option.
 
 ## PARAMETERS
+
+### -ConfigPath
+
+The claude_desktop_config.json to edit, for when Claude Desktop reads it from somewhere this cmdlet
+does not look. Not given, the cmdlet finds it as described above.
+
+```yaml
+Type: System.String
+DefaultValue: ''
+SupportsWildcards: false
+Aliases: []
+ParameterSets:
+- Name: (All)
+  Position: Named
+  IsRequired: false
+  ValueFromPipeline: false
+  ValueFromPipelineByPropertyName: false
+  ValueFromRemainingArguments: false
+DontShow: false
+AcceptedValues: []
+HelpMessage: ''
+```
 
 ### -ConsoleLaunch
 

@@ -23,6 +23,7 @@ public class StatusContractTests
             ["ProxyPid"]    = typeof(int?),
             ["AgentId"]     = typeof(string),
             ["ClientName"]  = typeof(string),
+            ["ConsoleName"] = typeof(string),
             ["LastError"]   = typeof(string),
         };
 
@@ -46,6 +47,7 @@ public class StatusContractTests
             ProxyPid = 1234,
             AgentId = "default",
             ClientName = "Claude Code",
+            ConsoleName = "Lithium",
             LastError = null,
         };
 
@@ -54,6 +56,7 @@ public class StatusContractTests
         Assert.Equal(1234, s.ProxyPid);
         Assert.Equal("default", s.AgentId);
         Assert.Equal("Claude Code", s.ClientName);
+        Assert.Equal("Lithium", s.ConsoleName);
         Assert.Null(s.LastError);
     }
 }

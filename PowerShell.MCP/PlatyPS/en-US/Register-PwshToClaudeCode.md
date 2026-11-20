@@ -43,12 +43,17 @@ This cmdlet has no aliases.
 
 Registers this module's proxy executable as the 'pwsh' MCP server at user scope, via the claude CLI.
 
+The registration serves both the Claude Code CLI and the local Code sessions of the Claude Desktop
+app, which read the same settings. (A cloud Code session does not run servers on this machine.) The
+app's chat sessions read a file of their own; register it there with Register-PwshToClaudeDesktop.
+
 If a 'pwsh' entry already exists at that scope (typically written by an earlier install, and still
 pointing at that install's proxy), it is replaced, because 'claude mcp add' refuses a name that is
 already registered.
-The arguments and environment variables the old entry carried (proxy flags such as --no-profile,
-settings such as POWERSHELL_MCP_TIMEOUT_CEILING) are carried over to the new one, and if the new
-entry cannot be added the old one is put back.
+The old entry is read as stored in Claude Code's .claude.json and only its command is repointed, so
+its arguments (proxy flags such as --no-profile), environment variables (settings such as
+POWERSHELL_MCP_TIMEOUT_CEILING) and any other field carry over exactly; the new entry is added with
+'claude mcp add-json'. If it cannot be added, the old one is put back.
 -ConsoleLaunch and -NoProfile set those two proxy flags on the new entry; a parameter that is not
 given leaves its flag as it is.
 

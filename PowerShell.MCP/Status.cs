@@ -28,6 +28,12 @@ namespace PowerShell.MCP
         /// </summary>
         public string? ClientName { get; set; }
 
+        /// <summary>
+        /// The name the owning proxy gave this console (e.g. "Lithium" of the
+        /// window title "#43036 Lithium"), or null when unowned or not yet named.
+        /// </summary>
+        public string? ConsoleName { get; set; }
+
         /// <summary>Message from the most recent failed engine start, or null.</summary>
         public string? LastError { get; set; }
     }

@@ -30,8 +30,12 @@ This cmdlet has no aliases.
 ## DESCRIPTION
 
 Returns ownership information for the current PowerShell console, including
-whether it is owned by an MCP proxy, the proxy's PID, the agent ID,
-and the client name (e.g., Claude Desktop, Claude Code, VS Code).
+whether it is owned by an MCP proxy, the proxy's PID, the agent ID, the
+client name (e.g., Claude Desktop, Claude Code, VS Code), and the name the
+proxy gave the console (e.g., Lithium, as in the window title "#43036 Lithium").
+
+ConsoleName is the name as the proxy gave it, so it stays the same if the window title is changed
+afterwards. It is empty while the console is not owned, and until its owner has named it.
 
 ## EXAMPLES
 
@@ -39,19 +43,25 @@ and the client name (e.g., Claude Desktop, Claude Code, VS Code).
 
 Get-MCPOwner
 
-Owned      : True
-ProxyPid   : 22208
-AgentId    : cc19706b
-ClientName : Claude Desktop
+EngineReady : True
+Owned       : True
+ProxyPid    : 22208
+AgentId     : cc19706b
+ClientName  : Claude Desktop
+ConsoleName : Lithium
+LastError   :
 
 ### EXAMPLE 2
 
 Get-MCPOwner
 
-Owned      : False
-ProxyPid   :
-AgentId    :
-ClientName :
+EngineReady : True
+Owned       : False
+ProxyPid    :
+AgentId     :
+ClientName  :
+ConsoleName :
+LastError   :
 
 ## PARAMETERS
 
@@ -66,13 +76,9 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### PSCustomObject with Owned
+### PowerShell.MCP.Status
 
-PSCustomObject with Owned, ProxyPid, AgentId, and ClientName properties.
-
-### System.Management.Automation.PSObject
-
-PSCustomObject with Owned, ProxyPid, AgentId, and ClientName properties.
+EngineReady, Owned, ProxyPid, AgentId, ClientName, ConsoleName and LastError properties.
 
 ## NOTES
 

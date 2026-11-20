@@ -1542,7 +1542,11 @@ Please provide how to update the MCP client configuration to the user.";
     {
         try
         {
-            var title = ConsoleTitle.Decorate(parameters.GetProperty("title").GetString() ?? "");
+            var requested = parameters.GetProperty("title").GetString() ?? "";
+            // The proxy names a console only through here, and only once: kept
+            // for Get-MCPOwner even when the title cannot be set right now.
+            ConsoleTitle.RememberName(requested);
+            var title = ConsoleTitle.Decorate(requested);
             var escapedTitle = title.Replace("'", "''");
             if (!ExecutionState.WaitForHeartbeat())
                 return "{\"success\":false,\"error\":\"busy\"}";

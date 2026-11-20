@@ -94,7 +94,9 @@ function Set-ProxyArgument {
     }
 
     if ($BoundParameters.Keys -contains 'NoProfile') {
-        $present = $result.Contains('--no-profile')
+        # Any case, as the proxy reads it: List.Contains would miss a
+        # --No-Profile already there and add a second one.
+        $present = $result -contains '--no-profile'
         if ($BoundParameters['NoProfile'] -and -not $present) { $result.Add('--no-profile') }
         elseif (-not $BoundParameters['NoProfile']) { [void]$result.RemoveAll({ param($a) $a -eq '--no-profile' }) }
     }
@@ -103,7 +105,38 @@ function Set-ProxyArgument {
     return , [string[]]$result.ToArray()
 }
 
-# Set OnRemove script block to execute cleanup automatically
+# Where Claude Desktop reads claude_desktop_config.json. Module-private; the
+# tests dot-source it alongside Register-PwshToClaudeDesktop.
+function Get-ClaudeDesktopConfigPath {
+    $fileName = 'claude_desktop_config.json'
+    if ($IsMacOS) { return Join-Path $HOME 'Library/Application Support/Claude' $fileName }
+    if ($IsLinux) { return Join-Path $HOME '.config/Claude' $fileName }
+    if (-not $IsWindows) { throw 'Unsupported platform.' }
+
+    # The Store (MSIX) version from 3.1623 on keeps its data in
+    # %LOCALAPPDATA%\Claude-Data\<package family name in lower case>. It moves
+    # it there from the package's LocalCache on the first launch after the
+    # update, and the old folder is gone afterwards (#60). Checked first: older
+    # files may be left behind in the places below, which that version no
+    # longer reads. More than one such folder is not expected; if there is,
+    # the one that already has the file wins, then the most recently written.
+    $dataFolders = @(Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA 'Claude-Data') -Directory -Filter 'claude_*' -ErrorAction SilentlyContinue)
+    if ($dataFolders.Count) {
+        $withFile = @($dataFolders | Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName $fileName) })
+        $candidates = if ($withFile.Count) { $withFile } else { $dataFolders }
+        $folder = $candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        return Join-Path $folder.FullName $fileName
+    }
+
+    # Store versions before 3.1623: %APPDATA% virtualized into the package's
+    # LocalCache. A version updated but not launched since is also here; its
+    # first launch moves the file along with the rest.
+    $package = Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA 'Packages') -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($package) { return Join-Path $package.FullName 'LocalCache\Roaming\Claude' $fileName }
+
+    return Join-Path $env:APPDATA 'Claude' $fileName
+}
+
 <#
 .SYNOPSIS
     Registers PowerShell.MCP as an MCP server in Claude Desktop.
@@ -116,6 +149,24 @@ function Set-ProxyArgument {
     re-registration.
     If a legacy "PowerShell" entry pointing to PowerShell.MCP.Proxy exists,
     it is removed and replaced with the new "pwsh" entry.
+
+    This registers the server for the Claude Desktop app's chat sessions. A
+    Code session in the app reads the same settings as the Claude Code CLI;
+    register it there with Register-PwshToClaudeCode.
+
+    The file is found where the installed Claude Desktop reads it. On Windows
+    that is %LOCALAPPDATA%\Claude-Data\claude_<id>\ for the Microsoft Store
+    version from 3.1623 on, the package's LocalCache\Roaming\Claude\ for older
+    Store versions, and %APPDATA%\Claude\ otherwise.
+
+    A file that is not valid JSON is left unchanged, with an error. The new
+    content is written to a temporary file first and then moved over the old
+    one, so an interrupted write cannot leave it half-written.
+
+.PARAMETER ConfigPath
+    The claude_desktop_config.json to edit, for when Claude Desktop reads it
+    from somewhere this cmdlet does not look. Not given, the cmdlet finds it
+    as described above.
 
 .PARAMETER ConsoleLaunch
     Sets the proxy's --console-launch option: how consoles open on Windows.
@@ -147,53 +198,54 @@ function Register-PwshToClaudeDesktop {
         [ValidateSet('Auto', 'Handoff', 'Minimized')]
         [string]$ConsoleLaunch,
 
-        [switch]$NoProfile
+        [switch]$NoProfile,
+
+        [string]$ConfigPath
     )
 
     $serverName = 'pwsh'
     $legacyName = 'PowerShell'
     $command = Get-MCPProxyPath
 
-    # Determine config file path per platform
-    # MSIX (Microsoft Store) installs virtualize %APPDATA% under Packages\
-    $configPath = if ($IsWindows) {
-        $msixDir = Get-ChildItem "$env:LOCALAPPDATA\Packages\Claude_*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($msixDir) {
-            Join-Path $msixDir.FullName 'LocalCache\Roaming\Claude\claude_desktop_config.json'
-        } else {
-            Join-Path $env:APPDATA 'Claude\claude_desktop_config.json'
-        }
-    } elseif ($IsMacOS) {
-        Join-Path $HOME 'Library/Application Support/Claude/claude_desktop_config.json'
-    } elseif ($IsLinux) {
-        Join-Path $HOME '.config/Claude/claude_desktop_config.json'
-    } else {
-        throw "Unsupported platform."
+    $configPath = if ($ConfigPath) {
+        $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ConfigPath)
+    }
+    else {
+        Get-ClaudeDesktopConfigPath
     }
 
-    # Load or create config
-    if (Test-Path $configPath) {
-        $json = Get-Content -Path $configPath -Raw -Encoding UTF8
-        $config = $json | ConvertFrom-Json -AsHashtable
-    } else {
-        $configDir = Split-Path $configPath -Parent
-        if (-not (Test-Path $configDir)) {
-            New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+    # Read the whole file first and touch nothing unless it parses: a file this
+    # cmdlet cannot understand is left exactly as it is, never replaced with a
+    # fresh one that would drop the user's other servers and settings.
+    $config = [ordered]@{}
+    if (Test-Path -LiteralPath $configPath) {
+        try {
+            $raw = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 -ErrorAction Stop
+            if (-not [string]::IsNullOrWhiteSpace($raw)) {
+                $config = $raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+            }
+            if ($config -isnot [System.Collections.IDictionary] -or
+                ($config.Contains('mcpServers') -and $config['mcpServers'] -isnot [System.Collections.IDictionary])) {
+                throw 'it is not a JSON object with an "mcpServers" object'
+            }
         }
-        $config = @{}
+        catch {
+            Write-Error ("Could not read $configPath as a Claude Desktop config, so it was left unchanged ($($_.Exception.Message)). " +
+                "Fix the file, or add this under ""mcpServers"" by hand: ""$serverName"": { ""command"": $($command | ConvertTo-Json) }")
+            return
+        }
     }
 
-    if (-not $config.ContainsKey('mcpServers')) {
-        $config['mcpServers'] = @{}
+    if (-not $config.Contains('mcpServers')) {
+        $config['mcpServers'] = [ordered]@{}
     }
+    $servers = $config['mcpServers']
 
     # Migrate legacy "PowerShell" entry if it points to PowerShell.MCP.Proxy
-    if ($config['mcpServers'].ContainsKey($legacyName)) {
-        $legacyCommand = $config['mcpServers'][$legacyName]['command']
-        if ($legacyCommand -match 'PowerShell\.MCP\.Proxy') {
-            $config['mcpServers'].Remove($legacyName)
-            Write-Host "Removed legacy '$legacyName' entry." -ForegroundColor DarkYellow
-        }
+    $legacyEntry = $servers[$legacyName]
+    if ($legacyEntry -is [System.Collections.IDictionary] -and $legacyEntry['command'] -match 'PowerShell\.MCP\.Proxy') {
+        $servers.Remove($legacyName)
+        Write-Host "Removed legacy '$legacyName' entry." -ForegroundColor DarkYellow
     }
 
     # Update the command in place rather than replacing the entry. An entry the
@@ -201,14 +253,14 @@ function Register-PwshToClaudeDesktop {
     # --no-profile) and "env" (settings such as POWERSHELL_MCP_TIMEOUT_CEILING);
     # assigning a fresh @{ command = ... } over it dropped both, silently, and
     # the loss only showed up later as a flag that had stopped taking effect.
-    if ($config['mcpServers'].ContainsKey($serverName)) {
+    if ($servers.Contains($serverName)) {
         $action = 'Updated'
-        $entry = $config['mcpServers'][$serverName]
-        if ($entry -isnot [System.Collections.IDictionary]) { $entry = @{} }
+        $entry = $servers[$serverName]
+        if ($entry -isnot [System.Collections.IDictionary]) { $entry = [ordered]@{} }
     }
     else {
         $action = 'Added'
-        $entry = @{}
+        $entry = [ordered]@{}
     }
 
     $entry['command'] = $command
@@ -216,9 +268,25 @@ function Register-PwshToClaudeDesktop {
         $proxyArgs = Set-ProxyArgument -Arguments @($entry['args']) -BoundParameters $PSBoundParameters
         if ($proxyArgs.Count) { $entry['args'] = $proxyArgs } else { $entry.Remove('args') }
     }
-    $config['mcpServers'][$serverName] = $entry
+    $servers[$serverName] = $entry
 
-    $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath -Encoding UTF8 -NoNewline
+    # Write beside the target and move over it, so an interrupted write cannot
+    # leave the file half-written. -Depth 100: the file also holds the app's own
+    # preferences, and ConvertTo-Json cuts anything deeper than its depth down
+    # to a string.
+    $temporary = $null
+    try {
+        New-Item -ItemType Directory -Path (Split-Path $configPath -Parent) -Force | Out-Null
+        $temporary = "$configPath.$([System.IO.Path]::GetRandomFileName()).tmp"
+        [System.IO.File]::WriteAllText($temporary, ($config | ConvertTo-Json -Depth 100), [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::Move($temporary, $configPath, $true)
+    }
+    catch {
+        if ($temporary -and (Test-Path -LiteralPath $temporary)) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
+        Write-Error "Could not update ${configPath}: $($_.Exception.Message)"
+        return
+    }
+
     Write-Host "$action '$serverName' in $configPath" -ForegroundColor Green
     Write-Host "  command: $command" -ForegroundColor Gray
     if ($entry['args']) {
@@ -286,13 +354,20 @@ you remove them again.
     Registers this module's proxy executable as the 'pwsh' MCP server at user
     scope, via the claude CLI.
 
+    The registration serves both the Claude Code CLI and the local Code
+    sessions of the Claude Desktop app, which read the same settings. (A cloud
+    Code session does not run servers on this machine.) The app's chat
+    sessions read a file of their own; register it there with
+    Register-PwshToClaudeDesktop.
+
     If a 'pwsh' entry already exists at that scope — typically written by an
     earlier install and still pointing at that install's proxy — it is replaced,
     because 'claude mcp add' refuses a name that is already registered. The
-    arguments and environment variables the old entry carried (proxy flags such
-    as --no-profile, settings such as POWERSHELL_MCP_TIMEOUT_CEILING) are
-    carried over to the new one, and if the new entry cannot be added the old
-    one is put back.
+    old entry is read as stored in Claude Code's .claude.json and only its
+    command is repointed, so its arguments (proxy flags such as --no-profile),
+    environment variables (settings such as POWERSHELL_MCP_TIMEOUT_CEILING)
+    and any other field carry over exactly; the new entry is added with
+    'claude mcp add-json'. If it cannot be added, the old one is put back.
 
     An entry at local or project scope for the current directory takes
     precedence over the user-scope entry there. It is left alone, and a warning
@@ -407,7 +482,35 @@ function Register-PwshToClaudeCode {
         return $entry
     }
 
+    # User-scope entries live under "mcpServers" in Claude Code's own
+    # .claude.json. Read from there, an entry comes back exactly as stored:
+    # every argument (one may contain a space), every environment variable, and
+    # any other field. 'claude mcp get' prints it as text instead, with the
+    # arguments joined by spaces, so an argument containing one came back as
+    # two; and it connects to the server to check it, which here launched a
+    # proxy. It is still the fallback when the file cannot be read.
+    $userConfigPath = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { $HOME }) '.claude.json'
+
     function Get-UserScopeEntry([string]$Name) {
+        if (Test-Path -LiteralPath $userConfigPath) {
+            try {
+                $userConfig = Get-Content -LiteralPath $userConfigPath -Raw -Encoding UTF8 -ErrorAction Stop |
+                    ConvertFrom-Json -AsHashtable -ErrorAction Stop
+                if ($userConfig -is [System.Collections.IDictionary]) {
+                    $servers = $userConfig['mcpServers']
+                    if ($null -eq $servers) { return $null }
+                    if ($servers -is [System.Collections.IDictionary]) {
+                        if (-not $servers.Contains($Name)) { return $null }
+                        if ($servers[$Name] -is [System.Collections.IDictionary]) { return $servers[$Name] }
+                    }
+                }
+            }
+            catch {
+                # Unreadable here (being written, or a format this cmdlet does
+                # not know): ask the CLI below.
+            }
+        }
+
         New-Item -ItemType Directory -Path $neutralDirectory -Force | Out-Null
         Push-Location -LiteralPath $neutralDirectory
         try {
@@ -418,21 +521,41 @@ function Register-PwshToClaudeCode {
             Pop-Location
         }
         if (-not $found) { return $null }
-        $entry = ConvertFrom-McpGetOutput $output
-        if ($entry.Scope -ne 'User') { return $null }
+        $parsed = ConvertFrom-McpGetOutput $output
+        if ($parsed.Scope -ne 'User') { return $null }
+        $entry = [ordered]@{ type = 'stdio'; command = $parsed.Command }
+        if ($parsed.Args.Count) { $entry['args'] = @($parsed.Args) }
+        if ($parsed.Env.Count) {
+            $entry['env'] = [ordered]@{}
+            foreach ($pair in $parsed.Env) { $key, $value = $pair -split '=', 2; $entry['env'][$key] = $value }
+        }
         return $entry
     }
 
-    function Add-UserScopeEntry([string]$Command, [string[]]$CommandArgs, [string[]]$Environment, [switch]$Quiet) {
-        $envArgs = @(foreach ($pair in $Environment) { '-e'; $pair })
-        if ($Quiet) { claude mcp add $serverName -s user @envArgs -- $Command @CommandArgs 2>&1 | Out-Null }
-        else { claude mcp add $serverName -s user @envArgs -- $Command @CommandArgs 2>&1 | Out-Host }
+    # 'claude mcp add-json' takes the entry as it is, so nothing has to survive
+    # a round trip through command-line options. It is passed on stdin, as
+    # UTF-8: a JSON argument would have its quotes mangled on the way to a
+    # native command.
+    function Add-UserScopeEntry([System.Collections.IDictionary]$Entry, [switch]$Quiet) {
+        $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        $json = $Entry | ConvertTo-Json -Depth 100 -Compress
+        if ($Quiet) { $json | claude mcp add-json $serverName - -s user 2>&1 | Out-Null }
+        else { $json | claude mcp add-json $serverName - -s user 2>&1 | Out-Host }
         return ($LASTEXITCODE -eq 0)
+    }
+
+    function Format-Entry([System.Collections.IDictionary]$Entry) {
+        $text = "$($Entry['command'])"
+        if ($Entry['args']) { $text += " $(@($Entry['args']) -join ' ')" }
+        if ($Entry['env'] -is [System.Collections.IDictionary] -and $Entry['env'].Count) {
+            $text += " (environment: $(@(foreach ($key in $Entry['env'].Keys) { "$key=$($Entry['env'][$key])" }) -join ', '))"
+        }
+        return $text
     }
 
     # Remove the legacy "PowerShell" entry if it is ours.
     $legacy = Get-UserScopeEntry $legacyName
-    if ($legacy -and $legacy.Command -match 'PowerShell\.MCP\.Proxy') {
+    if ($legacy -and $legacy['command'] -match 'PowerShell\.MCP\.Proxy') {
         claude mcp remove $legacyName -s user 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
             Write-Host "Removed legacy '$legacyName' entry from Claude Code." -ForegroundColor DarkYellow
@@ -445,40 +568,43 @@ function Register-PwshToClaudeCode {
     # 'claude mcp add' refuses a name that already exists at the same scope, so a
     # registration written by an older install could never be updated: the add
     # failed and Claude Code kept launching that install's proxy. Remove the
-    # user-scope entry first, carrying its arguments and environment variables
-    # across, and put it back if the new one cannot be added.
+    # user-scope entry first, and put it back as it was if the new one cannot
+    # be added. The new entry is a copy of the old one with the command
+    # repointed, so its arguments, environment variables and any other field
+    # carry across.
     $existing = Get-UserScopeEntry $serverName
-    $commandArgs = @()
-    $environment = @()
     if ($existing) {
-        $commandArgs = @($existing.Args)
-        $environment = @($existing.Env)
+        $newEntry = $existing | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+    }
+    else {
+        $newEntry = [ordered]@{}
+    }
+    $newEntry['type'] = 'stdio'
+    $newEntry['command'] = $proxyPath
+    if ($PSBoundParameters.ContainsKey('ConsoleLaunch') -or $PSBoundParameters.ContainsKey('NoProfile')) {
+        $proxyArgs = Set-ProxyArgument -Arguments @($newEntry['args']) -BoundParameters $PSBoundParameters
+        if ($proxyArgs.Count) { $newEntry['args'] = $proxyArgs } else { $newEntry.Remove('args') }
+    }
 
+    if ($existing) {
         claude mcp remove $serverName -s user 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Could not remove the existing user-scope '$serverName' entry (exit code $LASTEXITCODE); it still points at: $($existing.Command)"
+            Write-Error "Could not remove the existing user-scope '$serverName' entry (exit code $LASTEXITCODE); it still points at: $($existing['command'])"
             return
         }
     }
 
-    # The previous entry is restored with its own arguments ($commandArgs);
-    # the new one gets the flags asked for here.
-    $newArgs = $commandArgs
-    if ($PSBoundParameters.ContainsKey('ConsoleLaunch') -or $PSBoundParameters.ContainsKey('NoProfile')) {
-        $newArgs = Set-ProxyArgument -Arguments $commandArgs -BoundParameters $PSBoundParameters
-    }
-
-    if (-not (Add-UserScopeEntry $proxyPath $newArgs $environment)) {
+    if (-not (Add-UserScopeEntry $newEntry)) {
         $exitCode = $LASTEXITCODE
         if (-not $existing) {
-            Write-Error "'claude mcp add $serverName' failed with exit code $exitCode."
+            Write-Error "'claude mcp add-json $serverName' failed with exit code $exitCode."
         }
-        elseif (Add-UserScopeEntry $existing.Command $commandArgs $environment -Quiet) {
-            Write-Error "'claude mcp add $serverName' failed with exit code $exitCode. The previous entry was restored; it still points at: $($existing.Command)"
+        elseif (Add-UserScopeEntry $existing -Quiet) {
+            Write-Error "'claude mcp add-json $serverName' failed with exit code $exitCode. The previous entry was restored; it still points at: $($existing['command'])"
         }
         else {
-            Write-Error ("'claude mcp add $serverName' failed with exit code $exitCode, and restoring the previous entry failed as well. " +
-                "It was: $($existing.Command) $($commandArgs -join ' ') (environment: $($environment -join ', '))")
+            Write-Error ("'claude mcp add-json $serverName' failed with exit code $exitCode, and restoring the previous entry failed as well. " +
+                "It was: $(Format-Entry $existing). Its JSON, for 'claude mcp add-json $serverName <json> -s user': $($existing | ConvertTo-Json -Depth 100 -Compress)")
         }
         return
     }
@@ -486,8 +612,10 @@ function Register-PwshToClaudeCode {
     $action = if ($existing) { 'Updated' } else { 'Added' }
     Write-Host "$action '$serverName' (user scope)" -ForegroundColor Green
     Write-Host "  command: $proxyPath" -ForegroundColor Gray
-    if ($newArgs) { Write-Host "  args: $($newArgs -join ' ')" -ForegroundColor Gray }
-    if ($environment) { Write-Host "  env: $($environment -join ', ')" -ForegroundColor Gray }
+    if ($newEntry['args']) { Write-Host "  args: $(@($newEntry['args']) -join ' ')" -ForegroundColor Gray }
+    if ($newEntry['env'] -is [System.Collections.IDictionary] -and $newEntry['env'].Count) {
+        Write-Host "  env: $(@(foreach ($key in $newEntry['env'].Keys) { "$key=$($newEntry['env'][$key])" }) -join ', ')" -ForegroundColor Gray
+    }
 
     # An entry at local or project scope for this directory still wins over the
     # user-scope one here. Leave it alone, but say so, or the update would look as
@@ -697,27 +825,36 @@ function Get-MCPProxyPath {
 
 .DESCRIPTION
     Returns ownership information for the current PowerShell console, including
-    whether it is owned by an MCP proxy, the proxy's PID, the agent ID,
-    and the client name (e.g., Claude Desktop, Claude Code, VS Code).
+    whether it is owned by an MCP proxy, the proxy's PID, the agent ID, the
+    client name (e.g., Claude Desktop, Claude Code, VS Code), and the name the
+    proxy gave the console (e.g., Lithium, as in the window title
+    "#43036 Lithium").
 
 .EXAMPLE
     Get-MCPOwner
 
-    Owned      : True
-    ProxyPid   : 22208
-    AgentId    : cc19706b
-    ClientName : Claude Desktop
+    EngineReady : True
+    Owned       : True
+    ProxyPid    : 22208
+    AgentId     : cc19706b
+    ClientName  : Claude Desktop
+    ConsoleName : Lithium
+    LastError   :
 
 .EXAMPLE
     Get-MCPOwner
 
-    Owned      : False
-    ProxyPid   :
-    AgentId    :
-    ClientName :
+    EngineReady : True
+    Owned       : False
+    ProxyPid    :
+    AgentId     :
+    ClientName  :
+    ConsoleName :
+    LastError   :
 
 .OUTPUTS
-    PSCustomObject with Owned, ProxyPid, AgentId, and ClientName properties
+    PowerShell.MCP.Status with EngineReady, Owned, ProxyPid, AgentId,
+    ClientName, ConsoleName and LastError properties
 #>
 function Get-McpStatus {
     # Internal helper: builds the unified PowerShell.MCP.Status object that
@@ -755,8 +892,13 @@ function Get-McpStatus {
                 # So the path test has to come first: with the name test
                 # leading, every Claude Code session was reported as
                 # 'Claude Desktop' once the CLI stopped being an npm/node
-                # install and became its own executable.
-                if ($processPath -match 'AnthropicClaude|Claude\.app') { $clientName = 'Claude Desktop'; break }
+                # install and became its own executable. The Microsoft Store
+                # version of Desktop runs from
+                # C:\Program Files\WindowsApps\Claude_<version>_<arch>__<id>\.
+                # (The Claude Code it bundles runs from its data folder,
+                # %LOCALAPPDATA%\Claude-Data\...\claude-code\, and is Claude
+                # Code.)
+                if ($processPath -match 'AnthropicClaude|Claude\.app|\\WindowsApps\\Claude_') { $clientName = 'Claude Desktop'; break }
                 elseif ($processName -eq 'claude' -or $processName -eq 'node' -or $processPath -match 'claude-code|claude_code') { $clientName = 'Claude Code'; break }
                 elseif ($processName -match '^code$|^code - insiders$') { $clientName = 'VS Code'; break }
                 elseif ($processName -match 'cursor') { $clientName = 'Cursor'; break }
@@ -769,12 +911,17 @@ function Get-McpStatus {
         }
     }
 
+    # Recorded when the owning proxy named the console, not read back from
+    # the window title, which may have been changed since.
+    $consoleName = if ($owned) { [PowerShell.MCP.Services.ConsoleTitle]::Name } else { $null }
+
     [PowerShell.MCP.Status]@{
         EngineReady = $engineReady
         Owned       = $owned
         ProxyPid    = $proxyPid
         AgentId     = $agentId
         ClientName  = $clientName
+        ConsoleName = $consoleName
         LastError   = $lastError
     }
 }

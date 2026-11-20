@@ -297,6 +297,10 @@ namespace PowerShell.MCP
                         }
                     }, token);
 
+                    // The new owner names the console itself (set_window_title);
+                    // until then it has no name of that owner's.
+                    ConsoleTitle.ForgetName();
+
                     // Arm event-driven disconnect detection for the new owner.
                     WatchProxyExit(proxyPid);
                     // (Re)publish this console's liveness marker for the new
@@ -340,6 +344,9 @@ namespace PowerShell.MCP
 
                     // Proxy is gone — release its process handle and stop watching.
                     StopWatchingProxyExitInternal();
+
+                    // The name was the gone proxy's; an unowned console has none.
+                    ConsoleTitle.ForgetName();
 
                     // Drop this console's liveness marker: once unowned it must
                     // not take part in its old group's keeper election (and a

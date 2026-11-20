@@ -65,45 +65,86 @@ Describe "Register-PwshToClaudeCode" {
             if ($Scope -eq 'User') { "User|$Name" } else { "$Scope|$Directory|$Name" }
         }
 
-        function Set-McpEntry {
-            param([string]$Scope, [string]$Name, [string]$Command, [string[]]$ProxyArgs = @(), [hashtable]$Env = @{}, [string]$Directory = $global:ShimProjectDir)
-            $global:McpState[(Get-ShimKey $Scope $Name $Directory)] = @{ Command = $Command; Args = @($ProxyArgs); Env = $Env }
+        # User-scope entries are kept where the real CLI keeps them: under
+        # "mcpServers" in .claude.json in CLAUDE_CONFIG_DIR, as JSON. With
+        # $global:ShimUserConfigElsewhere set, the shim keeps that file
+        # somewhere the cmdlet does not look, as a future Claude Code might,
+        # and the cmdlet has to fall back to asking 'claude mcp get'.
+        function Get-UserConfigPath {
+            if ($global:ShimUserConfigElsewhere) { Join-Path $env:CLAUDE_CONFIG_DIR 'elsewhere' '.claude.json' }
+            else { Join-Path $env:CLAUDE_CONFIG_DIR '.claude.json' }
+        }
+        function Read-UserConfig {
+            $path = Get-UserConfigPath
+            if (Test-Path -LiteralPath $path) { Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable }
+            else { [ordered]@{ numStartups = 3 } }
+        }
+        function Get-UserServer([string]$Name) {
+            $servers = (Read-UserConfig)['mcpServers']
+            if ($servers -and $servers.Contains($Name)) { $servers[$Name] }
+        }
+        function Set-UserServer([string]$Name, $Entry) {
+            $config = Read-UserConfig
+            if (-not $config.Contains('mcpServers')) { $config['mcpServers'] = [ordered]@{} }
+            if ($null -eq $Entry) { $config['mcpServers'].Remove($Name) } else { $config['mcpServers'][$Name] = $Entry }
+            $path = Get-UserConfigPath
+            New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force | Out-Null
+            $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path -NoNewline
         }
 
+        function Set-McpEntry {
+            param([string]$Scope, [string]$Name, [string]$Command, [string[]]$ProxyArgs = @(), [hashtable]$Env = @{}, [string]$Directory = $global:ShimProjectDir)
+            if ($Scope -eq 'User') {
+                Set-UserServer $Name ([ordered]@{ type = 'stdio'; command = $Command; args = @($ProxyArgs); env = $Env })
+            }
+            else {
+                $global:McpState[(Get-ShimKey $Scope $Name $Directory)] = @{ Command = $Command; Args = @($ProxyArgs); Env = $Env }
+            }
+        }
+
+        # Every scope in one shape: Command, Args, Env.
         function Get-McpEntry {
             param([string]$Scope, [string]$Name, [string]$Directory = $global:ShimProjectDir)
-            $global:McpState[(Get-ShimKey $Scope $Name $Directory)]
+            if ($Scope -ne 'User') { return $global:McpState[(Get-ShimKey $Scope $Name $Directory)] }
+            $entry = Get-UserServer $Name
+            if (-not $entry) { return $null }
+            @{
+                Command = $entry['command']
+                Args    = if ($entry.Contains('args')) { @($entry['args']) } else { @() }
+                Env     = if ($entry['env']) { $entry['env'] } else { @{} }
+            }
         }
 
         function claude {
             $global:ClaudeCalls += , ([string[]]$args)
             $verb = "$($args[0]) $($args[1])"
             $cwd = (Get-Location).Path
+            $stdin = @($input) -join "`n"
 
             # PowerShell strips '--' before a FUNCTION sees it (the real claude is
             # a native command and does receive it), so everything that is not an
             # option is simply positional here.
-            $scope = $null; $environment = @{}; $positional = @()
+            $scope = $null; $positional = @()
             for ($i = 2; $i -lt $args.Count; $i++) {
                 $token = [string]$args[$i]
                 if ($token -eq '--') { continue }
                 elseif ($token -in '-s', '--scope') { $i++; $scope = (Get-Culture).TextInfo.ToTitleCase([string]$args[$i]) }
-                elseif ($token -in '-e', '--env') { $i++; $pair = ([string]$args[$i]) -split '=', 2; $environment[$pair[0]] = $pair[1] }
                 else { $positional += $token }
             }
             $name = $positional[0]
-            $winning = @('Local', 'Project', 'User') |
-                ForEach-Object { Get-ShimKey $_ $name $cwd } |
-                Where-Object { $global:McpState.Contains($_) } |
+            $winningScope = @('Local', 'Project', 'User') |
+                Where-Object { Get-McpEntry $_ $name $cwd } |
                 Select-Object -First 1
 
             switch ($verb) {
                 'mcp get' {
-                    if (-not $winning) { $global:LASTEXITCODE = 1; return "No MCP server named ""$name""." }
-                    $entry = $global:McpState[$winning]
+                    $global:ShimGetDirectories += $cwd
+                    if (-not $winningScope) { $global:LASTEXITCODE = 1; return "No MCP server named ""$name""." }
+                    $entry = Get-McpEntry $winningScope $name $cwd
+                    # As the real CLI prints it: the arguments joined by spaces.
                     $lines = @(
                         "${name}:"
-                        "  Scope: $($winning.Split('|')[0]) config"
+                        "  Scope: $winningScope config"
                         '  Status: x Failed to connect'
                         '  Type: stdio'
                         "  Command: $($entry.Command)"
@@ -117,31 +158,33 @@ Describe "Register-PwshToClaudeCode" {
                     return $lines
                 }
                 'mcp remove' {
-                    $key = if ($scope) { Get-ShimKey $scope $name $cwd } else { $winning }
-                    if (-not $key -or -not $global:McpState.Contains($key) -or $global:ShimFailRemove -contains $name) {
+                    $target = if ($scope) { $scope } else { $winningScope }
+                    if (-not $target -or -not (Get-McpEntry $target $name $cwd) -or $global:ShimFailRemove -contains $name) {
                         $global:LASTEXITCODE = 1
                         return "No MCP server named ""$name"" in $scope scope"
                     }
-                    $global:McpState.Remove($key)
+                    if ($target -eq 'User') { Set-UserServer $name $null }
+                    else { $global:McpState.Remove((Get-ShimKey $target $name $cwd)) }
                     $global:LASTEXITCODE = 0
                     return "Removed MCP server $name"
                 }
-                'mcp add' {
+                'mcp add-json' {
                     if (-not $scope) { $scope = 'Local' }
-                    $command = $positional[1]
-                    $key = Get-ShimKey $scope $name $cwd
+                    $json = if ($positional[1] -eq '-') { $stdin } else { $positional[1] }
+                    $entry = $json | ConvertFrom-Json -AsHashtable
                     # The refusal this cmdlet had to be taught to work around.
-                    if ($global:McpState.Contains($key)) {
+                    if (Get-McpEntry $scope $name $cwd) {
                         $global:LASTEXITCODE = 1
                         return "MCP server $name already exists in $($scope.ToLower()) config"
                     }
-                    if ($global:ShimFailAddCommand -and $command -eq $global:ShimFailAddCommand) {
+                    if ($global:ShimFailAddCommand -and $entry['command'] -eq $global:ShimFailAddCommand) {
                         $global:LASTEXITCODE = 1
-                        return "simulated failure adding $command"
+                        return "simulated failure adding $($entry['command'])"
                     }
-                    $global:McpState[$key] = @{ Command = $command; Args = @($positional | Select-Object -Skip 2); Env = $environment }
+                    if ($scope -eq 'User') { Set-UserServer $name $entry }
+                    else { $global:McpState[(Get-ShimKey $scope $name $cwd)] = @{ Command = $entry['command']; Args = @($entry['args']); Env = $entry['env'] } }
                     $global:LASTEXITCODE = 0
-                    return "Added stdio MCP server $name with command: $command to $($scope.ToLower()) config"
+                    return "Added stdio MCP server $name to $($scope.ToLower()) config"
                 }
                 default {
                     $global:LASTEXITCODE = 1
@@ -152,7 +195,7 @@ Describe "Register-PwshToClaudeCode" {
     }
 
     AfterAll {
-        Remove-Variable -Name McpState, ClaudeCalls, ShimProjectDir, ShimFailAddCommand, ShimFailRemove, ShimShellChoice, ShellPromptCount -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name McpState, ClaudeCalls, ShimProjectDir, ShimFailAddCommand, ShimFailRemove, ShimShellChoice, ShellPromptCount, ShimUserConfigElsewhere, ShimGetDirectories -Scope Global -ErrorAction SilentlyContinue
         $env:CLAUDE_CONFIG_DIR = $script:savedConfigDir
     }
 
@@ -164,6 +207,8 @@ Describe "Register-PwshToClaudeCode" {
         $global:ShimFailRemove = @()
         $global:ShimShellChoice = 'CannotAsk'
         $global:ShellPromptCount = 0
+        $global:ShimUserConfigElsewhere = $false
+        $global:ShimGetDirectories = @()
         $env:CLAUDE_CONFIG_DIR = Join-Path $TestDrive "claude-$([guid]::NewGuid().ToString('N'))"
         New-Item -ItemType Directory -Path $env:CLAUDE_CONFIG_DIR | Out-Null
     }
@@ -202,9 +247,10 @@ Describe "Register-PwshToClaudeCode" {
         It "removes the stale entry before adding, so the add is not refused" {
             Register-PwshToClaudeCode 6>$null
 
-            $order = @($global:ClaudeCalls | Where-Object { $_[2] -eq 'pwsh' -and $_[1] -in 'remove', 'add' } | ForEach-Object { $_[1] })
+            $order = @($global:ClaudeCalls | Where-Object { $_[2] -eq 'pwsh' -and $_[1] -in 'remove', 'add-json' } | ForEach-Object { $_[1] })
             $order | Should -Contain 'remove'
-            $order.IndexOf('remove') | Should -BeLessThan $order.IndexOf('add')
+            $order | Should -Contain 'add-json'
+            $order.IndexOf('remove') | Should -BeLessThan $order.IndexOf('add-json')
         }
     }
 
@@ -224,6 +270,58 @@ Describe "Register-PwshToClaudeCode" {
 
             (Get-McpEntry User pwsh).Env['POWERSHELL_MCP_TIMEOUT_CEILING'] | Should -BeExactly '120'
             (Get-McpEntry User pwsh).Env['FOO'] | Should -BeExactly 'bar'
+        }
+
+        It "carries them over from 'claude mcp get' when .claude.json is not where it looks" {
+            $global:ShimUserConfigElsewhere = $true
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe' -ProxyArgs '--no-profile' -Env @{ POWERSHELL_MCP_TIMEOUT_CEILING = '120' }
+
+            Register-PwshToClaudeCode 6>$null
+
+            $entry = Get-McpEntry User pwsh
+            $entry.Command | Should -BeExactly 'C:\NEW\PowerShell.MCP.Proxy.exe'
+            $entry.Args | Should -Be @('--no-profile')
+            $entry.Env['POWERSHELL_MCP_TIMEOUT_CEILING'] | Should -BeExactly '120'
+        }
+    }
+
+    Context "when the old entry is read from .claude.json" {
+        It "keeps an argument that contains a space as one argument" {
+            # 'claude mcp get' prints the arguments joined by spaces, so this
+            # one used to come back as two.
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe' -ProxyArgs '--log', 'C:\My Logs\mcp.log'
+
+            Register-PwshToClaudeCode 6>$null
+
+            (Get-McpEntry User pwsh).Args | Should -Be @('--log', 'C:\My Logs\mcp.log')
+        }
+
+        It "keeps fields it does not know about" {
+            Set-UserServer pwsh ([ordered]@{ type = 'stdio'; command = 'C:\OLD\PowerShell.MCP.Proxy.exe'; args = @(); env = @{}; timeout = 30 })
+
+            Register-PwshToClaudeCode 6>$null
+
+            $entry = Get-UserServer pwsh
+            $entry['command'] | Should -BeExactly 'C:\NEW\PowerShell.MCP.Proxy.exe'
+            $entry['timeout'] | Should -Be 30
+        }
+
+        It "leaves the rest of .claude.json alone" {
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe'
+            Set-McpEntry User other 'C:\Other\server.exe'
+
+            Register-PwshToClaudeCode 6>$null
+
+            (Read-UserConfig)['numStartups'] | Should -Be 3
+            (Get-McpEntry User other).Command | Should -BeExactly 'C:\Other\server.exe'
+        }
+
+        It "does not ask 'claude mcp get' for it, which would launch the old proxy to check it" {
+            Set-McpEntry User pwsh 'C:\OLD\PowerShell.MCP.Proxy.exe'
+
+            Register-PwshToClaudeCode 6>$null
+
+            $global:ShimGetDirectories | Where-Object { $_ -match 'PowerShell\.MCP\.Register' } | Should -BeNullOrEmpty
         }
     }
 
