@@ -39,7 +39,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             if (!currentPids.Contains(pid))
             {
                 var reason = ClosedConsoleNotices.TakeReason(_sessionManager.ProxyPid, agentId, pid);
-                closedMessages.Add(ReportClosed(agentId, pid, reason));
+                if (ReportClosed(agentId, pid, reason) is { } line) closedMessages.Add(line);
             }
         }
 
@@ -59,7 +59,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             if (pid == excludePid) continue;
             if (notes.TryGetValue(pid, out var reason) || !IsProcessAlive(pid))
             {
-                closedMessages.Add(ReportClosed(agentId, pid, reason));
+                if (ReportClosed(agentId, pid, reason) is { } line) closedMessages.Add(line);
             }
         }
 
@@ -70,11 +70,14 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     /// The closed-console line for one PID, and the bookkeeping that goes with
     /// it: the display name is read BEFORE ClearDeadPipe forgets it, and the
     /// console leaves every tracking set so it is reported exactly once.
+    /// Null when this pipe was reported already.
     /// </summary>
-    private string ReportClosed(string agentId, int pid, string? reason)
+    private string? ReportClosed(string agentId, int pid, string? reason)
     {
         var name = _sessionManager.GetConsoleDisplayName(pid);
-        _sessionManager.ClearDeadPipe(agentId, ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pid));
+        var pipeName = ConsoleSessionManager.GetPipeNameForPids(_sessionManager.ProxyPid, agentId, pid);
+        _sessionManager.ClearDeadPipe(agentId, pipeName);
+        if (!_sessionManager.TryMarkDeadPipeReported(pipeName)) return null;
         // No "  - ": these lines are joined with no heading above them, so a
         // list marker only pushed the ⚠ off the start of the response (seen
         // 2026-11-19); wait_for_completion's own line never had one.
@@ -108,10 +111,12 @@ public class PipeDiscoveryService : IPipeDiscoveryService
     /// The closed-console line for a pipe that stopped answering, with the
     /// console's own reason when it left one, or the fact that its process
     /// is still there when it is. Reads the display name before the caller
-    /// clears the pipe.
+    /// clears the pipe. Null when this pipe was reported already: on Linux and
+    /// macOS a socket that could not be removed is found by every scan.
     /// </summary>
-    private string DescribeDeadPipe(string agentId, string pipeName)
+    private string? DescribeDeadPipe(string agentId, string pipeName)
     {
+        if (!_sessionManager.TryMarkDeadPipeReported(pipeName)) return null;
         var name = _sessionManager.GetConsoleDisplayName(pipeName);
         var pid = ConsoleSessionManager.GetPidFromPipeName(pipeName);
         var reason = pid.HasValue ? ClosedConsoleNotices.TakeReason(_sessionManager.ProxyPid, agentId, pid.Value) : null;
@@ -170,7 +175,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 var line = DescribeDeadPipe(agentId, activePipe);
                 _sessionManager.ClearDeadPipe(agentId, activePipe);
-                closedMessages.Add(line);
+                if (line != null) closedMessages.Add(line);
             }
             else if (activePipeStatus.IsReady())
             {
@@ -201,7 +206,7 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             {
                 var line = DescribeDeadPipe(agentId, pipeName);
                 _sessionManager.ClearDeadPipe(agentId, pipeName);
-                closedMessages.Add(line);
+                if (line != null) closedMessages.Add(line);
                 continue;
             }
 

@@ -293,6 +293,8 @@ public class ConsoleSessionManager
             state.ActivePipeName = pipeName;
             if (pipeName != null)
             {
+                // A pipe in use answers: a later death is news again.
+                _reportedDeadPipes.Remove(pipeName);
                 var pid = GetPidFromPipeName(pipeName);
                 if (pid.HasValue) state.KnownOwnedPids.Add(pid.Value);
                 Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Active pipe set to '{pipeName}' (agent={agentId})");
@@ -369,6 +371,7 @@ public class ConsoleSessionManager
                 state.KnownOwnedPids.Remove(pid.Value);
                 _pidToTitle.Remove(pid.Value);
                 _pidToLastAiCwd.Remove(pid.Value);
+                RemoveStaleSocket(pipeName, pid.Value, ClosedConsoleNotices.IsProcessAlive);
             }
             Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Cleared dead pipe '{pipeName}' (agent={agentId})");
 
@@ -415,15 +418,7 @@ public class ConsoleSessionManager
             else
             {
                 // Linux/macOS: .NET Named Pipes use Unix Domain Sockets at CoreFxPipe_*
-                // macOS may use $TMPDIR instead of /tmp
-                var directories = new List<string> { "/tmp" };
-                var tmpDir = Environment.GetEnvironmentVariable("TMPDIR");
-                if (!string.IsNullOrEmpty(tmpDir) && tmpDir != "/tmp" && tmpDir != "/tmp/")
-                {
-                    directories.Add(tmpDir.TrimEnd('/'));
-                }
-
-                paths = directories
+                paths = UnixSocketDirectories()
                     .Where(Directory.Exists)
                     .SelectMany(dir =>
                     {
@@ -470,6 +465,67 @@ public class ConsoleSessionManager
                 yield return pipe;
             }
         }
+    }
+
+    /// <summary>
+    /// Where .NET puts a named pipe's Unix domain socket (CoreFxPipe_{name}):
+    /// /tmp, and on macOS possibly $TMPDIR.
+    /// </summary>
+    internal static IReadOnlyList<string> UnixSocketDirectories()
+    {
+        var directories = new List<string> { "/tmp" };
+        var tmpDir = Environment.GetEnvironmentVariable("TMPDIR");
+        if (!string.IsNullOrEmpty(tmpDir) && tmpDir != "/tmp" && tmpDir != "/tmp/")
+            directories.Add(tmpDir.TrimEnd('/'));
+        return directories;
+    }
+
+    /// <summary>
+    /// Linux/macOS: deletes the socket file a dead console left behind. On
+    /// Windows a named pipe goes with its process; a Unix domain socket file
+    /// does not, whether the console exited or was killed. Left there, every
+    /// later scan found it as a pipe that does not answer and reported the
+    /// console closed again, on every call (seen 2026-11-21 on RHEL 8.5: one
+    /// warning per closed console, repeated in each response). Only when the
+    /// process is gone: a live process behind a silent pipe (module removed,
+    /// or stuck) keeps its socket.
+    /// </summary>
+    /// <param name="isUnix">Tests only: overrides the platform check.</param>
+    /// <param name="directories">Tests only: overrides <see cref="UnixSocketDirectories"/>.</param>
+    internal static void RemoveStaleSocket(string pipeName, int pid, Func<int, bool> isProcessAlive,
+        bool? isUnix = null, IReadOnlyList<string>? directories = null)
+    {
+        if (!(isUnix ?? !RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) || isProcessAlive(pid)) return;
+        foreach (var dir in directories ?? UnixSocketDirectories())
+        {
+            try
+            {
+                var path = Path.Combine(dir, "CoreFxPipe_" + pipeName);
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    Console.Error.WriteLine($"[INFO] ConsoleSessionManager: Removed stale socket '{path}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[WARN] ConsoleSessionManager: Could not remove stale socket for '{pipeName}': {ex.Message}");
+            }
+        }
+    }
+
+    // Dead pipes already reported. A pipe whose socket could not be removed
+    // (a PID reused by an unrelated process keeps it, by design) is still
+    // found by every scan; it is reported once, not on every call.
+    private readonly HashSet<string> _reportedDeadPipes = new();
+
+    /// <summary>
+    /// True the first time a dead pipe is reported, false after that (until the
+    /// pipe is in use again, see <see cref="SetActivePipeName"/>).
+    /// </summary>
+    public bool TryMarkDeadPipeReported(string pipeName)
+    {
+        lock (_lock) { return _reportedDeadPipes.Add(pipeName); }
     }
 
     // Reports the AI must pass on to the user ("started a new console #7060 Silk"),
