@@ -17,6 +17,16 @@ without a matching section here fails the workflow on purpose. Add new version
 sections at the TOP of the file; keep older sections for history.
 -->
 
+# Version: 1.17.2
+
+## Highlights
+- **On Linux and macOS, a console under remote control no longer stalls after Esc.** Once Esc had been pressed in it, every command from the AI left it reported busy, and the next one waited until someone pressed a key there.
+- **On Linux and macOS, a closed console is reported once,** not again in every response.
+
+## Bug Fixes
+- **A console under remote control on Linux or macOS no longer reads as "user command" after Esc.** Once Esc had been pressed in it — on its own, or to close MenuComplete's menu — every AI command left the console reported busy with `(user command)`: the next command was refused until someone pressed a key in that console, and Enter let exactly one through. PSReadLine's idle loop, which runs PowerShell.MCP's engine, reads the cursor position, and after an AI command's output that means asking the terminal; from the first Esc on, PSReadLine's key thread held the console's input lock while it waited for a key, so the question, and the engine with it, waited for a key too. PowerShell.MCP now has PSReadLine wait for keys without holding that lock: it checks for a key every 15 ms and reads it once it is there. Nothing changes on Windows, or in the VS Code integrated console, where PowerShell Editor Services reads the keys. Seen on RHEL 8.5 (pwsh 7.7.0, PSReadLine 2.4.5); a console the user opened and a local MCP server drove did not stall after the same keys.
+- **A closed console is reported once on Linux and macOS, not in every response.** After a console closed, each later response repeated `⚠ Console #… was closed`, one line for every console closed so far. On these systems a named pipe is a socket file in `/tmp` (or `$TMPDIR`) that stays when its console exits or is killed, and each pipe scan found it again. The socket of a console whose process is gone is now removed when the console is reported closed, a dead pipe is reported only once, and the sockets left by the consoles of earlier sessions are removed once both that session's MCP server and the console have exited. Consoles still running, other sessions' included, are left alone.
+
 # Version: 1.17.1
 
 ## Highlights
