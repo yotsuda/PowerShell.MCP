@@ -221,6 +221,9 @@ public class PipeDiscoveryService : IPipeDiscoveryService
             allPipesStatus.Add($"  - {pipeName}: {status.Status} (pipeline: {status.Pipeline ?? "unknown"}, duration: {status.Duration:F1}s)");
         }
 
+        // Linux/macOS housekeeping: sockets of earlier sessions' dead consoles.
+        _sessionManager.SweepOrphanedSockets();
+
         // Step 3: Check unowned pipes (user-started consoles not yet claimed
         // by any proxy). Caller can opt out via includeUnowned=false — see
         // start_console's no-start_location branch for the rationale.

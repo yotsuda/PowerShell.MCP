@@ -514,6 +514,40 @@ public class ConsoleSessionManager
         }
     }
 
+    /// <summary>
+    /// Linux/macOS: removes the sockets other proxies' consoles left behind
+    /// once that proxy and that console are both gone. A proxy cleans up only
+    /// its own pipes (<see cref="ClearDeadPipe"/>), so the consoles of an
+    /// earlier session that closed after it, or with it, kept their sockets in
+    /// /tmp for good, one more set per restart of the client. A pipe whose
+    /// proxy or console is still running — another session's — is left alone.
+    /// </summary>
+    public void SweepOrphanedSockets()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            SweepOrphanedSockets(EnumeratePipes(), ProxyPid, ClosedConsoleNotices.IsProcessAlive);
+    }
+
+    /// <param name="isUnix">Tests only: overrides the platform check.</param>
+    /// <param name="directories">Tests only: overrides <see cref="UnixSocketDirectories"/>.</param>
+    internal static void SweepOrphanedSockets(IEnumerable<string> pipeNames, int ownProxyPid, Func<int, bool> isProcessAlive,
+        bool? isUnix = null, IReadOnlyList<string>? directories = null)
+    {
+        foreach (var pipeName in pipeNames)
+        {
+            // Owned: {name}.{proxyPid}.{agentId}.{pwshPid}. Unowned pipes are
+            // looked at by the discovery itself.
+            var segments = pipeName.Split('.');
+            if (segments.Length < 4
+                || !int.TryParse(segments[1], out var proxyPid)
+                || !int.TryParse(segments[^1], out var pwshPid))
+                continue;
+            if (proxyPid == ownProxyPid || isProcessAlive(proxyPid))
+                continue;
+            RemoveStaleSocket(pipeName, pwshPid, isProcessAlive, isUnix, directories);
+        }
+    }
+
     // Dead pipes already reported. A pipe whose socket could not be removed
     // (a PID reused by an unrelated process keeps it, by design) is still
     // found by every scan; it is reported once, not on every call.

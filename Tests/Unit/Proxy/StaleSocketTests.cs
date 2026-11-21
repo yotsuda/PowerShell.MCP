@@ -77,6 +77,47 @@ public class StaleSocketTests : IDisposable
             directories: [_dir, Path.Combine(_dir, "does-not-exist")]);
     }
 
+    // ---- SweepOrphanedSockets: earlier sessions' leftovers ----
+
+    [Fact]
+    public void A_dead_proxy_and_a_dead_console_lose_their_socket()
+    {
+        var path = Socket("PSMCP.300.default.301");
+
+        ConsoleSessionManager.SweepOrphanedSockets(["PSMCP.300.default.301"], ownProxyPid: 999,
+            isProcessAlive: _ => false, isUnix: true, directories: [_dir]);
+
+        Assert.False(File.Exists(path));
+    }
+
+    [Theory]
+    [InlineData(300)] // the other session's proxy is still running
+    [InlineData(301)] // its console is still running
+    public void Another_sessions_pipe_with_anything_alive_is_left_alone(int alivePid)
+    {
+        var path = Socket("PSMCP.300.default.301");
+
+        ConsoleSessionManager.SweepOrphanedSockets(["PSMCP.300.default.301"], ownProxyPid: 999,
+            isProcessAlive: pid => pid == alivePid, isUnix: true, directories: [_dir]);
+
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public void Own_and_unowned_pipes_are_not_swept_here()
+    {
+        // Own pipes go through ClearDeadPipe (and are reported); unowned ones
+        // are looked at by the discovery.
+        var own = Socket("PSMCP.999.default.302");
+        var unowned = Socket("PSMCP.303");
+
+        ConsoleSessionManager.SweepOrphanedSockets(["PSMCP.999.default.302", "PSMCP.303"], ownProxyPid: 999,
+            isProcessAlive: _ => false, isUnix: true, directories: [_dir]);
+
+        Assert.True(File.Exists(own));
+        Assert.True(File.Exists(unowned));
+    }
+
     [Fact]
     public void A_dead_pipe_is_reported_once_until_it_is_in_use_again()
     {
