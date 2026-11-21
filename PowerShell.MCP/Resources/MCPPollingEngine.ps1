@@ -12,6 +12,12 @@ if (-not (Test-Path Variable:global:McpTimer)) {
     # running PowerShell command and to re-arm the engine through the stop.
     try { [PowerShell.MCP.Services.ConsoleControl]::RegisterEngine([System.Management.Automation.Runspaces.Runspace]::DefaultRunspace, $global:McpTimer) } catch {}
 
+    # Linux/macOS: PSReadLine's key thread must not hold the stdin lock while it
+    # waits, or its idle loop -- which runs this engine -- stops at the first
+    # cursor query until a key is pressed (see ReadKeyPolling). Here, on the home
+    # thread inside a command, no key is being read, so the next one uses it.
+    try { [void][PowerShell.MCP.Services.ReadKeyPolling]::Install() } catch {}
+
     # Trim PSReadLine history file if it exceeds 1MB to prevent input lag
     if ($IsWindows) {
         try {

@@ -3,6 +3,9 @@ try {
     # serving a proxy on another machine from a runspace with no engine.
     try { [void][PowerShell.MCP.Services.RemoteControl]::Stop('module removed', $true) } catch {}
 
+    # PSReadLine's own key method back (Linux/macOS; a no-op elsewhere).
+    try { [PowerShell.MCP.Services.ReadKeyPolling]::Uninstall() } catch {}
+
     # -Force: the engine registers with -SupportEvent, which hides it otherwise.
     $eventSubscriber = Get-EventSubscriber -SourceIdentifier MCP_Poll -Force -ErrorAction SilentlyContinue
     if ($eventSubscriber) {
